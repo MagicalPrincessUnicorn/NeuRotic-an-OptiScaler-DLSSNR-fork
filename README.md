@@ -1,193 +1,115 @@
 <div align="center">
 
-  ![Logo](https://github.com/user-attachments/assets/c7dad5da-0b29-4710-8a57-b58e4e407abd)
+# NeuRotic
+
+### Practical DLSS Neural Rendering for OptiScaler
+
+A community fork focused on making NVIDIA DLSS Neural Rendering usable, configurable, measurable, and safer during real gameplay.
+
+[Download Alpha 0.9.4](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.4) · [Read the full release notes](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/blob/alpha-0.9.4/ALPHA-0.9.4.md) · [Support development on Ko-fi](https://ko-fi.com/espiownage)
 
 </div>
-<hr />
-<br />
-<div align="center">
-  <a href="https://github.com/sponsors/cdozdil?frequency=one-time"><img src="images/gh-sponsor-red.png" /></a>
-  <a href="https://buymeacoffee.com/nitec"><img src="images/bmac.png" /></a>
-</div>
-<br />
-
-## Table of Contents
-
-**1.** [**About**](#about)  
-**2.** [**How it works?**](#how-it-works)  
-**3.** [**Supported APIs and Upscalers**](#which-apis-and-upscalers-are-supported)  
-**4.** [**Installation**](#installation)  
-**5.** [**Known Issues**](#known-issues)  
-**6.** [**Compilation and Credits**](#compilation)  
-**7.** [**Wiki**](https://github.com/optiscaler/OptiScaler/wiki)
-
-<br />
-<div align="center">
-  <a href="https://discord.gg/wEyd9w4hG5"><img src="https://img.shields.io/badge/OptiScaler-blue?style=for-the-badge&logo=discord&logoColor=white&logoSize=auto&color=5865F2" alt="Discord invite"></a>
-  <a href="https://github.com/optiscaler/OptiScaler/releases/latest"><img src="https://img.shields.io/badge/Download-Stable-green?style=for-the-badge&logo=github&logoSize=auto" alt="Stable release"></a>
-  <a href="https://github.com/optiscaler/OptiScaler/releases/tag/nightly"><img src="https://img.shields.io/badge/Download-Nightly-purple?style=for-the-badge&logo=github&logoSize=auto" alt="Nightly release"></a>
-  <a href="https://github.com/optiscaler/OptiScaler/wiki"><img src="https://img.shields.io/badge/Documentation-blue?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Wiki"></a>
-</div>
-<div align="center">
-  <a href="https://github.com/optiscaler/OptiScaler/releases"><img src="https://img.shields.io/github/downloads/optiscaler/optiscaler/total?style=for-the-badge&logo=gitextensions&logoSize=auto&label=Total" alt="Total DL"></a>
-  <a href="https://github.com/optiscaler/OptiScaler/releases/latest"><img src="https://img.shields.io/github/downloads/optiscaler/optiscaler/latest/total?style=for-the-badge&logo=gitextensions&logoSize=auto&label=Stable&color=green&logoColor=white" alt="Stable DL"></a>
-  <a href="https://github.com/optiscaler/OptiScaler/releases/tag/nightly"><img src="https://img.shields.io/github/downloads/optiscaler/OptiScaler/nightly/total?style=for-the-badge&logo=gitextensions&logoColor=white&logoSize=auto&label=Nightly&color=purple" alt="Nightly DL"></a>
-  <a href="https://github.com/optiscaler/OptiScaler/stargazers"><img src="https://img.shields.io/github/stars/optiscaler/optiscaler?style=for-the-badge&logo=githubsponsors&logoColor=white&label=S.T.A.R.S." alt="Stars"></a>
-</div>
-
-
-## About
-
-**OptiScaler** is a tool that lets you replace upscalers in games that ***already support DLSS2+ / FSR2+ / XeSS*** ($`^1`$), as well as manage ***frame generation*** in already mentioned games _(either by replacing existing FG options or enabling it in DX12 games through experimental ***OptiFG***)_. It also offers extensive customization options for all users, including those with Nvidia GPUs using DLSS.
-
-> [!CAUTION]
-> * We've been informed about some **FAKE websites** presenting themselves as OptiScaler team, so we would like to strongly highlight that we **DO NOT HAVE an official website!**  
-> * We **DON'T have an official manager app**, so please be careful when downloading or using them! And please don't bother us to provide support for something which isn't even ours!
-> * Only **LEGIT places** are this Github, our Discord server and Nitec's NexusMods page.  
-> * OptiScaler is **FREE**, any kind of monetary requirements are scams!  
-
-> [!TIP]
-> _For example, if a game has DLSS only, OptiScaler can be used to replace DLSS with XeSS or FSR 3.1 (also works for FSR2-only games, like The Outer Worlds Spacer's Choice, albeit requires manually providing nvngx_dlss.dll)._
-
-**Key aspects of OptiScaler:**
-- Enables usage of XeSS, FSR2, FSR3, **FSR4**$`^2`$ (_officially, RDNA4 and RDNA3 dGPUs only_) and DLSS in (temporal) upscaler-enabled games
-- Allows users to fine-tune their upscaling experience with a wide range of tweaks and enhancements (RCAS & MAS, Output Scaling, DLSS Presets, Ratio & DRS Overrides etc.)
-- Since v0.7.0+, added ***experimental DX12*** frame generation support with possible HUDfix solution ([**OptiFG**](#optifg--hudfix-experimental-hud-ghosting-fix))
-- Supports [**Fakenvapi**](#installation) integration - enables Reflex hooking and injecting _Anti-Lag 2_ (RDNA1+ only), _LatencyFlex_ (LFX) or _XeLL_ - _bundled since 0.9_  
-- Since v0.7.7, added support for **Nukem's** FSR3-FG mod [**dlssg-to-fsr3**](#installation), only supports games with ***native DLSS-FG*** - _bundled since 0.9_
-- Since v0.7.8, added **ASI plugin loading** support (_disabled_ by default (`LoadAsiPlugins=` in INI), loads from customisable folder, default `plugins`)
-- New project - [**OptiPatcher**](https://github.com/optiscaler/OptiPatcher) - an ASI Plugin for OptiScaler for enabling DLSS and DLSSG inputs without spoofing in ***supported games***.
-- Since v0.7.8, OptiScaler is now automatically applying certain game patches for a better out-of-the-box experience
-- Since v0.9.0, separated FG Inputs and Outputs, added XeFG and FSR4-FG support, as well as bundled Fakenvapi and Nukem's FSR3-FG mod
-- For a detailed list of all features, check [Features](Features.md)
-
 
 > [!IMPORTANT]
-> _**Always check the [Wiki Compatibility list](https://github.com/optiscaler/OptiScaler/wiki) for known game issues and workarounds.**_  
-> Also please check the  [***OptiScaler known issues***](#known-issues) at the end regarding **RTSS** compatibility.  
-> A separate [***FSR4 Compatibility list***](https://github.com/optiscaler/OptiScaler/wiki/FSR4-Compatibility-List) is available for community-sourced tested games.  
-> ***[3]** For **not bundled** items, please check [Installation](#installation).*  
+> Download the named release ZIP—not GitHub's automatic **Source code** archives. Source archives are for developers and are not drop-in game installations.
+
+## What is NeuRotic?
+
+NeuRotic is an experimental fork of [OptiScaler](https://github.com/optiscaler/OptiScaler) and [Dagherbou's OptiScaler DLSS-NR work](https://github.com/Dagherbou/OptiScaler_DLSSNR). Its purpose is to integrate NVIDIA's DLSS Neural Rendering model into OptiScaler while preserving the game's native temporal inputs and making difficult rendering transitions less fragile.
+
+The project is independent and is not affiliated with NVIDIA, the OptiScaler maintainers, or any game developer. It is intended for experimentation in single-player games.
+
+## Alpha 0.9.4 highlights
+
+- **Performance Mode by default.** Runs NR before native DLSS Super Resolution so the model processes fewer pixels.
+- **Quality Mode when preferred.** Keeps NR after native Super Resolution for the established full-resolution path.
+- **Ray Reconstruction-aware routing.** Games using native DLSS Ray Reconstruction retain native RR ownership; NeuRotic runs NR afterward instead of forcing an incompatible pre-SR route.
+- **Substantial NR lifecycle hardening.** Feature creation, restart, replacement, shutdown, device changes, and partial initialization now have explicit ownership and fail-closed behavior.
+- **GPU-completion-based safety.** Command-list submissions and fences protect descriptors, upload buffers, readbacks, capture surfaces, scalers, and retired model sessions from premature CPU reuse or destruction.
+- **Synchronized state and configuration.** Each host upscale uses one immutable NR settings snapshot, preventing mixed old/new placement or tuning during live changes.
+- **Transactional allocation.** Multi-resource replacements publish only after every required allocation succeeds; failure keeps the last valid state intact.
+- **Safer capture and exposure scanning.** Resize, format, cancellation, bounds, readiness, and concurrent reporting paths have been hardened.
+- **Correct DLSS preset and upscaler override behavior.** Explicit per-mode choices remain distinct from global and NVIDIA-default selection.
+- **A much better overlay.** Reorganized controls, readable two-column sizing, nested text wrapping, upper-right anchoring, and downward expansion without first-open horizontal runaway.
+
+### Rendering modes
+
+| Mode | NR placement | Best for |
+|---|---|---|
+| **Performance (default)** | Before native DLSS Super Resolution | Lower NR cost and practical gameplay |
+| **Quality** | After native DLSS Super Resolution | Maximum-resolution NR processing |
+| **Native Ray Reconstruction active** | After native DLSS RR | Preserving the game's RR inputs and reconstruction ownership |
 
 > [!NOTE]
-> ### Upscaler notes
-> <details>
->  <summary><b>Click for [1], [2] </b></summary>  
->  
-> **[1]** For **Unreal Engine** games, only UE XeSS -> Opti XeSS/FSR4 work  
->  
-> *Regarding **XeSS** inputs, since **Unreal Engine plugin** does not provide depth, replacing in-game XeSS breaks other upscalers (e.g. Redout 2 as a XeSS-only game), but you can still apply RCAS sharpening to XeSS to reduce blurry visuals.* 
->
-> *Regarding **FSR inputs**, FSR 3.1 is the first version with a fully standardised, forward-looking API and should be fully supported. Since FSR2 and FSR3 support custom interfaces, game support will depend on the developers' implementation. With Unreal Engine games, you might need [ini tweaks](https://github.com/optiscaler/OptiScaler/wiki/Unreal-Engine-Tweaks) for FSR inputs.*  
->
-> **[2]** *Regarding **FSR4**, please check [FSR4 Compatibility list](https://github.com/optiscaler/OptiScaler/wiki/FSR4-Compatibility-List) for known supported games and general info.*
-> 
-> </details>
-
-
-## Official Discord Server: [OptiScaler](https://discord.gg/wEyd9w4hG5)
-
-*This project is based on [PotatoOfDoom](https://github.com/PotatoOfDoom)'s excellent [CyberFSR2](https://github.com/PotatoOfDoom/CyberFSR2).*
-
-## How it works?
-* OptiScaler acts as a middleware, it intercepts upscaler calls from the game (_**Inputs**_) and redirects them to the chosen upscaling backend (_**Output**_), allowing user to replace one technology with another one. **Inputs -> OptiScaler -> Outputs**  
-* _Or put more bluntly, **Input** is the upscaler used in game settings, and **Output** the one selected in Opti Overlay._
-* _Same goes for FG options which are separated into **FG Input** and **FG Output**._
-
-> [!NOTE]
-> * Pressing **`Insert`** should open the Optiscaler **Overlay** in-game with all of the options (_`ShortcutKey=` can be changed in the INI file, or under **Keybinds** in the overlay_). 
-> * Pressing **`Page Up`** shows the performance stats overlay in the top left, and can be cycled between different modes with **`Page Down`** (_keybinds customisable in the overlay_).  
-> * If Opti overlay is instantly disappearing after trying Insert a few times, maybe try **`Alt + Insert`** ([reported workaround](https://github.com/optiscaler/OptiScaler/issues/484) for alternate keyboard layouts).
-
-![inputs_and_outputs](https://github.com/user-attachments/assets/7ff37fd7-515f-488d-99ff-faa586e206fc)
-
-## Which APIs and Upscalers are Supported?
-Currently **OptiScaler** can be used with DirectX 11, DirectX 12 and Vulkan, but each API has different sets of supported upscalers.  
-[**OptiFG**](#optifg--hudfix-experimental-hud-ghosting-fix) currently **only supports DX12** and is explained in a separate paragraph.
-
-#### For DirectX 12
-- XeSS (Default)
-- FSR 2.1.2, 2.2.1
-- FSR 3.X (and FSR 2.3.X)
-- FSR 4.X (via FSR 3.X/4, _officially RDNA4 and RDNA3 dGPUs only_)
-- DLSS
-
-#### For DirectX 11
-- FSR 2.2.1 (Default, native DX11)
-- FSR 3.1.2 (unofficial port to native DX11)
-- DLSS (native DX11)
-- XeSS 2.X (native DX11, _Intel ARC only_)
-- XeSS, FSR 2.1.2, 2.2.1, FSR 3.X w/Dx12 (_via D3D11on12_)$`^1`$
-- FSR 4.X (via FSR 3.X/4 w/Dx12 interop, _officially RDNA4 and RDNA3 dGPUs only_)
-
-> [!NOTE]
-> <details>
->  <summary><b>Expand for [1]</b></summary>
->
-> _**[1]** These implementations use a background DirectX12 device to be able to use DX12-only upscalers. There's a performance penalty up to 10-ish % for this method, but allows many more upscaler options. Also native DX11 implementation of FSR 2.2.1 is a backport from Unity renderer and has its own problems of which some were fixed by OptiScaler._
-> </details>
-
-#### For Vulkan
-- FSR 4.X (via FSR 3.X/4 w/Dx12 interop, _officially RDNA4 and RDNA3 dGPUs only_)
-- FSR2 2.1.2 (Default), 2.2.1
-- FSR3 3.1 (and FSR2 2.3.2)
-- DLSS
-- XeSS 2.x
-
-#### OptiFG + HUDfix (experimental HUD ghosting fix) 
-**OptiFG** was added with **v0.7** and is **only supported in DX12**. 
-It's an **experimental** way of adding FG to games without native Frame Generation, or can also be used as a last case scenario if the native FG is not working properly.  
-* Currently supports FSR3-FG (requires HUDfix to avoid HUD ghosting), XeFG and FSR4-FG (ML model deals with the HUD, so may or may not require HUDfix).
-
-For more information on OptiFG and how to use it, please check the Wiki page - [OptiFG](https://github.com/optiscaler/OptiScaler/wiki/OptiFG).
-
+> Neural Rendering itself remains opt-in. “Performance by default” refers to the selected NR route once NR is enabled.
 
 ## Installation
+
+1. Download **`OptiScaler-DLSSNR-alpha-0.9.4.zip`** from the [Alpha 0.9.4 release](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.4).
+2. Fully close the game and back up any existing OptiScaler files and `OptiScaler.ini` beside the game's real executable.
+3. Extract the complete ZIP beside that executable.
+4. Run `setup_windows.bat` and choose a proxy filename. `dxgi.dll` is the normal first choice for DirectX 12; Vulkan commonly uses `winmm.dll`. Individual games may require another supported proxy.
+5. Supply your own licensed NVIDIA **`nvngx_dlssnr.dll`** model beside the game executable. It is proprietary and is deliberately not redistributed here.
+6. Keep the included **`nvngx.dll_dlssnr.dll`** forwarder. Despite the similar name, it is a separate NeuRotic component and is required.
+7. Start the game, open the OptiScaler overlay, enable Neural Rendering, and confirm that its status reports successful evaluations.
+
+The package includes the tested Alpha 0.9.4 INI profile. Back up your current INI first if you want to preserve game-specific settings.
+
 > [!CAUTION]
-> _**Warning**: **Do not use this mod with online games.** It may trigger anti-cheat software and cause bans!_
+> Do not use injected graphics middleware in anti-cheat-protected multiplayer. It may trigger anti-cheat systems or account penalties.
 
-> [!IMPORTANT]
-> **For installation steps, please check the [**Wiki**](https://github.com/optiscaler/OptiScaler/wiki)**  
+### Green or white particle “flashbang”
 
-## Configuration
-Please check [this](Config.md) document for configuration parameters and explanations. If your GPU is not an Nvidia one, check [GPU spoofing options](Spoofing.md) *(Will be updated)*
+Monster Hunter Wilds and some other games can flood the screen with bright green or white particles when NR interacts with the game's tone-mapping or post-processing shaders.
 
-## Known Issues
+If this happens, install [ReShade with full add-on support](https://reshade.me/) and an SDR/HDR [RenoDX mod for the affected game](https://github.com/clshortfuse/renodx/wiki/Mods). A game-specific RenoDX shader rewrite often resolves or substantially reduces the flashing.
 
-> [!NOTE]
-> **For a list of known issues, please check the [**Wiki**](https://github.com/optiscaler/OptiScaler/wiki)**.
-> 
-> Also worth checking the [Compatibility List](https://github.com/optiscaler/OptiScaler/wiki/Compatibility-List) for possible game issues and their fixes.
+For **Monster Hunter Wilds**, use [RenoDX — HDR and SDR Fix / Tonemap / Color Grade](https://www.nexusmods.com/monsterhunterwilds/mods/202) and follow its current REFramework and ReShade requirements. [Source is available here](https://github.com/MohannedElfatih/renodx/tree/mhwilds). Use the SDR path for SDR or HDR path for HDR, avoid competing Auto HDR/RTX HDR tone mapping, and ensure ReShade and OptiScaler do not overwrite the same proxy DLL.
 
-## Compilation
+## What NeuRotic does not provide
 
-### Requirements
-* Visual Studio 2022
+NeuRotic is focused on Neural Rendering. It does not itself unlock DLSS Multi Frame Generation on unsupported GPUs, add native DLSS Frame Generation to a game that lacks it, or redistribute NVIDIA's Neural Rendering model.
 
-### Instructions
-* Clone this repo with **all of its submodules**.
-* Open the OptiScaler.sln with Visual Studio 2022.
-* Build the project
+For capabilities outside this fork's scope:
 
-## Thanks
-* @PotatoOfDoom for CyberFSR2
-* @Artur for DLSS Enabler and helping me implement NVNGX api correctly
-* @LukeFZ & @Nukem for their great mods and sharing their knowledge 
-* @FakeMichau for continous support, testing and feature creep
-* @QM for continous testing efforts and helping me to reach games
-* @TheRazerMD for continous testing and support
-* @Cryio, @krispy, @krisshietala, @Lordubuntu, @scz, @Veeqo for their hard work on (now outdated) [compatibility matrix](https://docs.google.com/spreadsheets/d/1qsvM0uRW-RgAYsOVprDWK2sjCqHnd_1teYAx00_TwUY)
-* And the whole DLSS2FSR community for all their support
+- **Recommended focused RTX 40-series MFG companion:** [Universal RTX 40 MFG Unlocker](https://github.com/dashdogy/RTX40MFG-Unlock), for supported games that already provide working Streamline DLSS Frame Generation.
+- **Alternative Ada MFG project:** [mfg-unlock](https://github.com/matiasLombo/mfg-unlock).
+- **Broader frame-generation approaches:** [DLSS Enabler](https://github.com/artur-graniszewski/DLSS-Enabler) and [DLSS Unlocked](https://github.com/ShyVortex/dlss-unlocked).
+- **Mainline upscaler and frame-generation development:** [official OptiScaler](https://github.com/optiscaler/OptiScaler).
 
-## Credit
-This project uses [FreeType](https://gitlab.freedesktop.org/freetype/freetype) licensed under the [FTL](https://gitlab.freedesktop.org/freetype/freetype/-/blob/master/docs/FTL.TXT)
+These are independent projects, not bundled dependencies. Combined compatibility is game-specific; read each project's instructions and warnings before stacking injectors.
 
-## Sponsors
-<table>
- <tbody>
-  <tr>
-   <td align="center"><img alt="[SignPath]" src="https://avatars.githubusercontent.com/u/34448643" height="30"/></td>
-   <td>Free code signing on Windows provided by <a href="https://signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a></td>
-  </tr>
- </tbody>
-</table>
+## Current limitations
 
+- This is an experimental Alpha, not a universal compatibility guarantee.
+- D3D12 has received the strongest runtime and fault-transition coverage. Native Vulkan NR remains less tested.
+- Deliberately spamming the NR toggle can still provoke an NVIDIA driver fault. Allow disable/re-enable transitions and resumed rendering to settle before toggling again.
+- Third-party overlays, loaders, frame-generation tools, shader mods, and driver overrides can independently alter compatibility.
+- A loaded model, static timing value, or lack of a crash does not prove NR is functioning; verify live successful evaluations and visible output.
+
+## Validation
+
+Alpha 0.9.4 passed non-game D3D12 WARP lifetime/fence tests, transactional allocation and failure-injection tests, capture-resize transitions, configuration concurrency checks, exposure-scan bounds/concurrency tests, readiness transitions, and 10,000 synthetic toggle cycles. User testing established the current build as viable for normal Alpha use while retaining the rapid-toggle limitation above.
+
+Build identity and full technical notes are recorded in the [Alpha 0.9.4 release notes](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/blob/alpha-0.9.4/ALPHA-0.9.4.md).
+
+## Building from source
+
+The repository is development source, not an install package.
+
+- Clone the repository with all submodules.
+- Open `OptiScaler.sln` in Visual Studio 2022.
+- Build `Release` / `x64`.
+- The matched outputs are `OptiScaler.dll` and `nvngx.dll_dlssnr.dll`.
+
+## Support NeuRotic
+
+If the fork helps you and you would like to support continued testing and development:
+
+☕ **[Ko-fi.com/espiownage](https://ko-fi.com/espiownage)**
+
+## Credits and licensing
+
+NeuRotic stands on the work of the OptiScaler community, Dagherbou's DLSS-NR research, and RenoDX. The NR colour-composition path includes design derived from [RenoDX](https://github.com/clshortfuse/renodx), with attribution and license text retained in `Licenses/RenoDX_ATTRIBUTION.txt`.
+
+Review [LICENSE](LICENSE), the [`Licenses`](Licenses) directory, and the upstream repositories for complete authorship and licensing information.
