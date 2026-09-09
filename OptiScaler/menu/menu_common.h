@@ -158,9 +158,17 @@ class MenuCommon
     static void RenderMainMenuWindow(RenderMenuContext& ctx);
 
     // RenderMainMenuWindow section helpers. These keep the main window flow readable
-    // without changing the existing ImGui layout, labels, or setting side effects.
+    // while keeping each top-level page responsible for exactly one group of controls.
     static void RenderMainMenuHeaderMessages(RenderMenuContext& ctx);
-    static void RenderMainMenuTable(RenderMenuContext& ctx);
+    static void RenderMainMenuTabs(RenderMenuContext& ctx);
+    static void RenderGeneralPage(RenderMenuContext& ctx);
+    static void RenderUpscalingPage(RenderMenuContext& ctx);
+    // This is the single owner for the Neural Rendering page. Future layer-specific
+    // panels belong here; the existing Feature 18 settings remain unchanged for now.
+    static void RenderNeuralRenderingPage(RenderMenuContext& ctx);
+    static void RenderFrameGenerationPage(RenderMenuContext& ctx);
+    static void RenderAdvancedPage(RenderMenuContext& ctx);
+    static void RenderDiagnosticsPage(RenderMenuContext& ctx);
     static void RenderActiveUpscalerSettings(RenderMenuContext& ctx);
     static void RenderFrameGenerationSelection(RenderMenuContext& ctx);
     static void RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx);

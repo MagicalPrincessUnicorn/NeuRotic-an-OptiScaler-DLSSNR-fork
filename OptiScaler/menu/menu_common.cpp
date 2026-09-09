@@ -7068,41 +7068,112 @@ void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
     }
 }
 
-void MenuCommon::RenderMainMenuTable(RenderMenuContext& ctx)
+void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
 {
-    if (ImGui::BeginTable("main", 2, ImGuiTableFlags_SizingStretchSame))
-    {
-        ImGui::TableNextColumn();
+    RenderKeybindSettings(ctx);
+    RenderThemeSettings(ctx);
+}
 
-        // Left column: active upscaler state, frame generation, FSR common, latency and fakenvapi controls.
-        RenderActiveUpscalerSettings(ctx);
-        RenderFrameGenerationSelection(ctx);
-        RenderFrameGenerationRuntimeSettings(ctx);
-        RenderFsrCommonSettings(ctx);
-        RenderFramerateSettings(ctx);
+void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
+{
+    RenderActiveUpscalerSettings(ctx);
+    RenderFsrCommonSettings(ctx);
+    RenderActiveImageSettings(ctx);
+    RenderMagnifierSettings(ctx);
+    RenderUpscalerInputsSettings(ctx);
+    RenderApiAndTextureSettings(ctx);
+}
+
+void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
+{
+    // Layer-specific UI will stay contained in this page when the existing optional
+    // second layer evolves into independently configurable layers. This experiment
+    // deliberately keeps its current single shared settings panel and Feature 18
+    // lifecycle unchanged.
+    DlssNr::RenderMenu(ctx.config, ctx.menuResScale);
+}
+
+void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
+{
+    RenderFrameGenerationSelection(ctx);
+    RenderFrameGenerationRuntimeSettings(ctx);
+    RenderFramerateSettings(ctx);
 #ifdef LOW_LATENCY_INPUTS
-        RenderLowLatencySettings(ctx);
+    RenderLowLatencySettings(ctx);
 #else
-        RenderFakenvapiSettings(ctx);
+    RenderFakenvapiSettings(ctx);
 #endif
+}
 
-        ImGui::TableNextColumn();
+void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
+{
+    RenderQuirksSettings(ctx);
+    RenderAdvancedSettings(ctx);
+    RenderLoggingSettings(ctx);
+}
 
-        // Right column: neural rendering, keybinds, image quality, initialization and supporting settings.
-        DlssNr::RenderMenu(ctx.config, ctx.menuResScale);
-        RenderKeybindSettings(ctx);
-        RenderActiveImageSettings(ctx);
-        RenderMagnifierSettings(ctx);
-        RenderQuirksSettings(ctx);
-        RenderAdvancedSettings(ctx);
-        RenderThemeSettings(ctx);
-        RenderFpsOverlaySettings(ctx);
-        RenderUpscalerInputsSettings(ctx);
-        RenderApiAndTextureSettings(ctx);
-        RenderLoggingSettings(ctx);
+void MenuCommon::RenderDiagnosticsPage(RenderMenuContext& ctx)
+{
+    RenderMainMenuGraphs(ctx);
+    RenderFpsOverlaySettings(ctx);
+}
 
-        ImGui::EndTable();
+void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
+{
+    ImGui::Spacing();
+
+    // Keep the six folder-style top-level pages selectable at narrow overlay widths:
+    // ImGui supplies scroll buttons instead of shrinking labels or dropping tabs.
+    if (!ImGui::BeginTabBar("MainMenuPages", ImGuiTabBarFlags_FittingPolicyScroll))
+        return;
+
+    const float viewportRemaining = ctx.io.DisplaySize.y - 220.0f * ctx.menuResScale;
+    const float pageHeight = std::max(120.0f * ctx.menuResScale,
+                                      std::min(720.0f * ctx.menuResScale, viewportRemaining));
+    const auto renderPage = [&](auto render)
+    {
+        if (ImGui::BeginChild("##MainMenuPageContent", ImVec2(0.0f, pageHeight), ImGuiChildFlags_Borders))
+            render(ctx);
+        ImGui::EndChild();
+    };
+
+    if (ImGui::BeginTabItem("General"))
+    {
+        renderPage(RenderGeneralPage);
+        ImGui::EndTabItem();
     }
+
+    if (ImGui::BeginTabItem("Upscaling"))
+    {
+        renderPage(RenderUpscalingPage);
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Neural Rendering"))
+    {
+        renderPage(RenderNeuralRenderingPage);
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Frame Generation"))
+    {
+        renderPage(RenderFrameGenerationPage);
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Advanced"))
+    {
+        renderPage(RenderAdvancedPage);
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Diagnostics"))
+    {
+        renderPage(RenderDiagnosticsPage);
+        ImGui::EndTabItem();
+    }
+
+    ImGui::EndTabBar();
 }
 
 void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
@@ -7685,17 +7756,14 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
 
     if (ImGui::Begin(windowTitle.c_str(), NULL, flags))
     {
-        // Header/status messages shown above the two-column settings table.
+        // Header/status messages shown above the page selector.
         RenderMainMenuHeaderMessages(ctx);
 
-        // Diagnostics directly below the title/status area.
-        RenderMainMenuGraphs(ctx);
-
-        // Readout and actions below the graphs and above the settings panels.
+        // Readout and actions remain available before the page selector.
         RenderMainMenuBottomBar(ctx);
 
-        // Main two-column settings content.
-        RenderMainMenuTable(ctx);
+        // One selected top-level page replaces the old vertical two-column settings list.
+        RenderMainMenuTabs(ctx);
 
         ImGui::End();
     }
