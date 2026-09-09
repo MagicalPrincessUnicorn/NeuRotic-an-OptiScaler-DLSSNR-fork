@@ -113,7 +113,7 @@ void RenderMenu(Config* config, float menuResScale)
 
     // DLSS Neural Rendering -----------------------------
     ImGui::Spacing();
-    if (auto ch = ScopedCollapsingHeader("DLSS Neural Rendering"); ch.IsHeaderOpen())
+    if (auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ImGui::Spacing();
@@ -136,9 +136,6 @@ void RenderMenu(Config* config, float menuResScale)
         if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
             config->SetDlssNrEnabled(enabled);
 
-        // Keep the keybind guidance attached to the setting it describes.
-        ImGui::TextDisabled("Can be toggled with a key -- bind it under Keybinds, \"Neural Rendering\".");
-
         HelpMarker("Synthesises detail in the upscaler's output, before frame generation sees it."
                        "\n\nNeeds two similarly named files beside OptiScaler, one character apart:"
                        "\n  nvngx_dlssnr.dll       NVIDIA's model (~165 MB) -- you supply it"
@@ -150,36 +147,39 @@ void RenderMenu(Config* config, float menuResScale)
         const auto nrTelemetry = DlssNr::Telemetry();
         const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
 
-        bool secondLayer = config->DlssNrSecondLayer.value_or_default();
-        if (vulkan)
-            ImGui::BeginDisabled();
-        if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
-            config->DlssNrSecondLayer = secondLayer;
-        if (vulkan)
-            ImGui::EndDisabled();
-
-        HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer"
-                   "\nframe. It inherits the first layer's model and composition settings."
-                   "\n\nEach layer owns separate temporal history. Enabling it roughly doubles"
-                   "\nthe model cost. This experiment implements the route on D3D12 only.");
-
-        if (vulkan)
-            ImGui::TextDisabled("Second neural-rendering layer unavailable on Vulkan in this experiment.");
-        else if (enabled && nrTelemetry.layer2Requested)
+        const auto renderSecondLayerControls = [&]()
         {
-            if (nrTelemetry.layer2Failed)
-                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f),
-                                   "Layer 2 unavailable: %s.", nrTelemetry.layer2FailureReason);
-            else if (nrTelemetry.layer2Retiring)
-                ImGui::TextDisabled("Layer 2 is retiring safely; NR evaluation is paused.");
-            else if (!nrTelemetry.layer2Loaded)
-                ImGui::TextDisabled("Layer 2 requested: waiting for a lifecycle-only creation frame.");
-            else if (!nrTelemetry.layer2Ready)
-                ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
-            else
-                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
-                                   "Two composed NR layers ready.");
-        }
+            bool secondLayer = config->DlssNrSecondLayer.value_or_default();
+            if (vulkan)
+                ImGui::BeginDisabled();
+            if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
+                config->DlssNrSecondLayer = secondLayer;
+            if (vulkan)
+                ImGui::EndDisabled();
+
+            HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer"
+                       "\nframe. It inherits the first layer's model and composition settings."
+                       "\n\nEach layer owns separate temporal history. Enabling it roughly doubles"
+                       "\nthe model cost. This experiment implements the route on D3D12 only.");
+
+            if (vulkan)
+                ImGui::TextDisabled("Second neural-rendering layer unavailable on Vulkan in this experiment.");
+            else if (enabled && nrTelemetry.layer2Requested)
+            {
+                if (nrTelemetry.layer2Failed)
+                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Layer 2 unavailable: %s.",
+                                       nrTelemetry.layer2FailureReason);
+                else if (nrTelemetry.layer2Retiring)
+                    ImGui::TextDisabled("Layer 2 is retiring safely; NR evaluation is paused.");
+                else if (!nrTelemetry.layer2Loaded)
+                    ImGui::TextDisabled("Layer 2 requested: waiting for a lifecycle-only creation frame.");
+                else if (!nrTelemetry.layer2Ready)
+                    ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
+                else
+                    ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Two composed NR layers ready.");
+            }
+        };
+
         if (!enabled)
         {
             ImGui::TextDisabled("Rendering mode selected: %s.", renderModeNames[renderMode]);
@@ -213,14 +213,17 @@ void RenderMenu(Config* config, float menuResScale)
                                                   : "Quality requested: waiting for a successful Post-SR evaluation.");
         }
 
-        bool applyModel = config->DlssNrApplyModel.value_or_default();
-        if (ImGui::Checkbox("Apply the model", &applyModel))
-            config->DlssNrApplyModel = applyModel;
+        const auto renderApplyModelControl = [&]()
+        {
+            bool applyModel = config->DlssNrApplyModel.value_or_default();
+            if (ImGui::Checkbox("Apply the model", &applyModel))
+                config->DlssNrApplyModel = applyModel;
 
-        HelpMarker("Whether the model's edit is applied. Off shows the clean upscaler frame while the"
+            HelpMarker("Whether the model's edit is applied. Off shows the clean upscaler frame while the"
                        "\npass keeps running -- so with Hold frame (under Compare) you can freeze a"
                        "\nframe and toggle this to see the same frozen frame with and without Neural"
                        "\nRendering. Leave it on for normal use.");
+        };
 
         // Report the same locked D3D12 observation used above. A loaded model can be retained
         // while NR is disabled; its previous frame's cost must not imply current activity.
@@ -282,6 +285,7 @@ void RenderMenu(Config* config, float menuResScale)
                                   "\nsee what it is costing you.");
         }
 
+        renderApplyModelControl();
         ImGui::Spacing();
         ImGui::PushItemWidth(220.0f * menuResScale);
 
@@ -307,6 +311,14 @@ void RenderMenu(Config* config, float menuResScale)
         {
             config->DlssNrWorkingScale = std::clamp(pendingScale, 25, 200) / 100.0f;
             pendingScale = -1;
+        }
+
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset##NrModelResolution"))
+        {
+            config->DlssNrWorkingScale = 1.0f;
+            pendingScale = -1;
+            scalePercent = 100;
         }
 
         if (scalePercent > 100)
@@ -1184,6 +1196,9 @@ void RenderMenu(Config* config, float menuResScale)
                        "\ncentred on grey. A flat grey frame there means it is doing nothing.");
         }
 
+        ImGui::Spacing();
+        ImGui::Separator();
+        renderSecondLayerControls();
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
     }

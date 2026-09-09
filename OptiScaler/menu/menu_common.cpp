@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "menu_common.h"
+#include "Localization.h"
 #include <dlssnr/DlssNr_ExposureScan.h>
 
 #include <algorithm>
@@ -2280,6 +2281,26 @@ void MenuCommon::RenderMainMenuHeaderMessages(RenderMenuContext& ctx)
     auto& versionStatus = ctx.versionStatus;
     auto& currentVersionText = ctx.currentVersionText;
     auto& primaryGpu = *ctx.primaryGpu;
+
+    ImGui::TextUnformatted("Enjoying Neurotic? Support me on Ko-fi");
+    ImGui::SameLine();
+    if (ImGui::Button("Buy Me a Coffee"))
+    {
+        auto& platform = ImGui::GetPlatformIO();
+        if (platform.Platform_OpenInShellFn)
+            platform.Platform_OpenInShellFn(ImGui::GetCurrentContext(), "https://ko-fi.com/espiownage");
+    }
+
+    if (currentFeature != nullptr && !currentFeature->IsFrozen())
+    {
+        ImGui::Text("%dx%d -> %dx%d (%.1f) [%dx%d (%.1f)]", currentFeature->RenderWidth(),
+                    currentFeature->RenderHeight(), currentFeature->TargetWidth(), currentFeature->TargetHeight(),
+                    (float) currentFeature->TargetWidth() / (float) currentFeature->RenderWidth(),
+                    currentFeature->DisplayWidth(), currentFeature->DisplayHeight(),
+                    (float) currentFeature->DisplayWidth() / (float) currentFeature->RenderWidth());
+        ImGui::SameLine(0.0f, 4.0f);
+        ImGui::Text("%d", currentFeature->FrameCount());
+    }
 
     if (!_showMipmapCalcWindow && !_showHudlessWindow && !ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
         ImGui::SetWindowFocus();
@@ -6038,7 +6059,7 @@ void MenuCommon::RenderAdvancedSettings(RenderMenuContext& ctx)
 
     // ADVANCED SETTINGS -----------------------------
     ImGui::Spacing();
-    if (auto ch = ScopedCollapsingHeader("Advanced Settings"); ch.IsHeaderOpen())
+    if (auto ch = ScopedCollapsingHeader("Advanced Settings", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ImGui::Spacing();
@@ -6127,7 +6148,7 @@ void MenuCommon::RenderLoggingSettings(RenderMenuContext& ctx)
 
     // LOGGING -----------------------------
     ImGui::Spacing();
-    if (auto ch = ScopedCollapsingHeader("Logging"); ch.IsHeaderOpen())
+    if (auto ch = ScopedCollapsingHeader("Logging", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ImGui::Spacing();
@@ -7136,8 +7157,8 @@ void MenuCommon::RenderToolsPage(RenderMenuContext& ctx)
 
 void MenuCommon::RenderDiagnosticsPage(RenderMenuContext& ctx)
 {
-    RenderQuirksSettings(ctx);
     RenderLoggingSettings(ctx);
+    RenderQuirksSettings(ctx);
     RenderFpsOverlaySettings(ctx);
 }
 
@@ -7150,7 +7171,8 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if (!ImGui::BeginTabBar("MainMenuPages", ImGuiTabBarFlags_FittingPolicyScroll))
         return;
 
-    const float viewportRemaining = ctx.io.DisplaySize.y - 220.0f * ctx.menuResScale;
+    const float viewportRemaining = ctx.io.DisplaySize.y - ImGui::GetCursorScreenPos().y -
+                                    70.0f * ctx.menuResScale;
     const float pageHeight =
         std::max(120.0f * ctx.menuResScale, std::min(720.0f * ctx.menuResScale, viewportRemaining));
     const auto renderPage = [&](auto render)
@@ -7219,6 +7241,26 @@ void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
     ImGui::Checkbox("Show Graphs", &_showMainMenuGraphs);
     ImGui::SameLine();
     ShowHelpMarker("Show or hide the live frame-time and upscaler-time graphs. This only changes menu presentation.");
+
+    ImGui::SameLine(0.0f, 20.0f * menuResScale);
+    ImGui::SetNextItemWidth(180.0f * menuResScale);
+    const int language = Neurotic::LanguageIndex(config->MenuLanguage.value_or_default());
+    if (ImGui::BeginCombo("Language", Neurotic::Languages[language].name))
+    {
+        for (int i = 0; i < Neurotic::LanguageCount; ++i)
+        {
+            if (ImGui::Selectable(Neurotic::Languages[i].name, language == i))
+                config->MenuLanguage = std::string(Neurotic::Languages[i].code);
+            if (language == i)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    const char* disclaimer = "Sorry for bad translation.";
+    const float contentRight = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    if (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize(disclaimer).x < contentRight)
+        ImGui::SameLine();
+    ImGui::TextDisabled("%s", disclaimer);
 
     if (!_showMainMenuGraphs)
         return;
@@ -7355,28 +7397,10 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
     auto& state = ctx.state;
     auto config = ctx.config;
     auto& io = ctx.io;
-    auto& currentFeature = ctx.currentFeature;
     auto& menuResScale = ctx.menuResScale;
 
-    // BOTTOM LINE ---------------
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    if (currentFeature != nullptr && !currentFeature->IsFrozen())
-    {
-        ImGui::Text("%dx%d -> %dx%d (%.1f) [%dx%d (%.1f)]", currentFeature->RenderWidth(),
-                    currentFeature->RenderHeight(), currentFeature->TargetWidth(), currentFeature->TargetHeight(),
-                    (float) currentFeature->TargetWidth() / (float) currentFeature->RenderWidth(),
-                    currentFeature->DisplayWidth(), currentFeature->DisplayHeight(),
-                    (float) currentFeature->DisplayWidth() / (float) currentFeature->RenderWidth());
-
-        ImGui::SameLine(0.0f, 4.0f);
-
-        ImGui::Text("%d", currentFeature->FrameCount());
-
-        ImGui::SameLine(0.0f, 10.0f);
-    }
+    // Global controls remain at the very top of the window.
+    _selectedScale = config->MenuScale.has_value() ? ((int) (menuResScale * 10.0f)) - 4 : 0;
 
     ImGui::PushItemWidth(100.0f * menuResScale);
 
@@ -7431,13 +7455,14 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
 
     ImGui::SameLine();
 
-    auto textSize = ImGui::CalcTextSize("Open Wiki (?)");
+    auto textSize = ImGui::CalcTextSize("Open Wiki");
     auto& style = ImGui::GetStyle();
     textSize.x += style.FramePadding.x * 2.0f;
-    textSize.x += style.ItemSpacing.x;
+    textSize.x += style.ItemSpacing.x * 2.0f + ImGui::CalcTextSize("(?)").x;
 
     float avail = ImGui::GetContentRegionAvail().x;
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - textSize.x);
+    if (avail > textSize.x)
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - textSize.x);
 
     // Make button text underline
     if (ImGui::Button("Open Wiki"))
@@ -7771,12 +7796,10 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
     }
 
     // Main menu window
-    if (windowTitle.empty())
-    {
-        windowTitle = StrFmt("%s - %s %s %s %s", VER_PRODUCT_NAME, state.gameExe.c_str(),
-                             state.gameName.empty() ? "" : StrFmt("- %s", state.gameName.c_str()).c_str(),
-                             (state.detectedQuirks.size() > 0) ? "(Q)" : "", state.isOptiPatcherSucceed ? "(OP)" : "");
-    }
+    windowTitle = Neurotic::Translate(StrFmt("Neurotic Alpha 0.9.4 | Based on %s", VER_PRODUCT_NAME)) +
+                  StrFmt(" - %s %s %s %s###NeuroticMainMenu", state.gameExe.c_str(),
+                         state.gameName.empty() ? "" : StrFmt("- %s", state.gameName.c_str()).c_str(),
+                         (state.detectedQuirks.size() > 0) ? "(Q)" : "", state.isOptiPatcherSucceed ? "(OP)" : "");
 
     // Start flush with the main viewport's upper-right corner. ImGuiCond_Once leaves later
     // user-dragged positions alone, and avoiding per-frame recentering lets auto-resize add
@@ -7792,14 +7815,12 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
 
     if (ImGui::Begin(windowTitle.c_str(), NULL, flags))
     {
-        // Header/status messages shown above the page selector.
-        RenderMainMenuHeaderMessages(ctx);
+        RenderMainMenuBottomBar(ctx);
 
         // Performance graphs and their visibility toggle remain available above every page.
         RenderMainMenuGraphs(ctx);
 
-        // Readout and actions remain available before the page selector.
-        RenderMainMenuBottomBar(ctx);
+        RenderMainMenuHeaderMessages(ctx);
 
         // One selected top-level page replaces the old vertical two-column settings list.
         RenderMainMenuTabs(ctx);
@@ -7918,6 +7939,7 @@ bool MenuCommon::RenderMenu()
         return false;
 
     RenderMenuContext ctx { State::Instance(), Config::Instance(), ImGui::GetIO() };
+    Neurotic::SetLanguage(ctx.config->MenuLanguage.value_or_default());
     ctx.now = Util::MillisecondsNow();
     ctx.currentFeature = ctx.state.currentFeature;
 
@@ -8030,6 +8052,8 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
                                                                          fontSize, &fontConfig);
         }
     }
+
+    Neurotic::AddLanguageFonts(io.Fonts, fontSize);
 
     if (!Config::Instance()->OverlayMenu.value_or_default())
     {

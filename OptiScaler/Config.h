@@ -459,6 +459,7 @@ class Config
     CustomOptional<float, NoDefault> MagnifierStaticPosY; // % of screen Height
 
     // Menu
+    CustomOptional<std::string> MenuLanguage { "en" };
     CustomOptional<float, NoDefault> MenuScale;
     CustomOptional<bool> OverlayMenu { true };
     CustomOptional<int> ShortcutKey { VK_INSERT };

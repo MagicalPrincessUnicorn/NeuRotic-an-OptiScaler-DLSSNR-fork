@@ -1,0 +1,1039 @@
+# English inventory index, Spanish, French, German, Portuguese. = preserves technical notation; @N reuses row N.
+0	«La generación de fotogramas atrae a gente muy peculiar»	«La génération d'images attire vraiment une drôle de clientèle»	„Framegenerierung zieht wirklich seltsame Kundschaft an“	«A geração de quadros atrai gente muito peculiar»
+1	=	=	=	=
+2	=	=	=	=
+3	%.1f%% de la pantalla	%.1f%% de l'écran	%.1f%% des Bildschirms	%.1f%% da tela
+4	=	=	=	=
+5	=	=	=	=
+6	%.2f%% de la pantalla	%.2f%% de l'écran	%.2f%% des Bildschirms	%.2f%% da tela
+7	=	=	=	=
+8	%08x, %s->%s, Cantidad: %llu, %s	%08x, %s->%s, Nombre : %llu, %s	%08x, %s->%s, Anzahl: %llu, %s	%08x, %s->%s, Quantidade: %llu, %s
+9	=	=	=	=
+10	=	=	=	=
+11	=	=	=	=
+12	=	=	=	=
+13	%s activo: Pre-SR, antes del reescalado DLSS nativo.	%s actif : Pre-SR, avant la mise à l'échelle DLSS native.	%s aktiv: Pre-SR, vor dem nativen DLSS-Upscaling.	%s ativo: Pre-SR, antes do upscaling DLSS nativo.
+14	%s está activo, pero el juego no lo usa todavía. Entra en la partida.	%s est actif, mais pas encore utilisé par le jeu. Entrez en jeu.	%s ist aktiv, wird aber noch nicht vom Spiel genutzt. Bitte ins Spiel wechseln.	%s está ativo, mas o jogo ainda não o usa. Entre na partida.
+15	%s solicitado: cambiando de ruta; se retiene la salida NR.	%s demandé : changement de chemin ; sortie NR retenue.	%s angefordert: Pfadwechsel; NR-Ausgabe wird zurückgehalten.	%s solicitado: alterando o caminho; saída NR retida.
+16	%s solicitado: esperando una evaluación Pre-SR segura.	%s demandé : attente d'une évaluation Pre-SR sûre.	%s angefordert: sichere Pre-SR-Auswertung wird abgewartet.	%s solicitado: aguardando uma avaliação Pre-SR segura.
+17	%s exploración %.4f -> blanco %.2f%s	%s analyse %.4f -> blanc %.2f%s	%s Suche %.4f -> Weiß %.2f%s	%s análise %.4f -> branco %.2f%s
+18	%zu. %s -- aún sin leer	%zu. %s -- pas encore lu	%zu. %s -- noch nicht gelesen	%zu. %s -- ainda não lido
+19	%zu. %s = %.5f (observado %.5f..%.5f) %s	%zu. %s = %.5f (observé %.5f..%.5f) %s	%zu. %s = %.5f (beobachtet %.5f..%.5f) %s	%zu. %s = %.5f (observado %.5f..%.5f) %s
+20	(Activo: %d)	(Actif : %d)	(Aktiv: %d)	(Ativo: %d)
+21	(Nitidez actual: %.3f)	(Netteté actuelle : %.3f)	(Aktuelle Schärfe: %.3f)	(Nitidez atual: %.3f)
+22	(Nitidez actual: desactivada)	(Netteté actuelle : désactivée)	(Aktuelle Schärfe: deaktiviert)	(Nitidez atual: desativada)
+23	(Siguiendo el cursor)	(Suit actuellement le curseur)	(Folgt momentan dem Mauszeiger)	(Seguindo o cursor)
+24	(Error al interceptar)	(Échec de l'interception)	(Hook fehlgeschlagen)	(Falha na interceptação)
+25	(Posible alternativa FSR3)	(Repli FSR3 possible)	(Möglicher FSR3-Rückfall)	(Possível alternativa FSR3)
+26	(retenido: ausente en este fotograma)	(conservé : absent de cette image)	(gehalten: fehlt in diesem Frame)	(retido: ausente neste quadro)
+27	(inactivo)	(inactif)	(inaktiv)	(inativo)
+28	(modelo en ejecución, efecto oculto)	(modèle actif, effet masqué)	(Modell läuft, Effekt ausgeblendet)	(modelo em execução, efeito oculto)
+29	(la exploración solo observa; el punto blanco procede de otra fuente)	(l'analyse observe seulement ; le point blanc vient d'une autre source)	(die Suche beobachtet nur; der Weißpunkt stammt aus einer anderen Quelle)	(a análise apenas observa; o ponto branco vem de outra fonte)
+30	({} no admite más de {}x)	({} ne prend pas en charge plus de {}x)	({} unterstützt höchstens {}x)	({} não suporta mais de {}x)
+31	({} desactivado)	({} désactivé)	({} aus)	({} desativado)
+32	*Control de daños generativo a nivel geométrico*	*Contrôle des dégâts génératifs au niveau géométrique*	*Generative Schadensbegrenzung auf Geometrieebene*	*Controle de danos generativos na geometria*
+33	-1 sigue la estructura local y es el valor predeterminado del modelo, no intensidad cero. Desde 0, la piel se ajusta por separado.	-1 suit la structure locale : c'est le défaut du modèle, pas une intensité nulle. À partir de 0, la peau est réglée séparément.	-1 folgt der lokalen Struktur und ist der Modellstandard, nicht Stärke null. Ab 0 wird Haut unabhängig vom restlichen Bild eingestellt.	-1 segue a estrutura local e é o padrão do modelo, não intensidade zero. A partir de 0, a pele é ajustada separadamente.
+34	La versión 0.8 fue un trabajo interno	La version 0.8 était un coup monté de l'intérieur	Version 0.8 war ein Insiderjob	A versão 0.8 foi um trabalho interno
+35	Filtros de IA 2D, ahora con solo dos 5090	Filtres IA 2D, avec seulement deux 5090	2D-KI-Filter, jetzt mit nur zwei 5090	Filtros de IA 2D, agora com apenas duas 5090
+36	<Tu texto gracioso aquí>	<Votre texte drôle ici>	<Dein lustiger Text hier>	<Seu texto engraçado aqui>
+37	Un búfer encontrado por la exploración	Un tampon trouvé par l'analyse	Ein von der Suche gefundener Puffer	Um buffer encontrado pela análise
+38	Indicador en la esquina: rojo en la oscuridad, verde con luz plena, con la lectura al lado. Permite comprobar que la exploración sigue la iluminación. Al entrar en sombra debe virar a rojo; al salir, a verde. Si se mueve al revés, usa la opción anterior. Es solo informativo.	Voyant dans le coin : rouge dans l'obscurité, vert en pleine lumière, avec la mesure à côté. Il permet de vérifier que l'analyse suit l'éclairage. Il doit rougir à l'ombre et verdir à la lumière. S'il réagit à l'envers, utilisez l'option précédente. Affichage uniquement.	Anzeige in der Ecke: Rot bei Dunkelheit, Grün bei vollem Licht, mit Messwert daneben. So lässt sich erkennen, ob die Suche die Beleuchtung verfolgt. Im Schatten sollte sie rot, im Licht grün werden. Bei umgekehrtem Verhalten hilft die obige Einstellung. Reine Anzeige ohne Einfluss auf das Bild.	Indicador no canto: vermelho no escuro, verde sob luz plena, com a leitura ao lado. Permite verificar se a análise acompanha a iluminação. Na sombra deve ficar vermelho; na luz, verde. Se reagir ao contrário, use a opção acima. É apenas informativo.
+39	Multiplica la exposición del juego. 1.00x usa el valor exacto y es la referencia correcta. Necesitar un ajuste muy alejado de 1 indica una lectura incorrecta; 0.8–1.25 es razonable, pero 4 suele ocultar un problema anterior. El blanco de papel manual se conserva y se restaura al desactivar la opción anterior.	Multiplie l'exposition du jeu. 1.00x utilise sa valeur exacte et constitue la référence. Un réglage très éloigné de 1 indique une lecture incorrecte ; 0.8–1.25 est raisonnable, mais 4 masque généralement un problème en amont. Le blanc papier manuel est conservé et restauré quand l'option précédente est désactivée.	Multipliziert die Belichtung des Spiels. 1.00x übernimmt den Wert exakt und ist die richtige Referenz. Ein Wert weit von 1 weist auf eine falsche Messung hin; 0.8–1.25 ist plausibel, 4 verdeckt meist ein vorgelagertes Problem. Der manuelle Papierweißwert bleibt gespeichert und wird beim Abschalten der obigen Option wiederhergestellt.	Multiplica a exposição do jogo. 1.00x usa o valor exato e é a referência correta. Um ajuste muito distante de 1 indica uma leitura incorreta; 0.8–1.25 é razoável, mas 4 geralmente esconde um problema anterior. O branco do papel manual é preservado e restaurado ao desativar a opção acima.
+40	Multiplica el punto blanco de la exploración entre anclas. Ajusta hasta que la imagen se vea bien con la luz actual y pulsa Anclar aquí: guarda el valor ajustado como nueva ancla y restablece el multiplicador a 1.	Multiplie le point blanc de l'analyse entre les ancrages. Réglez l'image pour l'éclairage actuel puis cliquez sur Ancrer ici : la valeur corrigée devient un nouvel ancrage et le multiplicateur revient à 1.	Multipliziert den Weißpunkt der Suche zwischen Ankern. Bei aktueller Beleuchtung passend einstellen und Hier verankern drücken: Der korrigierte Wert wird als neuer Anker gespeichert, der Faktor auf 1 zurückgesetzt.	Multiplica o ponto branco da análise entre âncoras. Ajuste a imagem para a iluminação atual e pressione Ancorar aqui: o valor ajustado vira uma nova âncora e o multiplicador volta a 1.
+41	Ni la IA puede empeorar esto	Même l'IA ne peut pas faire pire	Selbst KI kann das nicht verschlimmbessern	Nem a IA consegue piorar isso
+42	Acum. añadida por fotograma	Accum. ajoutée par image	Akkumulation pro Frame	Acúmulo adicionado por quadro
+43	Color de acento	Couleur d'accentuation	Akzentfarbe	Cor de destaque
+44	Aceptar el primer HUDless	Accepter le premier HUDless	Erstes HUDless akzeptieren	Aceitar o primeiro HUDless
+45	Activo	Actif	Aktiv	Ativo
+46	DispatchFlags activos	DispatchFlags actifs	Aktive DispatchFlags	DispatchFlags ativos
+47	Particularidades activas	Particularités actives	Aktive Sonderfälle	Particularidades ativas
+48	Entrada activa: %s	Entrée active : %s	Aktive Eingabe: %s	Entrada ativa: %s
+49	Salida activa: %s	Sortie active : %s	Aktive Ausgabe: %s	Saída ativa: %s
+50	Avanzado	Avancé	Erweitert	Avançado
+51	Parámetros DA avanzados	Paramètres DA avancés	Erweiterte DA-Parameter	Parâmetros DA avançados
+52	Ajustes DLSS avanzados	Réglages DLSS avancés	Erweiterte DLSS-Einstellungen	Configurações DLSS avançadas
+53	Ajustes DLSSD avanzados	Réglages DLSSD avancés	Erweiterte DLSSD-Einstellungen	Configurações DLSSD avançadas
+54	Ajustes FG avanzados	Réglages FG avancés	Erweiterte FG-Einstellungen	Configurações FG avançadas
+55	Indicadores de inicio avanzados	Indicateurs d'initialisation avancés	Erweiterte Initialisierungsflags	Indicadores de inicialização avançados
+56	Ajustes OptiFG avanzados	Réglages OptiFG avancés	Erweiterte OptiFG-Einstellungen	Configurações OptiFG avançadas
+57	Ajustes avanzados	Réglages avancés	Erweiterte Einstellungen	Configurações avançadas
+58	Afecta a FSR-FG y a los reescaladores	Concerne FSR-FG et les moteurs de mise à l'échelle	Betrifft FSR-FG und Upscaler	Afeta FSR-FG e os upscalers
+59	Tras cambiar esta opción, guarda los ajustes. Se aplicará en el próximo inicio.	Après ce changement, enregistrez les réglages. Ils seront appliqués au prochain lancement.	Nach der Änderung Einstellungen speichern. Wird beim nächsten Start angewendet.	Após alterar esta opção, salve as configurações. Será aplicada na próxima inicialização.
+60	@59	@59	@59	@59
+61	Agresivo	Agressif	Aggressiv	Agressivo
+62	Todas las relaciones	Tous les rapports	Alle Verhältnisse	Todas as proporções
+63	Todos tus píxeles nos pertenecen	Tous vos pixels nous appartiennent	Alle deine Pixel gehören uns	Todos os seus pixels nos pertencem
+64	Permitir asincronía	Autoriser l'asynchrone	Asynchronität erlauben	Permitir assincronia
+65	Permite WaitForSingleObject en lugar de esperar activamente el valor de la barrera	Autorise WaitForSingleObject au lieu d'attendre activement la valeur de la barrière	Erlaubt WaitForSingleObject statt aktivem Warten auf den Fence-Wert	Permite WaitForSingleObject em vez de esperar ativamente pelo valor da barreira
+66	Permite XeLL sin FG en tarjetas no Intel. Desactiva las opciones FG. Requiere reiniciar.	Permet XeLL sans FG sur les cartes non Intel. Désactive les options FG. Redémarrage requis.	Erlaubt XeLL ohne FG auf Nicht-Intel-Karten. Deaktiviert FG-Optionen. Neustart erforderlich.	Permite XeLL sem FG em placas não Intel. Desativa as opções FG. Requer reinicialização.
+67	Permite dormir al bloqueo de temporización para reducir uso de CPU. Los FPS pueden aumentar más lentamente.	Permet au verrou de cadencement de dormir pour réduire l'usage CPU. La montée des FPS peut être plus lente.	Lässt die Timing-Warteschleife schlafen, um CPU-Last zu senken. FPS können langsamer ansteigen.	Permite que a espera de temporização durma para reduzir o uso de CPU. Os FPS podem subir mais lentamente.
+68	Permite una máscara reactiva. Una máscara enviada a DLSS puede dar malos resultados con FSR/XeSS.	Autorise un masque réactif. Un masque envoyé à DLSS peut produire une mauvaise image avec FSR/XeSS.	Erlaubt eine reaktive Maske. Eine für DLSS gelieferte Maske kann mit FSR/XeSS schlechte Bilder ergeben.	Permite uma máscara reativa. Uma máscara enviada ao DLSS pode produzir uma imagem ruim com FSR/XeSS.
+69	Rastrear siempre los heaps	Toujours suivre les heaps	Heaps immer verfolgen	Sempre rastrear heaps
+70	Rastrear siempre los recursos puede reducir el rendimiento, pero también corregir fallos de HUDFix.	Suivre constamment les ressources peut réduire les performances, mais aussi corriger des plantages HUDFix.	Ständige Ressourcenverfolgung kann Leistung kosten, aber auch HUDFix-Abstürze beheben.	Rastrear recursos continuamente pode reduzir o desempenho, mas também corrigir falhas do HUDFix.
+71	Un límite activo de 0 detecta automáticamente la frecuencia de la pantalla	Une limite active de 0 détecte automatiquement la fréquence de l'écran	Ein aktives Limit von 0 erkennt automatisch die Bildwiederholrate	Um limite ativo de 0 detecta automaticamente a frequência da tela
+72	Anclar aquí	Ancrer ici	Hier verankern	Ancorar aqui
+73	Y así se llega a 60 FPS	Et voilà comment atteindre 60 FPS	Und so erreicht man 60 FPS	E assim se chega a 60 FPS
+74	Filtrado anisotrópico	Filtrage anisotrope	Anisotrope Filterung	Filtragem anisotrópica
+75	=	=	=	=
+76	=	=	=	=
+77	Reducción de estelas (GB)	Réduction des traînées (GB)	Nachbildreduzierung (GB)	Redução de rastros (GB)
+78	Tinte rojo contra estelas	Teinte rouge anti-traînées	Roter Farbton der Nachbildkorrektur	Tonalidade vermelha antirrastros
+79	Pantalla dividida contra estelas	Écran partagé anti-traînées	Geteilter Bildschirm zur Nachbildkorrektur	Tela dividida antirrastros
+80	Aplicar cambio	Appliquer la modification	Änderung anwenden	Aplicar alteração
+81	Aplicar cambios	Appliquer les modifications	Änderungen anwenden	Aplicar alterações
+82	Aplicar límite	Appliquer la limite	Limit anwenden	Aplicar limite
+83	Aplicar objetivo	Appliquer la cible	Ziel anwenden	Aplicar alvo
+84	Aplicar temporización	Appliquer le cadencement	Timing anwenden	Aplicar temporização
+85	Usa la sustitución como multiplicador. En modo de escala, usa valores positivos para aumentar la nitidez.	Utilise la substitution comme multiplicateur. En mode échelle, utilisez des valeurs positives pour augmenter la netteté.	Verwendet den überschriebenen Wert als Faktor. Im Skalierungsmodus erhöhen positive Werte die Schärfe.	Usa a substituição como multiplicador. No modo de escala, use valores positivos para aumentar a nitidez.
+86	Aplicar el mismo valor a todas las texturas	Appliquer la même valeur à toutes les textures	Gleichen Wert auf alle Texturen anwenden	Aplicar o mesmo valor a todas as texturas
+87	Aplicar el modelo	Appliquer le modèle	Modell anwenden	Aplicar o modelo
+88	Más rojo indica más nitidez aplicada; las zonas verdes reciben menos nitidez.	Plus de rouge indique plus de netteté appliquée ; les zones vertes en reçoivent moins.	Rote Bereiche werden stärker, grüne Bereiche schwächer geschärft.	Mais vermelho indica mais nitidez aplicada; áreas verdes recebem menos nitidez.
+89	Detección de artefactos	Détection d'artefacts	Artefakterkennung	Detecção de artefatos
+90	Automático	Automatique	Automatisch	Automático
+91	Automático (%3.1f)	Automatique (%3.1f)	Automatisch (%3.1f)	Automático (%3.1f)
+92	Exposición automática	Exposition automatique	Automatische Belichtung	Exposição automática
+93	Máscara de piel automática	Masque de peau automatique	Automatische Hautmaske	Máscara de pele automática
+94	Opacidad del fondo	Opacité du fond	Hintergrunddeckkraft	Opacidade do fundo
+95	Color de fondo	Couleur de fond	Hintergrundfarbe	Cor de fundo
+96	Equilibrado	Équilibré	Ausgewogen	Equilibrado
+97	Preajuste equilibrado	Préréglage équilibré	Ausgewogene Voreinstellung	Predefinição equilibrada
+98	Porque el renderizado nativo está sobrevalorado.	Parce que le rendu natif est surestimé.	Weil natives Rendering überbewertet wird.	Porque a renderização nativa é superestimada.
+99	Ideal si es compatible. Algunos juegos, como Cyberpunk, recurren al modo agresivo.	Idéal si compatible. Certains jeux, comme Cyberpunk, se replient sur le mode agressif.	Am besten bei Kompatibilität. Manche Spiele, etwa Cyberpunk, fallen auf Aggressiv zurück.	Ideal quando compatível. Alguns jogos, como Cyberpunk, usam o modo agressivo como alternativa.
+100	Bicúbico	Bicubique	Bikubisch	Bicúbico
+101	Excluye recursos poco usados de HUDless para evitar parpadeos y otros problemas. Activar o desactivar HUDfix borra la lista de exclusión.	Exclut les ressources rarement utilisées de HUDless pour éviter les scintillements. Activer ou désactiver HUDfix réinitialise cette liste.	Sperrt selten genutzte Ressourcen für HUDless gegen Flackern und andere Probleme. Umschalten von HUDfix setzt die Sperrliste zurück.	Exclui recursos pouco usados de HUDless para evitar cintilação e outros problemas. Ativar ou desativar HUDfix limpa a lista de exclusão.
+102	Azul	Bleu	Blau	Azul
+103	Grosor del borde	Épaisseur du bord	Randbreite	Espessura da borda
+104	¡Se requiere modo sin bordes!	Mode sans bordure requis !	Randloser Anzeigemodus erforderlich!	Modo sem bordas necessário!
+105	Abajo a la izquierda	En bas à gauche	Unten links	Inferior esquerdo
+106	Abajo a la derecha	En bas à droite	Unten rechts	Inferior direito
+107	Invítame a un café	Offrez-moi un café	Spendier mir einen Kaffee	Pague-me um café
+108	Por defecto usa FSR Anti-Lag 2.0/XeLL si está disponible. Permite forzar LatencyFlex en su lugar.	Utilise FSR Anti-Lag 2.0/XeLL si disponible. Permet de forcer LatencyFlex à la place.	Nutzt standardmäßig FSR Anti-Lag 2.0/XeLL, falls verfügbar. Hier lässt sich stattdessen LatencyFlex erzwingen.	Usa FSR Anti-Lag 2.0/XeLL quando disponível. Permite forçar LatencyFlex em seu lugar.
+109	Calcular sesgo mipmap	Calculer le biais mipmap	Mipmap-Bias berechnen	Calcular viés mipmap
+110	Límite calculado: %.1f	Limite calculée : %.1f	Berechnetes Limit: %.1f	Limite calculado: %.1f
+111	Plano lejano de cámara	Plan lointain de la caméra	Ferne Kameraebene	Plano distante da câmera
+112	Depurar vectores de cámara	Débogage des vecteurs caméra	Kamera-Bewegungsvektoren debuggen	Depurar vetores da câmera
+113	Plano cercano de cámara	Plan proche de la caméra	Nahe Kameraebene	Plano próximo da câmera
+114	Compatible con cualquier salida FG. Requiere DLSS-FG activado en el juego. Admite HUDless directamente. Solo juegos con Streamline.	Compatible avec toute sortie FG. DLSS-FG doit être activé en jeu. HUDless pris en charge directement. Jeux Streamline uniquement.	Mit jeder FG-Ausgabe nutzbar. DLSS-FG muss im Spiel aktiv sein. HUDless wird direkt unterstützt. Nur Spiele mit Streamline.	Compatível com qualquer saída FG. Requer DLSS-FG ativado no jogo. Suporta HUDless diretamente. Apenas jogos com Streamline.
+115	Compatible con cualquier salida FG. Requiere FSR-FG activado en el juego. Admite HUDless directamente.	Compatible avec toute sortie FG. FSR-FG doit être activé en jeu. HUDless pris en charge directement.	Mit jeder FG-Ausgabe nutzbar. FSR-FG muss im Spiel aktiv sein. HUDless wird direkt unterstützt.	Compatível com qualquer saída FG. Requer FSR-FG ativado no jogo. Suporta HUDless diretamente.
+116	Puede corregir texturas borrosas. Valores negativos aumentan nitidez; positivos la reducen. Tiene un pequeño coste de rendimiento.	Peut corriger des textures floues. Les valeurs négatives accentuent la netteté ; les positives la réduisent. Faible coût en performances.	Kann unscharfe Texturen korrigieren. Negative Werte schärfen, positive machen unschärfer. Geringer Leistungsverlust.	Pode corrigir texturas borradas. Valores negativos aumentam a nitidez; positivos a reduzem. Pequeno custo de desempenho.
+117	No se encuentran nvngx.dll, libxess.dll ni entradas FSR. El reescalado NO funcionará.	Impossible de trouver nvngx.dll, libxess.dll et les entrées FSR. La mise à l'échelle NE fonctionnera PAS.	nvngx.dll, libxess.dll und FSR-Eingaben fehlen. Upscaling funktioniert NICHT.	nvngx.dll, libxess.dll e entradas FSR não encontrados. O upscaling NÃO funcionará.
+118	=	=	=	=
+119	Cambiar FG	Changer de FG	FG wechseln	Alterar FG
+120	Cambiar reescalador	Changer de moteur	Upscaler wechseln	Alterar upscaler
+121	Cinematográfico	Cinématique	Filmisch	Cinematográfico
+122	Limitar salida	Limiter la sortie	Ausgabe begrenzen	Limitar saída
+123	Limita la imagen a [0, 1] para evitar halos y colores negativos. Recomendado en LDR; opcional en HDR según el mapeo tonal. Sin ajuste explícito, OptiScaler usa el indicador HDR del reescalador.	Limite l'image à [0, 1] pour éviter halos et couleurs négatives. Conseillé en LDR ; facultatif en HDR selon le tone mapping. Sans réglage explicite, OptiScaler utilise l'indicateur HDR du moteur.	Begrenzt das Bild auf [0, 1] gegen Halos und negative Farben. Für LDR empfohlen, bei HDR abhängig vom Tonemapping optional. Ohne Vorgabe nutzt OptiScaler das HDR-Flag des Upscalers.	Limita a imagem a [0, 1] para evitar halos e cores negativas. Recomendado em LDR; opcional em HDR conforme o mapeamento tonal. Sem ajuste explícito, OptiScaler usa o indicador HDR do upscaler.
+124	Clásico	Classique	Klassisch	Clássico
+125	Limpiar	Effacer	Leeren	Limpar
+126	Pulsa una fila para editarla con el deslizador; vuelve a pulsarla para controlar el punto en vivo. > indica el punto actual.	Cliquez sur une ligne pour la régler avec le curseur, puis à nouveau pour contrôler le point en direct. > indique le point actif.	Zeile zum Bearbeiten mit dem Regler anklicken; erneut klicken steuert den Live-Punkt. > markiert den aktiven Punkt.	Clique numa linha para editá-la com o controle; clique novamente para controlar o ponto ao vivo. > indica o ponto atual.
+127	Abre la wiki de OptiScaler en el navegador: compatibilidad, problemas conocidos, soluciones, opciones FG y otra información.	Ouvre le wiki OptiScaler dans le navigateur : compatibilité, problèmes connus, solutions, options FG et autres informations.	Öffnet das OptiScaler-Wiki im Browser: Kompatibilität, bekannte Probleme, Lösungen, FG-Optionen und weitere Informationen.	Abre a wiki do OptiScaler no navegador: compatibilidade, problemas conhecidos, soluções, opções FG e outras informações.
+128	Cerrar	Fermer	Schließen	Fechar
+129	Color	Couleur	Farbe	Cor
+130	@129	@129	@129	@129
+131	Intensidad del color	Intensité des couleurs	Farbstärke	Intensidade da cor
+132	Combinado	Combiné	Kombiniert	Combinado
+133	Común	Commun	Allgemein	Comum
+134	Comparar	Comparer	Vergleichen	Comparar
+135	Compilando sombreadores... Tiempo estimado: 05h:49m	Compilation des shaders... Estimation : 05h:49m	Shader werden kompiliert... Restzeit: 05h:49m	Compilando shaders... Estimativa: 05h:49m
+136	Conservador	Conservateur	Konservativ	Conservador
+137	Considera renombrar OptiScaler de %s a otro nombre compatible para evitar problemas.	Envisagez de renommer OptiScaler de %s vers un autre nom compatible pour éviter des problèmes.	OptiScaler von %s in einen anderen unterstützten Namen umbenennen, um Probleme zu vermeiden.	Considere renomear OptiScaler de %s para outro nome compatível para evitar problemas.
+138	Los plebeyos de consola no pueden hacer esto	Les plébéiens sur console ne peuvent pas faire ça	Konsolen-Plebs können das nicht	A plebe dos consoles não consegue fazer isso
+139	Contraste	Contraste	Kontrast	Contraste
+140	Contraste activado	Contraste activé	Kontrast aktiviert	Contraste ativado
+141	Reduce la nitidez en bordes de profundidad. Valores altos evitan mejor cruzar límites de objetos y reducen halos; valores bajos dan más nitidez, con mayor riesgo de artefactos.	Réduit l'accentuation aux discontinuités de profondeur. Les valeurs élevées protègent mieux les contours et réduisent les halos ; les faibles donnent plus de netteté, avec davantage de risques.	Reduziert Schärfung an Tiefenkanten. Hohe Werte schützen Objektgrenzen stärker und mindern Halos; niedrige Werte ergeben mehr Schärfe, aber auch mehr Artefaktrisiko.	Reduz a nitidez nas bordas de profundidade. Valores altos protegem melhor os limites dos objetos e reduzem halos; valores baixos dão mais nitidez, com maior risco de artefatos.
+142	Controla la nitidez en zonas de alto contraste.	Contrôle la netteté des zones à fort contraste.	Steuert die Schärfe in kontrastreichen Bereichen.	Controla a nitidez em áreas de alto contraste.
+143	Intervalo de sincronización DXGI Present: 0 presenta inmediatamente, sin esperar VSync; 1 sincroniza cada refresco; 2 o más presenta cada N refrescos y reduce los FPS. Valores altos pueden reducir el desgarro, pero aumentan latencia y limitan FPS. Usa 0 para mínima latencia o 1 para VSync normal.	Intervalle DXGI Present : 0 affiche immédiatement, sans attente VSync ; 1 synchronise chaque rafraîchissement ; 2 ou plus affiche tous les N rafraîchissements et réduit les FPS. Les valeurs élevées peuvent réduire les déchirures mais augmenter la latence. Utilisez 0 pour la latence minimale ou 1 pour VSync normal.	DXGI-Present-Synchronisationsintervall: 0 zeigt sofort ohne VSync-Warten an; 1 synchronisiert jeden Bildwechsel; ab 2 wird nur alle N Bildwechsel präsentiert, wodurch die FPS sinken. Hohe Werte können Tearing reduzieren, aber Latenz erhöhen und FPS begrenzen. 0 für minimale Latenz oder 1 für normales VSync verwenden.	Intervalo de sincronização DXGI Present: 0 apresenta imediatamente sem esperar VSync; 1 sincroniza cada atualização; 2 ou mais apresenta a cada N atualizações, reduzindo os FPS. Valores altos podem reduzir cortes, mas aumentar a latência e limitar FPS. Use 0 para latência mínima ou 1 para VSync normal.
+144	Resígnate con inteligencia	Résignez-vous intelligemment	Cleverer schönreden	Conforme-se com inteligência
+145	La resignación es fuerte en este...	La résignation est puissante chez celui-ci...	Die Verdrängung ist stark in diesem hier...	A conformação é forte neste aqui...
+146	Acumulación añadida por fotograma donde aparece una zona antes oculta o la máscara reactiva supera 0.0f. Reducirla y marcar el objeto con estelas (sin vectores de movimiento) cerca de 1.0f en la máscara puede reducir estelas temporales, pero aumentar parpadeos en detalles finos.	Accumulation ajoutée par image dans les zones désoccultées ou où le masque réactif dépasse 0.0f. La réduire et marquer l'objet à traînées (sans vecteurs de mouvement) près de 1.0f dans le masque peut réduire les traînées temporelles, mais accroître le scintillement des détails fins.	Akkumulation pro Frame in neu sichtbaren Bereichen oder bei reaktiver Maske über 0.0f. Ein niedrigerer Wert und eine Maskierung des nachziehenden Objekts ohne Bewegungsvektoren nahe 1.0f können zeitliche Nachbilder reduzieren, aber feine Details stärker flackern lassen.	Acúmulo adicionado por quadro em áreas recém-reveladas ou onde a máscara reativa supera 0.0f. Reduzi-lo e marcar o objeto com rastros (sem vetores de movimento) perto de 1.0f na máscara pode reduzir rastros temporais, mas aumentar cintilação em detalhes finos.
+147	Actual: %.3f / %.3f	Actuel : %.3f / %.3f	Aktuell: %.3f / %.3f	Atual: %.3f / %.3f
+148	Actual: %.3f / %.3f, Objetivo: %.3f	Actuel : %.3f / %.3f, Cible : %.3f	Aktuell: %.3f / %.3f, Ziel: %.3f	Atual: %.3f / %.3f, Alvo: %.3f
+149	Actual: %.3f / %.3f, Objetivo: Base * %.3f	Actuel : %.3f / %.3f, Cible : Base * %.3f	Aktuell: %.3f / %.3f, Ziel: Basis * %.3f	Atual: %.3f / %.3f, Alvo: Base * %.3f
+150	Actual: %.3f / %.3f, Objetivo: Base + %.3f	Actuel : %.3f / %.3f, Cible : Base + %.3f	Aktuell: %.3f / %.3f, Ziel: Basis + %.3f	Atual: %.3f / %.3f, Alvo: Base + %.3f
+151	Estado DLSSG actual:	État DLSSG actuel :	Aktueller DLSSG-Status:	Estado atual do DLSSG:
+152	Estado FSR-FG actual:	État FSR-FG actuel :	Aktueller FSR-FG-Status:	Estado atual do FSR-FG:
+153	Estado Streamline FG actual:	État Streamline FG actuel :	Aktueller Streamline-FG-Status:	Estado atual do Streamline FG:
+154	Método actual: %s	Méthode actuelle : %s	Aktuelle Methode: %s	Método atual: %s
+155	Desplazamiento X del cursor	Décalage X du curseur	Mauszeigerversatz X	Deslocamento X do cursor
+156	Desplazamiento Y del cursor	Décalage Y du curseur	Mauszeigerversatz Y	Deslocamento Y do cursor
+157	Color de acento personalizado	Couleur d'accent personnalisée	Eigene Akzentfarbe	Cor de destaque personalizada
+158	Color de fondo personalizado	Couleur de fond personnalisée	Eigene Hintergrundfarbe	Cor de fundo personalizada
+159	Recorta la transparencia de la interfaz para ayudar a interpolar. Usa Mostrar interfaz detectada para comparar. 0.0 es automático.	Limite la transparence de l'interface pour aider l'interpolation. Utilisez Afficher l'interface détectée pour comparer. 0.0 est automatique.	Beschneidet UI-Transparenz für bessere Interpolation. Mit Erkannte UI anzeigen vergleichen. 0.0 bedeutet automatisch.	Recorta a transparência da interface para ajudar a interpolação. Use Mostrar interface detectada para comparar. 0.0 é automático.
+160	D3D11 con DX12	D3D11 avec DX12	D3D11 mit DX12	D3D11 com DX12
+161	Depuración DA + MAS	Débogage DA + MAS	DA- und MAS-Debugging	Depuração DA + MAS
+162	Versión DE: %d.%d.%d.%d Versión GB: %d.%d	Version DE : %d.%d.%d.%d Version GB : %d.%d	DE-Version: %d.%d.%d.%d GB-Version: %d.%d	Versão DE: %d.%d.%d.%d Versão GB: %d.%d
+163	Preajuste DLAA	Préréglage DLAA	DLAA-Voreinstellung	Predefinição DLAA
+164	DLSS 3.7+: preajuste D mejorado. ¡Eliminado en versiones recientes!	DLSS 3.7+ : préréglage D amélioré. Supprimé des versions récentes !	DLSS 3.7+: verbesserte D-Voreinstellung. In neueren Versionen entfernt!	DLSS 3.7+: predefinição D melhorada. Removida nas versões recentes!
+165	DLSS 5: así se supone que se embadurna	DLSS 5 : la bouillie comme vous ne l'avez jamais vue	DLSS 5: So soll Bildmatsch aussehen	DLSS 5: a meleca como deve ser
+166	DLSS Enabler como dlss-enabler-headless.dll	DLSS Enabler sous dlss-enabler-headless.dll	DLSS Enabler als dlss-enabler-headless.dll	DLSS Enabler como dlss-enabler-headless.dll
+167	Renderizado neuronal DLSS	Rendu neuronal DLSS	Neuronales DLSS-Rendering	Renderização neural DLSS
+168	Ajustes DLSS	Réglages DLSS	DLSS-Einstellungen	Configurações DLSS
+169	DLSS con Dx12	DLSS avec Dx12	DLSS mit Dx12	DLSS com Dx12
+170	Ajustes DLSSD	Réglages DLSSD	DLSSD-Einstellungen	Configurações DLSSD
+171	DLSSG se desactiva intencionadamente mientras este menú está visible	DLSSG est volontairement désactivé lorsque ce menu est visible	DLSSG wird bei sichtbarem Menü absichtlich deaktiviert	DLSSG é desativado intencionalmente enquanto este menu está visível
+172	DLSSG solo admite HDR10	DLSSG ne prend en charge que HDR10	DLSSG unterstützt nur HDR10	DLSSG suporta apenas HDR10
+173	La salida DLSSG puede combinarse, por ejemplo, con la de Nukem	La sortie DLSSG peut être combinée à celle de Nukem, par exemple	DLSSG-Ausgabe lässt sich beispielsweise mit Nukems Lösung kombinieren	A saída DLSSG pode ser combinada, por exemplo, com a de Nukem
+174	DLSSG mediante Nvngx	DLSSG via Nvngx	DLSSG über Nvngx	DLSSG via Nvngx
+175	DLSSG mediante Streamline	DLSSG via Streamline	DLSSG über Streamline	DLSSG via Streamline
+176	Objetivo FPS de DMFG	Cible FPS DMFG	DMFG-FPS-Ziel	Alvo FPS do DMFG
+177	DRS (resolución dinámica)	DRS (résolution dynamique)	DRS (dynamische Auflösung)	DRS (resolução dinâmica)
+178	DXVK con Dx12	DXVK avec Dx12	DXVK mit Dx12	DXVK com Dx12
+179	Depuración	Débogage	Debugging	Depuração
+180	Líneas de cadencia	Lignes de cadencement	Timing-Debuglinien	Linhas de cadência
+181	Líneas de reinicio	Lignes de réinitialisation	Reset-Debuglinien	Linhas de reinicialização
+182	Líneas de desgarro	Lignes de déchirure	Tearing-Debuglinien	Linhas de corte
+183	Vista de depuración	Vue de débogage	Debugansicht	Visualização de depuração
+184	@183	@183	@183	@183
+185	Depuración: azul donde se usan vectores de cámara alternativos	Débogage : bleu où les vecteurs caméra de repli sont utilisés	Debug: Blau bei Verwendung der Kamera-Ersatzbewegungsvektoren	Depuração: azul onde são usados vetores alternativos da câmera
+186	Depuración: rojo en píxeles corregidos	Débogage : rouge sur les pixels corrigés	Debug: Rot auf korrigierten Pixeln	Depuração: vermelho nos pixels corrigidos
+187	Depuración: comparación dividida	Débogage : comparaison sur écran partagé	Debug: Vergleich auf geteiltem Bildschirm	Depuração: comparação em tela dividida
+188	Depuración: visualización trapezoidal	Débogage : zone trapézoïdale	Debug: Trapezbereich anzeigen	Depuração: área trapezoidal
+189	Muestreo profundo de porquería 5	Échantillonnage profond de bouillie 5	Deep-Learning-Bildmatsch 5	Amostragem profunda de meleca 5
+190	Predeterminado	Par défaut	Standard	Padrão
+191	Predeterminado (estándar)	Par défaut (standard)	Standard (normal)	Padrão (normal)
+192	Predeterminado para rendimiento. Transformer de 2.ª generación	Défaut pour Performance. Transformer de 2e génération	Standard für Leistung. Transformer der 2. Generation	Padrão para desempenho. Transformer de 2ª geração
+193	Predeterminado para ultrarrendimiento. Transformer de 2.ª generación	Défaut pour Ultra performance. Transformer de 2e génération	Standard für Ultra-Leistung. Transformer der 2. Generation	Padrão para ultradesempenho. Transformer de 2ª geração
+194	Predeterminado deja elegir al modelo. La numeración no equivale a los preajustes de superresolución o reconstrucción de rayos.	Par défaut laisse le modèle choisir. La numérotation ne correspond pas aux préréglages de super-résolution ou de reconstruction des rayons.	Standard überlässt die Wahl dem Modell. Die Nummern entsprechen nicht den Super-Resolution- oder Ray-Reconstruction-Voreinstellungen.	Padrão deixa o modelo escolher. A numeração não corresponde às predefinições de super-resolução ou reconstrução de raios.
+195	Modelo predeterminado, Transformer	Modèle par défaut, Transformer	Standardmodell, Transformer	Modelo padrão, Transformer
+196	Opción predeterminada: calidad suficiente y muy rápida.	Option par défaut : qualité satisfaisante et très rapide.	Standardoption: ausreichende Bildqualität und sehr schnell.	Opção padrão: qualidade suficiente e muito rápida.
+197	Predeterminado para DLAA/equilibrado/calidad. Transformer de 1.ª generación	Défaut pour DLAA/Équilibré/Qualité. Transformer de 1re génération	Standard für DLAA/Ausgewogen/Qualität. Transformer der 1. Generation	Padrão para DLAA/equilibrado/qualidade. Transformer de 1ª geração
+198	Predeterminado para rendimiento/equilibrado/calidad; prioriza estabilidad. ¡Eliminado en versiones recientes!	Défaut pour Performance/Équilibré/Qualité ; privilégie la stabilité. Supprimé des versions récentes !	Standard für Leistung/Ausgewogen/Qualität; bevorzugt Stabilität. In neueren Versionen entfernt!	Padrão para desempenho/equilibrado/qualidade; prioriza estabilidade. Removido nas versões recentes!
+199	Predeterminado para ultrarrendimiento y DLAA. ¡Eliminado en versiones recientes!	Défaut pour Ultra performance et DLAA. Supprimé des versions récentes !	Standard für Ultra-Leistung und DLAA. In neueren Versionen entfernt!	Padrão para ultradesempenho e DLAA. Removido nas versões recentes!
+200	Intervalo de movimiento donde el efecto pasa de cero a intensidad total, a partir del umbral. Un intervalo mayor suaviza y ralentiza la respuesta; uno menor la hace más rápida y agresiva.	Plage de mouvement où l'effet passe de zéro à pleine intensité après le seuil. Une plage large adoucit la réponse ; une petite la rend plus rapide et agressive.	Bewegungsbereich, in dem der Effekt oberhalb der Schwelle von null auf volle Stärke steigt. Größere Werte ergeben weichere Übergänge, kleinere eine schnellere und stärkere Reaktion.	Faixa de movimento em que o efeito passa de zero à intensidade total após o limiar. Uma faixa maior suaviza a resposta; uma menor a torna mais rápida e agressiva.
+201	Retrasa la captura HUDless. ¡Valores altos pueden causar fallos!	Retarde la capture HUDless. Des valeurs élevées peuvent provoquer des plantages !	Verzögert HUDless-Aufnahme. Hohe Werte können Abstürze verursachen!	Atrasa a captura HUDless. Valores altos podem causar falhas!
+202	Profundidad	Profondeur	Tiefe	Profundidade
+203	Adaptación a profundidad (DAS)	Selon la profondeur (DAS)	Tiefenabhängig (DAS)	Adaptado à profundidade (DAS)
+204	Adaptación a profundidad (RCAS)	Selon la profondeur (RCAS)	Tiefenabhängig (RCAS)	Adaptado à profundidade (RCAS)
+205	Sesgo de profundidad	Biais de profondeur	Tiefenbias	Viés de profundidade
+206	Profundidad invertida	Profondeur inversée	Invertierte Tiefe	Profundidade invertida
+207	Escala de profundidad	Échelle de profondeur	Tiefenskalierung	Escala de profundidade
+208	Profundidad como ValidNow	Profondeur comme ValidNow	Tiefe als ValidNow	Profundidade como ValidNow
+209	La profundidad se divide entre este valor	La profondeur est divisée par cette valeur	Tiefenwerte werden durch diesen Wert geteilt	A profundidade é dividida por este valor
+210	Diseñado para reducir resolución. Buen contraste y pocos artefactos, pero más suave que Lanczos.	Conçu pour réduire la résolution. Bon contraste et peu d'artefacts, mais plus doux que Lanczos.	Für Verkleinerung ausgelegt. Guter Kontrast bei wenigen Artefakten, aber weicher als Lanczos.	Projetado para reduzir resolução. Bom contraste e poucos artefatos, mas mais suave que Lanczos.
+211	Intensidad del detalle	Intensité des détails	Detailstärke	Intensidade do detalhe
+212	Detallado	Détaillé	Detailliert	Detalhado
+213	Detallado + gráfico	Détaillé + graphique	Detailliert + Diagramm	Detalhado + gráfico
+214	Diagnóstico	Diagnostic	Diagnose	Diagnóstico
+215	¿Sabías que Intel lanzó XeFG para todos?	Saviez-vous qu'Intel a rendu XeFG accessible à tous ?	Wusstest du, dass Intel XeFG für alle veröffentlicht hat?	Sabia que a Intel lançou XeFG para todos?
+216	¿De verdad pagaste 70 EUR por este juego?	Vous avez vraiment payé 70 EUR pour ce jeu ?	Hast du wirklich 70 EUR für dieses Spiel bezahlt?	Você realmente pagou 70 EUR por este jogo?
+217	Diferencia (amplificada)	Différence (amplifiée)	Differenz (verstärkt)	Diferença (amplificada)
+218	Desactivar	Désactiver	Deaktivieren	Desativar
+219	Desactivar rastreo DI	Désactiver le suivi DI	DI-Verfolgung deaktivieren	Desativar rastreamento DI
+220	Desactivar rastreo DII	Désactiver le suivi DII	DII-Verfolgung deaktivieren	Desativar rastreamento DII
+221	Desactivar rastreo Dispatch	Désactiver le suivi Dispatch	Dispatch-Verfolgung deaktivieren	Desativar rastreamento Dispatch
+222	Desactiva interpolación del HUD/interfaz y restaura el comportamiento XeFG 2. Corrige artefactos en elementos transparentes.	Désactive l'interpolation HUD/interface et rétablit XeFG 2. Corrige les artefacts des éléments transparents.	Deaktiviert HUD/UI-Interpolation und stellt das XeFG-2-Verhalten wieder her. Behebt Artefakte transparenter Elemente.	Desativa a interpolação do HUD/interface e restaura o comportamento XeFG 2. Corrige artefatos em elementos transparentes.
+223	Desactivar HUDless	Désactiver HUDless	HUDless deaktivieren	Desativar HUDless
+224	Desactivar rastreo OM	Désactiver le suivi OM	OM-Verfolgung deaktivieren	Desativar rastreamento OM
+225	Desactivar rastreo RTV	Désactiver le suivi RTV	RTV-Verfolgung deaktivieren	Desativar rastreamento RTV
+226	Desactivar máscara reactiva	Désactiver le masque réactif	Reaktive Maske deaktivieren	Desativar máscara reativa
+227	Desactivar rastreo SCR	Désactiver le suivi SCR	SCR-Verfolgung deaktivieren	Desativar rastreamento SCR
+228	Desactivar rastreo SGR	Désactiver le suivi SGR	SGR-Verfolgung deaktivieren	Desativar rastreamento SGR
+229	Desactivar rastreo SRV	Désactiver le suivi SRV	SRV-Verfolgung deaktivieren	Desativar rastreamento SRV
+230	Desactivar rastreo UAV	Désactiver le suivi UAV	UAV-Verfolgung deaktivieren	Desativar rastreamento UAV
+231	Desactivar textura de interfaz	Désactiver la texture d'interface	UI-Textur deaktivieren	Desativar textura da interface
+232	Desactiva el rastreo de CreateRenderTargetView. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de CreateRenderTargetView. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von CreateRenderTargetView. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de CreateRenderTargetView. Pode ajudar a excluir recursos HUDless incorretos.
+233	Desactiva el rastreo de CreateShaderResourceView. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de CreateShaderResourceView. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von CreateShaderResourceView. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de CreateShaderResourceView. Pode ajudar a excluir recursos HUDless incorretos.
+234	Desactiva el rastreo de CreateUnorderedAccessView. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de CreateUnorderedAccessView. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von CreateUnorderedAccessView. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de CreateUnorderedAccessView. Pode ajudar a excluir recursos HUDless incorretos.
+235	Desactiva el rastreo de Dispatch. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de Dispatch. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von Dispatch. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de Dispatch. Pode ajudar a excluir recursos HUDless incorretos.
+236	Desactiva el rastreo de DrawIndexedInstanced. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de DrawIndexedInstanced. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von DrawIndexedInstanced. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de DrawIndexedInstanced. Pode ajudar a excluir recursos HUDless incorretos.
+237	Desactiva el rastreo de DrawInstanced. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de DrawInstanced. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von DrawInstanced. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de DrawInstanced. Pode ajudar a excluir recursos HUDless incorretos.
+238	Desactiva el rastreo de OMSetRenderTargets. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de OMSetRenderTargets. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von OMSetRenderTargets. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de OMSetRenderTargets. Pode ajudar a excluir recursos HUDless incorretos.
+239	Desactiva el rastreo de SetComputeRootDescriptorTable. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de SetComputeRootDescriptorTable. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von SetComputeRootDescriptorTable. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de SetComputeRootDescriptorTable. Pode ajudar a excluir recursos HUDless incorretos.
+240	Desactiva el rastreo de SetGraphicsRootDescriptorTable. Puede ayudar a excluir recursos HUDless incorrectos.	Désactive le suivi de SetGraphicsRootDescriptorTable. Peut aider à exclure les mauvaises ressources HUDless.	Deaktiviert die Verfolgung von SetGraphicsRootDescriptorTable. Kann falsche HUDless-Ressourcen herausfiltern.	Desativa o rastreamento de SetGraphicsRootDescriptorTable. Pode ajudar a excluir recursos HUDless incorretos.
+241	Tinte de desoclusión	Teinte de désoccultation	Farbe neu sichtbarer Bereiche	Tonalidade de desoclusão
+242	Pant.	Écran	Anzeige	Tela
+243	Vectores a resolución de pantalla	Vecteurs à la résolution d'écran	Bewegungsvektoren in Anzeigeauflösung	Vetores na resolução da tela
+244	Ancho de pantalla	Largeur d'écran	Anzeigebreite	Largura da tela
+245	Mostrar solo fotogramas generados por FSR 3.1	Afficher uniquement les images générées par FSR 3.1	Nur von FSR 3.1 generierte Frames anzeigen	Mostrar apenas quadros gerados por FSR 3.1
+246	No usar HUDless de ffxConfig	Ne pas utiliser HUDless de ffxConfig	HUDless aus ffxConfig nicht verwenden	Não usar HUDless de ffxConfig
+247	No usar HUDless de ffxDispatch	Ne pas utiliser HUDless de ffxDispatch	HUDless aus ffxDispatch nicht verwenden	Não usar HUDless de ffxDispatch
+248	No existe	N'existe pas	Nicht vorhanden	Não existe
+249	@248	@248	@248	@248
+250	No usar NTShared	Ne pas utiliser NTShared	NTShared nicht verwenden	Não usar NTShared
+251	No usar señales de reinicio de entradas FG	Ignorer les signaux de réinitialisation des entrées FG	Reset-Signale der FG-Eingaben ignorieren	Não usar sinais de reinicialização das entradas FG
+252	Reductor de resolución	Réducteur de résolution	Verkleinerungsfilter	Redutor de resolução
+253	Reductor de resolución (NR)	Réducteur de résolution (NR)	Verkleinerungsfilter (NR)	Redutor de resolução (NR)
+254	Superponer interfaz	Superposer l'interface	UI darüberzeichnen	Sobrepor interface
+255	Dibuja la interfaz sobre la imagen final. ¡Actívalo si falta la interfaz!	Dessine l'interface sur l'image finale. Activez si elle est absente !	Zeichnet die UI über das fertige Bild. Bei fehlender UI aktivieren!	Desenha a interface sobre a imagem final. Ative se ela não aparecer!
+256	Controlador	Pilote	Treiber	Driver
+257	Volcar (Mayús+Supr)	Exporter (Maj+Suppr)	Speicherabbild (Umschalt+Entf)	Exportar (Shift+Del)
+258	Ajustes Dx11 con Dx12	Réglages Dx11 avec Dx12	Dx11-mit-Dx12-Einstellungen	Configurações Dx11 com Dx12
+259	Cada preajuste interno FSR4 corresponde a una resolución; elegirlo NO cambia el preajuste del juego. 0: FSR Native AA; 1: calidad/ultracalidad; 2: equilibrado; 3: rendimiento; 4: DRS; 5: ultrarrendimiento.	Chaque préréglage interne FSR4 vise une résolution ; il NE change PAS celui du jeu. 0 : FSR Native AA ; 1 : Qualité/Ultra qualité ; 2 : Équilibré ; 3 : Performance ; 4 : DRS ; 5 : Ultra performance.	Jede interne FSR4-Voreinstellung ist für eine Auflösung gedacht; sie ändert NICHT die Spieleinstellung. 0: FSR Native AA; 1: Qualität/Ultra-Qualität; 2: Ausgewogen; 3: Leistung; 4: DRS; 5: Ultra-Leistung.	Cada predefinição interna FSR4 visa uma resolução; ela NÃO muda a predefinição do jogo. 0: FSR Native AA; 1: qualidade/ultraqualidade; 2: equilibrado; 3: desempenho; 4: DRS; 5: ultradesempenho.
+260	Cada preajuste tiene ventajas e inconvenientes. Sustituirlo puede mejorar la imagen. Pulsa Aplicar tras activarlo o desactivarlo.	Chaque préréglage a ses avantages et limites. Le remplacer peut améliorer l'image. Cliquez sur Appliquer après activation ou désactivation.	Jede Voreinstellung hat Stärken und Schwächen. Überschreiben kann die Bildqualität verbessern. Nach dem Umschalten Anwenden drücken.	Cada predefinição tem vantagens e limitações. Substituí-la pode melhorar a imagem. Pressione Aplicar após ativar ou desativar.
+261	@260	@260	@260	@260
+262	Activar	Activer	Aktivieren	Ativar
+263	Activa asincronía para mejorar FG. ¡Puede causar fallos, especialmente con HUD Fix!	Active l'asynchrone pour accélérer FG. Risque de plantage, surtout avec HUD Fix !	Aktiviert Asynchronität für bessere FG-Leistung. Absturzgefahr, besonders mit HUD Fix!	Ativa assincronia para melhorar FG. Pode causar falhas, especialmente com HUD Fix!
+264	Vistas DA + MAS: azul para bordes detectados por DA; rojo para más nitidez y verde para menos.	Vues DA + MAS : bleu pour les contours détectés par DA ; rouge pour plus de netteté, vert pour moins.	DA- und MAS-Debugansichten: Blau für erkannte Tiefenkanten, Rot für stärkere und Grün für schwächere Schärfung.	Visualizações DA + MAS: azul para bordas detectadas por DA; vermelho para mais nitidez e verde para menos.
+265	Activar vista de depuración	Activer la vue de débogage	Debugansicht aktivieren	Ativar visualização de depuração
+266	Activar límites ampliados	Activer les limites étendues	Erweiterte Grenzen aktivieren	Ativar limites ampliados
+267	Depuración FSR3.1-FG. Arriba: vectores del juego, profundidad GMV, vectores de flujo óptico. Centro: solo imagen interpolada. Abajo: máscara de desoclusión, fuente sin interfaz, recurso HUDless.	Débogage FSR3.1-FG. En haut : vecteurs du jeu, profondeur GMV, vecteurs de flux optique. Centre : image interpolée seule. En bas : masque de désoccultation, source sans interface, ressource HUDless.	FSR3.1-FG-Debugansicht. Oben: Spielbewegungsvektoren, GMV-Tiefe, optischer Fluss. Mitte: nur interpolierter Frame. Unten: Maske neu sichtbarer Bereiche, Quelle ohne UI, HUDless-Ressource.	Depuração FSR3.1-FG. Acima: vetores do jogo, profundidade GMV, vetores de fluxo óptico. Centro: apenas quadro interpolado. Abaixo: máscara de desoclusão, fonte sem interface, recurso HUDless.
+268	Activar generación de fotogramas	Activer la génération d'images	Framegenerierung aktivieren	Ativar geração de quadros
+269	Corrección de estabilidad HUD. ¡Puede causar fallos!	Correction de stabilité HUD. Risque de plantage !	HUD-Stabilitätskorrektur. Kann Abstürze verursachen!	Correção de estabilidade do HUD. Pode causar falhas!
+270	Activar espera híbrida	Activer l'attente hybride	Hybrides Warten aktivieren	Ativar espera híbrida
+271	Activar lupa	Activer la loupe	Lupe aktivieren	Ativar lupa
+272	Activar nitidez adaptada al movimiento	Activer la netteté adaptée au mouvement	Bewegungsabhängige Schärfe aktivieren	Ativar nitidez adaptada ao movimento
+273	Activar renderizado neuronal	Activer le rendu neuronal	Neuronales Rendering aktivieren	Ativar renderização neural
+274	Activa el filtro de nitidez de OptiScaler. Por defecto usa el valor del juego; para cambiarlo, elige Sustituir en Nitidez y ajusta el deslizador. Algunos reescaladores tienen su propio filtro, por lo que puede no ser necesario.	Active le filtre de netteté OptiScaler. Utilise par défaut la valeur du jeu ; choisissez Remplacer dans Netteté pour la régler. Certains moteurs ont leur propre filtre et n'en ont pas besoin.	Aktiviert OptiScalers Schärfefilter. Standardmäßig gilt der Spielwert; zum Ändern unter Schärfe Überschreiben wählen. Einige Upscaler besitzen eigene Filter, sodass dieser unnötig sein kann.	Ativa o filtro de nitidez do OptiScaler. Por padrão usa o valor do jogo; escolha Substituir em Nitidez para ajustá-lo. Alguns upscalers têm filtro próprio, dispensando esta opção.
+275	Activar RCAS/DA	Activer RCAS/DA	RCAS/DA aktivieren	Ativar RCAS/DA
+276	Activar ajuste fino	Activer les réglages fins	Feinabstimmung aktivieren	Ativar ajuste fino
+277	Activar WaitForSingleObjectOnFence	Activer WaitForSingleObjectOnFence	WaitForSingleObjectOnFence aktivieren	Ativar WaitForSingleObjectOnFence
+278	Activar marca de agua	Activer le filigrane	Wasserzeichen aktivieren	Ativar marca d'água
+279	Activar depuración XeFG	Activer le débogage XeFG	XeFG-Debugansicht aktivieren	Ativar depuração XeFG
+280	Activar corrección de estelas	Activer la correction des traînées	Nachbildkorrektur aktivieren	Ativar correção de rastros
+281	Activar segunda capa de renderizado neuronal	Activer une seconde couche de rendu neuronal	Zweite neuronale Rendering-Ebene aktivieren	Ativar segunda camada de renderização neural
+282	Fijación temporal del HUD (estabilidad del búfer de presentación)	Ancrage temporel HUD (stabilité du tampon de présentation)	Zeitliche HUD-Fixierung (Stabilität des Präsentationspuffers)	Fixação temporal do HUD (estabilidade do buffer de apresentação)
+283	=	=	=	=
+284	Captura recursos antes de ejecutar el sombreador. Mejora las posibilidades de captura HUDless, pero puede incluir recursos innecesarios.	Capture les ressources avant les shaders. Améliore les chances de capture HUDless, mais peut inclure des ressources inutiles.	Erfasst Ressourcen vor Shaderausführung. Erhöht die HUDless-Erfassungschance, kann aber unnötige Ressourcen einschließen.	Captura recursos antes dos shaders. Aumenta as chances de captura HUDless, mas pode incluir recursos desnecessários.
+285	Dibuja líneas de interpolación omitida	Dessine les lignes d'interpolation ignorée	Zeigt Linien übersprungener Interpolation	Desenha linhas de interpolação ignorada
+286	Dibuja líneas de cadencia	Dessine les lignes de cadencement	Zeigt Timing-Linien	Desenha linhas de cadência
+287	Dibuja líneas de desgarro e interpolación omitida	Dessine les lignes de déchirure et d'interpolation ignorée	Zeigt Tearing-Linien und übersprungene Interpolation	Desenha linhas de corte e interpolação ignorada
+288	Ajusta la nitidez según el movimiento	Adapte la netteté au mouvement	Passt die Schärfe an die Bewegung an	Ajusta a nitidez conforme o movimento
+289	Activando DLSS desde 2023	Active DLSS depuis 2023	Aktiviert DLSS seit 2023	Ativando DLSS desde 2023
+290	¿Disfrutas de Neurotic? Apóyame en Ko-fi	Vous aimez Neurotic ? Soutenez-moi sur Ko-fi	Gefällt dir Neurotic? Unterstütze mich auf Ko-fi	Gostando do Neurotic? Apoie-me no Ko-fi
+291	Ampliación	Agrandissement	Vergrößerung	Ampliação
+292	Error	Erreur	Fehler	Erro
+293	Esc para cancelar, Retroceso para quitar la asignación	Échap pour annuler, Retour arrière pour supprimer le raccourci	Esc zum Abbrechen, Rücktaste zum Aufheben	Esc para cancelar, Backspace para remover a atribuição
+294	¡También admite XeSS por software!	Prend même en charge XeSS « logiciel » !	Unterstützt sogar „Software“-XeSS!	Até suporta XeSS por software!
+295	Existe	Existe	Vorhanden	Existe
+296	@295	@295	@295	@295
+297	Ampliado y mejorado	Étendu et amélioré	Erweitert und verbessert	Ampliado e aprimorado
+298	Exposición	Exposition	Belichtung	Exposição
+299	Ampliado	Étendu	Erweitert	Ampliado
+300	Ajustes FSR FG ampliados	Réglages FSR FG étendus	Erweiterte FSR-FG-Einstellungen	Configurações FSR FG ampliadas
+301	Ajustes XeFG ampliados	Réglages XeFG étendus	Erweiterte XeFG-Einstellungen	Configurações XeFG ampliadas
+302	Comprobaciones de formato ampliadas para HUDless. ¡Pueden causar fallos y ralentizaciones!	Vérifications de format HUDless étendues. Risque de plantages et ralentissements !	Erweiterte HUDless-Formatprüfungen. Können Abstürze und Verlangsamungen verursachen!	Verificações de formato HUDless ampliadas. Podem causar falhas e lentidão!
+303	Amplía los límites de los deslizadores de calidad. Cambia la detección de resolución y puede causar problemas o fallos.	Étend les limites des curseurs de qualité. Modifie la détection de résolution et peut provoquer des problèmes ou plantages.	Erweitert die Grenzen der Qualitätsregler. Ändert die Auflösungserkennung und kann Probleme oder Abstürze verursachen.	Amplia os limites dos controles de qualidade. Muda a detecção de resolução e pode causar problemas ou falhas.
+304	Sombreadores adicionales:	Shaders supplémentaires :	Zusätzliche Shader:	Shaders adicionais:
+305	=	=	=	=
+306	Ajustes FFX	Réglages FFX	FFX-Einstellungen	Configurações FFX
+307	Reescalador FFX	Moteur de mise à l'échelle FFX	FFX-Upscaler	Upscaler FFX
+308	FFX para fotogramas intermedios; Enabler para el resto. 2x: FFX; 3x: Enabler; 4x: ambos; 5x: Enabler; 6x: ambos.	FFX pour les images intermédiaires ; Enabler pour le reste. 2x : FFX ; 3x : Enabler ; 4x : les deux ; 5x : Enabler ; 6x : les deux.	FFX für mittlere generierte Frames, Enabler für den Rest. 2x: FFX; 3x: Enabler; 4x: beide; 5x: Enabler; 6x: beide.	FFX para quadros intermediários; Enabler para o restante. 2x: FFX; 3x: Enabler; 4x: ambos; 5x: Enabler; 6x: ambos.
+309	@308	@308	@308	@308
+310	FFX con cadena de presentación DLSSG	FFX avec chaîne de présentation DLSSG	FFX mit DLSSG-Swapchain	FFX com cadeia de apresentação DLSSG
+311	Lista de creación FG	Liste de création FG	FG-Erstellungsliste	Lista de criação FG
+312	Entrada FG	Entrée FG	FG-Eingabe	Entrada FG
+313	Copiar profundidad FG	Copier la profondeur FG	FG-Tiefenkopien erstellen	Copiar profundidade FG
+314	Copiar vectores FG	Copier les vecteurs FG	FG-Bewegungsvektoren kopieren	Copiar vetores FG
+315	=	=	=	=
+316	Sustitución FG Nvngx	Remplacement FG Nvngx	FG-Nvngx-Ersatz	Substituição FG Nvngx
+317	Solo generados FG	FG : images générées seules	FG: nur generierte Frames	FG: apenas gerados
+318	Salida FG	Sortie FG	FG-Ausgabe	Saída FG
+319	Rectángulo FG	Rectangle FG	FG-Rechteck	Retângulo FG
+320	Escala máxima de profundidad FG	Échelle maximale de profondeur FG	Maximale FG-Tiefenskalierung	Escala máxima de profundidade FG
+321	Lista de uso FG	Liste d'utilisation FG	FG-Verwendungsliste	Lista de uso FG
+322	Mutex para presentación FG	Mutex pour la présentation FG	Mutex für FG-Präsentation	Mutex para apresentação FG
+323	=	=	=	=
+324	Límite FPS	Limite FPS	FPS-Limit	Limite FPS
+325	Indicador FPS	Affichage FPS	FPS-Anzeige	Indicador FPS
+326	Alternar indicador FPS	Parcourir les affichages FPS	FPS-Anzeige durchschalten	Alternar indicador FPS
+327	Indicador FPS activado	Affichage FPS activé	FPS-Anzeige aktiviert	Indicador FPS ativado
+328	=	=	=	=
+329	FPS: %6.1f, Media: %6.1f	FPS : %6.1f, Moyenne : %6.1f	FPS: %6.1f, Mittel: %6.1f	FPS: %6.1f, Média: %6.1f
+330	=	=	=	=
+331	FPS: %6.1f/%5.1f, Media: %6.1f	FPS : %6.1f/%5.1f, Moyenne : %6.1f	FPS: %6.1f/%5.1f, Mittel: %6.1f	FPS: %6.1f/%5.1f, Média: %6.1f
+332	=	=	=	=
+333	FSR 2.1.2 con Dx12	FSR 2.1.2 avec Dx12	FSR 2.1.2 mit Dx12	FSR 2.1.2 com Dx12
+334	FSR 2.2.1 con Dx12	FSR 2.2.1 avec Dx12	FSR 2.2.1 mit Dx12	FSR 2.2.1 com Dx12
+335	Ajuste manual del reescalador FSR 3	Réglage manuel du moteur FSR 3	Manuelle FSR-3-Upscaler-Abstimmung	Ajuste manual do upscaler FSR 3
+336	=	=	=	=
+337	Preajustes FSR 3.1:	Préréglages FSR 3.1 :	FSR-3.1-Voreinstellungen:	Predefinições FSR 3.1:
+338	=	=	=	=
+339	=	=	=	=
+340	FSR 3.X con Dx12	FSR 3.X avec Dx12	FSR 3.X mit Dx12	FSR 3.X com Dx12
+341	FSR 3.X/4 con Dx12	FSR 3.X/4 avec Dx12	FSR 3.X/4 mit Dx12	FSR 3.X/4 com Dx12
+342	FSR 3/4 FG mediante FFX	FSR 3/4 FG via FFX	FSR 3/4 FG über FFX	FSR 3/4 FG via FFX
+343	FSR 4 FP8 solo funciona en AMD	FSR 4 FP8 fonctionne uniquement sur AMD	FSR 4 FP8 funktioniert nur auf AMD	FSR 4 FP8 funciona apenas na AMD
+344	=	=	=	=
+345	FSR Anti-Lag 2.0 es el nuevo nombre de AntiLag 2. No preguntes por qué.	FSR Anti-Lag 2.0 est le nouveau nom d'AntiLag 2. Ne demandez pas pourquoi.	FSR Anti-Lag 2.0 heißt jetzt das bisherige AntiLag 2. Frag nicht warum.	FSR Anti-Lag 2.0 é o novo nome de AntiLag 2. Não pergunte por quê.
+346	Ajustes comunes FSR	Réglages FSR communs	Allgemeine FSR-Einstellungen	Configurações comuns FSR
+347	Interceptores FSR: %s	Interceptions FSR : %s	FSR-Hooks: %s	Interceptações FSR: %s
+348	FSR3/4-FG. RDNA4 actualiza automáticamente a FSR4-FG, que puede ser mejor o peor que XeFG según el caso.	FSR3/4-FG. RDNA4 passe automatiquement à FSR4-FG, parfois meilleur ou moins bon que XeFG.	FSR3/4-FG. RDNA4 wechselt automatisch zu FSR4-FG, das je nach Fall besser oder schlechter als XeFG ist.	FSR3/4-FG. RDNA4 atualiza automaticamente para FSR4-FG, às vezes melhor ou pior que XeFG.
+349	AMD, ¿para cuándo FSR4 DP4a?	AMD, FSR4 DP4a arrive quand ?	AMD, wann kommt FSR4 DP4a?	AMD, quando chega FSR4 DP4a?
+350	Preajuste FSR4	Préréglage FSR4	FSR4-Voreinstellung	Predefinição FSR4
+351	Entrada de tiempo de fotograma	Entrée du temps d'image	Framezeit-Eingabe	Entrada de tempo de quadro
+352	Fotogramas falsos, ¡lleve sus fotogramas falsos!	Fausses images, venez chercher vos fausses images !	Falsche Frames, holt euch eure falschen Frames!	Quadros falsos, pegue seus quadros falsos!
+353	Finge hasta renderizar	Simulez jusqu'au rendu	Täuschen bis zum Rendern	Finja até renderizar
+354	Píxeles falsos y fotogramas aún más falsos...	Faux pixels et images encore plus fausses...	Falsche Pixel und noch falschere Frames...	Pixels falsos e quadros ainda mais falsos...
+355	Alternativa	Repli	Ersatz	Alternativa
+356	Opción tradicional más rápida. Imagen muy suave o borrosa; puede servir para reducir resolución.	Option classique la plus rapide. Image très douce ou floue ; peut convenir à la réduction.	Schnellste klassische Option. Sehr weiches, unscharfes Bild; zum Verkleinern eventuell geeignet.	Opção tradicional mais rápida. Imagem muito suave ou borrada; pode servir para reduzir resolução.
+357	Corregir errores visuales	Corriger les erreurs visuelles	Bildfehler korrigieren	Corrigir erros visuais
+358	Corrección para entradas de profundidad DLSS-D incorrectas	Correction des entrées de profondeur DLSS-D incorrectes	Korrektur falscher DLSS-D-Tiefeneingaben	Correção de entradas de profundidade DLSS-D incorretas
+359	Corrección para juegos que ignoran límites DRS oficiales	Correction des jeux ignorant les limites DRS officielles	Korrektur für Spiele, die offizielle DRS-Grenzen ignorieren	Correção para jogos que ignoram os limites DRS oficiais
+360	Corrección para movimiento con jitter ya aplicado	Correction des mouvements avec jitter déjà appliqué	Korrektur für Bewegungsdaten mit bereits angewendetem Jitter	Correção para movimento com jitter já aplicado
+361	Invertir (Unity)	Retourner (Unity)	Spiegeln (Unity)	Inverter (Unity)
+362	Usar desplazamiento al invertir	Utiliser un décalage au retournement	Versatz beim Spiegeln verwenden	Usar deslocamento ao inverter
+363	Invierte recursos de velocidad y profundidad de juegos Unity	Retourne les ressources de vitesse et profondeur des jeux Unity	Spiegelt Geschwindigkeits- und Tiefenressourcen von Unity-Spielen	Inverte recursos de velocidade e profundidade de jogos Unity
+364	Invierte si la imagen empeora cuando debería mejorar. La mayoría de motores guardan una exposición que baja al subir la luz; otros guardan su inversa. La forma del búfer no permite distinguirlo. Una segunda ancla con otra iluminación lo determina automáticamente y oculta esta opción.	Inversez si l'image empire alors qu'elle devrait s'améliorer. La plupart des moteurs stockent une exposition qui baisse avec la lumière, d'autres son inverse. La forme du tampon ne permet pas de le savoir. Un second ancrage sous un autre éclairage le détermine automatiquement et masque cette option.	Umschalten, wenn das Bild in der falschen Richtung reagiert. Meist sinkt der Belichtungswert bei mehr Licht; manche Engines speichern den Kehrwert. Die Pufferform verrät das nicht. Ein zweiter Anker bei anderem Licht bestimmt die Richtung automatisch; die Option verschwindet dann.	Inverta se a imagem piorar quando deveria melhorar. A maioria dos motores guarda exposição que cai com mais luz; outros guardam o inverso. O formato do buffer não distingue isso. Uma segunda âncora sob outra iluminação determina a direção automaticamente e oculta esta opção.
+365	Campo de visión y cámara	Champ de vision et caméra	Sichtfeld und Kamera	Campo de visão e câmera
+366	Seguir al juego	Suivre le jeu	Spieleinstellung folgen	Seguir o jogo
+367	Para reescaladores, por reescaladores	Pour les moteurs, par les moteurs	Von Upscalern für Upscaler	Para upscalers, por upscalers
+368	Desactiva HUDless aunque el juego lo envíe	Désactive HUDless même si le jeu le fournit	Deaktiviert HUDless trotz Bereitstellung durch das Spiel	Desativa HUDless mesmo quando fornecido pelo jogo
+369	Desactiva la textura de interfaz aunque el juego la envíe	Désactive la texture d'interface même si le jeu la fournit	Deaktiviert die UI-Textur trotz Bereitstellung durch das Spiel	Desativa a textura da interface mesmo quando fornecida pelo jogo
+370	Forzar filtrado anisotrópico	Forcer le filtrage anisotrope	Anisotrope Filterung erzwingen	Forçar filtragem anisotrópica
+371	Forzar sin bordes	Forcer le mode sans bordure	Randlos erzwingen	Forçar sem bordas
+372	Forzar desactivación	Forcer la désactivation	Deaktivierung erzwingen	Forçar desativação
+373	Forzar MFG dinámico	Forcer MFG dynamique	Dynamisches MFG erzwingen	Forçar MFG dinâmico
+374	Forzar activación	Forcer l'activation	Aktivierung erzwingen	Forçar ativação
+375	Forzar LatencyFlex	Forcer LatencyFlex	LatencyFlex erzwingen	Forçar LatencyFlex
+376	Forzar Reflex	Forcer Reflex	Reflex erzwingen	Forçar Reflex
+377	Forzar estado	Forcer l'état	Status erzwingen	Forçar estado
+378	Fuerza V-Sync y el intervalo de sincronización	Force V-Sync et l'intervalle de synchronisation	Erzwingt V-Sync und Synchronisationsintervall	Força V-Sync e o intervalo de sincronização
+379	Forzar XeLL	Forcer XeLL	XeLL erzwingen	Forçar XeLL
+380	Fuerza modo sin bordes. Para mejores resultados, iguala la resolución de pantalla completa a la pantalla. Puede causar inestabilidad. ¡REQUIERE REINICIAR EL JUEGO!	Force le mode sans bordure. Faites correspondre la résolution plein écran à celle de l'écran. Peut causer une instabilité. REDÉMARRAGE DU JEU REQUIS !	Erzwingt randlosen Modus. Vollbildauflösung auf Monitorauflösung setzen. Kann Instabilität verursachen. SPIELNEUSTART ERFORDERLICH!	Força modo sem bordas. Iguale a resolução de tela cheia à da tela. Pode causar instabilidade. REQUER REINICIAR O JOGO!
+381	Encontrado. Ajusta el blanco de papel hasta que la imagen se vea bien y pulsa Anclar aquí.	Trouvé. Réglez le blanc papier pour obtenir une bonne image, puis cliquez sur Ancrer ici.	Gefunden. Papierweiß passend einstellen, dann Hier verankern drücken.	Encontrado. Ajuste o branco do papel até a imagem ficar boa e pressione Ancorar aqui.
+382	Fotograma %ux%u | Trabajo %ux%u | Guías %ux%u	Image %ux%u | Travail %ux%u | Guides %ux%u	Frame %ux%u | Verarbeitung %ux%u | Hilfsdaten %ux%u	Quadro %ux%u | Trabalho %ux%u | Guias %ux%u
+383	Fotogramas por adelantado	Images d'avance	Vorausberechnete Frames	Quadros adiantados
+384	Generación de fotogramas	Génération d'images	Framegenerierung	Geração de quadros
+385	Generación de fotogramas (DLSSG)	Génération d'images (DLSSG)	Framegenerierung (DLSSG)	Geração de quadros (DLSSG)
+386	Generación de fotogramas (Enabler + FFX)	Génération d'images (Enabler + FFX)	Framegenerierung (Enabler + FFX)	Geração de quadros (Enabler + FFX)
+387	Generación de fotogramas (FSR FG)	Génération d'images (FSR FG)	Framegenerierung (FSR FG)	Geração de quadros (FSR FG)
+388	Generación de fotogramas (entradas FSR-FG)	Génération d'images (entrées FSR-FG)	Framegenerierung (FSR-FG-Eingaben)	Geração de quadros (entradas FSR-FG)
+389	Generación de fotogramas (FSR3-FG mediante DLSSG de Nukem)	Génération d'images (FSR3-FG via DLSSG de Nukem)	Framegenerierung (FSR3-FG über Nukems DLSSG)	Geração de quadros (FSR3-FG via DLSSG de Nukem)
+390	Generación de fotogramas (FSR3-MFG mediante DLSS Enabler)	Génération d'images (FSR3-MFG via DLSS Enabler)	Framegenerierung (FSR3-MFG über DLSS Enabler)	Geração de quadros (FSR3-MFG via DLSS Enabler)
+391	Generación de fotogramas (FSRFG mediante FFX)	Génération d'images (FSRFG via FFX)	Framegenerierung (FSRFG über FFX)	Geração de quadros (FSRFG via FFX)
+392	Generación de fotogramas (OptiFG)	Génération d'images (OptiFG)	Framegenerierung (OptiFG)	Geração de quadros (OptiFG)
+393	Generación de fotogramas (entradas Streamline FG)	Génération d'images (entrées Streamline FG)	Framegenerierung (Streamline-FG-Eingaben)	Geração de quadros (entradas Streamline FG)
+394	Generación de fotogramas (XeFG)	Génération d'images (XeFG)	Framegenerierung (XeFG)	Geração de quadros (XeFG)
+395	Ajuste de cadencia	Réglage du cadencement	Frame-Timing-Abstimmung	Ajuste de cadência
+396	Tiempo de fotograma: %7.2f ms, Media: %7.2f ms	Temps d'image : %7.2f ms, Moyenne : %7.2f ms	Framezeit: %7.2f ms, Mittel: %7.2f ms	Tempo de quadro: %7.2f ms, Média: %7.2f ms
+397	¡Fotograma a fotograma, voy reescalando!	Image par image, j'agrandis !	Frame für Frame skaliere ich hoch!	Quadro a quadro, vou ampliando!
+398	Rectángulo FG para contenido con bandas negras	Rectangle FG pour contenu avec bandes noires	FG-Rechteck für Inhalte mit schwarzen Balken	Retângulo FG para conteúdo com barras pretas
+399	Línea de índice de fotograma	Ligne d'indice d'image	Frameindex-Linie	Linha de índice do quadro
+400	Frecuencia de fotogramas	Fréquence d'images	Bildrate	Taxa de quadros
+401	Fotogramas %llu | Reinicios del juego %llu | Creaciones %llu | Recreaciones %llu | Fallos de evaluación %llu	Images %llu | Réinitialisations jeu %llu | Créations %llu | Recréations %llu | Échecs d'évaluation %llu	Frames %llu | Spiel-Resets %llu | Erstellungen %llu | Neuerstellungen %llu | Auswertungsfehler %llu	Quadros %llu | Reinícios do jogo %llu | Criações %llu | Recriações %llu | Falhas de avaliação %llu
+402	Gratis y siempre gratis	Gratuit pour toujours	Kostenlos und bleibt kostenlos	Grátis e sempre grátis
+403	Congela el fotograma del modelo para comparar blanco de papel, intensidades, modo reversible y preajustes sin mover la escena. NO permite comparar cambios del reescalador DLSS/FSR/XeSS ni procesos anteriores: no se vuelven a ejecutar. El HUD y el posprocesado del juego siguen actualizándose después. El punto blanco se congela para no alterar la comparación. Ocultar el menú no reanuda; desactiva esta opción para continuar.	Fige l'image du modèle pour comparer blanc papier, intensités, mode réversible et préréglages sans changer de scène. Ne permet PAS de comparer les réglages DLSS/FSR/XeSS ou les étapes antérieures : elles ne sont pas réexécutées. Le HUD et le post-traitement du jeu continuent ensuite. Le point blanc reste figé pour préserver la comparaison. Masquer le menu ne reprend pas l'animation ; désactivez cette option.	Hält den Modellframe zum Vergleich von Papierweiß, Stärken, reversiblem Modus und Modellvoreinstellungen fest. Upscaler-Einstellungen von DLSS/FSR/XeSS und vorgelagerte Schritte lassen sich NICHT vergleichen, da sie nicht erneut laufen. HUD und nachgelagerte Spielnachbearbeitung aktualisieren sich weiter. Der Weißpunkt bleibt fest, damit der Vergleich unverfälscht ist. Auch bei geschlossenem Menü bleibt das Bild gehalten; zum Fortsetzen abschalten.	Congela o quadro do modelo para comparar branco do papel, intensidades, modo reversível e predefinições sem mudar a cena. NÃO compara alterações do upscaler DLSS/FSR/XeSS nem etapas anteriores: elas não são executadas novamente. HUD e pós-processamento do jogo continuam depois. O ponto branco fica congelado para preservar a comparação. Ocultar o menu não retoma; desative esta opção.
+404	Completo	Complet	Vollständig	Completo
+405	Completo + gráfico	Complet + graphique	Vollständig + Diagramm	Completo + gráfico
+406	Exposición del juego %.4f -> punto blanco %.2f%s	Exposition du jeu %.4f -> point blanc %.2f%s	Spielbelichtung %.4f -> Weißpunkt %.2f%s	Exposição do jogo %.4f -> ponto branco %.2f%s
+407	XeLL del juego	XeLL du jeu	XeLL des Spiels	XeLL do jogo
+408	General	Général	Allgemein	Geral
+409	Generando discordia desde 2023	Sème la discorde depuis 2023	Stiftet Streit seit 2023	Gerando discórdia desde 2023
+410	Visualización genérica	Visualisation générique	Allgemeine Visualisierung	Visualização genérica
+411	Liberándose de las cadenas verdes...	Libération des chaînes vertes en cours...	Befreiung von den grünen Ketten läuft...	Libertando-se das correntes verdes...
+412	¿Te quedan más reescaladores?	Vous avez encore des moteurs de mise à l'échelle ?	Hast du noch mehr von diesen Upscalern?	Tem mais desses upscalers?
+413	Gris	Gris	Grau	Cinza
+414	Verde	Vert	Grün	Verde
+415	Ahora somos demos prealfa, parece	On est des démos préalpha maintenant	Jetzt sind wir wohl Pre-Alpha-Demos	Parece que agora somos demos pré-alfa
+416	Adivina quién olvidó comprobar nullptr otra vez	Devinez qui a encore oublié de vérifier nullptr	Wer hat wohl wieder die nullptr-Prüfung vergessen?	Adivinhe quem esqueceu de verificar nullptr de novo
+417	Interpolación HUD OF (0=fijación clásica, 1=deformación OF)	Interpolation HUD OF (0=ancrage classique, 1=déformation OF)	HUD-OF-Interpolation (0=klassische Fixierung, 1=OF-Verzerrung)	Interpolação HUD OF (0=fixação clássica, 1=deformação OF)
+418	Detección del HUD	Détection du HUD	HUD-Erkennung	Detecção do HUD
+419	Interpolación del HUD	Interpolation du HUD	HUD-Interpolation	Interpolação do HUD
+420	=	=	=	=
+421	Recursos HUDless	Ressources HUDless	HUDless-Ressourcen	Recursos HUDless
+422	HUDless como ValidNow	HUDless comme ValidNow	HUDless als ValidNow	HUDless como ValidNow
+423	Más pesado que Lanczos2. Máxima nitidez, pero más propenso a halos. Considerado de los mejores junto a Kaiser3.	Plus lourd que Lanczos2. Netteté maximale, mais davantage de halos. Parmi les meilleurs avec Kaiser3.	Aufwendiger als Lanczos2. Höchste Schärfe, aber stärkste Neigung zu Überschwingern. Gilt neben Kaiser3 als einer der besten.	Mais pesado que Lanczos2. Nitidez máxima, mas mais propenso a halos. Entre os melhores junto com Kaiser3.
+424	Protección de altas luces	Protection des hautes lumières	Lichterschutz	Proteção de altas luzes
+425	Congelar fotograma	Figer l'image	Frame halten	Congelar quadro
+426	Espero que no tengas buena vista	J'espère que vous n'avez pas une bonne vue	Hoffentlich siehst du nicht zu gut	Espero que você não enxergue muito bem
+427	Horizontal	Horizontal	Horizontal	Horizontal
+428	Campo de visión horizontal	Champ de vision horizontal	Horizontales Sichtfeld	Campo de visão horizontal
+429	Mezcla el fotograma original con la imagen completa del modelo, cuya luminancia se ajusta al original; no suma una diferencia sin más. 0 devuelve exactamente el reescalado original; 1, la imagen del modelo. Más de 1 extrapola más allá de lo solicitado por el modelo: úsalo para examinar el efecto y luego bájalo. Este control refuerza el efecto visible; Intensidad actúa dentro del modelo y este decide cómo usarla.	Mélange l'image originale avec l'image complète du modèle, dont la luminance est recalée sur l'original ; ce n'est pas une simple addition. 0 restitue exactement la sortie du moteur ; 1, l'image du modèle. Au-delà de 1, on extrapole hors du résultat demandé au modèle : utile pour examiner l'effet, puis redescendre. Ce réglage renforce l'effet visible ; Intensité agit dans le modèle, qui décide de son usage.	Mischt den ursprünglichen Frame mit dem vollständigen Modellbild, dessen Leuchtdichte an das Original angepasst wird; keine einfache Addition. 0 gibt exakt das Upscaler-Ergebnis zurück, 1 das Modellbild. Über 1 wird über das Modellresultat hinaus extrapoliert: zum Untersuchen nutzen, dann wieder senken. Dieser Regler verstärkt den sichtbaren Effekt; Intensität wirkt innerhalb des Modells, das selbst darüber entscheidet.	Mistura o quadro original com a imagem completa do modelo, cuja luminância é ajustada ao original; não é uma simples soma. 0 devolve exatamente a saída original do upscaler; 1, a imagem do modelo. Acima de 1 extrapola além do resultado do modelo: use para examinar o efeito e depois reduza. Este controle reforça o efeito visível; Intensidade atua dentro do modelo, que decide como usá-la.
+430	Duración de espera activa con FPTHybridSpin, en unidades de resolución del temporizador. No se recomienda menos de 2: provoca sobrepasos frecuentes.	Durée d'attente active avec FPTHybridSpin, en unités de résolution du minuteur. Moins de 2 est déconseillé : dépassements fréquents.	Aktive Wartezeit bei FPTHybridSpin in Einheiten der Timerauflösung. Unter 2 nicht empfohlen: häufiges Überschreiten der Zielzeit.	Duração da espera ativa com FPTHybridSpin, em unidades de resolução do temporizador. Menos de 2 não é recomendado: causa ultrapassagens frequentes.
+431	Cuánto efecto se aplica	Quantité d'effet appliquée	Angewendete Effektstärke	Quanto efeito é aplicado
+432	Cada mitad tiene la mitad del ancho y toda la altura. A 1 se ve el fotograma entero con proporciones correctas y bandas arriba y abajo. A 2 llena la mitad recortando los lados. Los valores intermedios equilibran ambos resultados.	Chaque moitié a la moitié de la largeur et toute la hauteur. À 1, l'image entière garde ses proportions avec des bandes en haut et en bas. À 2, elle remplit la moitié en rognant les côtés. Les valeurs intermédiaires combinent les deux.	Jede Hälfte hat halbe Breite und volle Höhe. Bei 1 wird das ganze Bild proportional mit Balken oben und unten gezeigt. Bei 2 füllt es die Hälfte, wobei Seiten beschnitten werden. Zwischenwerte bilden einen Kompromiss.	Cada metade tem metade da largura e toda a altura. Em 1, o quadro inteiro mantém as proporções com barras acima e abaixo. Em 2, preenche a metade cortando os lados. Valores intermediários equilibram os dois.
+433	Reconstruye el resultado cuando el modelo trabaja a menor resolución. Clásico compara directamente la imagen pequeña con el fotograma completo: confunde el desenfoque de reducción con cambios del modelo, causando desviación de color, mayor a resoluciones bajas (p. ej. 50%). Residuo ajustado amplía solo la diferencia del modelo y la aplica al proxy del fotograma: compara imágenes completas y conserva solo el cambio real. Sin efecto a 100% o más; el supermuestreo se reduce antes. Basado en el trabajo multipaso de hhkbble.	Reconstruit le résultat du modèle à basse résolution. Classique compare directement la petite image à l'image complète : le flou de réduction est confondu avec les changements du modèle, causant des dérives de couleur plus fortes à basse résolution (par ex. 50%). Résidu ajusté agrandit uniquement la différence et l'applique au proxy de l'image : la comparaison reste à pleine taille et conserve le vrai changement. Aucun effet à 100% ou plus ; le suréchantillonnage est réduit avant. Issu du travail multipasse de hhkbble.	Rekonstruiert das Ergebnis bei niedriger Modellauflösung. Klassisch vergleicht das kleine Modellbild direkt mit dem vollständigen Frame: Verkleinerungsunschärfe wird mit Modelländerungen verwechselt und erzeugt besonders bei niedrigen Auflösungen wie 50% Farbverschiebungen. Angepasstes Residuum vergrößert nur die Modelldifferenz und legt sie auf den Frame-Proxy; beide Vergleichsbilder bleiben vollständig. Ab 100% ohne Wirkung, da Supersampling zuvor verkleinert wird. Basiert auf hhkbbles Mehrpass-Arbeit.	Reconstrói o resultado quando o modelo usa resolução menor. Clássico compara diretamente a imagem pequena ao quadro completo: confunde desfoque de redução com alterações do modelo, causando desvio de cor maior em resoluções baixas (por exemplo, 50%). Resíduo ajustado amplia apenas a diferença do modelo e a aplica ao proxy do quadro: compara imagens completas e preserva a mudança real. Sem efeito em 100% ou mais; supersampling é reduzido antes. Baseado no trabalho multipasse de hhkbble.
+434	¿Cómo quito estos mensajes cursis?	Comment enlever ces messages ringards ?	Wie werde ich diese albernen Sprüche los?	Como tiro essas mensagens cafonas?
+435	Umbral del HUD	Seuil du HUD	HUD-Schwelle	Limiar do HUD
+436	Tiempo de espera híbrida	Durée d'attente hybride	Hybride Wartezeit	Tempo de espera híbrida
+437	Proxy híbrido + composición	Proxy hybride + composition	Hybrider Proxy + Komposition	Proxy híbrido + composição
+438	Proxy híbrido + sustitución	Proxy hybride + remplacement	Hybrider Proxy + Ersetzen	Proxy híbrido + substituição
+439	Casi no noto el retardo de entrada	Je sens à peine le retard d'entrée	Ich spüre die Eingabeverzögerung kaum	Quase não sinto o atraso de entrada
+440	Tu falta de supermuestreo me inquieta...	Votre manque de suréchantillonnage me trouble...	Dein Mangel an Supersampling beunruhigt mich...	Sua falta de supersampling me perturba...
+441	Tengo un mal presentimiento sobre esta cadencia	J'ai un mauvais pressentiment sur ce cadencement	Ich habe ein ungutes Gefühl bei diesem Frame-Timing	Tenho um mau pressentimento sobre esta cadência
+442	Vine a patear píxeles y masticar fotogramas...	Je suis venu botter des pixels et mâcher des images...	Ich bin hier, um Pixel zu treten und Frames zu kauen...	Vim chutar pixels e mastigar quadros...
+443	Tengo 99 problemas, pero la baja resolución no es uno.	J'ai 99 problèmes, mais pas la basse résolution.	Ich habe 99 Probleme, aber niedrige Auflösung ist keines.	Tenho 99 problemas, mas baixa resolução não é um deles.
+444	Desactiva esta opción si la interfaz se ve demasiado tenue	Désactivez si l'interface est trop pâle	Bei zu blasser UI deaktivieren	Desative se a interface estiver muito fraca
+445	Si se etiqueta más de un HUDless, usa solo el primero	Si plusieurs HUDless sont marqués, utilise seulement le premier	Bei mehreren markierten HUDless nur das erste verwenden	Se houver mais de um HUDless marcado, usa apenas o primeiro
+446	Si usas una GPU AMD/Intel, asegúrate de tener Fakenvapi	Avec une GPU AMD/Intel, assurez-vous d'avoir Fakenvapi	Bei AMD/Intel-GPU muss Fakenvapi vorhanden sein	Se usa uma GPU AMD/Intel, verifique se tem Fakenvapi
+447	@446	@446	@446	@446
+448	Ignorar comprobaciones de inicio	Ignorer les vérifications d'initialisation	Initialisierungsprüfungen ignorieren	Ignorar verificações de inicialização
+449	Ignorar textura de interfaz	Ignorer la texture d'interface	UI-Textur ignorieren	Ignorar textura da interface
+450	Ignorar DLSSG.UI dedicado (forzar ruta HUD clásica)	Ignorer DLSSG.UI dédié (forcer le chemin HUD classique)	Dedizierte DLSSG.UI ignorieren (klassischen HUD-Pfad erzwingen)	Ignorar DLSSG.UI dedicado (forçar caminho HUD clássico)
+451	Ignora comprobaciones XeFG. ¡No lo uses para saltar advertencias de tamaño de vectores en juegos UE! Puede causar fallos y mala imagen.	Ignore les vérifications XeFG. Ne contournez PAS ainsi l'avertissement de taille des vecteurs des jeux UE ! Risque de plantages et mauvaise image.	Ignoriert XeFG-Vorprüfungen. NICHT zum Umgehen der Vektorgrößenwarnung in UE-Spielen nutzen! Abstürze und schlechte Bildqualität möglich.	Ignora verificações XeFG. NÃO use para pular avisos de tamanho dos vetores em jogos UE! Pode causar falhas e imagem ruim.
+452	Ignora diferencias pequeñas de profundidad antes de detectar bordes. Valores altos reducen ruido y parpadeo, pero pueden suavizar bordes reales; bajos conservan detalle fino, con detección más inestable.	Ignore les petites différences de profondeur avant de détecter les contours. Les valeurs élevées réduisent bruit et scintillement mais adoucissent les vrais contours ; les faibles préservent les détails avec une détection moins stable.	Ignoriert kleine Tiefenunterschiede vor der Kantenerkennung. Hohe Werte mindern Rauschen und Flackern, können aber echte Kanten aufweichen. Niedrige bewahren Details, erkennen Kanten jedoch unruhiger.	Ignora pequenas diferenças de profundidade antes de detectar bordas. Valores altos reduzem ruído e cintilação, mas suavizam bordas reais; baixos preservam detalhes com detecção menos estável.
+453	Ignora el valor del juego y usa el siguiente	Ignore la valeur du jeu et utilise celle ci-dessous	Ignoriert den Spielwert und nutzt den folgenden	Ignora o valor do jogo e usa o valor abaixo
+454	Captura inmediata	Capture immédiate	Sofortige Aufnahme	Captura imediata
+455	Mejora latencia, pero puede reducir los FPS más de lo esperado	Améliore la latence mais peut réduire les FPS plus que prévu	Verbessert Latenz, kann FPS aber stärker als erwartet senken	Melhora a latência, mas pode reduzir FPS mais que o esperado
+456	Aumenta el cambio de sombreado calculado por FSR3.1 al leerlo para obtener más reactividad.	Amplifie le changement d'ombrage calculé par FSR3.1 à la lecture pour augmenter la réactivité.	Verstärkt den berechneten FSR3.1-Schattierungswechsel beim Lesen für höhere Reaktivität.	Amplifica a mudança de sombreamento calculada por FSR3.1 na leitura para aumentar a reatividade.
+457	Aumentarlo puede reducir parpadeos de píxeles blancos alrededor de objetos finos que se mueven y se ocultan entre sí. Demasiado alto aumenta las estelas.	L'augmenter peut réduire le scintillement blanc autour d'objets fins mobiles qui se masquent mutuellement. Trop élevé, il augmente les traînées.	Höhere Werte können weiße flackernde Pixel um schwankende dünne Objekte reduzieren, die sich gegenseitig verdecken. Zu hohe Werte verstärken Nachbilder.	Aumentar pode reduzir cintilação branca ao redor de objetos finos em movimento que se ocultam entre si. Valores altos demais aumentam rastros.
+458	Información	Info	Info	Informação
+459	Información	Informations	Informationen	Informações
+460	Heredar el preajuste DLSS global	Hériter du préréglage DLSS global	Globale DLSS-Voreinstellung übernehmen	Herdar a predefinição DLSS global
+461	Indicadores de inicio	Indicateurs d'initialisation	Initialisierungsflags	Indicadores de inicialização
+462	Entrada	Entrée	Eingabe	Entrada
+463	Espacio de color de entrada	Espace colorimétrique d'entrée	Eingabefarbraum	Espaço de cor de entrada
+464	Para rendimiento/equilibrado/calidad. Variante antigua contra estelas. ¡Eliminada en versiones recientes!	Pour Performance/Équilibré/Qualité. Ancienne variante anti-traînées. Supprimée des versions récentes !	Für Leistung/Ausgewogen/Qualität. Ältere Variante gegen Nachbilder. In neueren Versionen entfernt!	Para desempenho/equilibrado/qualidade. Variante antiga contra rastros. Removida nas versões recentes!
+465	Para rendimiento/equilibrado/calidad. Prioriza el fotograma actual. ¡Eliminado en versiones recientes!	Pour Performance/Équilibré/Qualité. Privilégie l'image actuelle. Supprimé des versions récentes !	Für Leistung/Ausgewogen/Qualität. Bevorzugt den aktuellen Frame. In neueren Versionen entfernt!	Para desempenho/equilibrado/qualidade. Prioriza o quadro atual. Removido nas versões recentes!
+466	Para ultrarrendimiento. Similar al preajuste A. ¡Eliminado en versiones recientes!	Pour Ultra performance. Similaire au préréglage A. Supprimé des versions récentes !	Für Ultra-Leistung. Ähnlich Voreinstellung A. In neueren Versionen entfernt!	Para ultradesempenho. Similar à predefinição A. Removido nas versões recentes!
+467	Intensidad	Intensité	Intensität	Intensidade
+468	Solo fotogramas interpolados	Images interpolées uniquement	Nur interpolierte Frames	Apenas quadros interpolados
+469	Es peligroso ir solo: toma este reescalador	C'est dangereux d'y aller seul : prenez ce moteur	Allein ist es gefährlich: Nimm diesen Upscaler	É perigoso ir sozinho: leve este upscaler
+470	Nunca es tarde para comprar una GPU mejor	Il n'est jamais trop tard pour acheter une meilleure GPU	Es ist nie zu spät für eine bessere GPU	Nunca é tarde para comprar uma GPU melhor
+471	Solo es mi quinto fallo de hoy	Ce n'est que mon cinquième plantage aujourd'hui	Erst mein fünfter Absturz heute	É só minha quinta falha hoje
+472	¡Se acabó, DLSS, tengo la posición elevada!	C'est fini, DLSS, j'ai l'avantage du terrain !	Es ist vorbei, DLSS, ich habe den höheren Boden!	Acabou, DLSS, tenho a posição elevada!
+473	Está muy borroso para ir solo: lleva RCAS	C'est trop flou pour partir seul : prenez RCAS	Zu unscharf, um allein zu gehen: Nimm RCAS mit	Está borrado demais para ir sozinho: leve RCAS
+474	Cancelación de jitter	Annulation du jitter	Jitter-Kompensation	Cancelamento de jitter
+475	Solo ampliado	Étendu seul	Nur erweitert	Apenas ampliado
+476	Solo FPS	FPS seuls	Nur FPS	Apenas FPS
+477	No mires la imagen demasiado de cerca	Ne regardez pas l'image de trop près	Schau das Bild nicht zu genau an	Não olhe a imagem de muito perto
+478	Cuando creo haber salido, me reescalan de vuelta	Quand je crois m'en sortir, ils me remettent à l'échelle	Gerade draußen, schon skalieren sie mich wieder rein	Quando acho que saí, me ampliam de volta
+479	=	=	=	=
+480	=	=	=	=
+481	¡Actualmente NO se admiten combinaciones de teclas!	Les combinaisons de touches ne sont PAS prises en charge !	Tastenkombinationen werden derzeit NICHT unterstützt!	Combinações de teclas NÃO são suportadas atualmente!
+482	Asignación de teclas	Raccourcis clavier	Tastenbelegung	Atalhos de teclado
+483	Tamaño de etiqueta	Taille des étiquettes	Beschriftungsgröße	Tamanho do rótulo
+484	Etiquetar lados	Étiqueter les côtés	Seiten beschriften	Rotular os lados
+485	=	=	=	=
+486	=	=	=	=
+487	Idioma	Langue	Sprache	Idioma
+488	Intercepción Streamline tardía detectada	Interception Streamline tardive détectée	Später Streamline-Hook erkannt	Interceptação tardia do Streamline detectada
+489	¿Latencia con FG? ¡Pero tengo buen internet!	De la latence avec FG ? Mais j'ai une bonne connexion !	Latenz mit FG? Aber mein Internet ist doch gut!	Latência com FG? Mas minha internet é boa!
+490	Modo LatencyFlex	Mode LatencyFlex	LatencyFlex-Modus	Modo LatencyFlex
+491	Más reciente	Le plus récent	Neueste	Mais recente
+492	Último Transformer. Necesario si se requiere guía de profundidad de campo.	Dernier Transformer. Nécessaire pour le guide de profondeur de champ.	Neuestes Transformer-Modell. Für Tiefenschärfe-Hilfsdaten erforderlich.	Transformer mais recente. Necessário para guia de profundidade de campo.
+493	Más reciente compatible con la DLL	Le plus récent pris en charge par la DLL	Neueste von der DLL unterstützte Version	Mais recente suportado pela DLL
+494	Capa 2 creada: esperando su primera evaluación de reinicio.	Couche 2 créée : attente de sa première évaluation de réinitialisation.	Ebene 2 erstellt: erste Reset-Auswertung wird abgewartet.	Camada 2 criada: aguardando a primeira avaliação de reinicialização.
+495	La capa 2 se retira de forma segura; evaluación NR pausada.	Retrait sûr de la couche 2 ; évaluation NR suspendue.	Ebene 2 wird sicher freigegeben; NR-Auswertung pausiert.	A camada 2 está sendo retirada com segurança; avaliação NR pausada.
+496	Capa 2 solicitada: esperando un fotograma exclusivo de creación.	Couche 2 demandée : attente d'une image réservée à la création.	Ebene 2 angefordert: separater Erstellungsframe wird abgewartet.	Camada 2 solicitada: aguardando um quadro exclusivo de criação.
+497	Capa 2 no disponible: %s.	Couche 2 indisponible : %s.	Ebene 2 nicht verfügbar: %s.	Camada 2 indisponível: %s.
+498	Dejar que XeFG gestione los tiempos de fotograma	Laisser XeFG gérer les temps d'image	XeFG die Framezeiten verwalten lassen	Deixar XeFG gerenciar os tempos de quadro
+499	Permite al modelo detectar piel en lugar de tratar toda la imagen por igual.	Laisse le modèle détecter la peau plutôt que traiter toute l'image uniformément.	Lässt das Modell Haut selbst erkennen, statt das ganze Bild gleich zu behandeln.	Permite ao modelo detectar pele em vez de tratar toda a imagem igualmente.
+500	Sustituye cada relación por separado. No todos los juegos admiten todos los preajustes. 1.5x en pantalla 1080p significa 720p internos: 1080 / 1.5 = 720.	Remplace chaque rapport séparément. Tous les jeux n'acceptent pas tous les préréglages. 1.5x sur un écran 1080p donne 720p internes : 1080 / 1.5 = 720.	Überschreibt jedes Verhältnis separat. Nicht jedes Spiel unterstützt jede Qualitätsstufe. 1.5x bei 1080p ergibt intern 720p: 1080 / 1.5 = 720.	Substitui cada proporção separadamente. Nem todo jogo suporta todas as predefinições. 1.5x em tela 1080p dá 720p internos: 1080 / 1.5 = 720.
+501	Tema claro	Thème clair	Helles Design	Tema claro
+502	Más ligero y rápido que Lanczos3. Menos halos, pero algo más borroso.	Plus léger et rapide que Lanczos3. Moins de halos, mais un peu plus flou.	Leichter und schneller als Lanczos3. Weniger Überschwinger, aber etwas unschärfer.	Mais leve e rápido que Lanczos3. Menos halos, mas um pouco mais borrado.
+503	Como ir en primera por la autopista	Comme rouler en première sur l'autoroute	Wie im ersten Gang auf der Autobahn	Como andar de primeira na rodovia
+504	Probablemente no haga mucho	Ne fait probablement pas grand-chose	Bewirkt vermutlich wenig	Provavelmente faz pouca diferença
+505	Límite	Limite	Limit	Limite
+506	Solo variantes FSR FG. Requiere DLSS-FG en el juego. Admite HUDless directamente. Usa la cadena de presentación Streamline para la cadencia.	Variantes FSR FG uniquement. DLSS-FG doit être activé en jeu. HUDless pris en charge directement. Utilise la chaîne Streamline pour le cadencement.	Nur FSR-FG-Varianten. DLSS-FG muss im Spiel aktiv sein. HUDless direkt unterstützt. Nutzt Streamlines Swapchain für das Timing.	Apenas variantes FSR FG. Requer DLSS-FG no jogo. Suporta HUDless diretamente. Usa a cadeia Streamline para a cadência.
+507	Lineal (predeterminado)	Linéaire (par défaut)	Linear (Standard)	Linear (padrão)
+508	Lista FG proporcionada por FFX SDK	Liste FG fournie par FFX SDK	Vom FFX SDK gemeldete FG-Liste	Lista FG fornecida pelo FFX SDK
+509	Lista de reescaladores proporcionada por FFX SDK	Liste des moteurs fournie par FFX SDK	Vom FFX SDK gemeldete Upscaler-Liste	Lista de upscalers fornecida pelo FFX SDK
+510	Estructura local	Structure locale	Lokale Struktur	Estrutura local
+511	Tono local	Tonalité locale	Lokaler Tonwert	Tom local
+512	Nivel de registro	Niveau de journalisation	Protokollstufe	Nível de registro
+513	Registro	Journalisation	Protokollierung	Registro
+514	Baja latencia	Faible latence	Niedrige Latenz	Baixa latência
+515	Tiempos de baja latencia, fotograma completo: %.1fms	Temps de faible latence, image entière : %.1fms	Niedriglatenz-Timing, gesamter Frame: %.1fms	Tempos de baixa latência, quadro inteiro: %.1fms
+516	Depuración MAS	Débogage MAS	MAS-Debugging	Depuração MAS
+517	Sustitución MB fija	Substitution MB fixe	Fester MB-Ersatz	Substituição MB fixa
+518	MB para todas las texturas	MB pour toutes les textures	MB für alle Texturen	MB para todas as texturas
+519	Sustitución MB por escala	Substitution MB par échelle	MB-Skalierungsersatz	Substituição MB por escala
+520	MFG funciona con Nukem, 100%% sin engaños	MFG fonctionne avec Nukem, 100%% sans arnaque	MFG funktioniert mit Nukem, 100%% kein Betrug	MFG funciona com Nukem, 100%% sem golpe
+521	Lupa	Loupe	Lupe	Lupa
+522	Copia la profundidad para OptiFG y evita posibles corrupciones	Copie la profondeur pour OptiFG afin d'éviter des corruptions	Kopiert Tiefe für OptiFG gegen mögliche Beschädigungen	Copia a profundidade para OptiFG e evita possíveis corrupções
+523	Copia los vectores de movimiento para OptiFG y evita posibles corrupciones	Copie les vecteurs de mouvement pour OptiFG afin d'éviter des corruptions	Kopiert Bewegungsvektoren für OptiFG gegen mögliche Beschädigungen	Copia os vetores de movimento para OptiFG e evita possíveis corrupções
+524	Ajusta la imagen y pulsa para guardar un punto. Usa Blanco de papel para el primero; para los siguientes cambia de iluminación y usa Ajuste, que queda incorporado al ancla. Con un punto, el blanco sigue la exploración por proporción. Un segundo bajo otra luz define la curva del búfer y corrige todo el intervalo. Admite hasta ocho puntos por juego. La tabla se puede compartir: otra persona puede usar los mismos valores con ese juego.	Réglez l'image puis cliquez pour enregistrer un point. Utilisez Blanc papier pour le premier ; ensuite changez d'éclairage et utilisez Ajustement, intégré à l'ancrage. Un point suit l'analyse par proportion. Un second sous une autre lumière définit la courbe du tampon et corrige l'intervalle entier. Jusqu'à huit points par jeu. La table se partage : d'autres personnes peuvent utiliser les mêmes valeurs pour ce jeu.	Bild einstellen und als Punkt speichern. Für den ersten Papierweiß verwenden; danach Beleuchtung wechseln und die Feinjustierung nutzen, die in den Anker übernommen wird. Mit einem Punkt folgt Weiß der Suche proportional. Ein zweiter bei anderem Licht bestimmt die Pufferkurve und korrigiert den gesamten Zwischenbereich. Bis zu acht Punkte pro Spiel. Die Tabelle ist teilbar: Andere können dieselben Werte für dieses Spiel verwenden.	Ajuste a imagem e pressione para salvar um ponto. Use Branco do papel no primeiro; depois mude a iluminação e use Ajuste, incorporado à âncora. Com um ponto, o branco segue a análise por proporção. Um segundo sob outra luz define a curva do buffer e corrige todo o intervalo. Até oito pontos por jogo. A tabela pode ser compartilhada: outras pessoas podem usar os mesmos valores nesse jogo.
+525	Copia el búfer de profundidad. Puede corregir errores visuales en algunos juegos con GPU AMD en Windows. Puede causar tirones; úsalo solo si hace falta.	Copie le tampon de profondeur. Peut corriger l'image de certains jeux sur GPU AMD sous Windows. Peut provoquer des saccades ; utilisez seulement si nécessaire.	Kopiert den Tiefenpuffer. Kann Bildfehler mancher Spiele auf AMD-GPUs unter Windows beheben. Kann Ruckler verursachen; nur bei Bedarf verwenden.	Copia o buffer de profundidade. Pode corrigir erros visuais em jogos com GPU AMD no Windows. Pode causar engasgos; use apenas se necessário.
+526	Máscara	Masque	Maske	Máscara
+527	Residuo ajustado	Résidu ajusté	Angepasstes Residuum	Resíduo ajustado
+528	Máximo cambio de nitidez por movimiento. Negativo reduce nitidez (recomendado); positivo la aumenta. El ajuste crece con el movimiento hasta este límite.	Variation maximale de netteté due au mouvement. Négative : réduit la netteté (recommandé) ; positive : l'augmente. Le réglage croît avec le mouvement jusqu'à cette limite.	Maximale bewegungsbedingte Schärfeänderung. Negative Werte reduzieren Schärfe (empfohlen), positive erhöhen sie. Die Anpassung steigt mit der Bewegung bis zu dieser Grenze.	Mudança máxima de nitidez pelo movimento. Negativa reduz nitidez (recomendado); positiva aumenta. O ajuste cresce com o movimento até este limite.
+529	Prueba de desarrollo: comprueba si aumentar la máscara reactiva reduce estelas.	Test de développement : vérifie si amplifier le masque réactif réduit les traînées.	Entwicklungstest: Prüft, ob höhere Werte in der reaktiven Maske Nachbilder reduzieren.	Teste de desenvolvimento: verifica se aumentar a máscara reativa reduz rastros.
+530	Menú	Menu	Menü	Menu
+531	Escala del menú	Échelle du menu	Menüskalierung	Escala do menu
+532	Tema y color del menú	Thème et couleur du menu	Menüdesign und Farbe	Tema e cor do menu
+533	Tecla de menú pulsada; se cambiará el modo FG	Touche de menu pressée ; changement du mode FG	Menütaste gedrückt; FG-Modus wird gewechselt	Tecla de menu pressionada; alterando modo FG
+534	Tecla de menú pulsada; se alternarán los FPS	Touche de menu pressée ; changement d'affichage FPS	Menütaste gedrückt; FPS werden umgeschaltet	Tecla de menu pressionada; alternando FPS
+535	Tecla de menú pulsada; se cambiará el modo FPS	Touche de menu pressée ; changement du mode FPS	Menütaste gedrückt; FPS-Modus wird gewechselt	Tecla de menu pressionada; alterando modo FPS
+536	Tecla de menú pulsada; se alternará el menú	Touche de menu pressée ; ouverture ou fermeture du menu	Menütaste gedrückt; Menü wird umgeschaltet	Tecla de menu pressionada; alternando menu
+537	Puede ser necesario para ciertas combinaciones de DispatchFlags	Peut être nécessaire pour certains DispatchFlags	Für bestimmte DispatchFlags-Kombinationen eventuell nötig	Pode ser necessário para certas combinações de DispatchFlags
+538	Puede mejorar la calidad de imagen	Peut améliorer la qualité d'image	Kann die Bildqualität verbessern	Pode melhorar a qualidade da imagem
+539	Puede mejorar la imagen y reducir estelas	Peut améliorer l'image et réduire les traînées	Kann Bildqualität verbessern und Nachbilder reduzieren	Pode melhorar a imagem e reduzir rastros
+540	Puede corregir el tinte violeta en algunos juegos	Peut corriger une teinte violette dans certains jeux	Kann Violettstich in manchen Spielen beheben	Pode corrigir tonalidade roxa em alguns jogos
+541	Acumulación mínima de desoclusión	Accumulation minimale de désoccultation	Minimale Akkumulation neu sichtbarer Bereiche	Acúmulo mínimo de desoclusão
+542	Movimiento mínimo para ajustar nitidez. Valores altos ignoran movimientos pequeños y dan estabilidad; bajos reaccionan a movimientos sutiles.	Mouvement minimal avant ajustement. Les valeurs élevées ignorent les petits mouvements pour plus de stabilité ; les faibles réagissent aux mouvements subtils.	Mindestbewegung für die Schärfeanpassung. Hohe Werte ignorieren kleine Bewegungen und erhöhen Stabilität; niedrige reagieren empfindlicher.	Movimento mínimo para ajustar nitidez. Valores altos ignoram pequenos movimentos e dão estabilidade; baixos reagem a movimentos sutis.
+543	Sesgo mipmap	Biais mipmap	Mipmap-Bias	Viés mipmap
+544	Falta amd_fidelityfx_framegeneration_dx12.dll	amd_fidelityfx_framegeneration_dx12.dll manquant	amd_fidelityfx_framegeneration_dx12.dll fehlt	Falta amd_fidelityfx_framegeneration_dx12.dll
+545	Falta amd_fidelityfx_framegeneration_dx12.dll o dlss-enabler-headless.dll	amd_fidelityfx_framegeneration_dx12.dll ou dlss-enabler-headless.dll manquant	amd_fidelityfx_framegeneration_dx12.dll oder dlss-enabler-headless.dll fehlt	Falta amd_fidelityfx_framegeneration_dx12.dll ou dlss-enabler-headless.dll
+546	Falta dlss-enabler-headless.dll	dlss-enabler-headless.dll manquant	dlss-enabler-headless.dll fehlt	Falta dlss-enabler-headless.dll
+547	Falta dlssg_to_fsr3_amd_is_better.dll	dlssg_to_fsr3_amd_is_better.dll manquant	dlssg_to_fsr3_amd_is_better.dll fehlt	Falta dlssg_to_fsr3_amd_is_better.dll
+548	Modelo	Modèle	Modell	Modelo
+549	Salida del modelo (sin procesar)	Sortie du modèle (brute)	Modellausgabe (roh)	Saída do modelo (bruta)
+550	Preajuste del modelo	Préréglage du modèle	Modellvoreinstellung	Predefinição do modelo
+551	Resolución del modelo	Résolution du modèle	Modellauflösung	Resolução do modelo
+552	Modificar comparación	Modifier la comparaison	Vergleich ändern	Modificar comparação
+553	Modificar mín./máx.	Modifier min/max	Min./Max. ändern	Modificar mín./máx.
+554	Principalmente para Unreal Engine. La esquina superior izquierda quedará borrosa.	Surtout pour Unreal Engine. La partie supérieure gauche sera floue.	Vorwiegend für Unreal Engine. Der obere linke Bildbereich wird unscharf.	Principalmente para Unreal Engine. O canto superior esquerdo ficará borrado.
+555	Mayormente estable, a diferencia del controlador	Plutôt stable, contrairement au pilote	Meist stabil, anders als der Treiber	Geralmente estável, diferente do driver
+556	Movimiento	Mouvement	Bewegung	Movimento
+557	Nitidez adaptada al movimiento	Netteté adaptée au mouvement	Bewegungsabhängige Schärfe	Nitidez adaptada ao movimento
+558	Mis ocho puntos son flotantes	Mes huit points sont flottants	Meine acht Punkte schweben	Meus oito pontos são flutuantes
+559	Composición/copias NR	Composition/copies NR	NR-Komposition/Kopien	Composição/cópias NR
+560	Modelo NR (NGX)	Modèle NR (NGX)	NR-Modell (NGX)	Modelo NR (NGX)
+561	NR Vulkan nativo activo después del reescalador.	NR Vulkan natif actif après le moteur de mise à l'échelle.	Natives Vulkan-NR nach dem Upscaler aktiv.	NR Vulkan nativo ativo após o upscaler.
+562	Natural	Naturel	Natürlich	Natural
+563	Cerca: %.1f Lejos: %.1f	Proche : %.1f Loin : %.1f	Nah: %.1f Fern: %.1f	Perto: %.1f Longe: %.1f
+564	Requiere textura HUDless para comparar con la imagen final. ¡Solo los elementos de interfaz deben aparecer rosas!	Texture HUDless requise pour comparer à l'image finale. SEULS les éléments d'interface doivent être roses !	Benötigt HUDless-Textur zum Vergleich mit dem fertigen Bild. NUR UI-Elemente sollen rosa erscheinen!	Requer textura HUDless para comparar com a imagem final. APENAS os elementos da interface devem aparecer rosas!
+565	Modelos de red	Modèles de réseau	Netzwerkmodelle	Modelos de rede
+566	Renderizado neuronal	Rendu neuronal	Neuronales Rendering	Renderização neural
+567	Tecla de renderizado neuronal pulsada; se alternará el pase	Touche de rendu neuronal pressée ; activation ou désactivation de la passe	Taste für neuronales Rendering gedrückt; Durchlauf wird umgeschaltet	Tecla de renderização neural pressionada; alternando a passagem
+568	Telemetría del renderizado neuronal:	Télémétrie du rendu neuronal :	Telemetrie des neuronalen Renderings:	Telemetria da renderização neural:
+569	Muestreo neuronal de porquería con DLSS5	Échantillonnage neuronal de bouillie avec DLSS5	Neuronaler Bildmatsch mit DLSS5	Amostragem neural de meleca com DLSS5
+570	Neurotic Alpha 0.9.4 | Basado en %s - %s %s %s %s	Neurotic Alpha 0.9.4 | Basé sur %s - %s %s %s %s	Neurotic Alpha 0.9.4 | Basierend auf %s - %s %s %s %s	Neurotic Alpha 0.9.4 | Baseado em %s - %s %s %s %s
+571	Proxy Neutwo + composición	Proxy Neutwo + composition	Neutwo-Proxy + Komposition	Proxy Neutwo + composição
+572	Proxy Neutwo + sustitución	Proxy Neutwo + remplacement	Neutwo-Proxy + Ersetzen	Proxy Neutwo + substituição
+573	Nueva aplicación en el barrio: TH	Nouvelle application dans le quartier : TH	Neue App im Viertel: TH	Novo aplicativo no pedaço: TH
+574	El extraño reescalado de Nitec	L'étrange mise à l'échelle de Nitec	Nitecs bizarres Upscaling	O estranho upscaling de Nitec
+575	Nada de flotantes: estrictamente entre -128 y 127	Pas de flottants : strictement entre -128 et 127	Kein Schweben: streng zwischen -128 und 127	Nada de flutuantes: estritamente entre -128 e 127
+576	DLSSG real no disponible: hardware incompatible. Solo sustituciones Nvngx FG.	DLSSG réel indisponible : matériel incompatible. Remplacements Nvngx FG uniquement.	Kein echtes DLSSG: Hardware nicht unterstützt. Nur Nvngx-FG-Ersatz verfügbar.	DLSSG real indisponível: hardware incompatível. Apenas substituições Nvngx FG.
+577	Sin compatibilidad	Non pris en charge	Nicht unterstützt	Sem suporte
+578	No lineal	Non linéaire	Nichtlinear	Não linear
+579	PQ no lineal	PQ non linéaire	Nichtlineares PQ	PQ não linear
+580	sRGB no lineal	sRGB non linéaire	Nichtlineares sRGB	sRGB não linear
+581	Ninguno	Aucun	Keine	Nenhum
+582	Ninguno (desactivado)	Aucun (désactivé)	Keine (aus)	Nenhum (desativado)
+583	Ninguno (DLSSG real)	Aucun (DLSSG réel)	Keine (echtes DLSSG)	Nenhum (DLSSG real)
+584	Nada en este juego tiene forma de exposición.	Rien dans ce jeu ne ressemble à une exposition.	Nichts in diesem Spiel hat die Form eines Belichtungswerts.	Nada neste jogo tem formato de exposição.
+585	=	=	=	=
+586	=	=	=	=
+587	Fotogramas que FG puede adelantarse al juego. Puede evitar alternancias FG, pero también causar problemas.	Nombre d'images d'avance autorisées pour FG. Peut éviter les bascules FG, mais aussi causer des problèmes.	Anzahl Frames, die FG dem Spiel voraus sein darf. Kann FG-Umschaltungen verhindern, aber auch Probleme verursachen.	Quadros que FG pode adiantar em relação ao jogo. Pode evitar alternâncias FG, mas também causar problemas.
+588	ACTIVO {}x	ACTIF {}x	AN {}x	ATIVO {}x
+589	Desactivado	Désactivé	Aus	Desativado
+590	Desactivado (curva suave)	Désactivé (courbe douce)	Aus (weiche Kennlinie)	Desativado (curva suave)
+591	Desactivado en esta sesión: %s.	Désactivé pour cette session : %s.	Für diese Sitzung deaktiviert: %s.	Desativado nesta sessão: %s.
+592	Desactivado. El modelo cargado se conserva para la próxima activación.	Désactivé. Le modèle chargé reste en mémoire pour la prochaine activation.	Aus. Ein geladenes Modell bleibt für die nächste Aktivierung erhalten.	Desativado. O modelo carregado é mantido para a próxima ativação.
+593	Activado	Activé	An	Ativado
+594	Activado + ampliado	Activé + étendu	An + erweitert	Ativado + ampliado
+595	Un tirón más y pierdo la paciencia	Encore une saccade et je craque	Noch ein Ruckler und ich raste aus	Mais um engasgo e eu surto
+596	Si solo sube, es un contador, no una exposición.	S'il ne fait que monter, c'est un compteur, pas une exposition.	Ein nur steigender Wert ist ein Zähler, keine Belichtung.	Se só sobe, é um contador, não uma exposição.
+597	Por debajo de 1.0 solo se admiten FSR1 y Bicúbico.	Sous 1.0, seuls FSR1 et Bicubique sont pris en charge.	Unter 1.0 werden nur FSR1 und Bikubisch unterstützt.	Abaixo de 1.0, apenas FSR1 e Bicúbico são suportados.
+598	Abrir wiki	Ouvrir le wiki	Wiki öffnen	Abrir wiki
+599	Abrir wiki (?)	Ouvrir le wiki (?)	Wiki öffnen (?)	Abrir wiki (?)
+600	Abrir página de versiones	Ouvrir la page des versions	Versionsseite öffnen	Abrir página de versões
+601	=	=	=	=
+602	Opti Sports: está en el muestreo	Opti Sports : tout est dans l'échantillonnage	Opti Sports: Alles steckt im Sampling	Opti Sports: está na amostragem
+603	¡OptiCopers, reuníos!	OptiCopers, rassemblement !	OptiCopers, versammelt euch!	OptiCopers, avante!
+604	OptiFG (reescalador)	OptiFG (mise à l'échelle)	OptiFG (Upscaler)	OptiFG (upscaler)
+605	OptiScaler: %s para el menú	OptiScaler : %s pour le menu	OptiScaler: %s für das Menü	OptiScaler: %s para o menu
+606	Actualización de OptiScaler disponible	Mise à jour OptiScaler disponible	OptiScaler-Update verfügbar	Atualização do OptiScaler disponível
+607	Desactivado porque el juego no proporciona máscara reactiva	Désactivé car le jeu ne fournit pas de masque réactif	Deaktiviert, da das Spiel keine reaktive Maske liefert	Desativado porque o jogo não fornece máscara reativa
+608	Naranja	Orange	Orange	Laranja
+609	Salida	Sortie	Ausgabe	Saída
+610	Escala de salida	Échelle de sortie	Ausgabeskalierung	Escala de saída
+611	Escala de salida: %s, resolución objetivo: %dx%d (%.2f), muestras de jitter: %d	Échelle de sortie : %s, résolution cible : %dx%d (%.2f), nombre de jitters : %d	Ausgabeskalierung: %s, Zielauflösung: %dx%d (%.2f), Jitter-Anzahl: %d	Escala de saída: %s, resolução alvo: %dx%d (%.2f), amostras de jitter: %d
+612	Posición del indicador	Position de l'affichage	Anzeigeposition	Posição do indicador
+613	Tipo de indicador	Type d'affichage	Anzeigetyp	Tipo de indicador
+614	Sustituir	Remplacer	Überschreiben	Substituir
+615	Sustituir relación DLSSG	Remplacer le rapport DLSSG	DLSSG-Verhältnis überschreiben	Substituir proporção DLSSG
+616	Sustituir máximo	Remplacer le maximum	Maximum überschreiben	Substituir máximo
+617	Sustituir mínimo	Remplacer le minimum	Minimum überschreiben	Substituir mínimo
+618	Sustituir preajuste	Remplacer le préréglage	Voreinstellung überschreiben	Substituir predefinição
+619	Sustituir todos	Tout remplacer	Alle überschreiben	Substituir todos
+620	Sustituye mipmaps de todas las texturas. Normalmente OptiScaler solo sustituye valores negativos.	Remplace les mipmaps de toutes les textures. Normalement OptiScaler ne remplace que les valeurs négatives.	Überschreibt Mipmaps aller Texturen. Normalerweise überschreibt OptiScaler nur negative Werte.	Substitui mipmaps de todas as texturas. Normalmente OptiScaler substitui apenas valores negativos.
+621	Sustituir por preajuste de calidad	Remplacer par préréglage de qualité	Je Qualitätsvoreinstellung überschreiben	Substituir por predefinição de qualidade
+622	Aplica el valor a todos los preajustes. 1.5x en pantalla 1080p equivale a 720p internos: 1080 / 1.5 = 720.	Applique la valeur à tous les préréglages. 1.5x sur écran 1080p donne 720p internes : 1080 / 1.5 = 720.	Wendet den Wert auf alle Voreinstellungen an. 1.5x bei 1080p ergibt intern 720p: 1080 / 1.5 = 720.	Aplica o valor a todas as predefinições. 1.5x em tela 1080p dá 720p internos: 1080 / 1.5 = 720.
+623	Blanco de papel	Blanc papier	Papierweiß	Branco do papel
+624	Blanco de papel (editando punto %d)	Blanc papier (modification du point %d)	Papierweiß (Punkt %d bearbeiten)	Branco do papel (editando ponto %d)
+625	Solo blanco de papel	Blanc papier seul	Nur Papierweiß	Apenas branco do papel
+626	Pasivo	Passif	Passiv	Passivo
+627	Desglose por sombreador:	Détail par shader :	Aufschlüsselung je Shader:	Detalhamento por shader:
+628	Preajuste de rendimiento	Préréglage Performance	Leistungsvoreinstellung	Predefinição de desempenho
+629	Rendimiento	Performance	Leistung	Desempenho
+630	Rendimiento (predeterminado)	Performance (par défaut)	Leistung (Standard)	Desempenho (padrão)
+631	Indicador de rendimiento	Affichage des performances	Leistungsanzeige	Indicador de desempenho
+632	Fija DLSSG.Backbuffer a la captura del subfotograma 1 durante el fotograma MFG	Fixe DLSSG.Backbuffer à la capture de la sous-image 1 pendant l'image MFG	Fixiert DLSSG.Backbuffer während des MFG-Frames auf die Aufnahme von Unterframe 1	Fixa DLSSG.Backbuffer à captura do subquadro 1 durante o quadro MFG
+633	Fijar búfer posterior	Fixer le tampon arrière	Backbuffer fixieren	Fixar buffer traseiro
+634	Coloca dlss-enabler-headless.dll en la carpeta de OptiScaler	Placez dlss-enabler-headless.dll dans le dossier OptiScaler	dlss-enabler-headless.dll im OptiScaler-Ordner ablegen	Coloque dlss-enabler-headless.dll na pasta do OptiScaler
+635	Coloca dlssg_to_fsr3_amd_is_better.dll en la carpeta de OptiScaler	Placez dlssg_to_fsr3_amd_is_better.dll dans le dossier OptiScaler	dlssg_to_fsr3_amd_is_better.dll im OptiScaler-Ordner ablegen	Coloque dlssg_to_fsr3_amd_is_better.dll na pasta do OptiScaler
+636	Selecciona %s en el juego y carga una partida para habilitar los ajustes Opti. Los reescaladores no siempre funcionan en menús.	Sélectionnez %s dans le jeu et chargez une partie pour activer les réglages Opti. Les moteurs ne fonctionnent pas toujours dans les menus.	%s im Spiel wählen und einen Spielstand laden, um Opti-Einstellungen zu aktivieren. Upscaler laufen nicht immer in Menüs.	Selecione %s no jogo e carregue uma partida para ativar configurações Opti. Upscalers nem sempre funcionam nos menus.
+637	Selecciona generación de fotogramas DLSS en el juego. Quizá debas seleccionar DLSS primero.	Sélectionnez la génération d'images DLSS en jeu. Il faudra peut-être sélectionner DLSS d'abord.	DLSS-Framegenerierung im Spiel wählen. Eventuell zuerst DLSS auswählen.	Selecione geração de quadros DLSS no jogo. Talvez precise selecionar DLSS primeiro.
+638	Selecciona generación de fotogramas FSR en el juego. Quizá debas seleccionar FSR primero.	Sélectionnez la génération d'images FSR en jeu. Il faudra peut-être sélectionner FSR d'abord.	FSR-Framegenerierung im Spiel wählen. Eventuell zuerst FSR auswählen.	Selecione geração de quadros FSR no jogo. Talvez precise selecionar FSR primeiro.
+639	Posicionamiento	Positionnement	Positionierung	Posicionamento
+640	Valores positivos reducen nitidez en alto contraste; negativos la aumentan.	Les valeurs positives réduisent la netteté à fort contraste ; les négatives l'augmentent.	Positive Werte senken Schärfe bei hohem Kontrast; negative erhöhen sie.	Valores positivos reduzem nitidez em alto contraste; negativos aumentam.
+641	Después de RR	Après RR	Nach RR	Após RR
+642	Post-SR solicitado	Post-SR demandé	Post-SR angefordert	Post-SR solicitado
+643	Pre-SR solicitado	Pre-SR demandé	Pre-SR angefordert	Pre-SR solicitado
+644	Presentación	Présentation	Präsentation	Apresentação
+645	Preajuste 0	Préréglage 0	Voreinstellung 0	Predefinição 0
+646	Preajuste 1	Préréglage 1	Voreinstellung 1	Predefinição 1
+647	Preajuste 2	Préréglage 2	Voreinstellung 2	Predefinição 2
+648	Preajuste 3	Préréglage 3	Voreinstellung 3	Predefinição 3
+649	Preajuste 4	Préréglage 4	Voreinstellung 4	Predefinição 4
+650	Preajuste 5	Préréglage 5	Voreinstellung 5	Predefinição 5
+651	Preajuste A. ¡Eliminado en versiones recientes!	Préréglage A. Supprimé des versions récentes !	Voreinstellung A. In neueren Versionen entfernt!	Predefinição A. Removida nas versões recentes!
+652	Preajuste B. ¡Eliminado en versiones recientes!	Préréglage B. Supprimé des versions récentes !	Voreinstellung B. In neueren Versionen entfernt!	Predefinição B. Removida nas versões recentes!
+653	Preajuste C. ¡Eliminado en versiones recientes!	Préréglage C. Supprimé des versions récentes !	Voreinstellung C. In neueren Versionen entfernt!	Predefinição C. Removida nas versões recentes!
+654	Preajustes sustituidos externamente	Préréglages remplacés de l'extérieur	Voreinstellungen extern überschrieben	Predefinições substituídas externamente
+655	Preajustes:	Préréglages :	Voreinstellungen:	Predefinições:
+656	Pulsa %s para más información	Appuyez sur %s pour plus d'informations	%s für weitere Informationen drücken	Pressione %s para mais informações
+657	Pulsa cualquier tecla...	Appuyez sur une touche...	Beliebige Taste drücken...	Pressione qualquer tecla...
+658	Proxy (lo que ve el modelo)	Proxy (ce que voit le modèle)	Proxy (was das Modell sieht)	Proxy (o que o modelo vê)
+659	Proxy muestra la imagen que recibe el modelo. Si se ve mal, el punto blanco es incorrecto y no se puede juzgar lo posterior. Diferencia muestra el cambio real amplificado 20 veces, centrado en gris. Un gris uniforme significa que el modelo no cambia nada.	Proxy montre l'image reçue par le modèle. Si elle est incorrecte, le point blanc l'est aussi et la suite ne peut être jugée. Différence montre le changement réel amplifié 20 fois, centré sur le gris. Un gris uniforme signifie aucun changement.	Proxy zeigt den Modelleingang. Sieht er falsch aus, stimmt der Weißpunkt nicht und nachgelagerte Ergebnisse sind nicht bewertbar. Differenz zeigt die echte Änderung 20-fach verstärkt um Grau. Gleichmäßiges Grau bedeutet keine Änderung.	Proxy mostra a imagem recebida pelo modelo. Se estiver errada, o ponto branco também está e não se pode avaliar o restante. Diferença mostra a mudança real ampliada 20 vezes, centrada em cinza. Cinza uniforme significa nenhuma alteração.
+660	Violeta	Violet	Violett	Roxo
+661	Cambia la imagen editada de lado. Hazlo tras elegir una preferida: la posición puede sesgar la percepción. Si la misma imagen sigue ganando, prefieres el efecto y no su posición.	Change l'image modifiée de côté. Faites-le après avoir choisi votre préférée : la position peut biaiser le regard. Si la même image reste meilleure, vous préférez l'effet et non sa position.	Verschiebt das bearbeitete Bild auf die andere Seite. Nach der Auswahl eines Favoriten ausprobieren: Die Position beeinflusst die Wahrnehmung. Gewinnt weiterhin dasselbe Bild, liegt es am Effekt und nicht an der Anordnung.	Troca a imagem editada de lado. Faça após escolher a preferida: a posição pode enviesar a percepção. Se a mesma imagem continua melhor, você prefere o efeito, não a posição.
+662	Calidad	Qualité	Qualität	Qualidade
+663	Preajuste de calidad	Préréglage Qualité	Qualitätsvoreinstellung	Predefinição de qualidade
+664	Calidad activa: Post-SR después del reescalado DLSS nativo.	Qualité active : Post-SR après la mise à l'échelle DLSS native.	Qualität aktiv: Post-SR nach nativem DLSS-Upscaling.	Qualidade ativa: Post-SR após upscaling DLSS nativo.
+665	Calidad aplica NR después de DLSS Super Resolution nativo; Rendimiento lo aplica antes. Ray Reconstruction ya elimina ruido y reconstruye la salida final en una sola pasada adaptada al modo, así que NR queda después de RR en ambos modos.	Qualité applique NR après DLSS Super Resolution natif ; Performance l'applique avant. Ray Reconstruction débruite et reconstruit déjà la sortie finale en une passe adaptée au mode ; NR reste donc après RR dans les deux modes.	Qualität führt NR nach nativem DLSS Super Resolution aus, Leistung davor. Ray Reconstruction entrauscht und rekonstruiert die fertige Ausgabe bereits in einem modusabhängigen Durchlauf; NR bleibt deshalb in beiden Modi nach RR.	Qualidade aplica NR após DLSS Super Resolution nativo; Desempenho aplica antes. Ray Reconstruction já remove ruído e reconstrói a saída final numa passagem adaptada ao modo; NR permanece após RR nos dois modos.
+666	Calidad solicitada: esperando una evaluación Post-SR correcta.	Qualité demandée : attente d'une évaluation Post-SR réussie.	Qualität angefordert: erfolgreiche Post-SR-Auswertung wird abgewartet.	Qualidade solicitada: aguardando avaliação Post-SR bem-sucedida.
+667	Relación	Rapport	Verhältnis	Proporção
+668	DispatchFlags sin procesar:	DispatchFlags bruts :	Rohe DispatchFlags:	DispatchFlags brutos:
+669	Ray Reconstruction activo: reescalado RR nativo y después NR.	Ray Reconstruction actif : mise à l'échelle RR native, puis NR.	Ray Reconstruction aktiv: natives RR-Upscaling, danach NR.	Ray Reconstruction ativo: upscaling RR nativo, depois NR.
+670	Ray Reconstruction activo: esperando NR después de RR nativo.	Ray Reconstruction actif : attente de NR après RR natif.	Ray Reconstruction aktiv: NR nach nativem RR wird abgewartet.	Ray Reconstruction ativo: aguardando NR após RR nativo.
+671	Sesgo de máscara reactiva	Biais du masque réactif	Bias der reaktiven Maske	Viés da máscara reativa
+672	Escala reactiva	Échelle réactive	Reaktive Skalierung	Escala reativa
+673	Se lee al crear el modelo; cambiarlo lo recrea tras un momento.	Lu à la création du modèle ; le modifier le recrée après un instant.	Wird beim Erstellen gelesen; Änderungen erzeugen das Modell nach kurzer Zeit neu.	Lido ao criar o modelo; alterações o recriam após um instante.
+674	Leyendo exposición...	Lecture de l'exposition...	Belichtung wird gelesen...	Lendo exposição...
+675	DLSSG real, para RTX 40xx y superiores	DLSSG réel, pour RTX 40xx et suivantes	Echtes DLSSG für RTX 40xx und neuer	DLSSG real, para RTX 40xx e superiores
+676	Fotogramas falsos auténticos. Certificados.	De vraies fausses images. Certifiées.	Echte falsche Frames. Zertifiziert.	Quadros falsos de verdade. Certificados.
+677	Altura del rectángulo	Hauteur du rectangle	Rechteckhöhe	Altura do retângulo
+678	Izquierda del rectángulo	Gauche du rectangle	Linker Rechteckrand	Esquerda do retângulo
+679	Arriba del rectángulo	Haut du rectangle	Oberer Rechteckrand	Topo do retângulo
+680	Ancho del rectángulo	Largeur du rectangle	Rechteckbreite	Largura do retângulo
+681	Ajustes del rectángulo	Réglages du rectangle	Rechteckeinstellungen	Configurações do retângulo
+682	Rojo	Rouge	Rot	Vermelho
+683	=	=	=	=
+684	ID de Reflex	ID Reflex	Reflex-ID	ID Reflex
+685	Reflex no interceptado	Reflex non intercepté	Reflex nicht eingehängt	Reflex não interceptado
+686	Tiempos Reflex	Temps Reflex	Reflex-Zeiten	Tempos Reflex
+687	Tiempos Reflex, fotograma completo: %.1fms	Temps Reflex, image entière : %.1fms	Reflex-Zeiten, gesamter Frame: %.1fms	Tempos Reflex, quadro inteiro: %.1fms
+688	Frecuencia de refresco	Fréquence de rafraîchissement	Bildwiederholrate	Taxa de atualização
+689	Amplía la tolerancia de resolución HUDless en 32 píxeles. Ayuda con bandas negras a ciertas resoluciones y relaciones, por ejemplo en Witcher 3.	Élargit la tolérance de résolution HUDless de 32 pixels. Aide avec les bandes noires à certaines résolutions et proportions, par exemple Witcher 3.	Erweitert die HUDless-Auflösungstoleranz um 32 Pixel. Hilft bei schwarzen Balken in bestimmten Auflösungen und Seitenverhältnissen, etwa Witcher 3.	Amplia a tolerância de resolução HUDless em 32 pixels. Ajuda com barras pretas em certas resoluções e proporções, como em Witcher 3.
+690	Comprobación de recursos flexible	Vérification souple des ressources	Gelockerte Ressourcenprüfung	Verificação flexível de recursos
+691	Sustituir preajustes de renderizado	Remplacer les préréglages de rendu	Rendering-Voreinstellungen überschreiben	Substituir predefinições de renderização
+692	Ancho de renderizado	Largeur de rendu	Renderbreite	Largura de renderização
+693	Renderiza en tu mundo. Reescala en el nuestro.	Rendez dans votre monde. Agrandissez dans le nôtre.	Rendere in deiner Welt. Skaliere in unserer.	Renderize no seu mundo. Amplie no nosso.
+694	Modo de renderizado	Mode de rendu	Rendering-Modus	Modo de renderização
+695	Modo solicitado: %s; NR no está disponible.	Mode demandé : %s ; NR indisponible.	Rendering-Modus angefordert: %s; NR nicht verfügbar.	Modo solicitado: %s; NR indisponível.
+696	Modo seleccionado: %s.	Mode sélectionné : %s.	Rendering-Modus gewählt: %s.	Modo selecionado: %s.
+697	Necesario para que funcionen los indicadores de depuración	Nécessaire au fonctionnement des indicateurs de débogage	Für korrekte Debug-Flags erforderlich	Necessário para os indicadores de depuração funcionarem
+698	Requiere la DLL dlssg_to_fsr3 de Nukem	Nécessite la DLL dlssg_to_fsr3 de Nukem	Benötigt Nukems dlssg_to_fsr3-DLL	Requer a DLL dlssg_to_fsr3 de Nukem
+699	Requiere desactivar vectores de movimiento dilatados	Nécessite de désactiver les vecteurs de mouvement dilatés	Erfordert deaktivierte dilatierte Bewegungsvektoren	Requer desativar vetores de movimento dilatados
+700	Resolución	Résolution	Auflösung	Resolução
+701	Restablecer	Réinitialiser	Zurücksetzen	Redefinir
+702	Restablecer color de acento	Réinitialiser la couleur d'accent	Akzentfarbe zurücksetzen	Redefinir cor de destaque
+703	Restablecer color de fondo	Réinitialiser la couleur de fond	Hintergrundfarbe zurücksetzen	Redefinir cor de fundo
+704	Restablecer cámara	Réinitialiser la caméra	Kamerawerte zurücksetzen	Redefinir câmera
+705	Restablecer profundidad	Réinitialiser la profondeur	Tiefenwerte zurücksetzen	Redefinir profundidade
+706	Restablecer rectángulo FG	Réinitialiser le rectangle FG	FG-Rechteck zurücksetzen	Redefinir retângulo FG
+707	Restablecer límite	Réinitialiser la limite	Limit zurücksetzen	Redefinir limite
+708	Restablecer lista	Réinitialiser la liste	Liste zurücksetzen	Redefinir lista
+709	Restablecer posición fija (seguir cursor)	Réinitialiser la position fixe (suivre le curseur)	Feste Position zurücksetzen (Mauszeiger folgen)	Redefinir posição fixa (seguir cursor)
+710	Restablecer objetivo	Réinitialiser la cible	Ziel zurücksetzen	Redefinir alvo
+711	Restablece el rectángulo de generación de fotogramas	Réinitialise le rectangle de génération d'images	Setzt das Framegenerierungsrechteck zurück	Redefine o retângulo de geração de quadros
+712	Resistirse es inútil. Tus píxeles serán reescalados.	Résister est inutile. Vos pixels seront agrandis.	Widerstand ist zwecklos. Deine Pixel werden hochskaliert.	Resistir é inútil. Seus pixels serão ampliados.
+713	Barreras de recursos	Barrières de ressources	Ressourcenbarrieren	Barreiras de recursos
+714	Bloqueo de recursos	Blocage des ressources	Ressourcensperren	Bloqueio de recursos
+715	Ajustes de recursos	Réglages des ressources	Ressourceneinstellungen	Configurações de recursos
+716	¡Reinicia el juego para aplicar correctamente XeFG!	Redémarrez le jeu pour appliquer correctement XeFG !	Spiel neu starten, um korrekte XeFG-Einstellungen anzuwenden!	Reinicie o jogo para aplicar XeFG corretamente!
+717	Restaurar firma raíz de cómputo	Restaurer la signature racine de calcul	Compute-Root-Signatur wiederherstellen	Restaurar assinatura raiz de computação
+718	Restaurar firma raíz gráfica	Restaurer la signature racine graphique	Grafik-Root-Signatur wiederherstellen	Restaurar assinatura raiz gráfica
+719	Reintentar	Réessayer	Erneut versuchen	Tentar novamente
+720	Proxy reversible	Proxy réversible	Reversibler Proxy	Proxy reversível
+721	Firmas raíz	Signatures racines	Root-Signaturen	Assinaturas raiz
+722	Ejecutándose de forma nativa en Vulkan: %llu fotogramas%s	Exécution native sur Vulkan : %llu images%s	Läuft nativ auf Vulkan: %llu Frames%s	Executando nativamente no Vulkan: %llu quadros%s
+723	En ejecución%s: %.2f ms por fotograma%s	En cours%s : %.2f ms par image%s	Läuft%s: %.2f ms pro Frame%s	Em execução%s: %.2f ms por quadro%s
+724	En ejecución.%s	En cours.%s	Läuft.%s	Em execução.%s
+725	Ejecuta una segunda capa Feature 18 independiente sobre el fotograma compuesto de la primera. Hereda sus ajustes de modelo y composición, pero conserva su propio historial temporal. Aproximadamente duplica el coste del modelo. Esta implementación experimental solo admite D3D12.	Exécute une seconde couche Feature 18 indépendante sur l'image composée de la première. Elle hérite de ses réglages de modèle et composition, mais conserve son propre historique temporel. Double approximativement le coût du modèle. Cette implémentation expérimentale est limitée à D3D12.	Führt eine zweite unabhängige Feature-18-Ebene auf dem fertig zusammengesetzten ersten Ergebnis aus. Übernimmt Modell- und Kompositionseinstellungen, besitzt aber eine eigene zeitliche Historie. Verdoppelt ungefähr die Modellkosten. Diese experimentelle Implementierung unterstützt nur D3D12.	Executa uma segunda camada Feature 18 independente sobre o quadro composto da primeira. Herda seus ajustes de modelo e composição, mas mantém histórico temporal próprio. Aproximadamente dobra o custo do modelo. Esta implementação experimental suporta apenas D3D12.
+726	Márgenes de seguridad en ms	Marges de sécurité en ms	Sicherheitsabstände in ms	Margens de segurança em ms
+727	Márgenes en milisegundos. Predeterminado FSR: 0.1ms; Opti: 0.01ms.	Marges en millisecondes. Défaut FSR : 0.1ms ; Opti : 0.01ms.	Sicherheitsabstände in Millisekunden. FSR-Standard: 0.1ms; Opti: 0.01ms.	Margens em milissegundos. Padrão FSR: 0.1ms; Opti: 0.01ms.
+728	Igual que el menú	Comme le menu	Wie Menü	Igual ao menu
+729	Guarda el INI y reinicia para aplicar	Enregistrez l'INI et redémarrez pour appliquer	INI speichern und zum Anwenden neu starten	Salve o INI e reinicie para aplicar
+730	Guardar ajustes	Enregistrer les réglages	Einstellungen speichern	Salvar configurações
+731	Guarda los ajustes y reinicia para aplicar	Enregistrez les réglages et redémarrez pour appliquer	Einstellungen speichern und zum Anwenden neu starten	Salve as configurações e reinicie para aplicar
+732	Escala	Échelle	Skalierung	Escala
+733	Escalar profundidad para corregir DLSS RR	Mettre la profondeur à l'échelle pour corriger DLSS RR	Tiefe zur DLSS-RR-Korrektur skalieren	Escalar profundidade para corrigir DLSS RR
+734	Exploración %.5f -> punto blanco %.2f (%u punto%s)	Analyse %.5f -> point blanc %.2f (%u point%s)	Suche %.5f -> Weißpunkt %.2f (%u Punkt%s)	Análise %.5f -> ponto branco %.2f (%u ponto%s)
+735	La segunda capa neuronal no está disponible en Vulkan en este experimento.	La seconde couche neuronale n'est pas disponible sur Vulkan dans cette expérience.	Die zweite neuronale Ebene ist in diesem Experiment unter Vulkan nicht verfügbar.	A segunda camada neural não está disponível no Vulkan neste experimento.
+736	Selecciona DLSS-FG en el juego	Sélectionnez DLSS-FG en jeu	DLSS-FG im Spiel wählen	Selecione DLSS-FG no jogo
+737	Selecciona FSR-FG en el juego	Sélectionnez FSR-FG en jeu	FSR-FG im Spiel wählen	Selecione FSR-FG no jogo
+738	Elige la fuente del tiempo de fotograma. Puede mejorar cadencia y tirones.	Choisissez la source du temps d'image. Peut améliorer cadencement et saccades.	Quelle der Framezeit wählen. Kann Timing und Ruckler verbessern.	Escolha a fonte do tempo de quadro. Pode melhorar cadência e engasgos.
+739	Espacio de color del juego. No lineal/sRGB puede mejorar FSR4, pero aumentar estelas. PQ es poco común y puede aumentar estelas y estropear luces.	Espace colorimétrique du jeu. Non linéaire/sRGB peut améliorer FSR4 mais augmenter les traînées. PQ est rare et peut accroître les traînées et perturber les lumières.	Farbraum des Spiels. Nichtlinear/sRGB kann FSR4 verbessern, aber Nachbilder verstärken. PQ ist selten und kann Nachbilder sowie Beleuchtungsfehler erzeugen.	Espaço de cor do jogo. Não linear/sRGB pode melhorar FSR4, mas aumentar rastros. PQ é raro e pode aumentar rastros e prejudicar luzes.
+740	Establecer	Définir	Festlegen	Definir
+741	Establecer cantidad de interpolaciones DLSSG	Définir le nombre d'interpolations DLSSG	DLSSG-Interpolationsanzahl festlegen	Definir quantidade de interpolações DLSSG
+742	Establecer posición fija	Définir une position fixe	Feste Position festlegen	Definir posição fixa
+743	Establecer cantidad de interpolaciones XeFG	Définir le nombre d'interpolations XeFG	XeFG-Interpolationsanzahl festlegen	Definir quantidade de interpolações XeFG
+744	Usar como límite FPS	Utiliser comme limite FPS	Als FPS-Limit festlegen	Usar como limite FPS
+745	Escala de sombreado	Échelle d'ombrage	Schattierungsskalierung	Escala de sombreamento
+746	Nitidez	Netteté	Schärfe	Nitidez
+747	Mostrar depuración	Afficher le débogage	Debug anzeigen	Mostrar depuração
+748	Mostrar interfaz detectada	Afficher l'interface détectée	Erkannte UI anzeigen	Mostrar interface detectada
+749	Mostrar gráficos	Afficher les graphiques	Diagramme anzeigen	Mostrar gráficos
+750	Muestra u oculta los gráficos de tiempo de fotograma y reescalado. Solo cambia la presentación del menú.	Affiche ou masque les graphiques de temps d'image et de mise à l'échelle. Modifie uniquement l'affichage du menu.	Zeigt oder verbirgt Framezeit- und Upscaler-Diagramme. Ändert nur die Menüdarstellung.	Mostra ou oculta gráficos de tempo de quadro e upscaling. Altera apenas a apresentação do menu.
+751	Mostrar fotómetro en pantalla	Afficher le posemètre à l'écran	Belichtungsmesser anzeigen	Mostrar fotômetro na tela
+752	Compara el resultado y el original simultáneamente. Lado a lado coloca el fotograma entero original a la izquierda y editado a la derecha, comprimidos horizontalmente: sirve para examinar, no para jugar. Barrido divide un único fotograma sin remuestrearlo, conservando proporciones y permitiendo jugar. Arrastra la división abajo; se guarda y sigue activa con el menú cerrado. Una línea fina marca la unión.	Compare simultanément le résultat et l'original. Côte à côte place l'image entière originale à gauche et modifiée à droite, comprimées horizontalement : pour examiner, pas pour jouer. Balayage coupe une seule image sans rééchantillonnage, conserve les proportions et permet de jouer. Déplacez la séparation ci-dessous ; elle est enregistrée et reste active menu fermé. Un trait fin marque la jonction.	Vergleicht Original und Ergebnis gleichzeitig. Nebeneinander zeigt den ganzen Originalframe links und den bearbeiteten rechts, horizontal gestaucht: zum Betrachten, nicht zum Spielen. Wischvergleich teilt einen einzelnen Frame ohne Neuberechnung und bewahrt die Form, sodass normales Spielen möglich ist. Trennlinie unten verschieben; sie wird gespeichert und bleibt bei geschlossenem Menü aktiv. Eine dünne Linie markiert die Grenze.	Compara resultado e original simultaneamente. Lado a lado coloca o quadro inteiro original à esquerda e editado à direita, comprimidos horizontalmente: serve para examinar, não para jogar. Varredura divide um único quadro sem reamostrar, mantendo proporções e permitindo jogar. Arraste a divisão abaixo; ela é salva e continua ativa com o menu fechado. Uma linha fina marca a junção.
+753	Lado a lado	Côte à côte	Nebeneinander	Lado a lado
+754	Ganso travieso detectado	Oie farceuse détectée	Alberne Gans erkannt	Ganso travesso detectado
+755	Similar a Lanczos2. Más suave y menos artefactos, pero algo más borroso.	Similaire à Lanczos2. Plus doux et moins d'artefacts, mais légèrement plus flou.	Ähnlich Lanczos2. Weicher und weniger Artefakte, aber etwas unschärfer.	Similar a Lanczos2. Mais suave e menos artefatos, mas um pouco mais borrado.
+756	Similar a Lanczos3, con muchos menos artefactos, pero mucho más coste GPU. Considerado de los mejores junto a Lanczos3.	Similaire à Lanczos3, avec bien moins d'artefacts mais beaucoup plus coûteux en GPU. Parmi les meilleurs avec Lanczos3.	Ähnlich Lanczos3 mit deutlich weniger Artefakten, aber höherer GPU-Last. Gilt neben Lanczos3 als einer der besten.	Similar a Lanczos3, com bem menos artefatos, mas custo GPU muito maior. Entre os melhores junto com Lanczos3.
+757	Similar a K. J puede tener algo menos de estelas. Transformer de 1.ª generación.	Similaire à K. J peut avoir un peu moins de traînées. Transformer de 1re génération.	Ähnlich K. J kann etwas weniger Nachbilder zeigen. Transformer der 1. Generation.	Similar a K. J pode ter um pouco menos de rastros. Transformer de 1ª geração.
+758	Simple	Simple	Einfach	Simples
+759	Simulación	Simulation	Simulation	Simulação
+760	Tamaño	Taille	Größe	Tamanho
+761	Estructura de piel	Structure de la peau	Hautstruktur	Estrutura da pele
+762	Omitir Config para HUDless	Ignorer Config pour HUDless	Config für HUDless überspringen	Ignorar Config para HUDless
+763	Omitir Dispatch para HUDless	Ignorer Dispatch pour HUDless	Dispatch für HUDless überspringen	Ignorar Dispatch para HUDless
+764	Omitir filtros puntuales	Ignorer les filtres ponctuels	Punktfilter überspringen	Ignorar filtros pontuais
+765	Omitir reinicio	Ignorer la réinitialisation	Reset überspringen	Ignorar reinicialização
+766	Omite la actualización de filtros puntuales	Ignore la mise à jour des filtres ponctuels	Überspringt die Aktualisierung von Punktfiltern	Ignora a atualização de filtros pontuais
+767	Necesario en algunos juegos Unreal Engine. Prueba si parpadean colores o aparecen estelas.	Nécessaire dans certains jeux Unreal Engine. Essayez en cas de couleurs clignotantes ou de traînées.	Für manche Unreal-Engine-Spiele nötig. Bei Farbflackern oder Nachbildern ausprobieren.	Necessário em alguns jogos Unreal Engine. Teste se houver cores piscando ou rastros.
+768	¡Puede que algunos píxeles sean reales!	Certains pixels sont peut-être même réels !	Einige Pixel könnten sogar echt sein!	Talvez alguns pixels sejam reais!
+769	Perdón por la mala traducción.	Désolé pour la mauvaise traduction.	Entschuldigung für die schlechte Übersetzung.	Desculpe pela tradução ruim.
+770	Evita artefactos y halos fuertes para un aspecto natural, aunque algo suave.	Évite les artefacts et halos marqués pour un aspect naturel, parfois un peu doux.	Vermeidet Artefakte und starke Halos für ein natürliches, eventuell etwas weiches Bild.	Evita artefatos e halos fortes para um aspecto natural, embora um pouco suave.
+771	Pantalla de inicio	Écran de démarrage	Startanzeige	Tela inicial
+772	División	Séparation	Trennung	Divisão
+773	Estabilidad	Stabilité	Stabilität	Estabilidade
+774	Posición fija X	Position fixe X	Feste Position X	Posição fixa X
+775	Posición fija Y	Position fixe Y	Feste Position Y	Posição fixa Y
+776	Estado: %s | Modo: %s | Reinicio pendiente: %s	État : %s | Mode : %s | Réinitialisation en attente : %s	Status: %s | Modus: %s | Reset ausstehend: %s	Estado: %s | Modo: %s | Reinício pendente: %s
+777	Estilo	Style	Stil	Estilo
+778	Correcto	Réussite	Erfolg	Sucesso
+779	¿Reescalado tan agresivo? Audaz.	Une mise à l'échelle aussi agressive ? Audacieux.	So aggressives Upscaling? Gewagt.	Upscaling tão agressivo? Ousado.
+780	Supermuestreo %.2fx: el modelo supera la resolución nativa y luego se reduce. Experimental y costoso: el tiempo crece con el área.	Suréchantillonnage %.2fx : le modèle dépasse la résolution native, puis est réduit. Expérimental et coûteux : le temps croît avec la surface.	Supersampling %.2fx: Das Modell läuft über nativer Auflösung und wird dann verkleinert. Experimentell und teuer: Die Zeit steigt mit der Fläche.	Supersampling %.2fx: o modelo supera a resolução nativa e depois é reduzido. Experimental e caro: o tempo cresce com a área.
+781	Compatibilidad no implementada; se referían a la salida FG	Prise en charge non implémentée ; il s'agissait de la sortie FG	Unterstützung nicht implementiert; gemeint war FG-Ausgabe	Suporte não implementado; referiam-se à saída FG
+782	Intercambiar lados	Permuter les côtés	Seiten tauschen	Trocar lados
+783	Intervalo sinc.	Intervalle synchro.	Sync-Intervall	Intervalo sinc.
+784	Ajustes de sincronización	Réglages de synchronisation	Synchronisationseinstellungen	Configurações de sincronização
+785	Sintetiza detalle antes de la generación de fotogramas. Requiere dos archivos junto a OptiScaler, cuyos nombres difieren en un carácter: nvngx_dlssnr.dll, modelo NVIDIA (~165 MB), que debes aportar; nvngx.dll_dlssnr.dll, intermediario (~13 KB), incluido en el paquete. Función no documentada y controlada directamente, sin soporte oficial.	Synthétise des détails avant la génération d'images. Nécessite deux fichiers près d'OptiScaler, dont les noms diffèrent d'un caractère : nvngx_dlssnr.dll, modèle NVIDIA (~165 MB), à fournir ; nvngx.dll_dlssnr.dll, intermédiaire (~13 KB), inclus. Fonction non documentée et pilotée directement, sans support officiel.	Erzeugt Details vor der Framegenerierung. Benötigt zwei Dateien neben OptiScaler mit um ein Zeichen abweichenden Namen: nvngx_dlssnr.dll, NVIDIA-Modell (~165 MB), selbst bereitzustellen; nvngx.dll_dlssnr.dll, Weiterleitung (~13 KB), im Paket enthalten. Undokumentierte direkte Ansteuerung ohne offizielle Unterstützung.	Sintetiza detalhes antes da geração de quadros. Requer dois arquivos junto ao OptiScaler, com nomes diferentes por um caractere: nvngx_dlssnr.dll, modelo NVIDIA (~165 MB), fornecido por você; nvngx.dll_dlssnr.dll, intermediário (~13 KB), incluído no pacote. Função não documentada e controlada diretamente, sem suporte oficial.
+786	Verde azulado	Bleu-vert	Türkis	Verde-azulado
+787	Fijación temporal del HUD	Ancrage temporel du HUD	Zeitliche HUD-Fixierung	Fixação temporal do HUD
+788	Probado y aprobado por By-U	Testé et approuvé par By-U	Von By-U getestet und freigegeben	Testado e aprovado por By-U
+789	Gracias, nitec; volvemos contigo, nitec	Merci nitec, à vous nitec	Danke nitec, zurück zu dir nitec	Obrigado, nitec; com você, nitec
+790	La generación de fotogramas que realmente usarás	La génération d'images réellement utilisée	Die tatsächlich verwendete Framegenerierung	A geração de quadros realmente utilizada
+791	La forma en que debe reescalarse	La mise à l'échelle comme elle se doit	So soll hochskaliert werden	O jeito certo de ampliar
+792	Fuente de datos FG: la generación nativa que admite el juego	Source de données FG : génération native prise en charge par le jeu	FG-Datenquelle: vom Spiel unterstützte native Framegenerierung	Fonte de dados FG: geração nativa suportada pelo jogo
+793	Filtro que reduce la respuesta supermuestreada al tamaño de pantalla para disminuir ruido. Lanczos3 y Kaiser3 conservan más detalle; Bicúbico y Catmull-Rom producen menos halos. Es independiente del reductor de Escala de salida: ambos pueden usar filtros distintos simultáneamente.	Filtre réduisant la réponse suréchantillonnée à la taille d'écran pour diminuer le bruit. Lanczos3 et Kaiser3 conservent plus de détails ; Bicubique et Catmull-Rom produisent moins de halos. Indépendant du réducteur d'Échelle de sortie : les deux peuvent différer simultanément.	Filter zur Verkleinerung des Supersampling-Ergebnisses auf Anzeigegröße gegen Rauschen. Lanczos3 und Kaiser3 erhalten mehr Details; Bikubisch und Catmull-Rom erzeugen weniger Überschwinger. Unabhängig vom Filter der Ausgabeskalierung; beide können gleichzeitig verschieden eingestellt sein.	Filtro que reduz a resposta superamostrada ao tamanho da tela para diminuir ruído. Lanczos3 e Kaiser3 preservam mais detalhes; Bicúbico e Catmull-Rom produzem menos halos. Independente do redutor de Escala de saída: ambos podem usar filtros diferentes simultaneamente.
+794	Exposición del propio juego	Exposition propre au jeu	Eigene Spielbelichtung	Exposição do próprio jogo
+795	La ilusión de rendimiento	L'illusion de la performance	Die Illusion von Leistung	A ilusão de desempenho
+796	El modelo se entrenó con fotogramas terminados codificados en sRGB. La salida del reescalador es lineal y sin límite superior. Estos ajustes la convierten a un formato reconocible por el modelo. Si el juego indica que ya tiene mapeo tonal, pasa sin modificar y estos ajustes no se aplican.	Le modèle a été entraîné sur des images finies encodées en sRGB. La sortie du moteur est linéaire et sans limite supérieure. Ces réglages la convertissent en une image reconnue par le modèle. Si le jeu signale un tone mapping déjà appliqué, l'image passe inchangée et ces réglages ne s'appliquent pas.	Das Modell wurde mit fertigen sRGB-Bildern trainiert. Die Upscaler-Ausgabe ist dagegen linear und nach oben offen. Diese Einstellungen wandeln sie in ein vom Modell erkennbares Format. Meldet das Spiel bereits angewendetes Tonemapping, wird das Bild unverändert durchgereicht; diese Einstellungen greifen nicht.	O modelo foi treinado com quadros finalizados em sRGB. A saída do upscaler é linear e sem limite superior. Estes ajustes a convertem em formato reconhecível pelo modelo. Se o jogo indicar mapeamento tonal já aplicado, a imagem passa intacta e estes ajustes não se aplicam.
+797	Perfiles internos del modelo. Predeterminado es el más intenso: aumenta contraste local y profundidad de iluminación, pudiendo sobresaturar o estilizar. Natural mantiene los detalles con más suavidad y conserva mejor piel y equilibrio tonal. Cinematográfico reduce brillo y exceso de procesamiento. Se leen al crear el modelo; cambiarlos lo recrea tras un momento. Los nombres proceden de pruebas comunitarias, no de NVIDIA.	Profils internes du modèle. Par défaut est le plus fort : accentue contraste local et éclairage, pouvant sursaturer ou styliser. Naturel garde les détails plus doucement et respecte mieux la peau et l'équilibre tonal. Cinématique réduit brillance et excès de traitement. Lus à la création ; les changer recrée le modèle après un instant. Noms issus des tests communautaires, pas de NVIDIA.	Interne Modellprofile. Standard wirkt am stärksten: mehr lokaler Kontrast und tiefere Beleuchtung, eventuell übersättigt oder stilisiert. Natürlich bearbeitet Details sanfter und bewahrt Hauttöne und Tonwertbalance besser. Filmisch mindert Glanz und übermäßige Bearbeitung. Beim Erstellen gelesen; Änderungen erzeugen das Modell kurz darauf neu. Namen stammen aus Community-Tests, nicht von NVIDIA.	Perfis internos do modelo. Padrão é o mais forte: aumenta contraste local e profundidade da iluminação, podendo supersaturar ou estilizar. Natural mantém detalhes com mais suavidade e preserva pele e equilíbrio tonal. Cinematográfico reduz brilho e excesso de processamento. Lidos ao criar o modelo; alterações o recriam após um instante. Nomes vêm de testes da comunidade, não da NVIDIA.
+798	Intensidad interna del modelo. Distinta de Intensidad del detalle, que escala el resultado después.	Intensité interne du modèle. Distincte de l'intensité des détails, qui ajuste le résultat ensuite.	Interne Modellintensität. Anders als Detailstärke, die das Ergebnis nachträglich skaliert.	Intensidade interna do modelo. Diferente de Intensidade do detalhe, que escala o resultado depois.
+799	Cuanto más reescalas, más ahorras	Plus vous agrandissez, plus vous économisez	Je mehr du hochskalierst, desto mehr sparst du	Quanto mais amplia, mais economiza
+800	Máximo cambio por píxel como factor sobre su brillo original: no puede aclararse más que este factor ni oscurecerse más que su inverso. Las luces son sensibles a errores del modelo; 2x conserva detalle y evita que una tira luminosa se convierta en celdas de colores. Aumenta solo si las zonas brillantes parecen recortadas.	Changement maximal par pixel, comme facteur de sa luminosité initiale : il ne peut être éclairci au-delà ni assombri sous l'inverse. Les lumières sont sensibles aux erreurs du modèle ; 2x conserve les détails et évite de transformer une bande lumineuse en cellules colorées. Augmentez seulement si les hautes lumières semblent écrêtées.	Maximale Pixeländerung als Faktor der ursprünglichen Helligkeit: Aufhellen höchstens um diesen Faktor, Abdunkeln höchstens auf dessen Kehrwert. Lichter sind besonders fehlerempfindlich; 2x erhält Details und verhindert farbige Zellen in Lichtstreifen. Nur erhöhen, wenn helle Bereiche abgeschnitten wirken.	Mudança máxima por pixel como fator do brilho original: não pode clarear além dele nem escurecer abaixo do inverso. Luzes são sensíveis a erros do modelo; 2x preserva detalhes e evita transformar faixas luminosas em células coloridas. Aumente só se áreas brilhantes parecerem cortadas.
+801	El valor funciona al revés	La valeur évolue à l'envers	Der Wert läuft umgekehrt	O valor funciona ao contrário
+802	Lo más seguro, pero puede reducir poco la latencia	Le plus sûr, mais peut peu réduire la latence	Am sichersten, senkt die Latenz aber eventuell wenig	Mais seguro, mas pode reduzir pouco a latência
+803	Punto blanco del ancla seleccionada o, sin selección, del siguiente punto a guardar. Ajusta la imagen y ancla. Repite con otra iluminación: dos puntos definen la relación del búfer y estabilizan los valores intermedios. Pulsa una fila para editar el punto y de nuevo para soltarlo.	Point blanc de l'ancrage sélectionné ou, sans sélection, du prochain point à enregistrer. Réglez l'image puis ancrez. Répétez sous une autre lumière : deux points définissent la relation du tampon et stabilisent les valeurs intermédiaires. Cliquez sur une ligne pour la régler, puis à nouveau pour la libérer.	Weißpunkt des gewählten Ankers oder ohne Auswahl des nächsten zu speichernden Punkts. Bild einstellen und verankern. Bei anderem Licht wiederholen: Zwei Punkte bestimmen die Pufferbeziehung und stabilisieren Zwischenwerte. Zeile zum Bearbeiten anklicken, erneut zum Loslassen.	Ponto branco da âncora selecionada ou, sem seleção, do próximo ponto a salvar. Ajuste a imagem e ancore. Repita sob outra iluminação: dois pontos definem a relação do buffer e estabilizam valores intermediários. Clique numa linha para editar e novamente para soltar.
+804	Tiempo de todo el pase: copias, resolución y modelo. Medir solo el modelo subestimaría el coste. Compáralo con el tiempo de fotograma mostrado en la ventana.	Temps de toute la passe : copies, résolution et modèle. Mesurer le modèle seul sous-estimerait le coût. Comparez au temps d'image affiché dans la fenêtre.	Zeit des gesamten Durchlaufs: Kopien, Resolve und Modell. Nur das Modell zu messen würde die Kosten unterschätzen. Mit der Framezeit im Fenster vergleichen.	Tempo de toda a passagem: cópias, resolução e modelo. Medir só o modelo subestimaria o custo. Compare com o tempo de quadro na janela.
+805	El juego proporciona exposición; la opción anterior la usaría.	Le jeu fournit une exposition ; l'option précédente l'utiliserait.	Das Spiel liefert Belichtung; die obige Option würde sie nutzen.	O jogo fornece exposição; a opção acima a utilizaria.
+806	El juego proporciona exposición y se está leyendo.	Le jeu fournit une exposition, actuellement lue.	Das Spiel liefert Belichtung und sie wird gelesen.	O jogo fornece exposição e ela está sendo lida.
+807	El juego no proporciona exposición; se usa blanco de papel. Prueba la exploración.	Le jeu ne fournit pas d'exposition ; blanc papier utilisé. Essayez l'analyse.	Das Spiel liefert keine Belichtung; Papierweiß wird verwendet. Die Suche ausprobieren.	O jogo não fornece exposição; usa-se branco do papel. Tente a análise.
+808	Aquí empieza la diversión...	C'est là que le plaisir commence...	Hier beginnt der Spaß...	Aqui começa a diversão...
+809	Esta no es la resolución que buscas	Ce n'est pas la résolution que vous cherchez	Das ist nicht die Auflösung, die du suchst	Esta não é a resolução que você procura
+810	¡Se activará en el próximo inicio!	Sera actif au prochain lancement !	Wird beim nächsten Start aktiv!	Será ativado na próxima inicialização!
+811	¡Este reescalador debería estar en un museo!	Ce moteur devrait être dans un musée !	Dieser Upscaler gehört in ein Museum!	Este upscaler deveria estar num museu!
+812	Suele ocurrir al usar Nvidia App o Nvidia Inspector	Arrive généralement avec Nvidia App ou Nvidia Inspector	Tritt meist bei Nutzung von Nvidia App oder Nvidia Inspector auf	Geralmente ocorre ao usar Nvidia App ou Nvidia Inspector
+813	A consola	Vers la console	In Konsole	Para o console
+814	A archivo	Vers un fichier	In Datei	Para arquivo
+815	Hasta el infinito y más allá... sin trazado de rayos	Vers l'infini et au-delà... sans ray tracing	Bis zur Unendlichkeit... mit Raytracing aus	Ao infinito e além... sem ray tracing
+816	Juntos reescalamos	Ensemble, agrandissons	Gemeinsam skalieren wir hoch	Juntos ampliamos
+817	Herramientas	Outils	Werkzeuge	Ferramentas
+818	Arriba a la izquierda	En haut à gauche	Oben links	Superior esquerdo
+819	Arriba a la derecha	En haut à droite	Oben rechts	Superior direito
+820	Arriba: vectores dilatados, zonas protegidas, profundidad dilatada. Centro: fotograma reescalado. Abajo: máscara de desoclusión, reactividad, reducción de protección del detalle.	En haut : vecteurs dilatés, zones protégées, profondeur dilatée. Centre : image agrandie. En bas : masque de désoccultation, réactivité, réduction de protection des détails.	Oben: dilatierte Bewegungsvektoren, geschützte Bereiche, dilatierte Tiefe. Mitte: hochskalierter Frame. Unten: Maske neu sichtbarer Bereiche, Reaktivität, Abbau des Detailschutzes.	Acima: vetores dilatados, áreas protegidas, profundidade dilatada. Centro: quadro ampliado. Abaixo: máscara de desoclusão, reatividade, redução de proteção do detalhe.
+821	Arriba izquierda: vectores dilatados. Arriba derecha: factor de mezcla previsto.	En haut à gauche : vecteurs dilatés. En haut à droite : facteur de mélange prédit.	Oben links: dilatierte Bewegungsvektoren. Oben rechts: vorhergesagter Mischfaktor.	Acima à esquerda: vetores dilatados. Acima à direita: fator de mistura previsto.
+822	Traza	Trace	Ablaufverfolgung	Rastreamento
+823	Ajustes de rastreo	Réglages de suivi	Verfolgungseinstellungen	Configurações de rastreamento
+824	Ajuste (x exposición del juego)	Ajustement (x exposition du jeu)	Feinjustierung (x Spielbelichtung)	Ajuste (x exposição do jogo)
+825	Ajuste (x exploración)	Ajustement (x analyse)	Feinjustierung (x Suche)	Ajuste (x análise)
+826	Confía en el proceso. Ignora el centelleo.	Faites confiance au processus. Ignorez le scintillement.	Vertrau dem Prozess. Ignoriere das Flimmern.	Confie no processo. Ignore a cintilação.
+827	Dos capas NR compuestas listas.	Deux couches NR composées prêtes.	Zwei zusammengesetzte NR-Ebenen bereit.	Duas camadas NR compostas prontas.
+828	Composición de interfaz	Composition d'interface	UI-Komposition	Composição da interface
+829	Alfa premultiplicado de interfaz	Alpha prémultiplié d'interface	Vormultipliziertes UI-Alpha	Alfa pré-multiplicado da interface
+830	Ultrarrendimiento	Ultra performance	Ultra-Leistung	Ultradesempenho
+831	Ultracalidad	Ultra qualité	Ultra-Qualität	Ultraqualidade
+832	Preajuste ultrarrendimiento	Préréglage Ultra performance	Ultra-Leistungs-Voreinstellung	Predefinição ultradesempenho
+833	Preajuste ultracalidad	Préréglage Ultra qualité	Ultra-Qualitäts-Voreinstellung	Predefinição ultraqualidade
+834	Sin asignar	Non attribué	Unbelegt	Não atribuído
+835	Poco común	Peu courant	Ungewöhnlich	Incomum
+836	Desconocido	Inconnu	Unbekannt	Desconhecido
+837	API incompatible	API non prise en charge	API nicht unterstützt	API não suportada
+838	Hardware incompatible	Matériel non pris en charge	Hardware nicht unterstützt	Hardware não suportado
+839	Hardware incompatible y sin sustituciones	Matériel incompatible et aucun remplacement	Hardware nicht unterstützt und kein Ersatz	Hardware incompatível e sem substituições
+840	Plataforma incompatible	Plateforme non prise en charge	Plattform nicht unterstützt	Plataforma não suportada
+841	Sin usar	Inutilisé	Ungenutzt	Não utilizado
+842	Actualización disponible: %s (actual %s)	Mise à jour disponible : %s (actuelle %s)	Update verfügbar: %s (aktuell %s)	Atualização disponível: %s (atual %s)
+843	Actualizar filtros de comparación	Mettre à jour les filtres de comparaison	Vergleichsfilter aktualisieren	Atualizar filtros de comparação
+844	Actualizar filtros mín./máx.	Mettre à jour les filtres min/max	Min./Max.-Filter aktualisieren	Atualizar filtros mín./máx.
+845	Reesc.	Échelle	Upscaler	Ampl.
+846	Sustituir relación de reescalado	Remplacer le rapport de mise à l'échelle	Upscaling-Verhältnis überschreiben	Substituir proporção de upscaling
+847	Reescalado hasta ser irreconocible.	Agrandissement jusqu'à méconnaissance.	Bis zur Unkenntlichkeit hochskaliert.	Ampliado até ficar irreconhecível.
+848	Reescalador	Moteur de mise à l'échelle	Upscaler	Upscaler
+849	Depuración del reescalador	Débogage de mise à l'échelle	Upscaler-Debugansicht	Depuração do upscaler
+850	Entradas del reescalador	Entrées du moteur	Upscaler-Eingaben	Entradas do upscaler
+851	Calidad del reescalador	Qualité du moteur	Upscaler-Qualität	Qualidade do upscaler
+852	Relación del reescalador	Rapport du moteur	Upscaler-Verhältnis	Proporção do upscaler
+853	Tiempo de reescalado: %7.2f ms, Media: %7.2f ms	Temps de mise à l'échelle : %7.2f ms, Moyenne : %7.2f ms	Upscaler-Zeit: %7.2f ms, Mittel: %7.2f ms	Tempo de upscaling: %7.2f ms, Média: %7.2f ms
+854	El reescalador no está activo	Le moteur n'est pas actif	Upscaler ist nicht aktiv	O upscaler não está ativo
+855	Requiere reescalador activo. Puede usarse con cualquier salida FG, con posibles imperfecciones. HUDfix necesario para evitar errores de interfaz.	Moteur actif requis. Utilisable avec toute sortie FG, avec des imperfections possibles. HUDfix requis contre les défauts d'interface.	Aktiver Upscaler erforderlich. Mit jeder FG-Ausgabe nutzbar, eventuell mit Fehlern. HUDfix gegen UI-Störungen erforderlich.	Requer upscaler ativo. Pode usar qualquer saída FG, com possíveis imperfeições. HUDfix necessário para evitar falhas da interface.
+856	Reescaladores	Moteurs de mise à l'échelle	Upscaler	Upscalers
+857	Reescala internamente y luego reduce a la resolución de pantalla. Menos de 1.0 reduce coste; más de 1.0 aumenta nitidez y coste. Si está deshabilitado, consulta los ajustes Unreal Engine de la wiki. Resolución objetivo y relación total abajo; máximo total 3.0.	Agrandit en interne puis réduit à la résolution d'écran. Sous 1.0 réduit le coût ; au-dessus augmente netteté et coût. Si grisé, consultez les réglages Unreal Engine du wiki. Résolution cible et rapport total en bas ; maximum total 3.0.	Skaliert intern hoch und dann auf Anzeigeauflösung herunter. Unter 1.0 sinken Kosten, über 1.0 steigen Schärfe und Kosten. Bei ausgegrauter Option Unreal-Engine-Tipps im Wiki prüfen. Zielauflösung und Gesamtverhältnis unten; insgesamt maximal 3.0.	Amplia internamente e depois reduz à resolução da tela. Abaixo de 1.0 reduz custo; acima aumenta nitidez e custo. Se indisponível, consulte ajustes Unreal Engine da wiki. Resolução alvo e proporção total abaixo; máximo total 3.0.
+858	Reescalado	Mise à l'échelle	Upscaling	Upscaling
+859	Reescalado para todos, no solo para unos pocos	La mise à l'échelle pour tous, pas pour une élite	Upscaling für alle, nicht nur für die Elite	Upscaling para todos, não só para poucos
+860	RCAS de AMD modificado con contraste y soporte MAS	RCAS AMD modifié avec contraste et prise en charge MAS	Angepasstes AMD-RCAS mit Kontrast und MAS-Unterstützung	RCAS AMD modificado com contraste e suporte MAS
+861	Usar máscara reactiva binaria	Utiliser un masque réactif binaire	Binäre reaktive Maske verwenden	Usar máscara reativa binária
+862	Usar CopyResource para entradas	Utiliser CopyResource pour les entrées	CopyResource für Eingaben verwenden	Usar CopyResource para entradas
+863	Usar CopyResource para salida	Utiliser CopyResource pour la sortie	CopyResource für Ausgabe verwenden	Usar CopyResource para saída
+864	Nitidez DAS adaptada a profundidad, dirección y luminancia. Más inteligente y con menos artefactos, pero más pesada. Los objetos más lejanos reciben más nitidez.	Netteté DAS adaptée à la profondeur, à la direction et à la luminance. Plus intelligente, moins d'artefacts, mais plus coûteuse. Les objets éloignés sont davantage accentués.	DAS-Schärfung berücksichtigt Tiefe, Richtung und Luminanz. Intelligenter und artefaktärmer, aber aufwendiger. Weiter entfernte Objekte werden stärker geschärft.	Nitidez DAS adaptada à profundidade, direção e luminância. Mais inteligente e com menos artefatos, mas mais pesada. Objetos distantes recebem mais nitidez.
+865	Nitidez RCAS adaptada a profundidad: menos artefactos, pero más coste. Cuanto más lejos el objeto, más nitidez.	Netteté RCAS selon la profondeur : moins d'artefacts mais plus coûteuse. Les objets éloignés sont davantage accentués.	Tiefenabhängige RCAS-Schärfung: weniger Artefakte, aber höhere Kosten. Entfernte Objekte werden stärker geschärft.	Nitidez RCAS adaptada à profundidade: menos artefatos, mas mais custo. Objetos distantes recebem mais nitidez.
+866	Usar valores de entrada FSR	Utiliser les valeurs d'entrée FSR	FSR-Eingabewerte verwenden	Usar valores de entrada FSR
+867	Usar entradas Ffx	Utiliser les entrées Ffx	Ffx-Eingaben verwenden	Usar entradas Ffx
+868	Usar entradas Fsr2	Utiliser les entrées Fsr2	Fsr2-Eingaben verwenden	Usar entradas Fsr2
+869	Usar búsqueda de patrones Fsr2	Utiliser la recherche de motifs Fsr2	Fsr2-Mustererkennung verwenden	Usar busca de padrões Fsr2
+870	Usar entradas Fsr3	Utiliser les entrées Fsr3	Fsr3-Eingaben verwenden	Usar entradas Fsr3
+871	Usar búsqueda de patrones Fsr3	Utiliser la recherche de motifs Fsr3	Fsr3-Mustererkennung verwenden	Usar busca de padrões Fsr3
+872	Usar marcadores Reflex del juego	Utiliser les marqueurs Reflex du jeu	Reflex-Marker des Spiels verwenden	Usar marcadores Reflex do jogo
+873	Usar ID de aplicación genérico con DLSS	Utiliser un ID d'application générique avec DLSS	Generische App-ID mit DLSS verwenden	Usar ID de aplicativo genérico com DLSS
+874	Usar campo de visión horizontal	Utiliser le champ de vision horizontal	Horizontales Sichtfeld verwenden	Usar campo de visão horizontal
+875	Usar sombreadores precompilados	Utiliser les shaders précompilés	Vorkompilierte Shader verwenden	Usar shaders pré-compilados
+876	Usar máscara reactiva como máscara de transparencia	Utiliser le masque réactif comme masque de transparence	Reaktive Maske als Transparenzmaske verwenden	Usar máscara reativa como máscara de transparência
+877	Usar colores del tema	Utiliser les couleurs du thème	Designfarben verwenden	Usar cores do tema
+878	Usar valor	Utiliser la valeur	Wert verwenden	Usar valor
+879	Usar campo de visión vertical	Utiliser le champ de vision vertical	Vertikales Sichtfeld verwenden	Usar campo de visão vertical
+880	ID genérico para NGX. Corrige preajustes OptiScaler que no se aplican en ciertos juegos. Requiere reiniciar el juego.	ID générique pour NGX. Corrige les préréglages OptiScaler non appliqués dans certains jeux. Redémarrage requis.	Generische App-ID für NGX. Behebt nicht greifende OptiScaler-Voreinstellungen in manchen Spielen. Spielneustart erforderlich.	ID genérico para NGX. Corrige predefinições OptiScaler que não são aplicadas em certos jogos. Requer reiniciar o jogo.
+881	Usar diferencia de altura como desplazamiento	Utiliser la différence de hauteur comme décalage	Höhenunterschied als Versatz verwenden	Usar diferença de altura como deslocamento
+882	Usa un mutex contra desincronización FG y fallos. Desactivarlo puede mejorar rendimiento a costa de estabilidad.	Utilise un mutex contre désynchronisation FG et plantages. Le désactiver peut améliorer les performances au détriment de la stabilité.	Mutex gegen FG-Desynchronisierung und Abstürze. Abschalten kann Leistung steigern, aber Stabilität senken.	Usa mutex contra dessincronização FG e falhas. Desativar pode melhorar desempenho à custa de estabilidade.
+883	Usar el preajuste predeterminado de NVIDIA/juego	Utiliser le préréglage NVIDIA/jeu par défaut	NVIDIA-/Spielstandard verwenden	Usar a predefinição padrão NVIDIA/jogo
+884	Usa Reflex cuando es posible. En AMD/Intel, Fakenvapi puede sustituir Reflex.	Utilise Reflex si possible. Sur AMD/Intel, Fakenvapi peut remplacer Reflex.	Nutzt Reflex, wenn möglich. Auf AMD/Intel kann Fakenvapi Reflex ersetzen.	Usa Reflex quando possível. Em AMD/Intel, Fakenvapi pode substituir Reflex.
+885	Usa tiempos de fotograma calculados por Opti	Utilise les temps d'image calculés par Opti	Nutzt von Opti berechnete Framezeiten	Usa tempos de quadro calculados pelo Opti
+886	Usa tiempos proporcionados por DLSSG o FSR-FG	Utilise les temps fournis par DLSSG ou FSR-FG	Nutzt Framezeiten von DLSSG oder FSR-FG	Usa tempos fornecidos por DLSSG ou FSR-FG
+887	La inyección Reflex de RTSS con FSR Anti-Lag 2.0 y FSR FG puede causar problemas	L'injection Reflex RTSS avec FSR Anti-Lag 2.0 et FSR FG peut causer des problèmes	RTSS-Reflex-Injektion mit FSR Anti-Lag 2.0 und FSR FG kann Probleme verursachen	Injeção Reflex do RTSS com FSR Anti-Lag 2.0 e FSR FG pode causar problemas
+888	El límite Reflex con FSR FG tiene coste adicional	La limite Reflex avec FSR FG a un coût supplémentaire	Reflex-Limit mit FSR FG verursacht Zusatzkosten	O limite Reflex com FSR FG tem custo adicional
+889	Usa parte de las funciones de DLSS Enabler	Utilise une partie des fonctions DLSS Enabler	Nutzt einen Teil der DLSS-Enabler-Funktionen	Usa parte das funções do DLSS Enabler
+890	Usa datos del reescalador para FG	Utilise les données de mise à l'échelle pour FG	Nutzt Upscaler-Daten für FG	Usa dados do upscaler para FG
+891	V-Sync desactivado	V-Sync désactivé	V-Sync aus	V-Sync desativado
+892	V-Sync activado	V-Sync activé	V-Sync an	V-Sync ativado
+893	Ajustes V-Sync	Réglages V-Sync	V-Sync-Einstellungen	Configurações V-Sync
+894	Calculadora de límite VRR	Calculateur de limite VRR	VRR-Framelimit-Rechner	Calculadora de limite VRR
+895	0.0f puede mejorar estabilidad temporal de píxeles brillantes. Valores bajos son más estables pero dejan estelas; altos dan más pixelación y menos estelas.	0.0f peut améliorer la stabilité temporelle des pixels brillants. Les valeurs faibles sont plus stables mais avec des traînées ; les élevées plus pixellisées avec moins de traînées.	0.0f kann helle Pixel zeitlich stabilisieren. Niedrige Werte sind stabiler, aber mit Nachbildern; hohe pixeliger, dafür mit weniger Nachbildern.	0.0f pode melhorar estabilidade temporal de pixels brilhantes. Valores baixos são mais estáveis, mas deixam rastros; altos dão mais pixelização e menos rastros.
+896	Valores mayores de 0 activan la máscara reactiva	Les valeurs supérieures à 0 activent le masque réactif	Werte über 0 aktivieren die reaktive Maske	Valores acima de 0 ativam a máscara reativa
+897	Factor de varianza	Facteur de variance	Varianzfaktor	Fator de variância
+898	Varianza: predeterminado FSR 0.1; Opti 0.3	Variance : défaut FSR 0.1 ; Opti 0.3	Varianz: FSR-Standard 0.1; Opti 0.3	Variância: padrão FSR 0.1; Opti 0.3
+899	Factor de velocidad	Facteur de vitesse	Geschwindigkeitsfaktor	Fator de velocidade
+900	Velocidad como ValidNow	Vitesse comme ValidNow	Geschwindigkeit als ValidNow	Velocidade como ValidNow
+901	Campo de visión vertical	Champ de vision vertical	Vertikales Sichtfeld	Campo de visão vertical
+902	¿Vul... qué? ~AMD	Vul... quoi ? ~AMD	Vul... was? ~AMD	Vul... o quê? ~AMD
+903	=	=	=	=
+904	=	=	=	=
+905	Ajustes Vulkan con Dx12	Réglages Vulkan avec Dx12	Vulkan-mit-Dx12-Einstellungen	Configurações Vulkan com Dx12
+906	Esperando un fotograma...	En attente d'une image...	Warte auf einen Frame...	Aguardando um quadro...
+907	Esperando una evaluación NR correcta en la ruta solicitada.	Attente d'une évaluation NR réussie sur le chemin demandé.	Erfolgreiche NR-Auswertung auf dem angeforderten Pfad wird abgewartet.	Aguardando avaliação NR bem-sucedida no caminho solicitado.
+908	Camina de la sombra a la luz. Una exposición real cambia.	Passez de l'ombre au soleil. Une vraie exposition varie.	Aus dem Schatten ins Licht gehen. Echte Belichtung ändert sich.	Caminhe da sombra para a luz. Uma exposição real muda.
+909	Advertencia	Avertissement	Warnung	Aviso
+910	Observando %u, sin cambios todavía: pasa de la luz a la sombra.	Surveillance de %u, aucun changement : passez de la lumière à l'ombre.	%u beobachtet, noch keine Änderung: zwischen Licht und Schatten wechseln.	Observando %u, ainda sem mudanças: passe da luz para a sombra.
+911	Marca de agua	Filigrane	Wasserzeichen	Marca d'água
+912	Adonde vamos no necesitamos píxeles reales	Là où on va, pas besoin de vrais pixels	Wo wir hinfahren, brauchen wir keine echten Pixel	Para onde vamos, não precisamos de pixels reais
+913	Qué backend usar en lugar del DLSSG real	Backend à utiliser à la place du vrai DLSSG	Backend anstelle des echten DLSSG	Qual backend usar no lugar do DLSSG real
+914	Fracción de resolución a la que trabaja el modelo. El coste varía con su cuadrado: a la mitad, tarda aproximadamente un cuarto. El fotograma original conserva todo su detalle; solo se calcula pequeña y se amplía la contribución del modelo. El sombreado amplio se conserva, pero el detalle fino sintetizado se suaviza. Útil para reducir el coste a cambio de parte del detalle añadido.	Fraction de résolution utilisée par le modèle. Le coût varie selon son carré : à moitié résolution, environ un quart du temps. L'image originale garde tous ses détails ; seule la contribution du modèle est calculée en petit puis agrandie. Les ombrages larges restent, mais les détails fins synthétisés s'adoucissent. Permet de réduire le coût au prix d'une partie des détails ajoutés.	Auflösungsanteil für die Modellberechnung. Der Aufwand sinkt quadratisch: halbe Auflösung benötigt etwa ein Viertel der Zeit. Das ursprüngliche Bild behält alle Details; nur der Modellbeitrag wird kleiner berechnet und hochskaliert. Großflächige Schattierung bleibt erhalten, synthetisierte Feinstrukturen werden weicher. Spart Rechenzeit auf Kosten hinzugefügter Details.	Fração da resolução usada pelo modelo. O custo varia com o quadrado: metade da resolução leva cerca de um quarto do tempo. O quadro original mantém todos os detalhes; apenas a contribuição do modelo é calculada em tamanho menor e ampliada. O sombreamento amplo permanece, mas detalhes finos sintetizados ficam mais suaves. Reduz o custo em troca de parte dos detalhes adicionados.
+915	Divisor aplicado al fotograma antes de mostrarlo al modelo. Es el único punto blanco. El modelo se entrenó con blanco en 1, pero la salida lineal HDR del escalador suele requerir un valor muy distinto. En Monster Hunter Wilds se midió 16 o más para que apareciera detalle; la luz diurna puede requerir más que un campamento sombreado. Un valor bajo aplana casi todo a blanco y elimina el detalle, dejando una dominante de color. Un valor alto subexpone y amplifica los errores al salir. Auméntalo hasta que deje de mejorar: después empeora. Ya no se multiplica por un blanco medido, pues esa medida confundía brillo de escena con punto blanco y oscurecía demasiado la entrada. Con intensidad cero el fotograma sigue siendo idéntico bit a bit.	Diviseur appliqué à l'image avant le modèle : c'est l'unique point blanc. Le modèle a été entraîné avec le blanc à 1, mais la sortie HDR linéaire de l'upscaler demande souvent bien plus. Dans Monster Hunter Wilds, les mesures indiquent 16 ou plus pour voir les détails ; le plein jour peut demander plus qu'un camp ombragé. Trop bas, presque tout devient blanc et les détails disparaissent, laissant une dominante colorée. Trop haut, l'entrée est sous-exposée et les erreurs sont amplifiées en sortie. Augmentez jusqu'à ce que l'image cesse de s'améliorer ; ensuite elle se dégrade. L'ancien blanc mesuré a été supprimé : il confondait luminosité de scène et point blanc, assombrissant trop l'entrée. À intensité nulle, l'image reste identique bit à bit.	Divisor des Bildes vor dem Modell; dies ist der einzige Weißpunkt. Das Modell wurde mit Weiß bei 1 trainiert, die lineare HDR-Ausgabe des Upscalers benötigt aber oft deutlich mehr. In Monster Hunter Wilds wurden mindestens 16 gemessen, bevor Details sichtbar wurden; Tageslicht kann mehr als ein schattiges Lager benötigen. Zu niedrig: Fast alles wird weiß abgeflacht, Details gehen verloren, ein Farbstich bleibt. Zu hoch: Unterbelichtung und verstärkte Fehler bei der Ausgabe. Erhöhen, bis das Bild nicht mehr besser wird; danach wird es schlechter. Der frühere gemessene Weißpunkt entfällt, weil er Szenenhelligkeit mit Weißpunkt verwechselte und die Eingabe zu stark abdunkelte. Bei Stärke null bleibt das Bild bitidentisch.	Divisor do quadro antes de entrar no modelo; este é o único ponto branco. O modelo foi treinado com branco em 1, mas a saída HDR linear do upscaler costuma exigir muito mais. Em Monster Hunter Wilds, foram medidos 16 ou mais para aparecerem detalhes; a luz do dia pode exigir mais que um acampamento sombreado. Muito baixo: quase tudo fica branco e perde detalhes, restando uma tonalidade de cor. Muito alto: subexposição e erros ampliados na saída. Aumente até a imagem parar de melhorar; depois ela piora. O antigo branco medido foi removido, pois confundia brilho da cena com ponto branco e escurecia demais a entrada. Com intensidade zero, o quadro permanece idêntico bit a bit.
+916	Cómo se presenta la imagen al modelo y se recupera su resultado. Desactivado (compresión suave): predeterminado, conserva bien los tonos medios pero pierde detalle en luces intensas. Neutwo compuesto: curva sin recorte seguida de intensidad, protección de luces y paleta; recupera luces pero comprime tonos medios y cambia el blanco de referencia: revísalo al cambiar. Híbrido compuesto: recomendado; tonos medios intactos y compresión sin recorte solo en luces, con poco cambio del blanco. Reemplazar: resultado directo mediante la inversa exacta, sin protección, paleta ni intensidades; detallado pero las luces parpadean en movimiento. Es una referencia, no para uso diario. Reemplazar híbrido: resultado directo con curva híbrida; limita el parpadeo a luces realmente brillantes y conserva gran parte del detalle. Desactivado es idéntico byte a byte al comportamiento anterior.	Présentation de l'image au modèle et récupération du résultat. Désactivé (compression douce) : par défaut, préserve les tons moyens mais perd les détails des hautes lumières. Neutwo composé : courbe sans écrêtage puis intensités, protection et palette ; récupère les lumières mais comprime les tons moyens et déplace le blanc de référence, à revérifier. Hybride composé : recommandé ; tons moyens inchangés, compression sans écrêtage seulement dans les lumières, blanc presque inchangé. Remplacer : sortie directe par l'inverse exact, sans protection, palette ni intensités ; détaillée mais les lumières clignotent en mouvement. Référence, pas un réglage quotidien. Remplacer hybride : sortie directe sur courbe hybride ; limite le clignotement aux vraies hautes lumières tout en conservant les détails. Désactivé reste identique octet par octet à l'ancien comportement.	Darstellung der Eingabe und Rückführung des Modellergebnisses. Aus (sanfter Übergang): Standard, gute Mitteltöne, aber weniger Details in hellen Bereichen. Neutwo kombiniert: unbeschnittene Kurve, danach Stärken, Spitzlichtschutz und Palette; mehr helle Details, aber komprimierte Mitteltöne und verschobenes Referenzweiß: neu prüfen. Hybrid kombiniert: empfohlen; unveränderte Mitteltöne und unbeschnittene Kompression nur in Spitzlichtern, kaum Weißverschiebung. Ersetzen: direkte Modellausgabe durch die exakte Umkehrung, ohne Schutz, Palette oder Stärken; detailreich, doch Lichter flackern bei Bewegung. Referenz, nicht für den Alltag. Hybrid ersetzen: direkte Ausgabe mit Hybridkurve; Flackern bleibt auf echte Spitzlichter beschränkt, bei weitgehend erhaltenen Details. Aus bleibt byteidentisch zum bisherigen Verhalten.	Como a imagem é apresentada ao modelo e como o resultado retorna. Desativado (compressão suave): padrão, preserva tons médios mas perde detalhes em altas luzes. Neutwo composto: curva sem corte seguida de intensidades, proteção e paleta; recupera luzes, mas comprime tons médios e muda o branco de referência: confira ao trocar. Híbrido composto: recomendado; tons médios intactos e compressão sem corte apenas nas luzes, quase sem mudar o branco. Substituir: saída direta pela inversa exata, sem proteção, paleta ou intensidades; detalhada, mas luzes piscam em movimento. É referência, não para uso diário. Substituir híbrido: saída direta com curva híbrida; limita a cintilação às luzes realmente intensas e preserva muitos detalhes. Desativado mantém o comportamento anterior byte a byte.
+917	Lo que use el juego	Selon le jeu	Vom Spiel verwendet	O que o jogo usar
+918	Origen del divisor del fotograma. Solo blanco de referencia: usa únicamente el control inferior; sirve con exposición fija, pero una constante no cubre una cueva y un campo. Exposición del juego: lee la textura que el juego entrega al escalador; es la mejor fuente porque se decide antes y este paso no la altera, aunque no todos los juegos la proporcionan. Búfer encontrado: para juegos que calculan exposición sin entregarla. Es una ESTIMACIÓN por la forma del búfer; en GTA V el mejor candidato sigue la exposición real a otra escala, corregida por la proporción del anclaje. Requiere anclar una vez y verificar después.	Origine du diviseur de l'image. Blanc de référence seul : uniquement le curseur ci-dessous ; convient à une exposition fixe, pas à la fois à une grotte et un champ. Exposition du jeu : lit la texture fournie à l'upscaler ; meilleure source car décidée en amont, sans influence de cette passe, mais tous les jeux ne la fournissent pas. Tampon détecté : pour les jeux qui calculent l'exposition sans la transmettre. C'est une ESTIMATION selon la forme du tampon ; dans GTA V, le meilleur candidat suit l'exposition à une autre échelle, compensée par le rapport d'ancrage. Ancrez une fois puis vérifiez.	Quelle des Bilddivisors. Nur Referenzweiß: ausschließlich der Regler unten; geeignet bei fester Belichtung, aber eine Konstante passt nicht gleichzeitig für Höhle und Feld. Spielbelichtung: liest die vom Spiel an den Upscaler übergebene Textur; beste Quelle, da vorgelagert und von diesem Durchlauf unbeeinflusst. Nicht jedes Spiel liefert sie. Gefundener Puffer: für Spiele, die Belichtung berechnen, aber nicht übergeben. Eine SCHÄTZUNG anhand der Pufferform; in GTA V folgt der beste Kandidat der echten Belichtung auf eigener Skala, die das Ankerverhältnis ausgleicht. Einmal verankern und anschließend prüfen.	Origem do divisor do quadro. Só branco de referência: apenas o controle abaixo; adequado para exposição fixa, mas uma constante não serve para uma caverna e um campo. Exposição do jogo: lê a textura entregue ao upscaler; é a melhor fonte, decidida antes e não alterada por esta passagem, mas nem todos os jogos a fornecem. Buffer encontrado: para jogos que calculam exposição sem repassá-la. É uma ESTIMATIVA pelo formato do buffer; em GTA V, o melhor candidato segue a exposição real em outra escala, compensada pela proporção da âncora. Ancore uma vez e confira depois.
+919	Posición del corte. A la izquierda está el fotograma del escalador; a la derecha, el editado por el modelo.	Position de la séparation : à gauche l'image de l'upscaler, à droite celle modifiée par le modèle.	Position der Trennlinie: links das Upscaler-Bild, rechts das vom Modell bearbeitete Bild.	Posição do corte: à esquerda, o quadro do upscaler; à direita, o editado pelo modelo.
+920	Si el color del modelo acompaña a su luz. 0 conserva exactamente el tono del juego y solo modifica el brillo. 1 incorpora el color del modelo, limitado a AP1. La interpolación entre imágenes terminadas evita los cambios de tono de la antigua suma de diferencias de color. Por encima de 1 aumenta la saturación sin cambiar el tono; comprime suavemente al llegar al límite de la pantalla en vez de recortar. 1 es el color propio del modelo; más añade viveza.	Le choix d'ajouter la couleur du modèle à sa lumière. 0 conserve exactement la teinte du jeu et ne modifie que la luminosité. 1 ajoute la couleur du modèle, limitée à AP1. L'interpolation entre images finies évite les dérives de teinte de l'ancienne addition de différences de couleur. Au-delà de 1, la saturation augmente sans changer la teinte, avec une compression douce à la limite de l'écran plutôt qu'un écrêtage. 1 est la couleur du modèle ; au-delà, elle devient plus vive.	Ob die Modellfarbe mit der Helligkeit übernommen wird. 0 erhält den Farbton des Spiels exakt und verändert nur die Helligkeit. 1 übernimmt die Modellfarbe, auf AP1 begrenzt. Das Mischen fertiger Bilder vermeidet die Farbtonverschiebungen der früheren Addition von Farbdifferenzen. Über 1 steigt die Sättigung ohne Farbtonänderung; an der Darstellungsgrenze erfolgt ein sanfter Übergang statt harten Abschneidens. 1 ist die Modellfarbe; darüber wird sie kräftiger.	Se a cor do modelo acompanha sua luz. 0 preserva exatamente a tonalidade do jogo e só altera o brilho. 1 incorpora a cor do modelo, limitada a AP1. A interpolação entre imagens prontas evita mudanças de tonalidade da antiga soma de diferenças de cor. Acima de 1, aumenta a saturação sem mudar a tonalidade, com compressão suave no limite da tela em vez de corte. 1 é a cor do modelo; acima disso, fica mais viva.
+921	Si se aplica la edición del modelo. Desactivado muestra el fotograma limpio del escalador mientras el paso sigue ejecutándose. Con Congelar fotograma, en Comparar, permite alternar la misma imagen congelada con y sin renderizado neuronal. Déjalo activado para uso normal.	Applique ou non la modification du modèle. Désactivé, affiche l'image propre de l'upscaler mais la passe continue. Avec Figer l'image, sous Comparer, vous pouvez alterner la même image figée avec et sans rendu neuronal. Laissez activé pour un usage normal.	Ob die Modellbearbeitung angewendet wird. Aus zeigt das unveränderte Upscaler-Bild, während der Durchlauf weiterläuft. Mit Bild einfrieren unter Vergleichen lässt sich dasselbe eingefrorene Bild mit und ohne neuronales Rendering betrachten. Für normale Nutzung eingeschaltet lassen.	Se a edição do modelo é aplicada. Desativado mostra o quadro limpo do upscaler enquanto a passagem continua. Com Congelar quadro, em Comparar, permite alternar a mesma imagem congelada com e sem renderização neural. Deixe ativado para uso normal.
+922	¿Qué consuelo eliges?	Quelle illusion choisissez-vous ?	Welchen Trost wählst du?	Qual consolo você escolhe?
+923	Origen del punto blanco	Source du point blanc	Weißpunktquelle	Origem do ponto branco
+924	¿Quién es Nukem, por cierto?	Qui est Nukem, au fait ?	Wer ist eigentlich Nukem?	Quem é Nukem, afinal?
+925	¡Se aplicará tras cambiar RESOLUCIÓN/PREAJUSTE!	Sera appliqué après un changement de RÉSOLUTION/PRÉRÉGLAGE !	Wird nach Änderung von AUFLÖSUNG/VOREINSTELLUNG angewendet!	Será aplicado após mudar RESOLUÇÃO/PREDEFINIÇÃO!
+926	¡Puede aplicarse tras cambiar RESOLUCIÓN/PREAJUSTE!	Pourrait être appliqué après un changement de RÉSOLUTION/PRÉRÉGLAGE !	Wird möglicherweise nach Änderung von AUFLÖSUNG/VOREINSTELLUNG angewendet!	Pode ser aplicado após mudar RESOLUÇÃO/PREDEFINIÇÃO!
+927	Usa más VRAM, pero Uniscaler lo necesita. Otros juegos también podrían necesitarlo.	Utilise plus de VRAM, mais Uniscaler en a besoin. D'autres jeux pourraient aussi en avoir besoin.	Benötigt mehr VRAM, ist aber für Uniscaler erforderlich. Möglicherweise auch für andere Spiele nötig.	Usa mais VRAM, mas Uniscaler precisa disso. Outros jogos também podem precisar.
+928	Usa más VRAM, pero algunos juegos lo necesitan.	Utilise plus de VRAM, mais certains jeux en ont besoin.	Benötigt mehr VRAM, ist aber für manche Spiele erforderlich.	Usa mais VRAM, mas alguns jogos precisam disso.
+929	Cortinilla	Balayage	Wischvergleich	Cortina
+930	En el peor caso, apágalo y vuelve a encenderlo	Au pire, désactivez puis réactivez	Im schlimmsten Fall aus- und wieder einschalten	No pior caso, desligue e ligue novamente
+931	Escribe en la imagen qué lado es cuál, para que las capturas conserven la identificación. Las etiquetas se dibujan en el plano de cada imagen: el corte las muestra u oculta como a la imagen, sin elementos arrastrables. Intercambiar lados mueve también las etiquetas.	Indique dans l'image l'identité de chaque côté, pour conserver les repères dans les captures. Les étiquettes sont dessinées dans le plan de chaque image : la séparation les révèle ou les masque comme l'image, sans élément à déplacer. Inverser les côtés déplace aussi les étiquettes.	Beschriftet die Seiten direkt im Bild, damit Screenshots die Zuordnung behalten. Beschriftungen liegen in der jeweiligen Bildebene: Der Wischvergleich zeigt oder verdeckt sie wie die Bilder selbst; nichts muss gezogen werden. Seiten tauschen verschiebt auch die Beschriftungen.	Identifica cada lado diretamente na imagem, para manter os rótulos nas capturas. Os rótulos são desenhados no plano de cada imagem: o corte os revela ou oculta junto com a imagem, sem elementos arrastáveis. Trocar lados também move os rótulos.
+932	XeFG: mayor coste, pero la mejor FG universal. XeFG 3 suele manejar mejor el HUD. Activa Composición de IU si aparecen estelas en el HUD.	XeFG : plus coûteux, mais meilleure FG universelle. XeFG 3 gère généralement mieux le HUD. Activez la composition de l'interface si le HUD laisse des traînées.	XeFG: aufwendigste, aber beste universelle FG. XeFG 3 behandelt das HUD insgesamt am besten. Bei HUD-Nachzieheffekten UI-Komposition aktivieren.	XeFG: mais pesado, mas a melhor FG universal. XeFG 3 geralmente lida melhor com o HUD. Ative Composição da interface se o HUD deixar rastros.
+933	XeFG solo admite HDR10	XeFG ne prend en charge que HDR10	XeFG unterstützt nur HDR10	XeFG só oferece suporte a HDR10
+934	Ajustes de XeSS	Paramètres XeSS	XeSS-Einstellungen	Configurações de XeSS
+935	XeSS con Dx12	XeSS avec Dx12	XeSS mit Dx12	XeSS com Dx12
+936	Amarillo	Jaune	Gelb	Amarelo
+937	No debería ser necesario cambiarlo	Vous ne devriez pas avoir à le modifier	Sollte normalerweise nicht geändert werden müssen	Não deve ser necessário alterar
+938	Puede que hoy tu juego ni siquiera se cierre inesperadamente	Votre jeu ne plantera peut-être même pas aujourd'hui	Vielleicht stürzt dein Spiel heute nicht einmal ab	Talvez seu jogo nem trave hoje
+939	Cero	Zéro	Null	Zero
+940	Zoom	Zoom	Zoom	Zoom
+941	Factor de zoom	Facteur de zoom	Zoomfaktor	Fator de zoom
+942	[CENSURADO] nunca se vio mejor	[CENSURÉ] n'a jamais été aussi beau	[ZENSIERT] sah noch nie besser aus	[CENSURADO] nunca esteve tão bonito
+943	[editando]	[modification]	[Bearbeitung]	[editando]
+944	no se pudo asignar un bloque de parámetros	impossible d'allouer un bloc de paramètres	Parameterblock konnte nicht reserviert werden	não foi possível alocar um bloco de parâmetros
+945	faltaba un recurso	une ressource manquait	eine Ressource fehlte	faltava um recurso
+946	falta amd_fidelityfx_dx12.dll	amd_fidelityfx_dx12.dll est absent	amd_fidelityfx_dx12.dll fehlt	amd_fidelityfx_dx12.dll está ausente
+947	¡Falta amd_fidelityfx_dx12.dll!	amd_fidelityfx_dx12.dll est absent !	amd_fidelityfx_dx12.dll fehlt!	amd_fidelityfx_dx12.dll está ausente!
+948	=	=	=	=
+949	el dispositivo cambió sin cerrar NGX; reinicia el proceso	le périphérique a changé sans arrêter NGX ; redémarrez le processus	Gerät ohne NGX-Abschaltung gewechselt; Prozess neu starten	o dispositivo mudou sem encerrar NGX; reinicie o processo
+950	el dispositivo cambió sin cerrar NGX; reinicia la sesión	le périphérique a changé sans arrêter NGX ; redémarrez la session	Gerät ohne NGX-Abschaltung gewechselt; Sitzung neu starten	o dispositivo mudou sem encerrar NGX; reinicie a sessão
+951	=	=	=	=
+952	=	=	=	=
+953	=	=	=	=
+954	falló	échec	fehlgeschlagen	falhou
+955	=	=	=	=
+956	=	=	=	=
+957	constante hasta ahora	stable pour le moment	bisher konstant	constante até agora
+958	cambió el formato del fotograma	le format d'image a changé	Bildformat geändert	o formato do quadro mudou
+959	fotogramas	images	Bilder	quadros
+960	=	=	=	=
+961	=	=	=	=
+962	=	=	=	=
+963	=	=	=	=
+964	=	=	=	=
+965	ya falló en esta sesión	a déjà échoué pendant cette session	in dieser Sitzung bereits fehlgeschlagen	já falhou nesta sessão
+966	está desactivado	est désactivé	ist ausgeschaltet	está desativado
+967	la capa 2 espera a que finalice la retirada segura	la couche 2 attend la fin du retrait sécurisé	Ebene 2 wartet auf den abschlussgesicherten Abbau	a camada 2 aguarda a conclusão da liberação segura
+968	cambió la firma de creación de la capa 2	la signature de création de la couche 2 a changé	Erstellungssignatur von Ebene 2 geändert	a assinatura de criação da camada 2 mudou
+969	=	=	=	=
+970	=	=	=	=
+971	falta libxess_fg.dll	libxess_fg.dll est absent	libxess_fg.dll fehlt	libxess_fg.dll está ausente
+972	¡Falta libxess_fg.dll!	libxess_fg.dll est absent !	libxess_fg.dll fehlt!	libxess_fg.dll está ausente!
+973	cambió la resolución del modelo	la résolution du modèle a changé	Modellauflösung geändert	a resolução do modelo mudou
+974	cambiaron los ajustes del modelo	les réglages du modèle ont changé	Modellabstimmung geändert	os ajustes do modelo mudaram
+975	de forma nativa en Vulkan	nativement sur Vulkan	nativ mit Vulkan	nativamente no Vulkan
+976	no	non	nein	não
+977	falta la lista de comandos o el bloque de parámetros	liste de commandes ou bloc de paramètres absent	Befehlsliste oder Parameterblock fehlt	falta a lista de comandos ou o bloco de parâmetros
+978	aún no hay coincidencias.	aucune correspondance pour le moment.	noch keine Übereinstimmung.	ainda não há correspondências.
+979	reemplazo de nvngx: %s	remplacement de nvngx : %s	nvngx-Ersatz: %s	substituto de nvngx: %s
+980	=	=	=	=
+981	falta nvngx.dll_dlssnr.dll	nvngx.dll_dlssnr.dll est absent	nvngx.dll_dlssnr.dll fehlt	nvngx.dll_dlssnr.dll está ausente
+982	no se encontró nvngx.dll_dlssnr.dll junto a OptiScaler o el juego	nvngx.dll_dlssnr.dll est introuvable à côté d'OptiScaler ou du jeu	nvngx.dll_dlssnr.dll wurde weder neben OptiScaler noch dem Spiel gefunden	nvngx.dll_dlssnr.dll não foi encontrado junto ao OptiScaler ou ao jogo
+983	no se pudo cargar nvngx.dll_dlssnr.dll	impossible de charger nvngx.dll_dlssnr.dll	nvngx.dll_dlssnr.dll konnte nicht geladen werden	não foi possível carregar nvngx.dll_dlssnr.dll
+984	Se detectó nvngx.ini; migra a OptiScaler.ini y elimina la configuración antigua.	nvngx.ini détecté ; passez à OptiScaler.ini et supprimez l'ancienne configuration.	nvngx.ini erkannt; bitte auf OptiScaler.ini umstellen und alte Konfiguration löschen.	nvngx.ini detectado; migre para OptiScaler.ini e exclua a configuração antiga.
+985	=	=	=	=
+986	¡No se encontró nvngx_dlss.dll, DLSS desactivado!	nvngx_dlss.dll introuvable, DLSS désactivé !	nvngx_dlss.dll nicht gefunden, DLSS deaktiviert!	nvngx_dlss.dll não encontrado, DLSS desativado!
+987	=	=	=	=
+988	no se encontró nvngx_dlssnr.dll	nvngx_dlssnr.dll est introuvable	nvngx_dlssnr.dll wurde nicht gefunden	nvngx_dlssnr.dll não foi encontrado
+989	no se encontró nvngx_dlssnr.dll junto a OptiScaler o el juego	nvngx_dlssnr.dll est introuvable à côté d'OptiScaler ou du jeu	nvngx_dlssnr.dll wurde weder neben OptiScaler noch dem Spiel gefunden	nvngx_dlssnr.dll não foi encontrado junto ao OptiScaler ou ao jogo
+990	desactivado	désactivé	aus	desativado
+991	o	ou	oder	ou
+992	gráficas	graphiques	Diagramme	gráficos
+993	DLAA privado	DLAA privé	privates DLAA	DLAA privado
+994	=	=	=	=
+995	en ejecución	en cours	aktiv	em execução
+996	ajuste desactivado	paramètre désactivé	Einstellung deaktiviert	configuração desativada
+997	no se pudo cerrar de forma segura; reinicia el proceso	arrêt sécurisé impossible ; redémarrez le processus	sicheres Abschalten nicht möglich; Prozess neu starten	não foi possível encerrar com segurança; reinicie o processo
+998	el núcleo NGX no tiene parámetros de capacidades	le noyau NGX n'a pas de paramètres de capacités	NGX-Kern hat keine Fähigkeitsparameter	o núcleo NGX não tem parâmetros de capacidades
+999	el núcleo NGX rechazó sus parámetros de capacidades	le noyau NGX a refusé ses paramètres de capacités	NGX-Kern hat seine Fähigkeitsparameter abgelehnt	o núcleo NGX recusou seus parâmetros de capacidades
+1000	no se pudo inicializar el núcleo NGX	impossible d'initialiser le noyau NGX	NGX-Kern konnte nicht initialisiert werden	não foi possível inicializar o núcleo NGX
+1001	no se pudo compilar el códec de color	impossible de compiler le codec couleur	Farbcodec konnte nicht kompiliert werden	não foi possível compilar o codec de cor
+1002	no se pudo crear el paso de composición	impossible de créer la passe de composition	Kompositionsdurchlauf konnte nicht erstellt werden	não foi possível criar a passagem de composição
+1003	falló el envío de reducción de resolución	échec de l'envoi de réduction de résolution	Ausführung der Herunterskalierung fehlgeschlagen	falhou o envio de redução de resolução
+1004	falló el envío de codificación	échec de l'envoi d'encodage	Ausführung der Kodierung fehlgeschlagen	falhou o envio de codificação
+1005	faltan puntos de entrada Vulkan en el reenviador	il manque des points d'entrée Vulkan dans le relais	Vulkan-Einstiegspunkte im Forwarder fehlen	faltam pontos de entrada Vulkan no encaminhador
+1006	faltan exportaciones en el reenviador	il manque des exports dans le relais	Exporte im Forwarder fehlen	faltam exportações no encaminhador
+1007	no se pudo cargar el reenviador	impossible de charger le relais	Forwarder konnte nicht geladen werden	não foi possível carregar o encaminhador
+1008	no se pudo habilitar la lectura de profundidad o vectores de movimiento del juego	impossible de rendre lisibles la profondeur ou les vecteurs de mouvement du jeu	Tiefe oder Bewegungsvektoren des Spiels konnten nicht lesbar gemacht werden	não foi possível habilitar a leitura da profundidade ou dos vetores de movimento do jogo
+1009	el modelo no expone una interfaz Vulkan completa	le modèle n'expose pas une interface Vulkan complète	Modell stellt keine vollständige Vulkan-Schnittstelle bereit	o modelo não expõe uma interface Vulkan completa
+1010	el modelo rechazó la evaluación	le modèle a refusé l'évaluation	Modell hat die Auswertung abgelehnt	o modelo recusou a avaliação
+1011	el modelo rechazó la ejecución	le modèle a refusé de s'exécuter	Modell hat die Ausführung abgelehnt	o modelo recusou a execução
+1012	el modelo no pudo crear una función en este dispositivo	le modèle n'a pas pu créer de fonction sur ce périphérique	Modell konnte auf diesem Gerät keine Funktion erstellen	o modelo não conseguiu criar uma função neste dispositivo
+1013	no se pudo inicializar el modelo	impossible d'initialiser le modèle	Modell konnte nicht initialisiert werden	não foi possível inicializar o modelo
+1014	no se pudo inicializar el modelo en este dispositivo Vulkan	impossible d'initialiser le modèle sur ce périphérique Vulkan	Modell konnte auf diesem Vulkan-Gerät nicht initialisiert werden	não foi possível inicializar o modelo neste dispositivo Vulkan
+1015	la textura de salida no pertenece a ningún dispositivo D3D12	la texture de sortie n'appartient à aucun périphérique D3D12	Ausgabetextur gehört zu keinem D3D12-Gerät	a textura de saída não pertence a nenhum dispositivo D3D12
+1016	los parámetros no incluían profundidad	les paramètres ne contenaient pas de profondeur	Parameter enthielten keine Tiefe	os parâmetros não incluíam profundidade
+1017	los parámetros no incluían vectores de movimiento	les paramètres ne contenaient pas de vecteurs de mouvement	Parameter enthielten keine Bewegungsvektoren	os parâmetros não incluíam vetores de movimento
+1018	los parámetros no incluían textura de salida	les paramètres ne contenaient pas de texture de sortie	Parameter enthielten keine Ausgabetextur	os parâmetros não incluíam textura de saída
+1019	el paso no pudo asignar sus propias superficies	la passe n'a pas pu allouer ses propres surfaces	Durchlauf konnte keine eigenen Oberflächen reservieren	a passagem não conseguiu alocar suas próprias superfícies
+1020	no se pudo crear el paso	impossible de créer la passe	Durchlauf konnte nicht erstellt werden	não foi possível criar a passagem
+1021	la sesión anterior del modelo sigue retirándose tras la reactivación	la session précédente du modèle termine encore son retrait après réactivation	vorherige Modellsitzung wird nach erneuter Aktivierung noch abgebaut	a sessão anterior do modelo ainda está sendo liberada após a reativação
+1022	la ruta DLAA privada falló repetidamente con esta configuración	le chemin DLAA privé a échoué plusieurs fois avec cette configuration	privater DLAA-Pfad ist mit dieser Konfiguration wiederholt fehlgeschlagen	o caminho DLAA privado falhou repetidamente com esta configuração
+1023	falló el envío de resolución final	échec de l'envoi de résolution finale	Ausführung der finalen Auflösung fehlgeschlagen	falhou o envio de resolução final
+1024	no se pudo asignar el conjunto de recursos temporales	impossible d'allouer le lot de ressources temporaires	temporäres Ressourcenpaket konnte nicht reserviert werden	não foi possível alocar o conjunto de recursos temporários
+1025	la segunda sesión del modelo rechazó la ejecución	la seconde session du modèle a refusé de s'exécuter	zweite Modellsitzung hat die Ausführung abgelehnt	a segunda sessão do modelo recusou a execução
+1026	no se pudo inicializar la segunda sesión del modelo	impossible d'initialiser la seconde session du modèle	zweite Modellsitzung konnte nicht initialisiert werden	não foi possível inicializar a segunda sessão do modelo
+1027	falló el envío de codificación de la segunda capa	échec de l'envoi d'encodage de la seconde couche	Kodierungsausführung der zweiten Ebene fehlgeschlagen	falhou o envio de codificação da segunda camada
+1028	falló el envío de remuestreo de la segunda capa	échec de l'envoi de rééchantillonnage de la seconde couche	Resampling-Ausführung der zweiten Ebene fehlgeschlagen	falhou o envio de reamostragem da segunda camada
+1029	falló el envío de resolución final de la segunda capa	échec de l'envoi de résolution finale de la seconde couche	finale Auflösungsausführung der zweiten Ebene fehlgeschlagen	falhou o envio de resolução final da segunda camada
+1030	el escalador no pudo restaurar el estado de este fotograma	l'upscaler n'a pas pu restaurer l'état de cette image	Upscaler konnte den Zustand dieses Bildes nicht wiederherstellen	o upscaler não conseguiu restaurar o estado deste quadro
+1031	el juego entrega un fotograma ya mapeado tonalmente; no hay nada que normalizar	le jeu fournit une image déjà traitée par tone mapping ; rien à normaliser	das Spiel übergibt ein bereits tonwertangepasstes Bild; nichts zu normalisieren	o jogo entrega um quadro já mapeado tonalmente; não há nada a normalizar
+1032	la escena tiene muy poca iluminación para determinar el extremo superior del rango	la scène est trop peu éclairée pour déterminer le haut de la plage	zu wenig beleuchtete Szene, um das obere Bereichsende zu bestimmen	a cena tem pouca iluminação para determinar o limite superior da faixa
+1033	en espera	en attente	wartet	aguardando
+1034	=	=	=	=
+1035	sí	oui	ja	sim
+1036	| Entrada: %s	| Entrée : %s	| Eingabe: %s	| Entrada: %s
+1037	| Suplantación: %s	| Simulation : %s	| Vortäuschung: %s	| Simulação: %s

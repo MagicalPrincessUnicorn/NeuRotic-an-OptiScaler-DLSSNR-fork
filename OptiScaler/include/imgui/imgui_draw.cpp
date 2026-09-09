@@ -33,6 +33,7 @@ Index of this file:
 #endif
 
 #include "imgui.h"
+#include "../../menu/Localization.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 #ifdef IMGUI_ENABLE_FREETYPE
@@ -1700,6 +1701,7 @@ void ImDrawList::AddBezierQuadratic(const ImVec2& p1, const ImVec2& p2, const Im
 
 void ImDrawList::AddText(ImFont* font, float font_size, const ImVec2& pos, ImU32 col, const char* text_begin, const char* text_end, float wrap_width, const ImVec4* cpu_fine_clip_rect)
 {
+    Neurotic::LocalizedRange localized(text_begin, text_end);
     if ((col & IM_COL32_A_MASK) == 0)
         return;
 

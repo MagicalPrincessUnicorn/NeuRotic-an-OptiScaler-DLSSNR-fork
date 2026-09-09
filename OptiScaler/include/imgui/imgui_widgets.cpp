@@ -41,6 +41,7 @@ Index of this file:
 #endif
 
 #include "imgui.h"
+#include "../../menu/Localization.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 
@@ -159,6 +160,7 @@ static ImVec2   InputTextCalcTextSize(ImGuiContext* ctx, const char* text_begin,
 
 void ImGui::TextEx(const char* text, const char* text_end, ImGuiTextFlags flags)
 {
+    Neurotic::LocalizedRange localized(text, text_end);
     ImGuiWindow* window = GetCurrentWindow();
     if (window->SkipItems)
         return;

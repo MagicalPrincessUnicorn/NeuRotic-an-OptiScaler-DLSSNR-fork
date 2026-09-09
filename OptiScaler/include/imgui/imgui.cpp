@@ -1116,6 +1116,7 @@ CODE
 #endif
 
 #include "imgui.h"
+#include "../../menu/Localization.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 
@@ -3714,6 +3715,7 @@ void ImGui::RenderText(ImVec2 pos, const char* text, const char* text_end, bool 
         text_display_end = text_end;
     }
 
+    Neurotic::LocalizedRange localized(text, text_display_end);
     if (text != text_display_end)
     {
         window->DrawList->AddText(g.Font, g.FontSize, pos, GetColorU32(ImGuiCol_Text), text, text_display_end);
@@ -3724,6 +3726,7 @@ void ImGui::RenderText(ImVec2 pos, const char* text, const char* text_end, bool 
 
 void ImGui::RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end, float wrap_width)
 {
+    Neurotic::LocalizedRange localized(text, text_end);
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
 
@@ -3745,6 +3748,7 @@ void ImGui::RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end
 // better advantage of the render function taking size into account for coarse clipping.
 void ImGui::RenderTextClippedEx(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_display_end, const ImVec2* text_size_if_known, const ImVec2& align, const ImRect* clip_rect)
 {
+    Neurotic::LocalizedRange localized(text, text_display_end);
     // Perform CPU side clipping for single clipped element to avoid using scissor state
     ImVec2 pos = pos_min;
     const ImVec2 text_size = text_size_if_known ? *text_size_if_known : CalcTextSize(text, text_display_end, false, 0.0f);
@@ -3794,6 +3798,7 @@ void ImGui::RenderTextEllipsis(ImDrawList* draw_list, const ImVec2& pos_min, con
     ImGuiContext& g = *GImGui;
     if (text_end_full == NULL)
         text_end_full = FindRenderedTextEnd(text);
+    Neurotic::LocalizedRange localized(text, text_end_full);
     const ImVec2 text_size = text_size_if_known ? *text_size_if_known : CalcTextSize(text, text_end_full, false, 0.0f);
 
     //draw_list->AddLine(ImVec2(pos_max.x, pos_min.y - 4), ImVec2(pos_max.x, pos_max.y + 6), IM_COL32(0, 0, 255, 255));
@@ -6158,6 +6163,7 @@ ImVec2 ImGui::CalcTextSize(const char* text, const char* text_end, bool hide_tex
     else
         text_display_end = text_end;
 
+    Neurotic::LocalizedRange localized(text, text_display_end);
     ImFont* font = g.Font;
     const float font_size = g.FontSize;
     if (text == text_display_end)

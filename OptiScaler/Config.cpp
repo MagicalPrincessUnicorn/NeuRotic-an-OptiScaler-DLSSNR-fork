@@ -547,6 +547,7 @@ bool Config::Reload(std::filesystem::path iniPath)
 
         // Menu
         {
+            MenuLanguage.set_from_config(readString("Menu", "Language", true));
             if (auto setting = readFloat("Menu", "Scale"); setting.has_value())
                 MenuScale.set_from_config(std::clamp(setting.value(), 0.5f, 2.0f));
 
@@ -1423,6 +1424,7 @@ bool Config::SaveIni()
     // Menu
     {
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
+        ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());
         ini.SetValue("Menu", "OverlayMenu", GetBoolValue(Instance()->OverlayMenu.value_for_config()).c_str());
 
         auto setting = Instance()->ShortcutKey.value_for_config();
