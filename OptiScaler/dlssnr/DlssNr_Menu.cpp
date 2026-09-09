@@ -6,6 +6,7 @@
 
 
 #include <Config.h>
+#include <State.h>
 #include <menu/menu_common.h>
 
 #include <imgui/imgui.h>
@@ -18,6 +19,20 @@
 
 namespace DlssNr
 {
+
+static bool IsVulkanInput()
+{
+    switch (State::Instance().currentInputApiName)
+    {
+    case ApiUpscalerInput::DLSS_VK:
+    case ApiUpscalerInput::XeSS_VK:
+    case ApiUpscalerInput::FFX_VK:
+    case ApiUpscalerInput::FSR2X_VK:
+        return true;
+    default:
+        return false;
+    }
+}
 
 // Nested panels indent their contents on the left. Match that inset on the right so wrapped
 // descriptions remain visually inside the panel instead of running to the parent column edge.
@@ -133,7 +148,38 @@ void RenderMenu(Config* config, float menuResScale)
         // The setting requests Pre-SR. It is deliberately not described as active until the
         // replacement-resource, reset, seed, and display-ready checks have all passed.
         const auto nrTelemetry = DlssNr::Telemetry();
-        const bool vulkan = DlssNr::IsRunningVk();
+        const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
+
+        bool secondLayer = config->DlssNrSecondLayer.value_or_default();
+        if (vulkan)
+            ImGui::BeginDisabled();
+        if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
+            config->DlssNrSecondLayer = secondLayer;
+        if (vulkan)
+            ImGui::EndDisabled();
+
+        HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer"
+                   "\nframe. It inherits the first layer's model and composition settings."
+                   "\n\nEach layer owns separate temporal history. Enabling it roughly doubles"
+                   "\nthe model cost. This experiment implements the route on D3D12 only.");
+
+        if (vulkan)
+            ImGui::TextDisabled("Second neural-rendering layer unavailable on Vulkan in this experiment.");
+        else if (enabled && nrTelemetry.layer2Requested)
+        {
+            if (nrTelemetry.layer2Failed)
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f),
+                                   "Layer 2 unavailable: %s.", nrTelemetry.layer2FailureReason);
+            else if (nrTelemetry.layer2Retiring)
+                ImGui::TextDisabled("Layer 2 is retiring safely; NR evaluation is paused.");
+            else if (!nrTelemetry.layer2Loaded)
+                ImGui::TextDisabled("Layer 2 requested: waiting for a lifecycle-only creation frame.");
+            else if (!nrTelemetry.layer2Ready)
+                ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
+            else
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
+                                   "Two composed NR layers ready.");
+        }
         if (!enabled)
         {
             ImGui::TextDisabled("Rendering mode selected: %s.", renderModeNames[renderMode]);

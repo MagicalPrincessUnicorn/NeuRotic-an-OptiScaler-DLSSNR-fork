@@ -28,6 +28,7 @@ struct TestConfig
 {
     NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
     NrOptional<bool> DlssNrEnabled { false };
+    NrOptional<bool> DlssNrSecondLayer { false };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR
@@ -314,7 +315,7 @@ void SnapshotCost()
         checksum += snapshot.DlssNrWorkingScale.value_or_default() > 0;
     }
     const auto elapsed = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start);
-    std::cout << "INFO single-lock 44-field snapshot (2 KiB anchor, uncontended): "
+    std::cout << "INFO single-lock 45-field snapshot (2 KiB anchor, uncontended): "
               << elapsed.count() / count << " us/capture; checksum=" << checksum << '\n';
 }
 

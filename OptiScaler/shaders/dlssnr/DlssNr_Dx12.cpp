@@ -208,6 +208,46 @@ struct TransitionFailureCircuit
     std::chrono::steady_clock::time_point retryAfter {};
 };
 
+struct NrSecondLayerState
+{
+    // A second Feature 18 handle is mandatory: sharing the first handle would merge the two temporal
+    // histories and tell one model session that two frames elapsed without motion between them.
+    void* feature = nullptr;
+    void* featureAwaitingRelease = nullptr;
+
+    // Layer 2 consumes the completed layer-1 composition, so it owns a complete staging set. None of
+    // these aliases layer 1; resize and working-scale transitions can replace the set transactionally.
+    ID3D12Resource* colorCopy = nullptr;
+    ID3D12Resource* output = nullptr;
+    ID3D12Resource* hdrCopy = nullptr;
+    ID3D12Resource* colorSmall = nullptr;
+    ID3D12Resource* outputNative = nullptr;
+    OS_Dx12* superUp = nullptr;
+    OS_Dx12* superDown = nullptr;
+    Scaler scaler = Scaler::Count;
+
+    unsigned int width = 0;
+    unsigned int height = 0;
+    unsigned int workWidth = 0;
+    unsigned int workHeight = 0;
+    unsigned int builtPreset = 0;
+    float builtIntensity = 0.0f;
+    unsigned int builtStyle = 0;
+    float builtLocalStructure = 0.0f;
+    float builtLocalTone = 0.0f;
+    float builtSkinStructure = 0.0f;
+    bool builtAutoMask = false;
+
+    bool requestObserved = false;
+    bool ready = false;
+    bool reset = true;
+    bool routeKnown = false;
+    bool routeWasPreSr = false;
+    bool failed = false;
+    const char* reason = "";
+    unsigned long long successfulEvaluations = 0;
+};
+
 struct NrState
 {
     HMODULE forwarder = nullptr;
@@ -238,20 +278,7 @@ struct NrState
     UINT64 privateCreateFenceValue = 0;
     HANDLE privateCreateEvent = nullptr;
 
-    // A feature per extra pass, each with its own temporal history.
-    //
-    // One feature run three times in a frame is told three frames passed with nothing moving between
-    // them, so its history fights every pass after the first -- which is what "loses detail on later
-    // passes" was. Separate features each see one frame per frame, which is the contract they were
-    // built for.
-    //
-    // It is also the only reading that fits the one clue we have about how this is done elsewhere:
-    // that implementation's memory grows with the pass count, and reusing a single feature cannot do
-    // that. A feature apiece can, because each carries its own history.
-    //
-    // Indexed by pass, so [0] is unused and the first extra pass is [1]. Wasting one pointer keeps
-    // every index here equal to the pass number it belongs to.
-    void* passFeature[4] = {};
+    NrSecondLayerState layer2;
 
     // The model cannot read and write one resource, so the frame is staged through these.
     ID3D12Resource* colorCopy = nullptr;
@@ -289,6 +316,9 @@ struct NrState
     // Incremented after model success (and resolve success on the compose path). Pre-SR uses this
     // serial rather than inferring readiness from feature existence or the absence of an error flag.
     unsigned long long successfulEvaluations = 0;
+    // Advances only after every requested healthy layer has composed. Pre-SR readiness keys on this
+    // rather than layer 1 alone, so a layer-2 creation/failure frame cannot be published as two-layer.
+    unsigned long long completedPipelineEvaluations = 0;
     bool lastEvaluationWasPreSr = false;
 
     // The frame as the upscaler wrote it. The resolve adds the model's edit to this rather than
@@ -481,7 +511,9 @@ std::unique_ptr<GpuTime_Dx12> g_gpuTime;
 // Splitting them says how much of the pass is the model and how much is ours -- and ours is the half
 // we can actually do something about.
 std::unique_ptr<GpuTime_Dx12> g_ngxTime;
+std::unique_ptr<GpuTime_Dx12> g_ngxTimeLayer2;
 std::optional<double> g_lastNgxTime;
+std::optional<double> g_lastNgxTimeLayer2;
 std::optional<double> g_lastGpuTime;
 
 // Writes matched before/after frames on request, so comparisons stop depending on video.
@@ -523,6 +555,10 @@ unsigned long long g_gameResetEvents = 0;
 unsigned long long g_featureBuilds = 0;
 unsigned long long g_featureRebuilds = 0;
 unsigned long long g_evaluateFailures = 0;
+unsigned long long g_layer2FeatureBuilds = 0;
+unsigned long long g_layer2FeatureRetires = 0;
+unsigned long long g_layer2EvaluateFailures = 0;
+unsigned int g_lastLayerCount = 0;
 
 constexpr uint32_t kTransitionFailureLimit = 4;
 
@@ -922,6 +958,7 @@ struct NrRetired
     void* feature = nullptr;
     ID3D12Resource* resource = nullptr;
     OS_Dx12* scaler = nullptr;
+    bool layer2Feature = false;
     DlssNr::GpuSafety::CompletionSet completion = DlssNr::GpuSafety::Pending();
 };
 
@@ -949,10 +986,42 @@ void ParkNrResource(ID3D12Resource*& res)
     g_nrRetired.push_back(r);
 }
 
-void TickNrRetired()
+void ParkSecondLayerFeature(const char* reason)
 {
+    if (g_nr.layer2.feature == nullptr)
+        return;
+
+    // One layer-2 generation may retire at a time. Creation is blocked on this exact handle until
+    // TickNrRetired releases it after the completion snapshot drains.
+    if (g_nr.layer2.featureAwaitingRelease != nullptr)
+        return;
+
+    NrRetired retired;
+    retired.feature = g_nr.layer2.feature;
+    retired.layer2Feature = true;
+    g_nr.layer2.featureAwaitingRelease = g_nr.layer2.feature;
+    g_nr.layer2.feature = nullptr;
+    g_nr.layer2.ready = false;
+    g_nr.layer2.reset = true;
+    ++g_layer2FeatureRetires;
+    g_nrRetired.push_back(retired);
+    LOG_INFO("DLSS-NR layer 2: retiring generation {} ({})", g_layer2FeatureRetires, reason);
+}
+
+// Layer-2 entries are deliberately collected only by Dispatch's lifecycle-only gate. Other callers
+// may collect ordinary NR resources, but they may not release layer 2 and then evaluate either layer
+// on the same command list.
+bool TickNrRetired(bool collectLayer2 = false)
+{
+    bool releasedLayer2 = false;
     for (size_t i = 0; i < g_nrRetired.size();)
     {
+        if (g_nrRetired[i].layer2Feature && !collectLayer2)
+        {
+            ++i;
+            continue;
+        }
+
         if (!DlssNr::GpuSafety::Reusable(g_nrRetired[i].completion))
         {
             ++i;
@@ -965,6 +1034,14 @@ void TickNrRetired()
         if (g_nrRetired[i].feature == g_nr.resumeFeatureAwaitingRelease)
             g_nr.resumeFeatureAwaitingRelease = nullptr;
 
+        if (g_nrRetired[i].layer2Feature)
+        {
+            if (g_nrRetired[i].feature == g_nr.layer2.featureAwaitingRelease)
+                g_nr.layer2.featureAwaitingRelease = nullptr;
+            releasedLayer2 = true;
+            LOG_INFO("DLSS-NR layer 2: retired generation released; creation is allowed next frame");
+        }
+
         if (g_nrRetired[i].resource != nullptr)
             g_nrRetired[i].resource->Release();
 
@@ -972,6 +1049,7 @@ void TickNrRetired()
 
         g_nrRetired.erase(g_nrRetired.begin() + i);
     }
+    return releasedLayer2;
 }
 
 // The inject point decides which buffer is being measured -- the upscaler's linear output or the
@@ -1001,9 +1079,9 @@ void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, ID3D12Resource* activeTa
 
     ParkNrFeature(g_nr.feature);
 
-    // The extras go with it: they were built for this raster and this tuning too.
-    for (void*& f : g_nr.passFeature)
-        ParkNrFeature(f);
+    // Layer 2 is independently completion-gated. It will not be released or recreated on an
+    // evaluation command list.
+    ParkSecondLayerFeature("frame format changed");
 
     // Surface replacement is committed by ScratchTransaction after the complete bundle exists.
 
@@ -1650,6 +1728,30 @@ void RecordBuiltTuning(const NrConfigSnapshot<Config>& cfg)
     g_nr.builtAutoMask = cfg.DlssNrAutoMask.value_or_default();
 }
 
+bool SecondLayerTuningMatches(const NrConfigSnapshot<Config>& cfg)
+{
+    const auto& layer = g_nr.layer2;
+    return layer.builtPreset == cfg.DlssNrPreset.value_or_default() &&
+           layer.builtIntensity == cfg.DlssNrIntensity.value_or_default() &&
+           layer.builtStyle == cfg.DlssNrStyle.value_or_default() &&
+           layer.builtLocalStructure == cfg.DlssNrLocalStructure.value_or_default() &&
+           layer.builtLocalTone == cfg.DlssNrLocalTone.value_or_default() &&
+           layer.builtSkinStructure == cfg.DlssNrSkinStructure.value_or_default() &&
+           layer.builtAutoMask == cfg.DlssNrAutoMask.value_or_default();
+}
+
+void RecordSecondLayerTuning(const NrConfigSnapshot<Config>& cfg)
+{
+    auto& layer = g_nr.layer2;
+    layer.builtPreset = cfg.DlssNrPreset.value_or_default();
+    layer.builtIntensity = cfg.DlssNrIntensity.value_or_default();
+    layer.builtStyle = cfg.DlssNrStyle.value_or_default();
+    layer.builtLocalStructure = cfg.DlssNrLocalStructure.value_or_default();
+    layer.builtLocalTone = cfg.DlssNrLocalTone.value_or_default();
+    layer.builtSkinStructure = cfg.DlssNrSkinStructure.value_or_default();
+    layer.builtAutoMask = cfg.DlssNrAutoMask.value_or_default();
+}
+
 // Guards the module's state. Every caller is now on the game's render thread, so this is no longer
 // holding two threads apart -- but the D3D11-on-D3D12 bridge enters from its own call site, and the
 // cost is a CPU-side lock on a path that already records command lists.
@@ -1859,6 +1961,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
+    const bool secondLayerRequested = cfg.DlssNrSecondLayer.value_or_default();
 
     if (!runtime.enabled || g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr ||
         motion == nullptr || output == nullptr)
@@ -1889,11 +1992,38 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             LOG_INFO("DLSS-NR: enable transition {} applied at the D3D12 render boundary; temporal reset requested",
                      runtime.resumeGeneration);
         }
+
+        ParkSecondLayerFeature("Neural Rendering re-enabled");
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
+    }
+
+    if (g_nr.layer2.requestObserved != secondLayerRequested)
+    {
+        g_nr.layer2.requestObserved = secondLayerRequested;
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
+
+        if (!secondLayerRequested)
+        {
+            ParkSecondLayerFeature("setting disabled");
+            g_nr.layer2.failed = false;
+            g_nr.layer2.reason = "";
+            LOG_INFO("DLSS-NR layer count requested: 1; layer 2 evaluation paused for lifecycle retirement");
+            // No layer is evaluated on a command list that begins a layer-2 retirement.
+            return;
+        }
+
+        g_nr.layer2.failed = false;
+        g_nr.layer2.reason = "";
+        LOG_INFO("DLSS-NR layer count requested: 2; waiting for a lifecycle-only creation frame");
     }
 
     // Enough for meter/encode/downsample/resolve and the optional Pre-SR re-jitter. If the
-    // bounded pool is busy, bypass this NR evaluation before recording output transitions.
-    if (!DlssNr::GpuSafety::Record(cmdList) || !HasFreeSlots(8))
+    // bounded pool is busy, bypass this NR evaluation before recording output transitions. Layer 2
+    // adds its own encode/downsample/resolve slots; the one-layer preflight is unchanged when off.
+    const bool secondLayerHealthy = secondLayerRequested && !g_nr.layer2.failed;
+    if (!DlssNr::GpuSafety::Record(cmdList) || !HasFreeSlots(secondLayerHealthy ? 12u : 8u))
     {
         g_nr.reset = true;
         ReportSkipOnce("GPU completion pending or command-list tracking unavailable");
@@ -1904,7 +2034,18 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // the current invocation if its outer call-site registration was first. The Record above cannot
     // weaken that snapshot. Bypass without touching the output until vendor release has actually run;
     // this also avoids overlapping two full-resolution model allocations.
-    TickNrRetired();
+    const bool releasedLayer2ThisCall = TickNrRetired(true);
+    if (releasedLayer2ThisCall)
+    {
+        // Vendor release happened in this invocation. Creation and both evaluations wait for a later
+        // command list, even though the old GPU work has now completed.
+        return;
+    }
+    if (g_nr.layer2.featureAwaitingRelease != nullptr)
+    {
+        ReportSkipOnce("layer 2 is waiting for completion-gated retirement");
+        return;
+    }
     if (g_nr.resumeFeatureAwaitingRelease != nullptr)
     {
         ReportSkipOnce("the previous model session is still retiring after re-enable");
@@ -1912,6 +2053,16 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
 
     ID3D12Resource* target = output;
+    const bool currentRouteIsPreSr = target == g_nr.preSrScratch;
+
+    if (secondLayerHealthy && g_nr.layer2.feature != nullptr && g_nr.layer2.routeKnown &&
+        g_nr.layer2.routeWasPreSr != currentRouteIsPreSr)
+    {
+        ParkSecondLayerFeature("Pre-SR/Post-SR route changed");
+        g_nr.layer2.routeKnown = false;
+        // Keep the route transition off both evaluation command lists.
+        return;
+    }
 
     // The state the upscaler left the output in. Every upscaler in this tree ends Evaluate by moving
     // the output to OutputResourceBarrier when the user set it (FFXFeature_Dx12.cpp:606 and the FSR2 /
@@ -2014,6 +2165,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (frame.Reset)
     {
         g_nr.reset = true;
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
         ++g_gameResetEvents;
 
         if (g_gameResetEvents <= 3 || g_gameResetEvents % 100 == 0)
@@ -2110,9 +2263,28 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         { &g_nr.colorSmall, desc.Format, workWidth, workHeight, reduced },
         { &g_nr.outputNative, desc.Format, width, height, workScale > 1.0f },
     }});
-    if (!scratch.Prepare([&](DXGI_FORMAT format, UINT w, UINT h) { return CreateScratch(device, format, w, h); }))
+    std::unique_ptr<DlssNr::Detail::ScratchTransaction> layer2Scratch;
+    if (secondLayerHealthy)
+    {
+        layer2Scratch = std::make_unique<DlssNr::Detail::ScratchTransaction>(
+            std::array<DlssNr::Detail::ScratchTransaction::Request,
+                       DlssNr::Detail::ScratchTransaction::Count> {{
+                { &g_nr.layer2.output, desc.Format, workWidth, workHeight, true },
+                { &g_nr.layer2.colorCopy, desc.Format, width, height, true },
+                { &g_nr.layer2.hdrCopy, desc.Format, width, height, true },
+                { &g_nr.layer2.colorSmall, desc.Format, workWidth, workHeight, reduced },
+                { &g_nr.layer2.outputNative, desc.Format, width, height, workScale > 1.0f },
+            }});
+    }
+
+    const auto allocateScratch =
+        [&](DXGI_FORMAT format, UINT w, UINT h) { return CreateScratch(device, format, w, h); };
+    if (!scratch.Prepare(allocateScratch) ||
+        (layer2Scratch != nullptr && !layer2Scratch->Prepare(allocateScratch)))
     {
         g_nr.reset = true;
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
         ReportSkipOnce("the scratch resource bundle could not be allocated");
         device->Release();
         return;
@@ -2136,9 +2308,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Parked rather than released: with frame generation the GPU can still be several frames
         // deep in work that references all of it.
         ParkNrFeature(g_nr.feature);
-
-        for (void*& f : g_nr.passFeature)
-            ParkNrFeature(f);
+        ParkSecondLayerFeature(resolutionChanged ? "model resolution changed" : "model tuning changed");
 
         // Only a resolution change invalidates the scratch textures. Tuning does not, and throwing
         // them away for it would mean a reallocation every time a slider moves.
@@ -2158,6 +2328,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
 
     scratch.Commit(ParkNrResource);
+    if (layer2Scratch != nullptr)
+        layer2Scratch->Commit(ParkNrResource);
     g_nr.workWidth = workWidth;
     g_nr.workHeight = workHeight;
 
@@ -2259,6 +2431,69 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return;
     }
 
+    if (secondLayerHealthy && g_nr.layer2.feature != nullptr &&
+        (g_nr.layer2.width != width || g_nr.layer2.height != height ||
+         g_nr.layer2.workWidth != workWidth || g_nr.layer2.workHeight != workHeight ||
+         !SecondLayerTuningMatches(cfg)))
+    {
+        ParkSecondLayerFeature("layer-2 creation signature changed");
+        device->Release();
+        return;
+    }
+
+    if (secondLayerHealthy && g_nr.layer2.feature == nullptr)
+    {
+        auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
+        if (!snippet.has_value())
+            snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+
+        if (!snippet.has_value())
+        {
+            g_nr.layer2.failed = true;
+            g_nr.layer2.reason = "nvngx_dlssnr.dll was not found";
+            LOG_ERROR("DLSS-NR layer 2 unavailable: {}", g_nr.layer2.reason);
+            device->Release();
+            return;
+        }
+
+        SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
+        g_nr.layer2.feature =
+            CreateNrFeature(cfg, device, cmdList, snippet.value(), workWidth, workHeight);
+
+        if (g_nr.layer2.feature == nullptr)
+        {
+            g_nr.layer2.failed = true;
+            g_nr.layer2.reason = "the second model session would not initialise";
+            const auto initResult = (unsigned int) (g_nr.lastInit != nullptr ? *g_nr.lastInit : 0);
+            const auto createResult = (unsigned int) (g_nr.lastCreate != nullptr ? *g_nr.lastCreate : 0);
+            LOG_ERROR("DLSS-NR layer 2 create failed: init 0x{:X} ({}), create 0x{:X} ({})",
+                      initResult, NgxResultName(initResult), createResult,
+                      NgxResultName(createResult));
+            device->Release();
+            return;
+        }
+
+        ++g_layer2FeatureBuilds;
+        g_nr.layer2.width = width;
+        g_nr.layer2.height = height;
+        g_nr.layer2.workWidth = workWidth;
+        g_nr.layer2.workHeight = workHeight;
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
+        g_nr.layer2.routeKnown = true;
+        g_nr.layer2.routeWasPreSr = currentRouteIsPreSr;
+        RecordSecondLayerTuning(cfg);
+        LOG_INFO("DLSS-NR layer 2: Feature 18 session created at {}x{} (build {}); "
+                 "both evaluations wait for the next command list",
+                 workWidth, workHeight, g_layer2FeatureBuilds);
+
+        // This command list contains layer-2 creation and therefore evaluates neither NR layer.
+        device->Release();
+        return;
+    }
+
+    const bool secondLayerActive = secondLayerHealthy && g_nr.layer2.feature != nullptr;
+
     // The upscaler has just written this, so it is a UAV. The model needs it readable.
     // Whether the buffer the upscaler just wrote is linear HDR or an already tone-mapped picture is not
     // something to assume: the game says so, in the flags it created its own DLSS feature with. Running
@@ -2323,6 +2558,9 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     if (g_ngxTime == nullptr)
         g_ngxTime = std::make_unique<GpuTime_Dx12>(device, true);
+
+    if (secondLayerActive && g_ngxTimeLayer2 == nullptr)
+        g_ngxTimeLayer2 = std::make_unique<GpuTime_Dx12>(device, true);
 
     ScopedGpuTime_Dx12 totalTimer(g_gpuTime.get(), cmdList);
 
@@ -2839,13 +3077,221 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             return;
         }
         ++g_nr.successfulEvaluations;
-        g_nr.lastEvaluationWasPreSr = target == g_nr.preSrScratch;
+        g_lastLayerCount = 1;
         resourceStates.Transition(g_nr.output, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         if (superDownOk)
             resourceStates.Transition(g_nr.outputNative, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        if (secondLayerActive)
+        {
+            // Layer 1 is now fully composed onto target. Layer 2 starts a new complete pipeline from
+            // that result; it never consumes layer 1's raw model output.
+            DlssNrConstants layer2Encode = encodeParams;
+            resourceStates.Transition(target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            if (!DispatchPass(cmdList, layer2Encode, target, nullptr, nullptr, nullptr, exposureTex,
+                              g_nr.layer2.colorCopy, g_nr.layer2.hdrCopy))
+            {
+                resourceStates.Transition(target, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                g_nr.layer2.failed = true;
+                g_nr.layer2.reason = "the second-layer encode dispatch failed";
+                ParkSecondLayerFeature(g_nr.layer2.reason);
+                ++g_nr.completedPipelineEvaluations;
+                g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+                LOG_ERROR("DLSS-NR layer 2 unavailable: {}; keeping the completed layer-1 result",
+                          g_nr.layer2.reason);
+            }
+            else
+            {
+                resourceStates.Transition(target, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                resourceStates.Transition(g_nr.layer2.colorCopy,
+                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                resourceStates.Transition(g_nr.layer2.hdrCopy,
+                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+                ID3D12Resource* layer2ModelInput = g_nr.layer2.colorCopy;
+                bool layer2PreparationOk = true;
+
+                if (reduced && g_nr.layer2.colorSmall != nullptr)
+                {
+                    bool built = false;
+                    if (workScale > 1.0f)
+                    {
+                        const Scaler nrScaler = cfg.DlssNrScalingDownscaler.value_or_default();
+                        if (g_nr.layer2.scaler != nrScaler)
+                        {
+                            for (auto** scaler : { &g_nr.layer2.superUp, &g_nr.layer2.superDown })
+                            {
+                                if (*scaler == nullptr) continue;
+                                NrRetired retired;
+                                retired.scaler = *scaler;
+                                g_nrRetired.push_back(std::move(retired));
+                                *scaler = nullptr;
+                            }
+                            g_nr.layer2.scaler = nrScaler;
+                        }
+                        if (g_nr.layer2.superUp == nullptr)
+                            g_nr.layer2.superUp =
+                                new OS_Dx12("DLSS-NR layer 2 supersample up", device, true, nrScaler);
+                        if (g_nr.layer2.superDown == nullptr)
+                            g_nr.layer2.superDown =
+                                new OS_Dx12("DLSS-NR layer 2 supersample down", device, false, nrScaler);
+
+                        if (g_nr.layer2.superUp != nullptr &&
+                            g_nr.layer2.superUp->Dispatch(cmdList, g_nr.layer2.colorCopy,
+                                                         g_nr.layer2.colorSmall))
+                        {
+                            resourceStates.Transition(g_nr.layer2.colorSmall,
+                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                            built = true;
+                        }
+                    }
+
+                    if (!built)
+                    {
+                        DlssNrConstants down {};
+                        down.Mode = DlssNrMode_Downsample;
+                        down.Width = workWidth;
+                        down.Height = workHeight;
+                        layer2PreparationOk =
+                            DispatchPass(cmdList, down, layer2ModelInput, nullptr, nullptr, nullptr,
+                                         nullptr, g_nr.layer2.colorSmall, nullptr);
+                        if (layer2PreparationOk)
+                        {
+                            resourceStates.Transition(g_nr.layer2.colorSmall,
+                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                        }
+                    }
+
+                    if (layer2PreparationOk)
+                        layer2ModelInput = g_nr.layer2.colorSmall;
+                }
+
+                if (!layer2PreparationOk)
+                {
+                    g_nr.layer2.failed = true;
+                    g_nr.layer2.reason = "the second-layer resample dispatch failed";
+                    ParkSecondLayerFeature(g_nr.layer2.reason);
+                    ++g_nr.completedPipelineEvaluations;
+                    g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+                    LOG_ERROR("DLSS-NR layer 2 unavailable: {}; keeping the completed layer-1 result",
+                              g_nr.layer2.reason);
+                }
+                else
+                {
+                    SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
+                    if (g_ngxTimeLayer2 != nullptr)
+                        g_ngxTimeLayer2->Start(cmdList);
+
+                    const int layer2Result = g_nr.evaluate(
+                        cmdList, g_nr.layer2.feature, g_nr.capabilityParams, layer2ModelInput,
+                        depthIn, motionIn, g_nr.layer2.output, workWidth, workHeight, guideWidth,
+                        guideHeight, g_nr.guideDepthInverted ? 1 : 0,
+                        g_nr.layer2.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+                        (int) cfg.DlssNrStyle.value_or_default(),
+                        cfg.DlssNrLocalStructure.value_or_default(),
+                        cfg.DlssNrLocalTone.value_or_default(),
+                        cfg.DlssNrSkinStructure.value_or_default(),
+                        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0,
+                        g_nr.guideMvScaleX * mvToWork, g_nr.guideMvScaleY * mvToWork,
+                        frame.JitterX, frame.JitterY);
+
+                    if (g_ngxTimeLayer2 != nullptr)
+                        g_ngxTimeLayer2->End(cmdList);
+
+                    if (layer2Result != NVSDK_NGX_Result_Success)
+                    {
+                        ++g_layer2EvaluateFailures;
+                        g_nr.layer2.failed = true;
+                        g_nr.layer2.reason = "the second model session refused to run";
+                        ParkSecondLayerFeature(g_nr.layer2.reason);
+                        ++g_nr.completedPipelineEvaluations;
+                        g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+                        LOG_ERROR("DLSS-NR layer 2 evaluate returned 0x{:X} ({}); keeping the "
+                                  "completed layer-1 result and retiring layer 2",
+                                  (uint32_t) layer2Result,
+                                  NgxResultName((unsigned int) layer2Result));
+                    }
+                    else
+                    {
+                        g_nr.layer2.reset = false;
+                        resourceStates.Transition(g_nr.layer2.output,
+                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+                        bool layer2SuperDownOk = false;
+                        if (workScale > 1.0f && g_nr.layer2.superDown != nullptr &&
+                            g_nr.layer2.outputNative != nullptr &&
+                            g_nr.layer2.superDown->Dispatch(cmdList, g_nr.layer2.output,
+                                                           g_nr.layer2.outputNative))
+                        {
+                            resourceStates.Transition(g_nr.layer2.outputNative,
+                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                            layer2SuperDownOk = true;
+                        }
+
+                        ID3D12Resource* layer2ResolveProxy =
+                            layer2SuperDownOk ? g_nr.layer2.colorCopy : layer2ModelInput;
+                        ID3D12Resource* layer2ResolveAnswer =
+                            layer2SuperDownOk ? g_nr.layer2.outputNative : g_nr.layer2.output;
+
+                        if (!DispatchPass(cmdList, resolveParams, layer2ResolveProxy,
+                                          layer2ResolveAnswer, g_nr.layer2.hdrCopy, motionIn,
+                                          exposureTex, target, nullptr))
+                        {
+                            g_nr.layer2.failed = true;
+                            g_nr.layer2.reason = "the second-layer resolve dispatch failed";
+                            ParkSecondLayerFeature(g_nr.layer2.reason);
+                            ++g_nr.completedPipelineEvaluations;
+                            g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+                            LOG_ERROR("DLSS-NR layer 2 unavailable: {}; keeping the completed "
+                                      "layer-1 result", g_nr.layer2.reason);
+                        }
+                        else
+                        {
+                            ++g_nr.layer2.successfulEvaluations;
+                            ++g_nr.completedPipelineEvaluations;
+                            g_nr.layer2.ready = true;
+                            g_nr.layer2.routeKnown = true;
+                            g_nr.layer2.routeWasPreSr = currentRouteIsPreSr;
+                            g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+                            g_lastLayerCount = 2;
+
+                            static bool reportedReady = false;
+                            if (!reportedReady)
+                            {
+                                reportedReady = true;
+                                LOG_INFO("DLSS-NR layer 2: first composed evaluation succeeded; "
+                                         "active route now runs 2 layers");
+                            }
+                        }
+
+                        resourceStates.Transition(g_nr.layer2.output,
+                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                        if (layer2SuperDownOk)
+                            resourceStates.Transition(g_nr.layer2.outputNative,
+                                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    }
+                }
+            }
+        }
+        else
+        {
+            ++g_nr.completedPipelineEvaluations;
+            g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+        }
 
         // On-demand capture works in this path too: the staging copy still holds the frame as the
         // upscaler produced it, and the edited frame is the output itself. A later evaluation writes
@@ -2862,8 +3308,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ++g_evaluateFailures;
         g_nr.failed = true;
         g_nr.reason = "the model refused to run";
-        LOG_ERROR("DLSS-NR evaluate returned 0x{:X} ({}), disabling for this session", (uint32_t) result,
-                  NgxResultName((unsigned int) result));
+        LOG_ERROR("DLSS-NR layer 1 evaluate returned 0x{:X} ({}), disabling NR for this session",
+                  (uint32_t) result, NgxResultName((unsigned int) result));
     }
 
     resourceStates.Restore();
@@ -2891,6 +3337,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     g_lastNgxTime = ngx;
             }
 
+            if (g_ngxTimeLayer2 != nullptr)
+            {
+                if (auto ngx = g_ngxTimeLayer2->ReadGpuTime(queue); ngx.has_value())
+                    g_lastNgxTimeLayer2 = ngx;
+            }
+
             // The split, once every few hundred frames. What is worth reading is not the total but the
             // remainder: the model's cost is NVIDIA's to set, and everything else is ours.
             static unsigned long long lastSplitLog = 0;
@@ -2899,14 +3351,19 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             {
                 lastSplitLog = g_frames;
                 const double total = g_lastGpuTime.value();
-                const double ngx = g_lastNgxTime.value();
-                LOG_INFO("DLSS-NR telemetry: frame {} | {} | frame {}x{} work {}x{} guides {}x{} | "
-                         "resets {} builds {} rebuilds {} eval failures {} | "
-                         "{:.2f} ms total = {:.2f} ms model + {:.2f} ms ours ({:.0f}% ours)",
+                const double layer1Ngx = g_lastNgxTime.value();
+                const double layer2Ngx =
+                    g_lastLayerCount == 2 && g_lastNgxTimeLayer2.has_value()
+                        ? g_lastNgxTimeLayer2.value() : 0.0;
+                const double ngx = layer1Ngx + layer2Ngx;
+                LOG_INFO("DLSS-NR telemetry: frame {} | {} | layers {} | frame {}x{} work {}x{} guides {}x{} | "
+                         "resets {} builds {}/{} rebuilds {} eval failures {}/{} | "
+                         "{:.2f} ms total = {:.2f} ms L1 model + {:.2f} ms L2 model + {:.2f} ms ours ({:.0f}% ours)",
                          g_frames, cfg.DlssNrRunBeforeSr.value_or_default() ? "Pre-SR" : "Post-SR",
-                         g_nr.width, g_nr.height, g_nr.workWidth, g_nr.workHeight,
+                         g_lastLayerCount, g_nr.width, g_nr.height, g_nr.workWidth, g_nr.workHeight,
                          g_nr.guideWidth, g_nr.guideHeight, g_gameResetEvents, g_featureBuilds,
-                         g_featureRebuilds, g_evaluateFailures, total, ngx, total - ngx,
+                         g_layer2FeatureBuilds, g_featureRebuilds, g_evaluateFailures,
+                         g_layer2EvaluateFailures, total, layer1Ngx, layer2Ngx, total - ngx,
                          total > 0.0 ? 100.0 * (total - ngx) / total : 0.0);
             }
         }
@@ -2929,6 +3386,10 @@ void RetryAfterFailure()
     g_nr.failed = false;
     g_nr.reason = "";
     g_nr.reset = true;
+    g_nr.layer2.failed = false;
+    g_nr.layer2.reason = "";
+    g_nr.layer2.reset = true;
+    g_nr.layer2.ready = false;
     g_nr.preSrAwaitingEvaluation = true;
     ClearTransitionFailure(g_nr.preSrFailureCircuit);
     ClearTransitionFailure(g_nr.preDlaaFailureCircuit);
@@ -2953,6 +3414,8 @@ void NotifyUpscalerRelease()
     g_nr.preSrAwaitingEvaluation = true;
     g_nr.preSrResetWasRequested = false;
     g_nr.reset = true;
+    g_nr.layer2.reset = true;
+    g_nr.layer2.ready = false;
     ClearTransitionFailure(g_nr.preSrFailureCircuit);
     ClearTransitionFailure(g_nr.preDlaaFailureCircuit);
 
@@ -3324,7 +3787,11 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     // actually held, then let the first coherent post-reset frame rebuild and seed the replacement.
     // This preserves the held-reset safety property without an arbitrary frame-count delay.
     if (resetRequested || resetEnded)
+    {
         g_nr.reset = true;
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
+    }
 
     const bool inputChanged =
         g_nr.preSrObservedWidth != observedWidth ||
@@ -3364,6 +3831,8 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         // Carry the transition into the NR feature itself so its first post-transition evaluation
         // cannot reuse the old scene's temporal history.
         g_nr.reset = true;
+        g_nr.layer2.reset = true;
+        g_nr.layer2.ready = false;
         g_nr.preSrAwaitingEvaluation = true;
         ParkNrResource(g_nr.preSrScratch);
         ParkNrResource(g_nr.preSrRejitter);
@@ -3468,9 +3937,14 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         g_nr.height == observedHeight &&
         g_nr.workWidth == expectedWorkW &&
         g_nr.workHeight == expectedWorkH &&
-        TuningMatchesFeature(cfg);
+        TuningMatchesFeature(cfg) &&
+        (!cfg.DlssNrSecondLayer.value_or_default() || g_nr.layer2.failed ||
+         (g_nr.layer2.feature != nullptr &&
+          g_nr.layer2.width == observedWidth && g_nr.layer2.height == observedHeight &&
+          g_nr.layer2.workWidth == expectedWorkW && g_nr.layer2.workHeight == expectedWorkH &&
+          SecondLayerTuningMatches(cfg)));
 
-    const unsigned long long successfulEvaluationsBefore = g_nr.successfulEvaluations;
+    const unsigned long long successfulEvaluationsBefore = g_nr.completedPipelineEvaluations;
 
     params->Set(NVSDK_NGX_Parameter_Output, g_nr.preSrScratch);
     EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, true, cfg);
@@ -3517,7 +3991,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         return nullptr;
     }
 
-    if (g_nr.successfulEvaluations == successfulEvaluationsBefore)
+    if (g_nr.completedPipelineEvaluations == successfulEvaluationsBefore)
     {
         // The pass can safely decline a frame when the game's compute state is not restorable. That
         // is not readiness: wait for an evaluation that actually completed.
@@ -4176,6 +4650,10 @@ TelemetrySnapshot Telemetry()
     t.featureBuilds = g_featureBuilds;
     t.featureRebuilds = g_featureRebuilds;
     t.evaluateFailures = g_evaluateFailures;
+    t.layer1EvaluateFailures = g_evaluateFailures;
+    t.layer2EvaluateFailures = g_layer2EvaluateFailures;
+    t.layer2FeatureBuilds = g_layer2FeatureBuilds;
+    t.layer2FeatureRetires = g_layer2FeatureRetires;
     t.frameWidth = g_nr.width;
     t.frameHeight = g_nr.height;
     t.workWidth = g_nr.workWidth;
@@ -4183,6 +4661,13 @@ TelemetrySnapshot Telemetry()
     t.guideWidth = g_nr.guideWidth;
     t.guideHeight = g_nr.guideHeight;
     t.runBeforeSr = Config::Instance()->DlssNrRunBeforeSr.value_or_default();
+    t.layer2Requested = Config::Instance()->DlssNrSecondLayer.value_or_default();
+    t.layer2Loaded = g_nr.layer2.feature != nullptr;
+    t.layer2Ready = g_nr.layer2.ready && t.layer2Loaded && !g_nr.layer2.failed;
+    t.layer2Retiring = g_nr.layer2.featureAwaitingRelease != nullptr;
+    t.layer2ResetPending = g_nr.layer2.reset;
+    t.layer2Failed = g_nr.layer2.failed;
+    t.layer2FailureReason = g_nr.layer2.reason;
     t.nativeRayReconstructionActive = g_nr.nativeRayReconstructionActive;
     const bool preSrRouteRequested = t.runBeforeSr && !t.nativeRayReconstructionActive;
     t.historyResetRequested = g_nr.reset;
@@ -4197,7 +4682,7 @@ TelemetrySnapshot Telemetry()
                       : TransitionCircuitOpen(g_nr.preDlaaFailureCircuit)
                           ? "the private DLAA path failed repeatedly for this configuration" : "";
     const auto readiness = GetReadiness({ runtime.enabled, !g_sessionClosed && !g_shutdownFailed,
-        t.failed, t.modelLoaded, g_nr.successfulEvaluations != 0, g_nr.reset,
+        t.failed, t.modelLoaded, g_nr.completedPipelineEvaluations != 0, g_nr.reset,
         runtime.resumeGeneration, g_nr.resumeGeneration, preSrRouteRequested,
         g_nr.lastEvaluationWasPreSr, g_nr.preSrScratchPrimed, g_nr.preSrAwaitingEvaluation });
     t.running = readiness.running;
@@ -4207,8 +4692,11 @@ TelemetrySnapshot Telemetry()
     t.resetPending = g_nr.reset;
     if (t.running)
     {
+        t.layerCount = g_lastLayerCount;
         t.totalGpuMs = g_lastGpuTime;
         t.modelGpuMs = g_lastNgxTime;
+        if (g_lastLayerCount == 2)
+            t.layer2ModelGpuMs = g_lastNgxTimeLayer2;
     }
     return t;
 }
@@ -4250,6 +4738,7 @@ bool Shutdown()
         g_compose.release();
         g_gpuTime.release();
         g_ngxTime.release();
+        g_ngxTimeLayer2.release();
         LOG_ERROR("DLSS-NR shutdown: GPU work is unsubmitted, incomplete, or lost; retaining the generation and blocking native NGX teardown/restart");
         return false;
     }
@@ -4296,13 +4785,10 @@ bool Shutdown()
 
     g_nr.feature = nullptr;
 
-    for (void*& f : g_nr.passFeature)
-    {
-        if (f != nullptr && g_nr.release != nullptr)
-            g_nr.release(f);
-
-        f = nullptr;
-    }
+    if (g_nr.layer2.feature != nullptr && g_nr.release != nullptr)
+        g_nr.release(g_nr.layer2.feature);
+    g_nr.layer2.feature = nullptr;
+    g_nr.layer2.featureAwaitingRelease = nullptr;
 
     if (g_nr.output != nullptr)
     {
@@ -4315,6 +4801,22 @@ bool Shutdown()
         g_nr.colorCopy->Release();
         g_nr.colorCopy = nullptr;
     }
+
+    for (ID3D12Resource** resource : { &g_nr.layer2.output, &g_nr.layer2.colorCopy,
+                                      &g_nr.layer2.hdrCopy, &g_nr.layer2.colorSmall,
+                                      &g_nr.layer2.outputNative })
+    {
+        if (*resource != nullptr)
+        {
+            (*resource)->Release();
+            *resource = nullptr;
+        }
+    }
+
+    delete g_nr.layer2.superUp;
+    delete g_nr.layer2.superDown;
+    g_nr.layer2.superUp = nullptr;
+    g_nr.layer2.superDown = nullptr;
 
     if (g_nr.preSrScratch != nullptr)
     {
@@ -4340,6 +4842,7 @@ bool Shutdown()
     g_nr.preSrResetWasRequested = false;
     g_nr.preSrScratchPrimed = false;
     g_nr.successfulEvaluations = 0;
+    g_nr.completedPipelineEvaluations = 0;
     g_nr.resumeFeatureAwaitingRelease = nullptr;
     ClearTransitionFailure(g_nr.preSrFailureCircuit);
     ClearTransitionFailure(g_nr.preDlaaFailureCircuit);
@@ -4452,11 +4955,17 @@ bool Shutdown()
     g_featureBuilds = 0;
     g_featureRebuilds = 0;
     g_evaluateFailures = 0;
+    g_layer2FeatureBuilds = 0;
+    g_layer2FeatureRetires = 0;
+    g_layer2EvaluateFailures = 0;
+    g_lastLayerCount = 0;
     g_nr.nativeRayReconstructionActive = false;
 
     g_gpuTime.reset();
     g_ngxTime.reset();
+    g_ngxTimeLayer2.reset();
     g_lastNgxTime.reset();
+    g_lastNgxTimeLayer2.reset();
     g_lastGpuTime.reset();
 
     g_compose.reset();
@@ -4479,6 +4988,7 @@ bool Shutdown()
     g_nr.reason = "";
     g_nr.reset = true;
     g_nr.width = g_nr.height = g_nr.workWidth = g_nr.workHeight = 0;
+    g_nr.layer2 = {};
     if (g_generationDevice != nullptr)
     {
         g_generationDevice->Release();

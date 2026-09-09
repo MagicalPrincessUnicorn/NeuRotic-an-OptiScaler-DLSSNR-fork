@@ -340,6 +340,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             // Config-only transaction: no GPU or scanner calls while holding this mutex.
             NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
             _dlssNrState.LoadEnabled(DlssNrEnabled, readBool("DlssNr", "Enabled"));
+            DlssNrSecondLayer.set_from_config(readBool("DlssNr", "SecondLayer"));
             // PerformanceMode is the user-facing name. Keep accepting the older experimental
             // key so profiles created before Alpha 0.4 retain their selected render path.
             auto performanceMode = readBool("DlssNr", "PerformanceMode");
@@ -1243,6 +1244,8 @@ bool Config::SaveIni()
     // inside this transaction: scanner code may read NR config while holding its own mutex.
     NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SecondLayer",
+                 GetBoolValue(Instance()->DlssNrSecondLayer.value_for_config()).c_str());
     // Persist the user-facing key and retain the legacy spelling for prior Alpha builds.
     const int renderingMode = std::clamp(Instance()->DlssNrRenderingMode.value_or_default(), 0, 1);
     ini.SetLongValue("DlssNr", "RenderingMode", static_cast<long>(renderingMode));

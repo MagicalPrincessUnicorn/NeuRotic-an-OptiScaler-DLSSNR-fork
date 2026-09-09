@@ -17,6 +17,9 @@ if errorlevel 1 goto failed
 if errorlevel 1 goto failed
 type "%testOut%\gpu-test.txt"
 type "%testOut%\scan-test.txt"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\Test-NrSecondLayer.ps1 >"%testOut%\second-layer-static.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\second-layer-static.txt"
 call tests\Run-NrConfig.cmd >"%testOut%\config-suite.txt" 2>&1
 if errorlevel 1 goto failed
 call tests\Run-NrDispatchResources.cmd >"%testOut%\dispatch-suite.txt" 2>&1

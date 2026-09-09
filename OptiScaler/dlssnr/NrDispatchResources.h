@@ -82,7 +82,9 @@ class DispatchResourceStates
     };
     ID3D12GraphicsCommandList* _cmd;
     Emit _emit;
-    std::array<Entry, 8> _entries {};
+    // Two composed NR layers can transition two independent five-surface scratch sets in one
+    // invocation. Sixteen keeps the established single-layer entries plus the complete layer-2 set.
+    std::array<Entry, 16> _entries {};
     size_t _count = 0;
 
   public:

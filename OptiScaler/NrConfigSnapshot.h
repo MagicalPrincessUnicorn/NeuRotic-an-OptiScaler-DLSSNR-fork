@@ -7,6 +7,7 @@
 // The explicit list also keeps unrelated config out of the render snapshot.
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
+    X(DlssNrSecondLayer) \
     X(DlssNrRunBeforeSr) \
     X(DlssNrRenderingMode) \
     X(DlssNrPreDlaa) \

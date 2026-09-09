@@ -124,6 +124,9 @@ class Config
     // DLSS Neural Rendering: a detail-synthesis pass over the upscaler's output. Off by default -- it is
     // an undocumented feature driven directly through its snippet, not something NVIDIA exposes.
     NrOptional<bool> DlssNrEnabled { false };
+    // Experimental D3D12-only second composed NR layer. Off preserves the established single-pass
+    // route exactly; when enabled, layer 2 inherits every layer-1 model and composition setting.
+    NrOptional<bool> DlssNrSecondLayer { false };
     // Runtime readers execute on rendering and hook threads. Publish the enable bit together with
     // an off->on generation so a resumed model cannot reuse temporal history across skipped frames.
     void SetDlssNrEnabled(bool enabled);

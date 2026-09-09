@@ -137,6 +137,10 @@ struct TelemetrySnapshot
     unsigned long long featureBuilds = 0;
     unsigned long long featureRebuilds = 0;
     unsigned long long evaluateFailures = 0;
+    unsigned long long layer1EvaluateFailures = 0;
+    unsigned long long layer2EvaluateFailures = 0;
+    unsigned long long layer2FeatureBuilds = 0;
+    unsigned long long layer2FeatureRetires = 0;
 
     unsigned int frameWidth = 0;
     unsigned int frameHeight = 0;
@@ -148,6 +152,14 @@ struct TelemetrySnapshot
     bool runBeforeSr = false;
     bool enabled = false;
     bool modelLoaded = false;
+    unsigned int layerCount = 0;
+    bool layer2Requested = false;
+    bool layer2Loaded = false;
+    bool layer2Ready = false;
+    bool layer2Retiring = false;
+    bool layer2ResetPending = false;
+    bool layer2Failed = false;
+    const char* layer2FailureReason = "";
     const char* failureReason = "";
     bool retryAllowed = false;
     bool nativeRayReconstructionActive = false;
@@ -165,6 +177,7 @@ struct TelemetrySnapshot
 
     std::optional<double> totalGpuMs;
     std::optional<double> modelGpuMs;
+    std::optional<double> layer2ModelGpuMs;
 };
 
 TelemetrySnapshot Telemetry();
