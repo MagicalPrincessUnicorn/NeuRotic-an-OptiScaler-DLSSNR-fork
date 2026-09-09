@@ -15,7 +15,7 @@ Included behavior:
 - Top action row, then graph visibility/language controls and graphs above tabs.
 - Neurotic Alpha 0.9.4 title with originating OptiScaler version; no milestone bump.
 - User-supplied Ko-fi link, support text and Buy Me a Coffee button.
-- English, Spanish, French, German and Portuguese; 1,065 catalog keys per language.
+- English, Spanish, French, German and Portuguese; 1,067 catalog keys per language.
   Four translations authored directly from the assistant's language knowledge,
   with translated apology, preserved technical names and English fallback.
 - NR and Advanced Settings remain collapsible and initially expanded.
@@ -34,6 +34,19 @@ See the workspace build-only handoff for final commit and build evidence.
 Runtime result: Inconclusive. Decision: keep experimental, pause before installation.
 No new candidate, baseline or stable promotion. Earlier MFG and NR runtime limits
 remain in force; a UI build does not establish new rendering compatibility.
+
+## Working-install follow-up
+
+The user reported the installed interface works and requested one focused layout
+revision. The compact support prompt is now `Enjoying NeuRotic?` plus the existing
+button, right-aligned as the final row below the tabs. Language moved immediately
+to the right of Open Wiki, and the apology was removed from the UI. The primary GPU
+name now shares the active game-resolution/frame-count row. New displayed text is
+included in all four translated catalogs. No rendering or INI behavior changed.
+
+This follow-up is isolated on `exp/alpha-0.9.4-neurotic-ui-polish` from installed
+commit `75390eebbc38c55b6050105175c8159517dc9e9c`. Its result remains Inconclusive
+until installed and inspected; the working installed commit remains the control.
 
 After installation is authorized, inspect every page, long translated tooltips,
 language switching and Save Settings/restart persistence, hide/show graphs,

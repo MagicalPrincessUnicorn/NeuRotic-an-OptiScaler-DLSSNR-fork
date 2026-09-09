@@ -2282,15 +2282,6 @@ void MenuCommon::RenderMainMenuHeaderMessages(RenderMenuContext& ctx)
     auto& currentVersionText = ctx.currentVersionText;
     auto& primaryGpu = *ctx.primaryGpu;
 
-    ImGui::TextUnformatted("Enjoying Neurotic? Support me on Ko-fi");
-    ImGui::SameLine();
-    if (ImGui::Button("Buy Me a Coffee"))
-    {
-        auto& platform = ImGui::GetPlatformIO();
-        if (platform.Platform_OpenInShellFn)
-            platform.Platform_OpenInShellFn(ImGui::GetCurrentContext(), "https://ko-fi.com/espiownage");
-    }
-
     if (currentFeature != nullptr && !currentFeature->IsFrozen())
     {
         ImGui::Text("%dx%d -> %dx%d (%.1f) [%dx%d (%.1f)]", currentFeature->RenderWidth(),
@@ -2300,6 +2291,8 @@ void MenuCommon::RenderMainMenuHeaderMessages(RenderMenuContext& ctx)
                     (float) currentFeature->DisplayWidth() / (float) currentFeature->RenderWidth());
         ImGui::SameLine(0.0f, 4.0f);
         ImGui::Text("%d", currentFeature->FrameCount());
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::Text("GPU: %s", primaryGpu.name.c_str());
     }
 
     if (!_showMipmapCalcWindow && !_showHudlessWindow && !ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
@@ -7229,8 +7222,6 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
 
 void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
 {
-    auto config = ctx.config;
-    auto& menuResScale = ctx.menuResScale;
     auto& state = ctx.state;
     auto& currentFeature = ctx.currentFeature;
     auto& frameTime = ctx.frameTime;
@@ -7243,26 +7234,6 @@ void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
     ImGui::Checkbox("Show Graphs", &_showMainMenuGraphs);
     ImGui::SameLine();
     ShowHelpMarker("Show or hide the live frame-time and upscaler-time graphs. This only changes menu presentation.");
-
-    ImGui::SameLine(0.0f, 20.0f * menuResScale);
-    ImGui::SetNextItemWidth(180.0f * menuResScale);
-    const int language = Neurotic::LanguageIndex(config->MenuLanguage.value_or_default());
-    if (ImGui::BeginCombo("Language", Neurotic::Languages[language].name))
-    {
-        for (int i = 0; i < Neurotic::LanguageCount; ++i)
-        {
-            if (ImGui::Selectable(Neurotic::Languages[i].name, language == i))
-                config->MenuLanguage = std::string(Neurotic::Languages[i].code);
-            if (language == i)
-                ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-    const char* disclaimer = "Sorry for bad translation.";
-    const float contentRight = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-    if (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize(disclaimer).x < contentRight)
-        ImGui::SameLine();
-    ImGui::TextDisabled("%s", disclaimer);
 
     if (!_showMainMenuGraphs)
         return;
@@ -7457,14 +7428,15 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
 
     ImGui::SameLine();
 
-    auto textSize = ImGui::CalcTextSize("Open Wiki");
     auto& style = ImGui::GetStyle();
-    textSize.x += style.FramePadding.x * 2.0f;
-    textSize.x += style.ItemSpacing.x * 2.0f + ImGui::CalcTextSize("(?)").x;
+    const float wikiWidth = ImGui::CalcTextSize("Open Wiki").x + style.FramePadding.x * 2.0f + style.ItemSpacing.x +
+                            ImGui::CalcTextSize("(?)").x;
+    const float languageWidth = 100.0f * menuResScale + style.ItemInnerSpacing.x + ImGui::CalcTextSize("Language").x;
+    const float rightGroupWidth = wikiWidth + style.ItemSpacing.x + languageWidth;
 
     float avail = ImGui::GetContentRegionAvail().x;
-    if (avail > textSize.x)
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - textSize.x);
+    if (avail > rightGroupWidth)
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - rightGroupWidth);
 
     // Make button text underline
     if (ImGui::Button("Open Wiki"))
@@ -7477,6 +7449,21 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
                    "Compatibility list with known game issues\nand workarounds, FG options explained\n"
                    "and other useful info");
 
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100.0f * menuResScale);
+    const int language = Neurotic::LanguageIndex(config->MenuLanguage.value_or_default());
+    if (ImGui::BeginCombo("Language", Neurotic::Languages[language].name))
+    {
+        for (int i = 0; i < Neurotic::LanguageCount; ++i)
+        {
+            if (ImGui::Selectable(Neurotic::Languages[i].name, language == i))
+                config->MenuLanguage = std::string(Neurotic::Languages[i].code);
+            if (language == i)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
 
@@ -7487,7 +7474,27 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
                            "nvngx.ini detected, please move over to using OptiScaler.ini and delete the old config");
         ImGui::Spacing();
     }
+}
 
+void MenuCommon::RenderMainMenuSupportLink()
+{
+    constexpr const char* prompt = "Enjoying NeuRotic?";
+    constexpr const char* button = "Buy Me a Coffee";
+    const auto& style = ImGui::GetStyle();
+    const float width = ImGui::CalcTextSize(prompt).x + style.ItemSpacing.x + ImGui::CalcTextSize(button).x +
+                        style.FramePadding.x * 2.0f;
+    const float available = ImGui::GetContentRegionAvail().x;
+    if (available > width)
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + available - width);
+
+    ImGui::TextUnformatted(prompt);
+    ImGui::SameLine();
+    if (ImGui::Button(button))
+    {
+        auto& platform = ImGui::GetPlatformIO();
+        if (platform.Platform_OpenInShellFn)
+            platform.Platform_OpenInShellFn(ImGui::GetCurrentContext(), "https://ko-fi.com/espiownage");
+    }
 }
 
 void MenuCommon::RenderMipmapBiasWindow(RenderMenuContext& ctx, ImGuiWindowFlags flags)
@@ -7826,6 +7833,9 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
 
         // One selected top-level page replaces the old vertical two-column settings list.
         RenderMainMenuTabs(ctx);
+
+        // Keep the compact support prompt anchored to the window's final, bottom-right row.
+        RenderMainMenuSupportLink();
 
         ImGui::End();
     }

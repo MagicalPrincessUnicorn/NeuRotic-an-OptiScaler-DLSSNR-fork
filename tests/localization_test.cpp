@@ -78,12 +78,15 @@ int main()
         io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
         Neurotic::AddLanguageFonts(io.Fonts, 16.0f);
         ImGuiID checkboxId = 0, tabId = 0;
+        const ImGuiStyle baseStyle = ImGui::GetStyle();
         const auto start = std::chrono::steady_clock::now();
         for (int language = 0; language < Neurotic::LanguageCount; ++language)
         {
             Neurotic::SetLanguage(Neurotic::Languages[language].code);
             for (float scale : { 0.5f, 1.0f, 2.0f })
             {
+                ImGui::GetStyle() = baseStyle;
+                ImGui::GetStyle().ScaleAllSizes(scale);
                 ImGui::NewFrame();
                 ImGui::PushFont(nullptr, 16.0f * scale);
                 ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -110,20 +113,32 @@ int main()
                 ImGui::SameLine(0, 6);
                 ImGui::Button("Close");
                 ImGui::SameLine();
+                const auto& headerStyle = ImGui::GetStyle();
+                const float wikiWidth = ImGui::CalcTextSize("Open Wiki").x + headerStyle.FramePadding.x * 2.0f +
+                                        headerStyle.ItemSpacing.x + ImGui::CalcTextSize("(?)").x;
+                const float languageWidth =
+                    100.0f * scale + headerStyle.ItemInnerSpacing.x + ImGui::CalcTextSize("Language").x;
+                const float headerGroupWidth = wikiWidth + headerStyle.ItemSpacing.x + languageWidth;
+                if (ImGui::GetContentRegionAvail().x > headerGroupWidth)
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - headerGroupWidth);
                 ImGui::Button("Open Wiki");
-                Check(ImGui::GetItemRectMax().x < 900 * scale, "action row fits");
-                bool showGraphs = true;
-                ImGui::Checkbox("Show Graphs", &showGraphs);
-                ImGui::SameLine(0, 20 * scale);
-                ImGui::SetNextItemWidth(180 * scale);
+                ImGui::SameLine();
+                ImGui::TextDisabled("(?)");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(100 * scale);
                 if (ImGui::BeginCombo("Language", Neurotic::Languages[language].name))
                     ImGui::EndCombo();
-                Check(ImGui::GetItemRectMax().x < 900 * scale, "language row fits");
-                ImGui::TextDisabled("Sorry for bad translation.");
-                ImGui::TextUnformatted("Enjoying Neurotic? Support me on Ko-fi");
-                ImGui::SameLine();
-                ImGui::Button("Buy Me a Coffee");
-                Check(ImGui::GetItemRectMax().x < 900 * scale, "support row fits");
+                if (ImGui::GetItemRectMax().x >= 900 * scale)
+                    std::fprintf(stderr, "header overflow: language=%s scale=%.1f right=%.1f limit=%.1f group=%.1f\n",
+                                 Neurotic::Languages[language].code, scale, ImGui::GetItemRectMax().x, 900 * scale,
+                                 headerGroupWidth);
+                Check(ImGui::GetItemRectMax().x < 900 * scale, "action and language row fits");
+                bool showGraphs = true;
+                ImGui::Checkbox("Show Graphs", &showGraphs);
+                ImGui::Text("3840x2160 -> 1920x1080 (2.0) [3840x2160 (1.0)]");
+                ImGui::SameLine(0, 10 * scale);
+                ImGui::Text("GPU: %s", "Test GPU");
+                Check(ImGui::GetItemRectMax().x < 900 * scale, "resolution and GPU row fits");
                 if (ImGui::BeginTabBar("Pages"))
                 {
                     for (const char* label : { "General", "Upscaling", "Frame Generation", "Neural Rendering",
@@ -135,6 +150,17 @@ int main()
                         }
                     ImGui::EndTabBar();
                 }
+                const char* supportPrompt = "Enjoying NeuRotic?";
+                const char* supportButton = "Buy Me a Coffee";
+                const auto& style = ImGui::GetStyle();
+                const float supportWidth = ImGui::CalcTextSize(supportPrompt).x + style.ItemSpacing.x +
+                                           ImGui::CalcTextSize(supportButton).x + style.FramePadding.x * 2.0f;
+                const float contentRight = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - supportWidth);
+                ImGui::TextUnformatted(supportPrompt);
+                ImGui::SameLine();
+                ImGui::Button(supportButton);
+                Check(std::abs(ImGui::GetItemRectMax().x - contentRight) <= 1.0f, "support row anchored right");
                 auto* baked = ImGui::GetFont()->GetFontBaked(ImGui::GetFontSize());
                 for (const auto& entry : Catalog)
                 {

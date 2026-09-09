@@ -1039,6 +1039,8 @@ static const CatalogEntry Catalog[] = {
     {"| Input: %s", {"| Entrada: %s", "| Entr\303\251e : %s", "| Eingabe: %s", "| Entrada: %s"}},
     {"| Spoof: %s", {"| Suplantaci\303\263n: %s", "| Simulation : %s", "| Vort\303\244uschung: %s", "| Simula\303\247\303\243o: %s"}},
     {"FrameTime", {"Tiempo por fotograma", "Temps par image", "Bildzeit", "Tempo por quadro"}},
+    {"Enjoying NeuRotic?", {"\302\277Disfrutas de NeuRotic?", "Vous aimez NeuRotic ?", "Gef\303\244llt dir NeuRotic?", "Gostando do NeuRotic?"}},
+    {"GPU: %s", {"GPU: %s", "GPU : %s", "GPU: %s", "GPU: %s"}},
     {"Neurotic Alpha 0.9.4 | Based on %s", {"Neurotic Alpha 0.9.4 | Basado en %s", "Neurotic Alpha 0.9.4 | Bas\303\251 sur %s", "Neurotic Alpha 0.9.4 | Basierend auf %s", "Neurotic Alpha 0.9.4 | Baseado em %s"}},
     {"ACTIVATE FG", {"ACTIVAR FG", "ACTIVER FG", "FG AKTIVIEREN", "ATIVAR FG"}},
     {"AUTO", {"AUTO", "AUTO", "AUTO", "AUTO"}},

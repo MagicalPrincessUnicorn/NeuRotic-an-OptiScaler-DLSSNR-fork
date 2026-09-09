@@ -192,6 +192,7 @@ class MenuCommon
     static void RenderKeybindSettings(RenderMenuContext& ctx);
     static void RenderMainMenuGraphs(RenderMenuContext& ctx);
     static void RenderMainMenuBottomBar(RenderMenuContext& ctx);
+    static void RenderMainMenuSupportLink();
     static void RenderMipmapBiasWindow(RenderMenuContext& ctx, ImGuiWindowFlags flags);
     static void RenderHudlessResourcesWindow(RenderMenuContext& ctx, ImGuiWindowFlags flags);
 
