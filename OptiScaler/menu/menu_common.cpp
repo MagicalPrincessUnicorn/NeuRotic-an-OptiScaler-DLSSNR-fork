@@ -6743,300 +6743,318 @@ void MenuCommon::RenderUpscalerInputsSettings(RenderMenuContext& ctx)
     }
 }
 
-void MenuCommon::RenderApiAndTextureSettings(RenderMenuContext& ctx)
+void MenuCommon::RenderVsyncSettings(RenderMenuContext& ctx)
+{
+    auto& state = ctx.state;
+    auto config = ctx.config;
+    auto& menuResScale = ctx.menuResScale;
+
+    if (state.swapchainApi == Vulkan)
+        return;
+
+    // V-SYNC -----------------------------
+    ImGui::Spacing();
+    if (auto ch = ScopedCollapsingHeader("V-Sync Settings"); ch.IsHeaderOpen())
+    {
+        ScopedIndent indent {};
+        ImGui::Spacing();
+
+        auto forceVsyncOn = config->ForceVsync.has_value() && config->ForceVsync.value();
+        auto forceVsyncOff = config->ForceVsync.has_value() && !config->ForceVsync.value();
+        bool vsyncChanged = false;
+
+        if (ImGui::Checkbox("V-Sync On", &forceVsyncOn))
+        {
+            if (forceVsyncOn)
+            {
+                config->ForceVsync = true;
+                vsyncChanged = true;
+            }
+            else
+            {
+                config->ForceVsync.reset();
+                vsyncChanged = true;
+            }
+        }
+        ImGui::SameLine(0.0f, 16.0f);
+
+        if (ImGui::Checkbox("V-Sync Off", &forceVsyncOff))
+        {
+            if (forceVsyncOff)
+            {
+                config->ForceVsync = false;
+                vsyncChanged = true;
+            }
+            else
+            {
+                config->ForceVsync.reset();
+                vsyncChanged = true;
+            }
+        }
+        ImGui::SameLine(0.0f, 16.0f);
+
+        ImGui::BeginDisabled(!forceVsyncOn);
+
+        ImGui::PushItemWidth(50.0f * menuResScale);
+
+        auto vsyncBuf = StrFmt("%d", config->VsyncInterval.value_or_default());
+        if (ImGui::BeginCombo("Sync Int.", vsyncBuf.c_str()))
+        {
+            if (ImGui::Selectable("0", config->VsyncInterval.value_or_default() == 0))
+            {
+                config->VsyncInterval = 0;
+                vsyncChanged = true;
+            }
+
+            if (ImGui::Selectable("1", config->VsyncInterval.value_or_default() == 1))
+            {
+                config->VsyncInterval = 1;
+                vsyncChanged = true;
+            }
+
+            if (ImGui::Selectable("2", config->VsyncInterval.value_or_default() == 2))
+            {
+                config->VsyncInterval = 2;
+                vsyncChanged = true;
+            }
+
+            if (ImGui::Selectable("3", config->VsyncInterval.value_or_default() == 3))
+            {
+                config->VsyncInterval = 3;
+                vsyncChanged = true;
+            }
+
+            ImGui::EndCombo();
+        }
+        ImGui::PopItemWidth();
+
+        ShowHelpMarker("Controls the DXGI Present sync interval, which determines how\n"
+                       "the swap chain waits for vertical refresh.\n\n"
+                       "0  = Present immediately, no VSync wait.\n"
+                       "1  = Sync to every refresh, normal VSync.\n"
+                       "2+ = Present every N refreshes, reducing effective frame rate.\n\n"
+                       "Higher values can reduce tearing but may increase latency and cap FPS.\n"
+                       "For most games, use 0 for lowest latency or 1 for normal VSync.");
+
+        ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, 16.0f);
+
+        if (ImGui::Button("Reset##10"))
+        {
+            config->ForceVsync.reset();
+            vsyncChanged = true;
+        }
+
+        ShowHelpMarker("Force V-Sync On/Off & Sync Interval options");
+
+        if (vsyncChanged && state.activeFgOutput == FGOutput::XeFG && state.currentFG != nullptr)
+        {
+            // To prevent XeLL issues
+            LOG_DEBUG("V-Sync change detected, forcing XeFG reset");
+            state.WAR_xefgRequestFGToggle = true;
+        }
+    }
+}
+
+void MenuCommon::RenderMipmapBiasSettings(RenderMenuContext& ctx)
+{
+    auto& state = ctx.state;
+    auto config = ctx.config;
+    auto& currentFeature = ctx.currentFeature;
+
+    if (state.swapchainApi == Vulkan)
+        return;
+
+    // MIPMAP BIAS -----------------------------
+    ImGui::Spacing();
+    if (auto ch = ScopedCollapsingHeader("Mipmap Bias", (currentFeature == nullptr || currentFeature->IsFrozen())
+                                                            ? ImGuiTreeNodeFlags_DefaultOpen
+                                                            : 0);
+        ch.IsHeaderOpen())
+    {
+        ScopedIndent indent {};
+        ImGui::Spacing();
+        if (config->MipmapBiasOverride.has_value() && _mipBias == 0.0f)
+            _mipBias = config->MipmapBiasOverride.value();
+
+        ImGui::SliderFloat("Mipmap Bias##2", &_mipBias, -15.0f, 15.0f, "%.6f");
+        ShowHelpMarker("Can help with blurry textures in broken games\n"
+                       "Negative values will make textures sharper\n"
+                       "Positive values will make textures more blurry\n\n"
+                       "Has a small performance impact");
+
+        ImGui::BeginDisabled(!config->MipmapBiasOverride.has_value());
+        {
+            ImGui::BeginDisabled(config->MipmapBiasScaleOverride.has_value() &&
+                                 config->MipmapBiasScaleOverride.value());
+            {
+                bool mbFixed = config->MipmapBiasFixedOverride.value_or_default();
+                if (ImGui::Checkbox("MB Fixed Override", &mbFixed))
+                {
+                    config->MipmapBiasScaleOverride.reset();
+                    config->MipmapBiasFixedOverride = mbFixed;
+                }
+
+                ShowHelpMarker("Apply same override value to all textures");
+            }
+            ImGui::EndDisabled();
+
+            ImGui::SameLine(0.0f, 6.0f);
+
+            ImGui::BeginDisabled(config->MipmapBiasFixedOverride.has_value() &&
+                                 config->MipmapBiasFixedOverride.value());
+            {
+                bool mbScale = config->MipmapBiasScaleOverride.value_or_default();
+                if (ImGui::Checkbox("MB Scale Override", &mbScale))
+                {
+                    config->MipmapBiasFixedOverride.reset();
+                    config->MipmapBiasScaleOverride = mbScale;
+                }
+
+                ShowHelpMarker("Apply override value as scale multiplier\n"
+                               "When using scale mode, please use positive\n"
+                               "override values to increase sharpness!");
+            }
+            ImGui::EndDisabled();
+
+            bool mbAll = config->MipmapBiasOverrideAll.value_or_default();
+            if (ImGui::Checkbox("MB Override All Textures", &mbAll))
+                config->MipmapBiasOverrideAll = mbAll;
+
+            ShowHelpMarker("Override all textures mipmap values\n"
+                           "Normally OptiScaler only overrides\n"
+                           "below zero mipmap values!");
+        }
+        ImGui::EndDisabled();
+
+        ImGui::BeginDisabled(config->MipmapBiasOverride.has_value() && config->MipmapBiasOverride.value() == _mipBias);
+        {
+            if (ImGui::Button("Set"))
+            {
+                config->MipmapBiasOverride = _mipBias;
+                state.lastMipBias = 100.0f;
+                state.lastMipBiasMax = -100.0f;
+            }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine(0.0f, 6.0f);
+
+        ImGui::BeginDisabled(!config->MipmapBiasOverride.has_value());
+        {
+            if (ImGui::Button("Reset"))
+            {
+                config->MipmapBiasOverride.reset();
+                _mipBias = 0.0f;
+                state.lastMipBias = 100.0f;
+                state.lastMipBiasMax = -100.0f;
+            }
+        }
+        ImGui::EndDisabled();
+
+        if (currentFeature != nullptr && !currentFeature->IsFrozen())
+        {
+            ImGui::SameLine(0.0f, 6.0f);
+
+            if (ImGui::Button("Calculate Mipmap Bias"))
+                _showMipmapCalcWindow = true;
+        }
+
+        if (config->MipmapBiasOverride.has_value())
+        {
+            if (config->MipmapBiasFixedOverride.value_or_default())
+            {
+                ImGui::Text("Current : %.3f / %.3f, Target: %.3f", state.lastMipBias, state.lastMipBiasMax,
+                            config->MipmapBiasOverride.value());
+            }
+            else if (config->MipmapBiasScaleOverride.value_or_default())
+            {
+                ImGui::Text("Current : %.3f / %.3f, Target: Base * %.3f", state.lastMipBias, state.lastMipBiasMax,
+                            config->MipmapBiasOverride.value());
+            }
+            else
+            {
+                ImGui::Text("Current : %.3f / %.3f, Target: Base + %.3f", state.lastMipBias, state.lastMipBiasMax,
+                            config->MipmapBiasOverride.value());
+            }
+        }
+        else
+        {
+            ImGui::Text("Current : %.3f / %.3f", state.lastMipBias, state.lastMipBiasMax);
+        }
+
+        ImGui::Text("Will be applied after RESOLUTION/PRESET change !!!");
+    }
+}
+
+void MenuCommon::RenderAnisotropicFilteringSettings(RenderMenuContext& ctx)
 {
     auto& state = ctx.state;
     auto config = ctx.config;
     auto& currentFeature = ctx.currentFeature;
     auto& menuResScale = ctx.menuResScale;
 
-    // DX11 & DX12 -----------------------------
-    if (state.swapchainApi != Vulkan)
+    if (state.swapchainApi == Vulkan)
+        return;
+
+    ImGui::Spacing();
+    if (auto ch = ScopedCollapsingHeader(
+            "Anisotropic Filtering",
+            (currentFeature == nullptr || currentFeature->IsFrozen()) ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+        ch.IsHeaderOpen())
     {
-        // V-SYNC -----------------------------
+        ScopedIndent indent {};
         ImGui::Spacing();
-        if (auto ch = ScopedCollapsingHeader("V-Sync Settings"); ch.IsHeaderOpen())
+        ImGui::PushItemWidth(65.0f * menuResScale);
+
+        auto selectedAF =
+            config->AnisotropyOverride.has_value() ? std::to_string(config->AnisotropyOverride.value()) : "Auto";
+        if (ImGui::BeginCombo("Force Anisotropic Filtering", selectedAF.c_str()))
         {
-            ScopedIndent indent {};
-            ImGui::Spacing();
+            if (ImGui::Selectable("Auto", !config->AnisotropyOverride.has_value()))
+                config->AnisotropyOverride.reset();
 
-            auto forceVsyncOn = config->ForceVsync.has_value() && config->ForceVsync.value();
-            auto forceVsyncOff = config->ForceVsync.has_value() && !config->ForceVsync.value();
-            bool vsyncChanged = false;
+            if (ImGui::Selectable("1", config->AnisotropyOverride.value_or(0) == 1))
+                config->AnisotropyOverride = 1;
 
-            if (ImGui::Checkbox("V-Sync On", &forceVsyncOn))
-            {
-                if (forceVsyncOn)
-                {
-                    config->ForceVsync = true;
-                    vsyncChanged = true;
-                }
-                else
-                {
-                    config->ForceVsync.reset();
-                    vsyncChanged = true;
-                }
-            }
-            ImGui::SameLine(0.0f, 16.0f);
+            if (ImGui::Selectable("2", config->AnisotropyOverride.value_or(0) == 2))
+                config->AnisotropyOverride = 2;
 
-            if (ImGui::Checkbox("V-Sync Off", &forceVsyncOff))
-            {
-                if (forceVsyncOff)
-                {
-                    config->ForceVsync = false;
-                    vsyncChanged = true;
-                }
-                else
-                {
-                    config->ForceVsync.reset();
-                    vsyncChanged = true;
-                }
-            }
-            ImGui::SameLine(0.0f, 16.0f);
+            if (ImGui::Selectable("4", config->AnisotropyOverride.value_or(0) == 4))
+                config->AnisotropyOverride = 4;
 
-            ImGui::BeginDisabled(!forceVsyncOn);
+            if (ImGui::Selectable("8", config->AnisotropyOverride.value_or(0) == 8))
+                config->AnisotropyOverride = 8;
 
-            ImGui::PushItemWidth(50.0f * menuResScale);
+            if (ImGui::Selectable("16", config->AnisotropyOverride.value_or(0) == 16))
+                config->AnisotropyOverride = 16;
 
-            auto vsyncBuf = StrFmt("%d", config->VsyncInterval.value_or_default());
-            if (ImGui::BeginCombo("Sync Int.", vsyncBuf.c_str()))
-            {
-                if (ImGui::Selectable("0", config->VsyncInterval.value_or_default() == 0))
-                {
-                    config->VsyncInterval = 0;
-                    vsyncChanged = true;
-                }
-
-                if (ImGui::Selectable("1", config->VsyncInterval.value_or_default() == 1))
-                {
-                    config->VsyncInterval = 1;
-                    vsyncChanged = true;
-                }
-
-                if (ImGui::Selectable("2", config->VsyncInterval.value_or_default() == 2))
-                {
-                    config->VsyncInterval = 2;
-                    vsyncChanged = true;
-                }
-
-                if (ImGui::Selectable("3", config->VsyncInterval.value_or_default() == 3))
-                {
-                    config->VsyncInterval = 3;
-                    vsyncChanged = true;
-                }
-
-                ImGui::EndCombo();
-            }
-            ImGui::PopItemWidth();
-
-            ShowHelpMarker("Controls the DXGI Present sync interval, which determines how\n"
-                           "the swap chain waits for vertical refresh.\n\n"
-                           "0  = Present immediately, no VSync wait.\n"
-                           "1  = Sync to every refresh, normal VSync.\n"
-                           "2+ = Present every N refreshes, reducing effective frame rate.\n\n"
-                           "Higher values can reduce tearing but may increase latency and cap FPS.\n"
-                           "For most games, use 0 for lowest latency or 1 for normal VSync.");
-
-            ImGui::EndDisabled();
-            ImGui::SameLine(0.0f, 16.0f);
-
-            if (ImGui::Button("Reset##10"))
-            {
-                config->ForceVsync.reset();
-                vsyncChanged = true;
-            }
-
-            ShowHelpMarker("Force V-Sync On/Off & Sync Interval options");
-
-            if (vsyncChanged && state.activeFgOutput == FGOutput::XeFG && state.currentFG != nullptr)
-            {
-                // To prevent XeLL issues
-                LOG_DEBUG("V-Sync change detected, forcing XeFG reset");
-                state.WAR_xefgRequestFGToggle = true;
-            }
+            ImGui::EndCombo();
         }
 
-        // MIPMAP BIAS & Anisotropy -----------------------------
-        ImGui::Spacing();
-        if (auto ch = ScopedCollapsingHeader("Mipmap Bias", (currentFeature == nullptr || currentFeature->IsFrozen())
-                                                                ? ImGuiTreeNodeFlags_DefaultOpen
-                                                                : 0);
-            ch.IsHeaderOpen())
-        {
-            ScopedIndent indent {};
-            ImGui::Spacing();
-            if (config->MipmapBiasOverride.has_value() && _mipBias == 0.0f)
-                _mipBias = config->MipmapBiasOverride.value();
+        ImGui::PopItemWidth();
 
-            ImGui::SliderFloat("Mipmap Bias##2", &_mipBias, -15.0f, 15.0f, "%.6f");
-            ShowHelpMarker("Can help with blurry textures in broken games\n"
-                           "Negative values will make textures sharper\n"
-                           "Positive values will make textures more blurry\n\n"
-                           "Has a small performance impact");
+        bool afComp = config->AnisotropyModifyComp.value_or_default();
+        if (ImGui::Checkbox("Modify Compare", &afComp))
+            config->AnisotropyModifyComp = afComp;
 
-            ImGui::BeginDisabled(!config->MipmapBiasOverride.has_value());
-            {
-                ImGui::BeginDisabled(config->MipmapBiasScaleOverride.has_value() &&
-                                     config->MipmapBiasScaleOverride.value());
-                {
-                    bool mbFixed = config->MipmapBiasFixedOverride.value_or_default();
-                    if (ImGui::Checkbox("MB Fixed Override", &mbFixed))
-                    {
-                        config->MipmapBiasScaleOverride.reset();
-                        config->MipmapBiasFixedOverride = mbFixed;
-                    }
+        ShowHelpMarker("Update comparison filters");
 
-                    ShowHelpMarker("Apply same override value to all textures");
-                }
-                ImGui::EndDisabled();
+        ImGui::SameLine(0.0f, 6.0f);
 
-                ImGui::SameLine(0.0f, 6.0f);
+        bool afMinMax = config->AnisotropyModifyMinMax.value_or_default();
+        if (ImGui::Checkbox("Modify Min/Max", &afMinMax))
+            config->AnisotropyModifyMinMax = afMinMax;
 
-                ImGui::BeginDisabled(config->MipmapBiasFixedOverride.has_value() &&
-                                     config->MipmapBiasFixedOverride.value());
-                {
-                    bool mbScale = config->MipmapBiasScaleOverride.value_or_default();
-                    if (ImGui::Checkbox("MB Scale Override", &mbScale))
-                    {
-                        config->MipmapBiasFixedOverride.reset();
-                        config->MipmapBiasScaleOverride = mbScale;
-                    }
+        ShowHelpMarker("Update min/max filters");
 
-                    ShowHelpMarker("Apply override value as scale multiplier\n"
-                                   "When using scale mode, please use positive\n"
-                                   "override values to increase sharpness!");
-                }
-                ImGui::EndDisabled();
+        bool afSkipPoint = config->AnisotropySkipPointFilter.value_or_default();
+        if (ImGui::Checkbox("Skip Point Filters", &afSkipPoint))
+            config->AnisotropySkipPointFilter = afSkipPoint;
 
-                bool mbAll = config->MipmapBiasOverrideAll.value_or_default();
-                if (ImGui::Checkbox("MB Override All Textures", &mbAll))
-                    config->MipmapBiasOverrideAll = mbAll;
+        ShowHelpMarker("Skip updating of point filters");
 
-                ShowHelpMarker("Override all textures mipmap values\n"
-                               "Normally OptiScaler only overrides\n"
-                               "below zero mipmap values!");
-            }
-            ImGui::EndDisabled();
-
-            ImGui::BeginDisabled(config->MipmapBiasOverride.has_value() &&
-                                 config->MipmapBiasOverride.value() == _mipBias);
-            {
-                if (ImGui::Button("Set"))
-                {
-                    config->MipmapBiasOverride = _mipBias;
-                    state.lastMipBias = 100.0f;
-                    state.lastMipBiasMax = -100.0f;
-                }
-            }
-            ImGui::EndDisabled();
-
-            ImGui::SameLine(0.0f, 6.0f);
-
-            ImGui::BeginDisabled(!config->MipmapBiasOverride.has_value());
-            {
-                if (ImGui::Button("Reset"))
-                {
-                    config->MipmapBiasOverride.reset();
-                    _mipBias = 0.0f;
-                    state.lastMipBias = 100.0f;
-                    state.lastMipBiasMax = -100.0f;
-                }
-            }
-            ImGui::EndDisabled();
-
-            if (currentFeature != nullptr && !currentFeature->IsFrozen())
-            {
-                ImGui::SameLine(0.0f, 6.0f);
-
-                if (ImGui::Button("Calculate Mipmap Bias"))
-                    _showMipmapCalcWindow = true;
-            }
-
-            if (config->MipmapBiasOverride.has_value())
-            {
-                if (config->MipmapBiasFixedOverride.value_or_default())
-                {
-                    ImGui::Text("Current : %.3f / %.3f, Target: %.3f", state.lastMipBias, state.lastMipBiasMax,
-                                config->MipmapBiasOverride.value());
-                }
-                else if (config->MipmapBiasScaleOverride.value_or_default())
-                {
-                    ImGui::Text("Current : %.3f / %.3f, Target: Base * %.3f", state.lastMipBias, state.lastMipBiasMax,
-                                config->MipmapBiasOverride.value());
-                }
-                else
-                {
-                    ImGui::Text("Current : %.3f / %.3f, Target: Base + %.3f", state.lastMipBias, state.lastMipBiasMax,
-                                config->MipmapBiasOverride.value());
-                }
-            }
-            else
-            {
-                ImGui::Text("Current : %.3f / %.3f", state.lastMipBias, state.lastMipBiasMax);
-            }
-
-            ImGui::Text("Will be applied after RESOLUTION/PRESET change !!!");
-        }
-
-        ImGui::Spacing();
-        if (auto ch = ScopedCollapsingHeader(
-                "Anisotropic Filtering",
-                (currentFeature == nullptr || currentFeature->IsFrozen()) ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-            ch.IsHeaderOpen())
-        {
-            ScopedIndent indent {};
-            ImGui::Spacing();
-            ImGui::PushItemWidth(65.0f * menuResScale);
-
-            auto selectedAF =
-                config->AnisotropyOverride.has_value() ? std::to_string(config->AnisotropyOverride.value()) : "Auto";
-            if (ImGui::BeginCombo("Force Anisotropic Filtering", selectedAF.c_str()))
-            {
-                if (ImGui::Selectable("Auto", !config->AnisotropyOverride.has_value()))
-                    config->AnisotropyOverride.reset();
-
-                if (ImGui::Selectable("1", config->AnisotropyOverride.value_or(0) == 1))
-                    config->AnisotropyOverride = 1;
-
-                if (ImGui::Selectable("2", config->AnisotropyOverride.value_or(0) == 2))
-                    config->AnisotropyOverride = 2;
-
-                if (ImGui::Selectable("4", config->AnisotropyOverride.value_or(0) == 4))
-                    config->AnisotropyOverride = 4;
-
-                if (ImGui::Selectable("8", config->AnisotropyOverride.value_or(0) == 8))
-                    config->AnisotropyOverride = 8;
-
-                if (ImGui::Selectable("16", config->AnisotropyOverride.value_or(0) == 16))
-                    config->AnisotropyOverride = 16;
-
-                ImGui::EndCombo();
-            }
-
-            ImGui::PopItemWidth();
-
-            bool afComp = config->AnisotropyModifyComp.value_or_default();
-            if (ImGui::Checkbox("Modify Compare", &afComp))
-                config->AnisotropyModifyComp = afComp;
-
-            ShowHelpMarker("Update comparison filters");
-
-            ImGui::SameLine(0.0f, 6.0f);
-
-            bool afMinMax = config->AnisotropyModifyMinMax.value_or_default();
-            if (ImGui::Checkbox("Modify Min/Max", &afMinMax))
-                config->AnisotropyModifyMinMax = afMinMax;
-
-            ShowHelpMarker("Update min/max filters");
-
-            bool afSkipPoint = config->AnisotropySkipPointFilter.value_or_default();
-            if (ImGui::Checkbox("Skip Point Filters", &afSkipPoint))
-                config->AnisotropySkipPointFilter = afSkipPoint;
-
-            ShowHelpMarker("Skip updating of point filters");
-
-            ImGui::Text("Will might be applied after RESOLUTION/PRESET change !!!");
-        }
+        ImGui::Text("Will might be applied after RESOLUTION/PRESET change !!!");
     }
 }
 
@@ -7072,6 +7090,8 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
 {
     RenderKeybindSettings(ctx);
     RenderThemeSettings(ctx);
+    RenderVsyncSettings(ctx);
+    RenderAnisotropicFilteringSettings(ctx);
 }
 
 void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
@@ -7079,9 +7099,7 @@ void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
     RenderActiveUpscalerSettings(ctx);
     RenderFsrCommonSettings(ctx);
     RenderActiveImageSettings(ctx);
-    RenderMagnifierSettings(ctx);
     RenderUpscalerInputsSettings(ctx);
-    RenderApiAndTextureSettings(ctx);
 }
 
 void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
@@ -7107,14 +7125,19 @@ void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
 
 void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
 {
-    RenderQuirksSettings(ctx);
     RenderAdvancedSettings(ctx);
-    RenderLoggingSettings(ctx);
+}
+
+void MenuCommon::RenderToolsPage(RenderMenuContext& ctx)
+{
+    RenderMagnifierSettings(ctx);
+    RenderMipmapBiasSettings(ctx);
 }
 
 void MenuCommon::RenderDiagnosticsPage(RenderMenuContext& ctx)
 {
-    RenderMainMenuGraphs(ctx);
+    RenderQuirksSettings(ctx);
+    RenderLoggingSettings(ctx);
     RenderFpsOverlaySettings(ctx);
 }
 
@@ -7122,14 +7145,14 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
 {
     ImGui::Spacing();
 
-    // Keep the six folder-style top-level pages selectable at narrow overlay widths:
+    // Keep the seven folder-style top-level pages selectable at narrow overlay widths:
     // ImGui supplies scroll buttons instead of shrinking labels or dropping tabs.
     if (!ImGui::BeginTabBar("MainMenuPages", ImGuiTabBarFlags_FittingPolicyScroll))
         return;
 
     const float viewportRemaining = ctx.io.DisplaySize.y - 220.0f * ctx.menuResScale;
-    const float pageHeight = std::max(120.0f * ctx.menuResScale,
-                                      std::min(720.0f * ctx.menuResScale, viewportRemaining));
+    const float pageHeight =
+        std::max(120.0f * ctx.menuResScale, std::min(720.0f * ctx.menuResScale, viewportRemaining));
     const auto renderPage = [&](auto render)
     {
         if (ImGui::BeginChild("##MainMenuPageContent", ImVec2(0.0f, pageHeight), ImGuiChildFlags_Borders))
@@ -7149,21 +7172,27 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
         ImGui::EndTabItem();
     }
 
-    if (ImGui::BeginTabItem("Neural Rendering"))
-    {
-        renderPage(RenderNeuralRenderingPage);
-        ImGui::EndTabItem();
-    }
-
     if (ImGui::BeginTabItem("Frame Generation"))
     {
         renderPage(RenderFrameGenerationPage);
         ImGui::EndTabItem();
     }
 
+    if (ImGui::BeginTabItem("Neural Rendering"))
+    {
+        renderPage(RenderNeuralRenderingPage);
+        ImGui::EndTabItem();
+    }
+
     if (ImGui::BeginTabItem("Advanced"))
     {
         renderPage(RenderAdvancedPage);
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Tools"))
+    {
+        renderPage(RenderToolsPage);
         ImGui::EndTabItem();
     }
 
@@ -7186,6 +7215,13 @@ void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
+
+    ImGui::Checkbox("Show Graphs", &_showMainMenuGraphs);
+    ImGui::SameLine();
+    ShowHelpMarker("Show or hide the live frame-time and upscaler-time graphs. This only changes menu presentation.");
+
+    if (!_showMainMenuGraphs)
+        return;
 
     if (ImGui::BeginTable("plots", 2, ImGuiTableFlags_SizingStretchSame))
     {
@@ -7758,6 +7794,9 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
     {
         // Header/status messages shown above the page selector.
         RenderMainMenuHeaderMessages(ctx);
+
+        // Performance graphs and their visibility toggle remain available above every page.
+        RenderMainMenuGraphs(ctx);
 
         // Readout and actions remain available before the page selector.
         RenderMainMenuBottomBar(ctx);

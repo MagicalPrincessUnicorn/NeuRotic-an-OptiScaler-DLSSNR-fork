@@ -116,6 +116,7 @@ class MenuCommon
     inline static bool _dx11Ready = false;
     inline static bool _dx12Ready = false;
     inline static bool _vulkanReady = false;
+    inline static bool _showMainMenuGraphs = true;
 
     inline static void ShowTooltip(const char* tip);
 
@@ -168,6 +169,7 @@ class MenuCommon
     static void RenderNeuralRenderingPage(RenderMenuContext& ctx);
     static void RenderFrameGenerationPage(RenderMenuContext& ctx);
     static void RenderAdvancedPage(RenderMenuContext& ctx);
+    static void RenderToolsPage(RenderMenuContext& ctx);
     static void RenderDiagnosticsPage(RenderMenuContext& ctx);
     static void RenderActiveUpscalerSettings(RenderMenuContext& ctx);
     static void RenderFrameGenerationSelection(RenderMenuContext& ctx);
@@ -184,7 +186,9 @@ class MenuCommon
     static void RenderThemeSettings(RenderMenuContext& ctx);
     static void RenderFpsOverlaySettings(RenderMenuContext& ctx);
     static void RenderUpscalerInputsSettings(RenderMenuContext& ctx);
-    static void RenderApiAndTextureSettings(RenderMenuContext& ctx);
+    static void RenderVsyncSettings(RenderMenuContext& ctx);
+    static void RenderMipmapBiasSettings(RenderMenuContext& ctx);
+    static void RenderAnisotropicFilteringSettings(RenderMenuContext& ctx);
     static void RenderKeybindSettings(RenderMenuContext& ctx);
     static void RenderMainMenuGraphs(RenderMenuContext& ctx);
     static void RenderMainMenuBottomBar(RenderMenuContext& ctx);
