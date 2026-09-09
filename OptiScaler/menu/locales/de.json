@@ -404,6 +404,7 @@
   "Frame by frame, I scale-up!": "Frame für Frame skaliere ich hoch!",
   "Frame generation rectangle, adjust for letterboxed content": "FG-Rechteck für Inhalte mit schwarzen Balken",
   "Frame index line": "Frameindex-Linie",
+  "FrameTime": "Bildzeit",
   "Framerate": "Bildrate",
   "Frames %llu | Game resets %llu | Builds %llu | Rebuilds %llu | Eval failures %llu": "Frames %llu | Spiel-Resets %llu | Erstellungen %llu | Neuerstellungen %llu | Auswertungsfehler %llu",
   "Free and always free": "Kostenlos und bleibt kostenlos",

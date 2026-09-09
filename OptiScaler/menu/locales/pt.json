@@ -404,6 +404,7 @@
   "Frame by frame, I scale-up!": "Quadro a quadro, vou ampliando!",
   "Frame generation rectangle, adjust for letterboxed content": "Retângulo FG para conteúdo com barras pretas",
   "Frame index line": "Linha de índice do quadro",
+  "FrameTime": "Tempo por quadro",
   "Framerate": "Taxa de quadros",
   "Frames %llu | Game resets %llu | Builds %llu | Rebuilds %llu | Eval failures %llu": "Quadros %llu | Reinícios do jogo %llu | Criações %llu | Recriações %llu | Falhas de avaliação %llu",
   "Free and always free": "Grátis e sempre grátis",

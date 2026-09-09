@@ -7229,6 +7229,8 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
 
 void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
 {
+    auto config = ctx.config;
+    auto& menuResScale = ctx.menuResScale;
     auto& state = ctx.state;
     auto& currentFeature = ctx.currentFeature;
     auto& frameTime = ctx.frameTime;

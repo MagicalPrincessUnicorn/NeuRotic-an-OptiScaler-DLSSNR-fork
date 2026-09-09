@@ -404,6 +404,7 @@
   "Frame by frame, I scale-up!": "¡Fotograma a fotograma, voy reescalando!",
   "Frame generation rectangle, adjust for letterboxed content": "Rectángulo FG para contenido con bandas negras",
   "Frame index line": "Línea de índice de fotograma",
+  "FrameTime": "Tiempo por fotograma",
   "Framerate": "Frecuencia de fotogramas",
   "Frames %llu | Game resets %llu | Builds %llu | Rebuilds %llu | Eval failures %llu": "Fotogramas %llu | Reinicios del juego %llu | Creaciones %llu | Recreaciones %llu | Fallos de evaluación %llu",
   "Free and always free": "Gratis y siempre gratis",

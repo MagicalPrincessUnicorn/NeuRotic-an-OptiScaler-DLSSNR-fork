@@ -15,7 +15,7 @@ Included behavior:
 - Top action row, then graph visibility/language controls and graphs above tabs.
 - Neurotic Alpha 0.9.4 title with originating OptiScaler version; no milestone bump.
 - User-supplied Ko-fi link, support text and Buy Me a Coffee button.
-- English, Spanish, French, German and Portuguese; 1,064 catalog keys per language.
+- English, Spanish, French, German and Portuguese; 1,065 catalog keys per language.
   Four translations authored directly from the assistant's language knowledge,
   with translated apology, preserved technical names and English fallback.
 - NR and Advanced Settings remain collapsible and initially expanded.

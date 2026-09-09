@@ -404,6 +404,7 @@
   "Frame by frame, I scale-up!": "Image par image, j'agrandis !",
   "Frame generation rectangle, adjust for letterboxed content": "Rectangle FG pour contenu avec bandes noires",
   "Frame index line": "Ligne d'indice d'image",
+  "FrameTime": "Temps par image",
   "Framerate": "Fréquence d'images",
   "Frames %llu | Game resets %llu | Builds %llu | Rebuilds %llu | Eval failures %llu": "Images %llu | Réinitialisations jeu %llu | Créations %llu | Recréations %llu | Échecs d'évaluation %llu",
   "Free and always free": "Gratuit pour toujours",
