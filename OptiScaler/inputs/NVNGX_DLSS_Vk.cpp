@@ -43,10 +43,7 @@ static void RegisterNativeFeature(NVSDK_NGX_Result result, NVSDK_NGX_Handle** ha
 {
     if (result != NVSDK_NGX_Result_Success || !handle || !*handle) return;
     std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
-    const auto identity = nativeFeatures.Register((*handle)->Id, static_cast<uint32_t>(type),
-                                                   reinterpret_cast<uintptr_t>(device));
-    LOG_INFO("VK-NATIVE created handle={} feature={} device=0x{:X} generation={}",
-             (*handle)->Id, identity.type, identity.device, identity.generation);
+    nativeFeatures.Register((*handle)->Id, static_cast<uint32_t>(type), reinterpret_cast<uintptr_t>(device));
 }
 
 static uint32_t ReadUIntParameter(NVSDK_NGX_Parameter* params, const char* name)
@@ -885,10 +882,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
     auto handleId = IFeature::GetNextHandleId();
     LOG_INFO("HandleId: {0}", handleId);
     const auto& slDiagnostic = GetStreamlineVkDiagnosticContext();
-    LOG_INFO("VK-RR-DIAG ngxCreate feature={} handle={} slActive={} viewport={} frame={} slCmd=0x{:X} ngxCmd=0x{:X} declaredSwapchain={}x{}",
-             static_cast<uint32_t>(InFeatureID), handleId, slDiagnostic.active, slDiagnostic.viewport,
-             slDiagnostic.frame, slDiagnostic.commandBuffer, reinterpret_cast<uintptr_t>(InCmdList),
-             static_cast<uint32_t>(State::Instance().screenWidth), static_cast<uint32_t>(State::Instance().screenHeight));
     VulkanRrRouting::Extent rrDeclared {};
     uint32_t rrViewport = VulkanRrRouting::UnknownViewport;
     if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
@@ -950,8 +943,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
             {
                 std::lock_guard<std::mutex> lock(rrRoutesMutex);
                 rrRoutes.Register(handleId, reinterpret_cast<uintptr_t>(InDevice), rrViewport, rrDeclared);
-                LOG_INFO("VK-RR-ROUTE created handle={} viewport={} declared={}x{} device=0x{:X}", handleId,
-                         rrViewport, rrDeclared.width, rrDeclared.height, reinterpret_cast<uintptr_t>(InDevice));
             }
             State::Instance().currentFeature = deviceContext;
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -1012,7 +1003,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
             {
                 std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
                 nativeFeatures.Release(handleId, result == NVSDK_NGX_Result_Success);
-                LOG_INFO("VK-NATIVE release handle={} result=0x{:X}", handleId, (uint32_t) result);
             }
 
             if (!shutdown)
@@ -1098,17 +1088,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 
             // SR/RR are owned contexts below. Native pass-through features (including FG)
             // must never acquire NR state, even when their parameter block happens to contain images.
-            {
-                std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
-                const auto identity = nativeFeatures.Observe(handleId);
-                static uint64_t unknownEvaluations = 0;
-                const auto count = identity.generation ? identity.evaluations : ++unknownEvaluations;
-                if (count <= 3 || count % 300 == 0)
-                    LOG_INFO("VK-NATIVE bypass-NR handle={} feature={} generation={} cmd=0x{:X} count={}",
-                             handleId, identity.type, identity.generation, reinterpret_cast<uintptr_t>(InCmdList),
-                             count);
-            }
-
             return result;
         }
         else
@@ -1197,8 +1176,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
         {
             const auto& slContext = GetStreamlineVkDiagnosticContext();
             const uint32_t viewport = slContext.active ? slContext.viewport : VulkanRrRouting::UnknownViewport;
-            const VulkanRrRouting::Extent declared { ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutWidth),
-                                                      ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutHeight) };
             const VulkanRrRouting::Extent observed = ObservedOutputExtent(InParameters);
             const auto presented = GetVulkanPresentedExtent();
             const VulkanRrRouting::Extent presentation { presented.width, presented.height };
@@ -1209,12 +1186,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                 decision = rrRoutes.Select(handleId, reinterpret_cast<uintptr_t>(vkDevice), viewport, slContext.frame,
                                            presentation);
             }
-
-            if (decision.log)
-                LOG_INFO("VK-RR-ROUTE handle={} viewport={} frame={} declared={}x{} observed={}x{} presented={}x{} selected={} decision={} eligibleCount={}",
-                         handleId, viewport, slContext.frame, declared.width, declared.height, observed.width,
-                         observed.height, presentation.width, presentation.height, decision.selectedHandle,
-                         VulkanRrRouting::ReasonName(decision.reason), decision.executionCount);
 
             if (decision.execute)
             {

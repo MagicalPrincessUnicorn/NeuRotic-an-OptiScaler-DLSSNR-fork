@@ -395,8 +395,6 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
             g_swapchainExtents[reinterpret_cast<uintptr_t>(*pSwapchain)] =
                 { pCreateInfo->imageExtent.width, pCreateInfo->imageExtent.height };
         }
-        LOG_INFO("VK-RR-DIAG vkCreateSwapchain device=0x{:X} swapchain=0x{:X} extent={}x{}", reinterpret_cast<uintptr_t>(device),
-                 reinterpret_cast<uintptr_t>(*pSwapchain), pCreateInfo->imageExtent.width, pCreateInfo->imageExtent.height);
 
         // The same question the DXGI side asks: what does one unit of this buffer mean?
         //

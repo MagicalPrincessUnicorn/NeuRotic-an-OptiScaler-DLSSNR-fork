@@ -209,6 +209,18 @@ static void SourceGuards()
     const auto end = source.find("static void ShutdownVkLocked(bool deviceAlive)\n{", start);
     Check(start != std::string::npos && end != std::string::npos, "evaluation boundaries found");
     const auto evaluation = source.substr(start, end - start);
+    Check(evaluation.find("++g_vk.frames;") != std::string::npos, "successful NR counter retained");
+    for (const char* trace : {"phaseLog", "phasePending", "logResources", "VK-NR requested",
+                              "VK-NR applied slot", "VK-NR compose recorded"})
+        Check(source.find(trace) == std::string::npos, "verbose NR tracing removed");
+    for (const char* path : {"OptiScaler/inputs/NVNGX_DLSS_Vk.cpp", "OptiScaler/hooks/Streamline_Hooks.cpp",
+                             "OptiScaler/hooks/Vulkan_Hooks.cpp"})
+    {
+        const auto hooks = Read(path);
+        Check(hooks.find("VK-RR-DIAG") == std::string::npos, "temporary hook tracing removed");
+        Check(hooks.find("VK-RR-ROUTE") == std::string::npos, "temporary route tracing removed");
+        Check(hooks.find("VK-NATIVE") == std::string::npos, "temporary native tracing removed");
+    }
     for (const char* forbidden : {"vkDeviceWaitIdle(", "g_vk.release(", "DestroyImage(",
                                   "DestroyParameters(", "(unsigned long long) (uintptr_t)"})
         Check(evaluation.find(forbidden) == std::string::npos, forbidden);

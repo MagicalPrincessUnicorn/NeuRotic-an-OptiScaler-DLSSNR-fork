@@ -76,7 +76,6 @@ struct VkState
     VkTuning::Result tuningResult = VkTuning::Result::Applied;
     std::string tuningMessage = "Waiting for NR";
     VkFormat physicalFormat = VK_FORMAT_UNDEFINED;
-    bool phasePending = false;
 
     // What the model writes, the proxy it is shown, and the frame as the upscaler left it.
     OwnedImage output;
@@ -569,17 +568,7 @@ std::optional<double> LastGpuTimeVk()
 std::string TuningStatusVk()
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
-    std::string status = g_vk.tuningMessage + " (" + std::to_string(g_vk.models.size) + "/8 slots)";
-    if (g_vk.models.active >= 0)
-    {
-        const auto& s = g_vk.models.entries[g_vk.models.active].settings;
-        status += "\nApplied slot " + std::to_string(g_vk.models.active + 1) +
-            ": preset " + std::to_string(s.preset) + ", style " + std::to_string(s.style) +
-            ", intensity " + std::to_string(s.intensity) + "\nStructure " + std::to_string(s.structure) +
-            ", tone " + std::to_string(s.tone) + ", skin " + std::to_string(s.skin) +
-            ", mask " + (s.mask ? "on" : "off");
-    }
-    return status;
+    return g_vk.tuningMessage + " (" + std::to_string(g_vk.models.size) + "/8 configurations)";
 }
 
 void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
@@ -876,9 +865,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     if (requestChanged)
     {
         g_vk.requestedTuning = requested;
-        LOG_INFO("VK-NR requested preset={} style={} intensity={} structure={} tone={} skin={} mask={}",
-                 requested.preset, requested.style, requested.intensity, requested.structure, requested.tone,
-                 requested.skin, requested.mask);
     }
     g_vk.tuningResult = g_vk.models.Select(requested, [&](auto& entry) {
         const auto allocated = NVSDK_NGX_VULKAN_AllocateParameters(&entry.params);
@@ -893,11 +879,9 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             LOG_ERROR("VK-NR typed parameter verification failed key={}; model not created", failedKey);
             return false;
         }
-        LOG_INFO("VK-NR create begin slot={} cmd=0x{:X} typed parameters verified", g_vk.models.size,
-                 reinterpret_cast<uintptr_t>(cmdBuffer));
         const int result = g_vk.create(cmdBuffer, entry.params, &entry.feature);
-        LOG_INFO("VK-NR create end slot={} result=0x{:X} feature={}", g_vk.models.size,
-                 (uint32_t) result, entry.feature);
+        if (result != 1 || entry.feature == nullptr)
+            LOG_ERROR("VK-NR model creation failed result=0x{:X}", (uint32_t) result);
         return result == 1 && entry.feature != nullptr;
     });
     const char* status = g_vk.tuningResult == VkTuning::Result::Applied ? "Applied" :
@@ -905,7 +889,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         g_vk.tuningResult == VkTuning::Result::Invalid ? "Invalid model settings; keeping applied settings" :
         "Model creation/verification failed; keeping applied settings";
     g_vk.tuningMessage = status;
-    if (requestChanged) LOG_INFO("VK-NR tuning status={} active={} slots={}/8", status, g_vk.models.active + 1, g_vk.models.size);
+    if (requestChanged && g_vk.tuningResult != VkTuning::Result::Applied)
+        LOG_WARN("VK-NR tuning: {}", status);
     if (g_vk.models.active < 0) return;
     const auto& activeModel = g_vk.models.entries[g_vk.models.active];
     g_vk.feature = activeModel.feature;
@@ -913,11 +898,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     if (g_vk.models.changed)
     {
         g_vk.reset = true;
-        g_vk.phasePending = true;
-        LOG_INFO("VK-NR applied slot={} preset={} style={} intensity={} structure={} tone={} skin={} mask={}",
-                 g_vk.models.active + 1, activeModel.settings.preset, activeModel.settings.style,
-                 activeModel.settings.intensity, activeModel.settings.structure, activeModel.settings.tone,
-                 activeModel.settings.skin, activeModel.settings.mask);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1172,42 +1152,15 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     auto* modelParams = g_vk.capabilityParams;
     const VkFrame::Inputs frame { &modelInput->ngx, depth, motion, &g_vk.output.ngx,
         workWidth, workHeight, guideWidth, guideHeight, depthInverted, g_vk.reset };
-    const bool phaseLog = g_vk.phasePending || g_vk.frames < 3 || (g_vk.frames + 1) % 300 == 0;
     int evaluated = 0;
     VkFrame::Failure failure;
-    const auto logResources = [&](const char* readback) {
-        for (const auto& b : frame.Bindings())
-        {
-            VkFrame::Failure invalid;
-            if (!VkFrame::ValidateImage(b.key, b.resource, b.writable, invalid))
-            {
-                LOG_ERROR("VK-NR resource key={} setter=void* readback={} pointer={} invalid={}",
-                          b.key, readback, (void*) b.resource, invalid.reason);
-                continue;
-            }
-            const auto& info = b.resource->Resource.ImageViewInfo;
-            LOG_INFO("VK-NR resource key={} setter=void* readback={} pointer={} image=0x{:X} view=0x{:X} imageExtent={}x{} subrect=0,0,{}x{} format={} writable={}",
-                     b.key, readback, (void*) b.resource, (uintptr_t) info.Image, (uintptr_t) info.ImageView,
-                     info.Width, info.Height, b.width, b.height, (uint32_t) info.Format, b.resource->ReadWrite);
-        }
-    };
     const bool prepared = VkFrame::PrepareAndEvaluate(modelParams, frame, activeModel.settings, failure, [&] {
-        if (phaseLog)
-        {
-            logResources("match");
-            LOG_INFO("VK-NR evaluate begin slot={} cmd=0x{:X} reset={} frame parameters verified",
-                     g_vk.models.active + 1, (uintptr_t) cmdBuffer, g_vk.reset);
-        }
         evaluated = g_vk.evaluate((void*) cmdBuffer, g_vk.feature, modelParams);
-        if (!phaseLog && evaluated != 1) logResources("match");
-        if (phaseLog || evaluated != 1) LOG_INFO("VK-NR evaluate end result=0x{:X}", (uint32_t) evaluated);
     });
     if (!prepared)
     {
-        logResources("verification-incomplete");
-        LOG_ERROR("VK-NR frame parameter rejected key={} reason={} readbackAttempted={} getResult=0x{:X} expectedPointer={} observedPointer={}; model not called",
-                  failure.key, failure.reason, failure.readbackAttempted, failure.result,
-                  failure.expectedPointer, failure.observedPointer);
+        LOG_ERROR("VK-NR frame parameter rejected key={} reason={} readbackAttempted={} getResult=0x{:X}; model not called",
+                  failure.key, failure.reason, failure.readbackAttempted, failure.result);
         Fail("model frame parameter verification failed");
         return;
     }
@@ -1254,7 +1207,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     Transition(cmdBuffer, *resolveAnswer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     Transition(cmdBuffer, g_vk.keep, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    if (phaseLog) LOG_INFO("VK-NR compose begin slot={}", g_vk.models.active + 1);
     if (!g_vk.pass->Dispatch(cmdBuffer, resolve, width, height, resolveProxy->view, resolveAnswer->view,
                              g_vk.keep.view, VK_NULL_HANDLE, colour->Resource.ImageViewInfo.ImageView,
                              VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
@@ -1264,9 +1216,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     }
 
     ++g_vk.frames;
-    g_vk.phasePending = false;
-    if (phaseLog) LOG_INFO("VK-NR compose recorded slot={} successfulNR={} output={}x{}",
-                          g_vk.models.active + 1, g_vk.frames, width, height);
 
     // Close it, and read the pair from three frames ago -- retired by now, so the read does not wait.
     if (g_vk.queryPool != VK_NULL_HANDLE)

@@ -576,9 +576,6 @@ sl::Result StreamlineHooks::hkslAllocateResources(sl::CommandBuffer* cmdBuffer, 
                                                   const sl::ViewportHandle& viewport)
 {
     LOG_FUNC();
-    LOG_INFO("VK-RR-DIAG slAllocate feature={} viewport={} cmd=0x{:X}", static_cast<uint32_t>(feature),
-             static_cast<uint32_t>(viewport),
-             reinterpret_cast<uintptr_t>(cmdBuffer));
     auto result = o_slAllocateResources(cmdBuffer, feature, viewport);
     return result;
 }
