@@ -3,6 +3,7 @@
 #include "Util.h"
 #include "Config.h"
 #include "resource.h"
+#include <hooks/Streamline_Hooks.h>
 
 #include "NVNGX_DLSS.h"
 #include <framegen/nvngx/Nvngx_FG.h>
@@ -846,6 +847,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
     // Create feature
     auto handleId = IFeature::GetNextHandleId();
     LOG_INFO("HandleId: {0}", handleId);
+    const auto& slDiagnostic = GetStreamlineVkDiagnosticContext();
+    LOG_INFO("VK-RR-DIAG ngxCreate feature={} handle={} slActive={} viewport={} frame={} slCmd=0x{:X} ngxCmd=0x{:X} declaredSwapchain={}x{}",
+             static_cast<uint32_t>(InFeatureID), handleId, slDiagnostic.active, slDiagnostic.viewport,
+             slDiagnostic.frame, slDiagnostic.commandBuffer, reinterpret_cast<uintptr_t>(InCmdList),
+             static_cast<uint32_t>(State::Instance().screenWidth), static_cast<uint32_t>(State::Instance().screenHeight));
 
     if (InFeatureID == NVSDK_NGX_Feature_SuperSampling)
     {
@@ -1009,6 +1015,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     }
 
     auto handleId = InFeatureHandle->Id;
+    const auto& slDiagnostic = GetStreamlineVkDiagnosticContext();
+    LOG_INFO("VK-RR-DIAG ngxEvaluate featureHandle={} slActive={} viewport={} frame={} slCmd=0x{:X} ngxCmd=0x{:X} swapchain={}x{}",
+             handleId, slDiagnostic.active, slDiagnostic.viewport, slDiagnostic.frame, slDiagnostic.commandBuffer,
+             reinterpret_cast<uintptr_t>(InCmdList), static_cast<uint32_t>(State::Instance().screenWidth),
+             static_cast<uint32_t>(State::Instance().screenHeight));
     if (VkContexts[handleId].feature == nullptr) // prevent source api name flicker when dlssg is active
         state.setInputApiName = state.currentInputApiName;
 
