@@ -8,6 +8,21 @@
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
     X(DlssNrSecondLayer) \
+    X(DlssNrSecondLayerWorkingScale) \
+    X(DlssNrSecondLayerScalingDownscaler) \
+    X(DlssNrSecondLayerTransfer) \
+    X(DlssNrSecondLayerPreset) \
+    X(DlssNrSecondLayerIntensity) \
+    X(DlssNrSecondLayerStyle) \
+    X(DlssNrSecondLayerLocalStructure) \
+    X(DlssNrSecondLayerLocalTone) \
+    X(DlssNrSecondLayerSkinStructure) \
+    X(DlssNrSecondLayerAutoMask) \
+    X(DlssNrSecondLayerTransferStrength) \
+    X(DlssNrSecondLayerColourStrength) \
+    X(DlssNrSecondLayerMaxRatio) \
+    X(DlssNrSecondLayerReversibleMode) \
+    X(DlssNrSecondLayerApplyModel) \
     X(DlssNrRoute) \
     X(DlssNrPresentWorkload) \
     X(DlssNrRunBeforeSr) \

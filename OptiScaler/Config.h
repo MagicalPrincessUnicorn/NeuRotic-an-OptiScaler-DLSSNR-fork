@@ -125,8 +125,24 @@ class Config
     // an undocumented feature driven directly through its snippet, not something NVIDIA exposes.
     NrOptional<bool> DlssNrEnabled { false };
     // Experimental D3D12-only second composed NR layer. Off preserves the established single-pass
-    // route exactly; when enabled, layer 2 inherits every layer-1 model and composition setting.
+    // route exactly. Profiles created before these keys existed are seeded once from layer 1 during
+    // load, then remain independent.
     NrOptional<bool> DlssNrSecondLayer { false };
+    NrOptional<float> DlssNrSecondLayerWorkingScale { 1.0f };
+    NrOptional<Scaler> DlssNrSecondLayerScalingDownscaler { Scaler::Lanczos3 };
+    NrOptional<uint32_t> DlssNrSecondLayerTransfer { 1 };
+    NrOptional<uint32_t> DlssNrSecondLayerPreset { 0 };
+    NrOptional<float> DlssNrSecondLayerIntensity { 1.0f };
+    NrOptional<uint32_t> DlssNrSecondLayerStyle { 0 };
+    NrOptional<float> DlssNrSecondLayerLocalStructure { 1.0f };
+    NrOptional<float> DlssNrSecondLayerLocalTone { 1.0f };
+    NrOptional<float> DlssNrSecondLayerSkinStructure { -1.0f };
+    NrOptional<bool> DlssNrSecondLayerAutoMask { true };
+    NrOptional<float> DlssNrSecondLayerTransferStrength { 1.0f };
+    NrOptional<float> DlssNrSecondLayerColourStrength { 1.0f };
+    NrOptional<float> DlssNrSecondLayerMaxRatio { 2.0f };
+    NrOptional<uint32_t> DlssNrSecondLayerReversibleMode { 0 };
+    NrOptional<bool> DlssNrSecondLayerApplyModel { true };
     // Runtime readers execute on rendering and hook threads. Publish the enable bit together with
     // an off->on generation so a resumed model cannot reuse temporal history across skipped frames.
     void SetDlssNrEnabled(bool enabled);

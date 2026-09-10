@@ -15,6 +15,10 @@ Require ($config.Contains('NrOptional<bool> DlssNrSecondLayer { false };')) `
     'Second-layer config must remain an explicit default-off bool.'
 Require ($snapshot.Contains('X(DlssNrSecondLayer)')) `
     'Second-layer config is missing from the coherent render snapshot.'
+Require ($snapshot.Contains('X(DlssNrSecondLayerWorkingScale)') -and `
+         $snapshot.Contains('X(DlssNrSecondLayerPreset)') -and `
+         $snapshot.Contains('X(DlssNrSecondLayerTransferStrength)')) `
+    'Layer-2 processing controls are missing from the coherent render snapshot.'
 Require (-not $vk.Contains('DlssNrSecondLayer')) `
     'Vulkan must not consume or advertise the D3D12-only second-layer option.'
 Require (-not $dx12.Contains('passFeature')) `
@@ -28,7 +32,7 @@ Require ($firstResolve -ge 0 -and $secondEncode -gt $firstResolve -and `
          $secondEvaluate -gt $secondEncode -and $secondResolve -gt $secondEvaluate) `
     'Layer 2 must encode the completed layer-1 composition, evaluate its own feature, then resolve.'
 
-$create = $dx12.IndexOf("g_nr.layer2.feature =`n            CreateNrFeature")
+$create = $dx12.IndexOf('CreateNrFeature(SecondLayerTuning(cfg)')
 $createReturn = $dx12.IndexOf('This command list contains layer-2 creation', $create)
 $evaluate = $dx12.IndexOf('cmdList, g_nr.layer2.feature, g_nr.capabilityParams', $create)
 Require ($create -ge 0 -and $createReturn -gt $create -and $createReturn -lt $evaluate) `
@@ -38,5 +42,12 @@ Require ($dx12.Contains('const bool releasedLayer2ThisCall = TickNrRetired(true)
     'Layer-2 vendor release must force a lifecycle-only frame.'
 Require ($dx12.Contains('featureAwaitingRelease') -and $dx12.Contains('ParkSecondLayerFeature')) `
     'Layer-2 replacement must remain blocked on completion-gated retirement.'
+Require ($dx12.Contains('cfg.DlssNrSecondLayerWorkingScale.value_or_default()') -and `
+         $dx12.Contains('cfg.DlssNrSecondLayerScalingDownscaler.value_or_default()') -and `
+         $dx12.Contains('cfg.DlssNrSecondLayerTransferStrength.value_or_default()') -and `
+         $dx12.Contains('cfg.DlssNrSecondLayerApplyModel.value_or_default()')) `
+    'Layer 2 must consume its own resolution, resampling, composition and apply controls.'
+Require (-not $dx12.Contains('ParkSecondLayerFeature(resolutionChanged ?')) `
+    'A layer-1-only tuning or working-scale change must not retire layer 2.'
 
-Write-Output 'PASS second NR layer: default-off config, D3D12-only exposure, composed ordering, independent feature, lifecycle-only create/release'
+Write-Output 'PASS second NR layer: default-off config, independent controls/resources, composed ordering, lifecycle-only create/release'

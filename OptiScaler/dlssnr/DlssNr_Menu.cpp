@@ -213,10 +213,7 @@ void RenderMenu(Config* config, float menuResScale)
             if (!d3d12)
                 ImGui::EndDisabled();
 
-            HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer"
-                       "\nframe. It inherits the first layer's model and composition settings."
-                       "\n\nEach layer owns separate temporal history. Enabling it roughly doubles"
-                       "\nthe model cost. This experiment implements the route on D3D12 only.");
+            HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer frame. It owns its model session, history, working resolution and composition settings. Each layer owns separate temporal history. Enabling it roughly doubles the model cost. This experimental D3D12-only pass can be extremely expensive; lower its working resolution if the game stops being playable.");
 
             if (!d3d12)
                 ImGui::TextDisabled("Second neural-rendering layer requires D3D12.");
@@ -233,6 +230,70 @@ void RenderMenu(Config* config, float menuResScale)
                     ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
                 else
                     ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Two composed NR layers ready.");
+            }
+
+            if (auto panel = ScopedCollapsingHeader("Second-pass settings (experimental)"); panel.IsHeaderOpen())
+            {
+                ScopedIndent indent {};
+                ScopedNestedTextWrap wrap {};
+                if (!secondLayer || !d3d12)
+                    ImGui::BeginDisabled();
+
+                ImGui::TextDisabled("Independent layer-2 tuning. Lower Model resolution first when testing performance.");
+                ImGui::PushItemWidth(220.0f * menuResScale);
+
+                int scale = (int) lroundf(config->DlssNrSecondLayerWorkingScale.value_or_default() * 100.0f);
+                if (ImGui::SliderInt("Model resolution##layer2", &scale, 25, 200, "%d%%"))
+                    config->DlssNrSecondLayerWorkingScale = std::clamp(scale, 25, 200) / 100.0f;
+
+                if (scale > 100)
+                {
+                    static const char* downscalerNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+                    int downscaler = (int) config->DlssNrSecondLayerScalingDownscaler.value_or_default();
+                    downscaler = std::clamp(downscaler, 0, IM_ARRAYSIZE(downscalerNames) - 1);
+                    if (ImGui::Combo("Downscaler##layer2", &downscaler, downscalerNames, IM_ARRAYSIZE(downscalerNames)))
+                        config->DlssNrSecondLayerScalingDownscaler = (Scaler) downscaler;
+                }
+
+                static const char* presetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
+                int preset = std::clamp((int) config->DlssNrSecondLayerPreset.value_or_default(), 0, 3);
+                if (ImGui::Combo("Model preset##layer2", &preset, presetNames, IM_ARRAYSIZE(presetNames)))
+                    config->DlssNrSecondLayerPreset = (uint32_t) preset;
+
+                static const char* styleNames[] = { "Default (standard)", "Natural", "Cinematic" };
+                int style = std::clamp((int) config->DlssNrSecondLayerStyle.value_or_default(), 0, 2);
+                if (ImGui::Combo("Style##layer2", &style, styleNames, IM_ARRAYSIZE(styleNames)))
+                    config->DlssNrSecondLayerStyle = (uint32_t) style;
+
+                const bool reduced = config->DlssNrSecondLayerWorkingScale.value_or_default() < 0.999f;
+                if (!reduced) ImGui::BeginDisabled();
+                static const char* enlargementNames[] = { "Classic", "Matched residual" };
+                int enlargement = config->DlssNrSecondLayerTransfer.value_or_default() == 1 ? 1 : 0;
+                if (ImGui::Combo("Enlargement##layer2", &enlargement, enlargementNames, IM_ARRAYSIZE(enlargementNames)))
+                    config->DlssNrSecondLayerTransfer = (uint32_t) enlargement;
+                if (!reduced) ImGui::EndDisabled();
+
+                float detail = config->DlssNrSecondLayerTransferStrength.value_or_default();
+                if (ImGui::SliderFloat("Detail strength##layer2", &detail, 0.0f, 2.0f, "%.2f"))
+                    config->DlssNrSecondLayerTransferStrength = std::clamp(detail, 0.0f, 2.0f);
+                float colour = config->DlssNrSecondLayerColourStrength.value_or_default();
+                if (ImGui::SliderFloat("Colour strength##layer2", &colour, 0.0f, 4.0f, "%.2f"))
+                    config->DlssNrSecondLayerColourStrength = std::clamp(colour, 0.0f, 4.0f);
+                float guard = config->DlssNrSecondLayerMaxRatio.value_or_default();
+                if (ImGui::SliderFloat("Highlight guard##layer2", &guard, 1.0f, 8.0f, "%.1fx"))
+                    config->DlssNrSecondLayerMaxRatio = std::clamp(guard, 1.0f, 8.0f);
+
+                DeferredSlider("Intensity##layer2", &config->DlssNrSecondLayerIntensity, 0.0f, 2.0f, 1.0f);
+                DeferredSlider("Local structure##layer2", &config->DlssNrSecondLayerLocalStructure, 0.0f, 2.0f, 1.0f);
+                DeferredSlider("Local tone##layer2", &config->DlssNrSecondLayerLocalTone, 0.0f, 2.0f, 1.0f);
+                DeferredSlider("Skin structure##layer2", &config->DlssNrSecondLayerSkinStructure, -1.0f, 2.0f, -1.0f);
+
+                bool autoMask = config->DlssNrSecondLayerAutoMask.value_or_default();
+                if (ImGui::Checkbox("Auto skin mask##layer2", &autoMask)) config->DlssNrSecondLayerAutoMask = autoMask;
+                bool apply = config->DlssNrSecondLayerApplyModel.value_or_default();
+                if (ImGui::Checkbox("Apply the model##layer2", &apply)) config->DlssNrSecondLayerApplyModel = apply;
+                ImGui::PopItemWidth();
+                if (!secondLayer || !d3d12) ImGui::EndDisabled();
             }
         };
 

@@ -29,6 +29,21 @@ struct TestConfig
     NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
     NrOptional<bool> DlssNrEnabled { false };
     NrOptional<bool> DlssNrSecondLayer { false };
+    NrOptional<float> DlssNrSecondLayerWorkingScale { 1.0f };
+    NrOptional<Scaler> DlssNrSecondLayerScalingDownscaler { Scaler::Lanczos3 };
+    NrOptional<uint32_t> DlssNrSecondLayerTransfer { 1 };
+    NrOptional<uint32_t> DlssNrSecondLayerPreset { 0 };
+    NrOptional<float> DlssNrSecondLayerIntensity { 1.0f };
+    NrOptional<uint32_t> DlssNrSecondLayerStyle { 0 };
+    NrOptional<float> DlssNrSecondLayerLocalStructure { 1.0f };
+    NrOptional<float> DlssNrSecondLayerLocalTone { 1.0f };
+    NrOptional<float> DlssNrSecondLayerSkinStructure { -1.0f };
+    NrOptional<bool> DlssNrSecondLayerAutoMask { true };
+    NrOptional<float> DlssNrSecondLayerTransferStrength { 1.0f };
+    NrOptional<float> DlssNrSecondLayerColourStrength { 1.0f };
+    NrOptional<float> DlssNrSecondLayerMaxRatio { 2.0f };
+    NrOptional<uint32_t> DlssNrSecondLayerReversibleMode { 0 };
+    NrOptional<bool> DlssNrSecondLayerApplyModel { true };
     NrOptional<uint32_t> DlssNrRoute { 0 };
     NrOptional<uint32_t> DlssNrPresentWorkload { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
@@ -317,7 +332,7 @@ void SnapshotCost()
         checksum += snapshot.DlssNrWorkingScale.value_or_default() > 0;
     }
     const auto elapsed = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start);
-    std::cout << "INFO single-lock 45-field snapshot (2 KiB anchor, uncontended): "
+    std::cout << "INFO single-lock 60-field snapshot (2 KiB anchor, uncontended): "
               << elapsed.count() / count << " us/capture; checksum=" << checksum << '\n';
 }
 

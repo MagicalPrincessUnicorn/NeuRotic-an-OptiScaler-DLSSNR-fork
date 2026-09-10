@@ -417,6 +417,43 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrReversibleMode.set_from_config(readUInt("DlssNr", "ReversibleMode"));
             DlssNrApplyModel.set_from_config(readBool("DlssNr", "ApplyModel"));
             DlssNrHoldFrame.set_from_config(readBool("DlssNr", "HoldFrame"));
+
+            DlssNrSecondLayerWorkingScale.set_from_config(readFloat("DlssNrLayer2", "WorkingScale"));
+            if (auto value = readEnum<Scaler>("DlssNrLayer2", "ScalingDownscaler"))
+                DlssNrSecondLayerScalingDownscaler.set_from_config(*value);
+            else
+                DlssNrSecondLayerScalingDownscaler.reset();
+            DlssNrSecondLayerTransfer.set_from_config(readUInt("DlssNrLayer2", "Transfer"));
+            DlssNrSecondLayerPreset.set_from_config(readUInt("DlssNrLayer2", "Preset"));
+            DlssNrSecondLayerIntensity.set_from_config(readFloat("DlssNrLayer2", "Intensity"));
+            DlssNrSecondLayerStyle.set_from_config(readUInt("DlssNrLayer2", "Style"));
+            DlssNrSecondLayerLocalStructure.set_from_config(readFloat("DlssNrLayer2", "LocalStructure"));
+            DlssNrSecondLayerLocalTone.set_from_config(readFloat("DlssNrLayer2", "LocalTone"));
+            DlssNrSecondLayerSkinStructure.set_from_config(readFloat("DlssNrLayer2", "SkinStructure"));
+            DlssNrSecondLayerAutoMask.set_from_config(readBool("DlssNrLayer2", "AutoMask"));
+            DlssNrSecondLayerTransferStrength.set_from_config(readFloat("DlssNrLayer2", "TransferStrength"));
+            DlssNrSecondLayerColourStrength.set_from_config(readFloat("DlssNrLayer2", "ColourStrength"));
+            DlssNrSecondLayerMaxRatio.set_from_config(readFloat("DlssNrLayer2", "MaxRatio"));
+            DlssNrSecondLayerReversibleMode.set_from_config(readUInt("DlssNrLayer2", "ReversibleMode"));
+            DlssNrSecondLayerApplyModel.set_from_config(readBool("DlssNrLayer2", "ApplyModel"));
+
+            // Missing keys describe a phase-one profile. Seed once from the loaded first-layer profile,
+            // preserving its existing two-layer picture without sharing mutable state afterwards.
+            if (!DlssNrSecondLayerWorkingScale.has_value()) DlssNrSecondLayerWorkingScale = DlssNrWorkingScale.value_or_default();
+            if (!DlssNrSecondLayerScalingDownscaler.has_value()) DlssNrSecondLayerScalingDownscaler = DlssNrScalingDownscaler.value_or_default();
+            if (!DlssNrSecondLayerTransfer.has_value()) DlssNrSecondLayerTransfer = DlssNrTransfer.value_or_default();
+            if (!DlssNrSecondLayerPreset.has_value()) DlssNrSecondLayerPreset = DlssNrPreset.value_or_default();
+            if (!DlssNrSecondLayerIntensity.has_value()) DlssNrSecondLayerIntensity = DlssNrIntensity.value_or_default();
+            if (!DlssNrSecondLayerStyle.has_value()) DlssNrSecondLayerStyle = DlssNrStyle.value_or_default();
+            if (!DlssNrSecondLayerLocalStructure.has_value()) DlssNrSecondLayerLocalStructure = DlssNrLocalStructure.value_or_default();
+            if (!DlssNrSecondLayerLocalTone.has_value()) DlssNrSecondLayerLocalTone = DlssNrLocalTone.value_or_default();
+            if (!DlssNrSecondLayerSkinStructure.has_value()) DlssNrSecondLayerSkinStructure = DlssNrSkinStructure.value_or_default();
+            if (!DlssNrSecondLayerAutoMask.has_value()) DlssNrSecondLayerAutoMask = DlssNrAutoMask.value_or_default();
+            if (!DlssNrSecondLayerTransferStrength.has_value()) DlssNrSecondLayerTransferStrength = DlssNrTransferStrength.value_or_default();
+            if (!DlssNrSecondLayerColourStrength.has_value()) DlssNrSecondLayerColourStrength = DlssNrColourStrength.value_or_default();
+            if (!DlssNrSecondLayerMaxRatio.has_value()) DlssNrSecondLayerMaxRatio = DlssNrMaxRatio.value_or_default();
+            if (!DlssNrSecondLayerReversibleMode.has_value()) DlssNrSecondLayerReversibleMode = DlssNrReversibleMode.value_or_default();
+            if (!DlssNrSecondLayerApplyModel.has_value()) DlssNrSecondLayerApplyModel = DlssNrApplyModel.value_or_default();
             }
             UseGenericAppIdWithDlss.set_from_config(readBool("DLSS", "UseGenericAppIdWithDlss"));
 
@@ -1255,6 +1292,21 @@ bool Config::SaveIni()
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SecondLayer",
                  GetBoolValue(Instance()->DlssNrSecondLayer.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "WorkingScale", GetFloatValue(Instance()->DlssNrSecondLayerWorkingScale.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "ScalingDownscaler", GetIntValue(Instance()->DlssNrSecondLayerScalingDownscaler.snapshot()).c_str());
+    ini.SetValue("DlssNrLayer2", "Transfer", GetIntValue(Instance()->DlssNrSecondLayerTransfer.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "Preset", GetIntValue(Instance()->DlssNrSecondLayerPreset.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "Intensity", GetFloatValue(Instance()->DlssNrSecondLayerIntensity.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "Style", GetIntValue(Instance()->DlssNrSecondLayerStyle.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "LocalStructure", GetFloatValue(Instance()->DlssNrSecondLayerLocalStructure.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "LocalTone", GetFloatValue(Instance()->DlssNrSecondLayerLocalTone.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "SkinStructure", GetFloatValue(Instance()->DlssNrSecondLayerSkinStructure.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "AutoMask", GetBoolValue(Instance()->DlssNrSecondLayerAutoMask.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "TransferStrength", GetFloatValue(Instance()->DlssNrSecondLayerTransferStrength.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "ColourStrength", GetFloatValue(Instance()->DlssNrSecondLayerColourStrength.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "MaxRatio", GetFloatValue(Instance()->DlssNrSecondLayerMaxRatio.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "ReversibleMode", GetIntValue(Instance()->DlssNrSecondLayerReversibleMode.value_for_config()).c_str());
+    ini.SetValue("DlssNrLayer2", "ApplyModel", GetBoolValue(Instance()->DlssNrSecondLayerApplyModel.value_for_config()).c_str());
     ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
     ini.SetValue("DlssNr", "PresentWorkload",
                  GetIntValue(Instance()->DlssNrPresentWorkload.value_for_config()).c_str());

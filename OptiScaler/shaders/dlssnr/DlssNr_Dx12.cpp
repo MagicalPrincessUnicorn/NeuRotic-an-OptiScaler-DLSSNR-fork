@@ -188,6 +188,16 @@ struct PreSrSignature
     float localTone = 0.0f;
     float skinStructure = 0.0f;
     bool autoMask = false;
+    bool secondLayer = false;
+    uint32_t secondWorkWidth = 0;
+    uint32_t secondWorkHeight = 0;
+    unsigned int secondPreset = 0;
+    float secondIntensity = 0.0f;
+    unsigned int secondStyle = 0;
+    float secondLocalStructure = 0.0f;
+    float secondLocalTone = 0.0f;
+    float secondSkinStructure = 0.0f;
+    bool secondAutoMask = false;
 
     bool operator==(const PreSrSignature& other) const
     {
@@ -198,7 +208,13 @@ struct PreSrSignature
                perfQuality == other.perfQuality && preDlaa == other.preDlaa &&
                preset == other.preset && intensity == other.intensity && style == other.style &&
                localStructure == other.localStructure && localTone == other.localTone &&
-               skinStructure == other.skinStructure && autoMask == other.autoMask;
+               skinStructure == other.skinStructure && autoMask == other.autoMask &&
+               secondLayer == other.secondLayer && secondWorkWidth == other.secondWorkWidth &&
+               secondWorkHeight == other.secondWorkHeight && secondPreset == other.secondPreset &&
+               secondIntensity == other.secondIntensity && secondStyle == other.secondStyle &&
+               secondLocalStructure == other.secondLocalStructure &&
+               secondLocalTone == other.secondLocalTone &&
+               secondSkinStructure == other.secondSkinStructure && secondAutoMask == other.secondAutoMask;
     }
 };
 
@@ -820,8 +836,40 @@ static bool EnsurePrivateCreateKit(ID3D12Device* device)
     return true;
 }
 
-static void* CreateNrFeature(const NrConfigSnapshot<Config>& cfg, ID3D12Device* device, ID3D12GraphicsCommandList* gameList,
-                             const std::filesystem::path& snippet, unsigned int workWidth, unsigned int workHeight)
+struct NrFeatureTuning
+{
+    uint32_t preset;
+    float intensity;
+    uint32_t style;
+    float localStructure;
+    float localTone;
+    float skinStructure;
+    bool autoMask;
+};
+
+static NrFeatureTuning FirstLayerTuning(const NrConfigSnapshot<Config>& cfg)
+{
+    return { cfg.DlssNrPreset.value_or_default(), cfg.DlssNrIntensity.value_or_default(),
+             cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+             cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+             cfg.DlssNrAutoMask.value_or_default() };
+}
+
+static NrFeatureTuning SecondLayerTuning(const NrConfigSnapshot<Config>& cfg)
+{
+    return { cfg.DlssNrSecondLayerPreset.value_or_default(),
+             cfg.DlssNrSecondLayerIntensity.value_or_default(),
+             cfg.DlssNrSecondLayerStyle.value_or_default(),
+             cfg.DlssNrSecondLayerLocalStructure.value_or_default(),
+             cfg.DlssNrSecondLayerLocalTone.value_or_default(),
+             cfg.DlssNrSecondLayerSkinStructure.value_or_default(),
+             cfg.DlssNrSecondLayerAutoMask.value_or_default() };
+}
+
+static void* CreateNrFeature(const NrFeatureTuning& tuning, ID3D12Device* device,
+                             ID3D12GraphicsCommandList* gameList,
+                             const std::filesystem::path& snippet, unsigned int workWidth,
+                             unsigned int workHeight)
 {
     // The former Private Queue experiment is retired; feature creation always stays on the game list.
     const bool privateQueue = false;
@@ -838,10 +886,9 @@ static void* CreateNrFeature(const NrConfigSnapshot<Config>& cfg, ID3D12Device* 
     }
     void* feature = g_nr.create(snippet.wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
                                 device, createList, g_nr.capabilityParams, workWidth, workHeight,
-                                (int) cfg.DlssNrPreset.value_or_default(), cfg.DlssNrIntensity.value_or_default(),
-                                (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
-                                cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
-                                cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
+                                (int) tuning.preset, tuning.intensity, (int) tuning.style,
+                                tuning.localStructure, tuning.localTone, tuning.skinStructure,
+                                tuning.autoMask ? 1 : 0, 1);
     if (!privateQueue) return feature;
     if (FAILED(g_nr.privateCreateList->Close()))
     {
@@ -1736,48 +1783,46 @@ void SetExtras(const NrConfigSnapshot<Config>& cfg, ID3D12Resource* ui, ID3D12Re
 
 bool TuningMatchesFeature(const NrConfigSnapshot<Config>& cfg)
 {
-    return g_nr.builtPreset == cfg.DlssNrPreset.value_or_default() &&
-           g_nr.builtIntensity == cfg.DlssNrIntensity.value_or_default() &&
-           g_nr.builtStyle == cfg.DlssNrStyle.value_or_default() &&
-           g_nr.builtLocalStructure == cfg.DlssNrLocalStructure.value_or_default() &&
-           g_nr.builtLocalTone == cfg.DlssNrLocalTone.value_or_default() &&
-           g_nr.builtSkinStructure == cfg.DlssNrSkinStructure.value_or_default() &&
-           g_nr.builtAutoMask == cfg.DlssNrAutoMask.value_or_default();
+    const auto tuning = FirstLayerTuning(cfg);
+    return g_nr.builtPreset == tuning.preset && g_nr.builtIntensity == tuning.intensity &&
+           g_nr.builtStyle == tuning.style && g_nr.builtLocalStructure == tuning.localStructure &&
+           g_nr.builtLocalTone == tuning.localTone &&
+           g_nr.builtSkinStructure == tuning.skinStructure && g_nr.builtAutoMask == tuning.autoMask;
 }
 
 void RecordBuiltTuning(const NrConfigSnapshot<Config>& cfg)
 {
-    g_nr.builtPreset = cfg.DlssNrPreset.value_or_default();
-    g_nr.builtIntensity = cfg.DlssNrIntensity.value_or_default();
-    g_nr.builtStyle = cfg.DlssNrStyle.value_or_default();
-    g_nr.builtLocalStructure = cfg.DlssNrLocalStructure.value_or_default();
-    g_nr.builtLocalTone = cfg.DlssNrLocalTone.value_or_default();
-    g_nr.builtSkinStructure = cfg.DlssNrSkinStructure.value_or_default();
-    g_nr.builtAutoMask = cfg.DlssNrAutoMask.value_or_default();
+    const auto tuning = FirstLayerTuning(cfg);
+    g_nr.builtPreset = tuning.preset;
+    g_nr.builtIntensity = tuning.intensity;
+    g_nr.builtStyle = tuning.style;
+    g_nr.builtLocalStructure = tuning.localStructure;
+    g_nr.builtLocalTone = tuning.localTone;
+    g_nr.builtSkinStructure = tuning.skinStructure;
+    g_nr.builtAutoMask = tuning.autoMask;
 }
 
 bool SecondLayerTuningMatches(const NrConfigSnapshot<Config>& cfg)
 {
     const auto& layer = g_nr.layer2;
-    return layer.builtPreset == cfg.DlssNrPreset.value_or_default() &&
-           layer.builtIntensity == cfg.DlssNrIntensity.value_or_default() &&
-           layer.builtStyle == cfg.DlssNrStyle.value_or_default() &&
-           layer.builtLocalStructure == cfg.DlssNrLocalStructure.value_or_default() &&
-           layer.builtLocalTone == cfg.DlssNrLocalTone.value_or_default() &&
-           layer.builtSkinStructure == cfg.DlssNrSkinStructure.value_or_default() &&
-           layer.builtAutoMask == cfg.DlssNrAutoMask.value_or_default();
+    const auto tuning = SecondLayerTuning(cfg);
+    return layer.builtPreset == tuning.preset && layer.builtIntensity == tuning.intensity &&
+           layer.builtStyle == tuning.style && layer.builtLocalStructure == tuning.localStructure &&
+           layer.builtLocalTone == tuning.localTone && layer.builtSkinStructure == tuning.skinStructure &&
+           layer.builtAutoMask == tuning.autoMask;
 }
 
 void RecordSecondLayerTuning(const NrConfigSnapshot<Config>& cfg)
 {
     auto& layer = g_nr.layer2;
-    layer.builtPreset = cfg.DlssNrPreset.value_or_default();
-    layer.builtIntensity = cfg.DlssNrIntensity.value_or_default();
-    layer.builtStyle = cfg.DlssNrStyle.value_or_default();
-    layer.builtLocalStructure = cfg.DlssNrLocalStructure.value_or_default();
-    layer.builtLocalTone = cfg.DlssNrLocalTone.value_or_default();
-    layer.builtSkinStructure = cfg.DlssNrSkinStructure.value_or_default();
-    layer.builtAutoMask = cfg.DlssNrAutoMask.value_or_default();
+    const auto tuning = SecondLayerTuning(cfg);
+    layer.builtPreset = tuning.preset;
+    layer.builtIntensity = tuning.intensity;
+    layer.builtStyle = tuning.style;
+    layer.builtLocalStructure = tuning.localStructure;
+    layer.builtLocalTone = tuning.localTone;
+    layer.builtSkinStructure = tuning.skinStructure;
+    layer.builtAutoMask = tuning.autoMask;
 }
 
 // Guards the module's state. Every caller is now on the game's render thread, so this is no longer
@@ -2348,6 +2393,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     const bool reduced = workWidth != width || workHeight != height;
 
+    float layer2WorkScale = cfg.DlssNrSecondLayerWorkingScale.value_or_default();
+    layer2WorkScale = layer2WorkScale < 0.25f ? 0.25f : (layer2WorkScale > 2.0f ? 2.0f : layer2WorkScale);
+    const unsigned int layer2WorkWidth = std::max(8u, (unsigned int) (width * layer2WorkScale + 0.5f) & ~7u);
+    const unsigned int layer2WorkHeight = std::max(8u, (unsigned int) (height * layer2WorkScale + 0.5f) & ~7u);
+    const bool layer2Reduced = layer2WorkWidth != width || layer2WorkHeight != height;
+
     // Prepare every size-dependent surface before publishing any replacement or retiring a feature.
     // A failed allocation leaves the old bundle intact, including its retirement tickets.
     DlssNr::Detail::ScratchTransaction scratch({{
@@ -2363,11 +2414,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         layer2Scratch = std::make_unique<DlssNr::Detail::ScratchTransaction>(
             std::array<DlssNr::Detail::ScratchTransaction::Request,
                        DlssNr::Detail::ScratchTransaction::Count> {{
-                { &g_nr.layer2.output, desc.Format, workWidth, workHeight, true },
+                { &g_nr.layer2.output, desc.Format, layer2WorkWidth, layer2WorkHeight, true },
                 { &g_nr.layer2.colorCopy, desc.Format, width, height, true },
                 { &g_nr.layer2.hdrCopy, desc.Format, width, height, true },
-                { &g_nr.layer2.colorSmall, desc.Format, workWidth, workHeight, reduced },
-                { &g_nr.layer2.outputNative, desc.Format, width, height, workScale > 1.0f },
+                { &g_nr.layer2.colorSmall, desc.Format, layer2WorkWidth, layer2WorkHeight, layer2Reduced },
+                { &g_nr.layer2.outputNative, desc.Format, width, height, layer2WorkScale > 1.0f },
             }});
     }
 
@@ -2388,6 +2439,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     const bool resolutionChanged = g_nr.width != width || g_nr.height != height ||
                                    g_nr.workWidth != workWidth || g_nr.workHeight != workHeight;
+    const bool frameDimensionsChanged = g_nr.width != width || g_nr.height != height;
 
     // The model reads its tuning once, while the feature is built, so a changed setting only takes
     // effect when the feature is rebuilt. TuningMatchesFeature was written to notice that and then
@@ -2402,7 +2454,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Parked rather than released: with frame generation the GPU can still be several frames
         // deep in work that references all of it.
         ParkNrFeature(g_nr.feature);
-        ParkSecondLayerFeature(resolutionChanged ? "model resolution changed" : "model tuning changed");
+        // Layer 2 owns its working resolution and model signature. A first-layer-only slider must
+        // never retire it; only a changed composed-frame size invalidates its resources.
+        if (frameDimensionsChanged)
+            ParkSecondLayerFeature("composed frame dimensions changed");
 
         // Only a resolution change invalidates the scratch textures. Tuning does not, and throwing
         // them away for it would mean a reallocation every time a slider moves.
@@ -2487,7 +2542,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
 
         SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
-        g_nr.feature = CreateNrFeature(cfg, device, cmdList, snippet.value(), workWidth, workHeight);
+        g_nr.feature = CreateNrFeature(FirstLayerTuning(cfg), device, cmdList, snippet.value(), workWidth, workHeight);
 
         if (g_nr.feature == nullptr)
         {
@@ -2527,7 +2582,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     if (secondLayerHealthy && g_nr.layer2.feature != nullptr &&
         (g_nr.layer2.width != width || g_nr.layer2.height != height ||
-         g_nr.layer2.workWidth != workWidth || g_nr.layer2.workHeight != workHeight ||
+         g_nr.layer2.workWidth != layer2WorkWidth || g_nr.layer2.workHeight != layer2WorkHeight ||
          !SecondLayerTuningMatches(cfg)))
     {
         ParkSecondLayerFeature("layer-2 creation signature changed");
@@ -2552,7 +2607,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
         SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
         g_nr.layer2.feature =
-            CreateNrFeature(cfg, device, cmdList, snippet.value(), workWidth, workHeight);
+            CreateNrFeature(SecondLayerTuning(cfg), device, cmdList, snippet.value(), layer2WorkWidth, layer2WorkHeight);
 
         if (g_nr.layer2.feature == nullptr)
         {
@@ -2570,8 +2625,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ++g_layer2FeatureBuilds;
         g_nr.layer2.width = width;
         g_nr.layer2.height = height;
-        g_nr.layer2.workWidth = workWidth;
-        g_nr.layer2.workHeight = workHeight;
+        g_nr.layer2.workWidth = layer2WorkWidth;
+        g_nr.layer2.workHeight = layer2WorkHeight;
         g_nr.layer2.reset = true;
         g_nr.layer2.ready = false;
         g_nr.layer2.routeKnown = true;
@@ -2579,7 +2634,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         RecordSecondLayerTuning(cfg);
         LOG_INFO("DLSS-NR layer 2: Feature 18 session created at {}x{} (build {}); "
                  "both evaluations wait for the next command list",
-                 workWidth, workHeight, g_layer2FeatureBuilds);
+                 layer2WorkWidth, layer2WorkHeight, g_layer2FeatureBuilds);
 
         // This command list contains layer-2 creation and therefore evaluates neither NR layer.
         device->Release();
@@ -3192,7 +3247,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         {
             // Layer 1 is now fully composed onto target. Layer 2 starts a new complete pipeline from
             // that result; it never consumes layer 1's raw model output.
+            const auto layer2Tuning = SecondLayerTuning(cfg);
+            const float mvToLayer2Work = width != 0 ? (float) layer2WorkWidth / (float) width : 1.0f;
             DlssNrConstants layer2Encode = encodeParams;
+            layer2Encode.ReversibleMode = cfg.DlssNrSecondLayerReversibleMode.value_or_default();
             resourceStates.Transition(target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             if (!DispatchPass(cmdList, layer2Encode, target, nullptr, nullptr, nullptr, exposureTex,
@@ -3222,12 +3280,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 ID3D12Resource* layer2ModelInput = g_nr.layer2.colorCopy;
                 bool layer2PreparationOk = true;
 
-                if (reduced && g_nr.layer2.colorSmall != nullptr)
+                if (layer2Reduced && g_nr.layer2.colorSmall != nullptr)
                 {
                     bool built = false;
-                    if (workScale > 1.0f)
+                    if (layer2WorkScale > 1.0f)
                     {
-                        const Scaler nrScaler = cfg.DlssNrScalingDownscaler.value_or_default();
+                        const Scaler nrScaler = cfg.DlssNrSecondLayerScalingDownscaler.value_or_default();
                         if (g_nr.layer2.scaler != nrScaler)
                         {
                             for (auto** scaler : { &g_nr.layer2.superUp, &g_nr.layer2.superDown })
@@ -3262,8 +3320,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     {
                         DlssNrConstants down {};
                         down.Mode = DlssNrMode_Downsample;
-                        down.Width = workWidth;
-                        down.Height = workHeight;
+                        down.Width = layer2WorkWidth;
+                        down.Height = layer2WorkHeight;
                         layer2PreparationOk =
                             DispatchPass(cmdList, down, layer2ModelInput, nullptr, nullptr, nullptr,
                                          nullptr, g_nr.layer2.colorSmall, nullptr);
@@ -3297,15 +3355,13 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
                     const int layer2Result = g_nr.evaluate(
                         cmdList, g_nr.layer2.feature, g_nr.capabilityParams, layer2ModelInput,
-                        depthIn, motionIn, g_nr.layer2.output, workWidth, workHeight, guideWidth,
+                        depthIn, motionIn, g_nr.layer2.output, layer2WorkWidth, layer2WorkHeight, guideWidth,
                         guideHeight, g_nr.guideDepthInverted ? 1 : 0,
-                        g_nr.layer2.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
-                        (int) cfg.DlssNrStyle.value_or_default(),
-                        cfg.DlssNrLocalStructure.value_or_default(),
-                        cfg.DlssNrLocalTone.value_or_default(),
-                        cfg.DlssNrSkinStructure.value_or_default(),
-                        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0,
-                        g_nr.guideMvScaleX * mvToWork, g_nr.guideMvScaleY * mvToWork,
+                        g_nr.layer2.reset ? 1 : 0, layer2Tuning.intensity,
+                        (int) layer2Tuning.style, layer2Tuning.localStructure,
+                        layer2Tuning.localTone, layer2Tuning.skinStructure,
+                        layer2Tuning.autoMask ? 1 : 0,
+                        g_nr.guideMvScaleX * mvToLayer2Work, g_nr.guideMvScaleY * mvToLayer2Work,
                         frame.JitterX, frame.JitterY);
 
                     if (g_ngxTimeLayer2 != nullptr)
@@ -3332,7 +3388,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
                         bool layer2SuperDownOk = false;
-                        if (workScale > 1.0f && g_nr.layer2.superDown != nullptr &&
+                        if (layer2WorkScale > 1.0f && g_nr.layer2.superDown != nullptr &&
                             g_nr.layer2.outputNative != nullptr &&
                             g_nr.layer2.superDown->Dispatch(cmdList, g_nr.layer2.output,
                                                            g_nr.layer2.outputNative))
@@ -3348,7 +3404,14 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                         ID3D12Resource* layer2ResolveAnswer =
                             layer2SuperDownOk ? g_nr.layer2.outputNative : g_nr.layer2.output;
 
-                        if (!DispatchPass(cmdList, resolveParams, layer2ResolveProxy,
+                        DlssNrConstants layer2Resolve = resolveParams;
+                        layer2Resolve.TransferStrength = cfg.DlssNrSecondLayerTransferStrength.value_or_default();
+                        layer2Resolve.ColourStrength = cfg.DlssNrSecondLayerColourStrength.value_or_default();
+                        layer2Resolve.MaxRatio = cfg.DlssNrSecondLayerMaxRatio.value_or_default();
+                        layer2Resolve.Transfer = cfg.DlssNrSecondLayerTransfer.value_or_default();
+                        layer2Resolve.ReversibleMode = cfg.DlssNrSecondLayerReversibleMode.value_or_default();
+                        layer2Resolve.ApplyModel = cfg.DlssNrSecondLayerApplyModel.value_or_default() ? 1u : 0u;
+                        if (!DispatchPass(cmdList, layer2Resolve, layer2ResolveProxy,
                                           layer2ResolveAnswer, g_nr.layer2.hdrCopy, motionIn,
                                           exposureTex, target, nullptr))
                         {
@@ -3861,6 +3924,12 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     expectedWorkW = std::max(8u, expectedWorkW & ~7u);
     expectedWorkH = std::max(8u, expectedWorkH & ~7u);
 
+    float expectedSecondScale = cfg.DlssNrSecondLayerWorkingScale.value_or_default();
+    expectedSecondScale = expectedSecondScale < 0.25f ? 0.25f : (expectedSecondScale > 2.0f ? 2.0f : expectedSecondScale);
+    const unsigned int expectedSecondWorkW = std::max(8u, (unsigned int) (observedWidth * expectedSecondScale + 0.5f) & ~7u);
+    const unsigned int expectedSecondWorkH = std::max(8u, (unsigned int) (observedHeight * expectedSecondScale + 0.5f) & ~7u);
+    const auto expectedSecondTuning = SecondLayerTuning(cfg);
+
     const PreSrSignature signature { observedWidth,
                                      observedHeight,
                                      colorDesc.Format,
@@ -3877,7 +3946,13 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                      cfg.DlssNrLocalStructure.value_or_default(),
                                      cfg.DlssNrLocalTone.value_or_default(),
                                      cfg.DlssNrSkinStructure.value_or_default(),
-                                     cfg.DlssNrAutoMask.value_or_default() };
+                                     cfg.DlssNrAutoMask.value_or_default(),
+                                     cfg.DlssNrSecondLayer.value_or_default(),
+                                     expectedSecondWorkW, expectedSecondWorkH,
+                                     expectedSecondTuning.preset, expectedSecondTuning.intensity,
+                                     expectedSecondTuning.style, expectedSecondTuning.localStructure,
+                                     expectedSecondTuning.localTone, expectedSecondTuning.skinStructure,
+                                     expectedSecondTuning.autoMask };
 
     int resetValue = 0;
     const bool resetRequested =
@@ -4065,7 +4140,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         (!cfg.DlssNrSecondLayer.value_or_default() || g_nr.layer2.failed ||
          (g_nr.layer2.feature != nullptr &&
           g_nr.layer2.width == observedWidth && g_nr.layer2.height == observedHeight &&
-          g_nr.layer2.workWidth == expectedWorkW && g_nr.layer2.workHeight == expectedWorkH &&
+          g_nr.layer2.workWidth == expectedSecondWorkW && g_nr.layer2.workHeight == expectedSecondWorkH &&
           SecondLayerTuningMatches(cfg)));
 
     const unsigned long long successfulEvaluationsBefore = g_nr.completedPipelineEvaluations;
