@@ -544,10 +544,6 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
             }
         }
     }
-    if (diagnostic.active)
-        LOG_INFO("VK-RR-DIAG slEvaluate feature={} viewport={} frame={} cmd=0x{:X}", diagnostic.feature,
-                 diagnostic.viewport, diagnostic.frame, diagnostic.commandBuffer);
-
     if (State::Instance().activeFgInput == FGInput::DLSSG && numInputs > 0 && inputs != nullptr)
     {
         for (uint32_t i = 0; i < numInputs; i++)
@@ -572,9 +568,6 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
     }
 
     auto result = o_slEvaluateFeature(feature, frame, inputs, numInputs, cmdBuffer);
-    if (diagnostic.active)
-        LOG_INFO("VK-RR-DIAG slEvaluate result={} viewport={} frame={} cmd=0x{:X}", static_cast<int>(result),
-                 diagnostic.viewport, diagnostic.frame, diagnostic.commandBuffer);
     diagnostic = saved;
     return result;
 }

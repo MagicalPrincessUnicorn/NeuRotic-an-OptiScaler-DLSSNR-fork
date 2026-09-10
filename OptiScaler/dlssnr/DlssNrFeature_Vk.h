@@ -48,6 +48,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 // Whether the native Vulkan path is up, and why not if it is not.
 bool IsRunningVk();
 const char* FailureReasonVk();
+void RequestHistoryResetVk();
 
 // How many frames it has actually composed. The menu needs this to tell "up but nothing has come
 // through yet" apart from "running", and the D3D12 counters say nothing about this path.

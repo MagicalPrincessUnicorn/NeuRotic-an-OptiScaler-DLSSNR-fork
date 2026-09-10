@@ -531,6 +531,12 @@ const char* FailureReasonVk()
                              : (g_vk.failed ? g_vk.reason : "");
 }
 
+void RequestHistoryResetVk()
+{
+    std::lock_guard<std::mutex> lock(g_vkMutex);
+    g_vk.reset = true;
+}
+
 unsigned long long FramesVk()
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);

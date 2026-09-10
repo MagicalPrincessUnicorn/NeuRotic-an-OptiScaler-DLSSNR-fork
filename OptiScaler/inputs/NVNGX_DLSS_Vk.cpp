@@ -4,8 +4,10 @@
 #include "Config.h"
 #include "resource.h"
 #include <hooks/Streamline_Hooks.h>
+#include <hooks/Vulkan_Hooks.h>
 
 #include "NVNGX_DLSS.h"
+#include "VulkanRrRouting.h"
 #include <framegen/nvngx/Nvngx_FG.h>
 #include "NVNGX_Parameter.h"
 #include "proxies/NVNGX_Proxy.h"
@@ -30,6 +32,26 @@ static int evalCounter = 0;
 static bool shutdown = false;
 static bool _skipInit = false;
 static wchar_t const** paths;
+static VulkanRrRouting::Registry rrRoutes;
+static std::mutex rrRoutesMutex;
+
+static uint32_t ReadUIntParameter(NVSDK_NGX_Parameter* params, const char* name)
+{
+    uint32_t value = 0;
+    if (params == nullptr || params->Get(name, &value) != NVSDK_NGX_Result_Success)
+        return 0;
+    return value;
+}
+
+static VulkanRrRouting::Extent ObservedOutputExtent(NVSDK_NGX_Parameter* params)
+{
+    NVSDK_NGX_Resource_VK* output = nullptr;
+    if (params == nullptr || params->Get(NVSDK_NGX_Parameter_Output, reinterpret_cast<void**>(&output)) !=
+                                 NVSDK_NGX_Result_Success ||
+        output == nullptr)
+        return {};
+    return { output->Resource.ImageViewInfo.Width, output->Resource.ImageViewInfo.Height };
+}
 
 class ScopedInitVk
 {
@@ -852,6 +874,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
              static_cast<uint32_t>(InFeatureID), handleId, slDiagnostic.active, slDiagnostic.viewport,
              slDiagnostic.frame, slDiagnostic.commandBuffer, reinterpret_cast<uintptr_t>(InCmdList),
              static_cast<uint32_t>(State::Instance().screenWidth), static_cast<uint32_t>(State::Instance().screenHeight));
+    VulkanRrRouting::Extent rrDeclared {};
+    uint32_t rrViewport = VulkanRrRouting::UnknownViewport;
+    if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
+    {
+        rrDeclared = { ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutWidth),
+                       ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutHeight) };
+        rrViewport = slDiagnostic.active ? slDiagnostic.viewport : VulkanRrRouting::UnknownViewport;
+    }
 
     if (InFeatureID == NVSDK_NGX_Feature_SuperSampling)
     {
@@ -901,6 +931,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
         if (deviceContext->Init(vkInstance, vkPD, InDevice, InCmdList, vkGIPA, vkGDPA, InParameters))
         {
+            if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
+            {
+                std::lock_guard<std::mutex> lock(rrRoutesMutex);
+                rrRoutes.Register(handleId, reinterpret_cast<uintptr_t>(InDevice), rrViewport, rrDeclared);
+                LOG_INFO("VK-RR-ROUTE created handle={} viewport={} declared={}x{} device=0x{:X}", handleId,
+                         rrViewport, rrDeclared.width, rrDeclared.height, reinterpret_cast<uintptr_t>(InDevice));
+            }
             State::Instance().currentFeature = deviceContext;
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             evalCounter = 0;
@@ -947,6 +984,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
         return NVSDK_NGX_Result_Success;
 
     auto handleId = InHandle->Id;
+    {
+        std::lock_guard<std::mutex> lock(rrRoutesMutex);
+        rrRoutes.Release(handleId);
+    }
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_ReleaseFeature() != nullptr)
@@ -1015,11 +1056,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     }
 
     auto handleId = InFeatureHandle->Id;
-    const auto& slDiagnostic = GetStreamlineVkDiagnosticContext();
-    LOG_INFO("VK-RR-DIAG ngxEvaluate featureHandle={} slActive={} viewport={} frame={} slCmd=0x{:X} ngxCmd=0x{:X} swapchain={}x{}",
-             handleId, slDiagnostic.active, slDiagnostic.viewport, slDiagnostic.frame, slDiagnostic.commandBuffer,
-             reinterpret_cast<uintptr_t>(InCmdList), static_cast<uint32_t>(State::Instance().screenWidth),
-             static_cast<uint32_t>(State::Instance().screenHeight));
     if (VkContexts[handleId].feature == nullptr) // prevent source api name flicker when dlssg is active
         state.setInputApiName = state.currentInputApiName;
 
@@ -1118,7 +1154,48 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                          backend == Upscaler::FSR22_on12 || backend == Upscaler::FFX_on12;
 
     if (upscaleResult && !bridged)
-        DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+    {
+        bool isRrRoute = false;
+        {
+            std::lock_guard<std::mutex> lock(rrRoutesMutex);
+            isRrRoute = rrRoutes.Contains(handleId);
+        }
+
+        if (!isRrRoute)
+        {
+            DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+        }
+        else
+        {
+            const auto& slContext = GetStreamlineVkDiagnosticContext();
+            const uint32_t viewport = slContext.active ? slContext.viewport : VulkanRrRouting::UnknownViewport;
+            const VulkanRrRouting::Extent declared { ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutWidth),
+                                                      ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutHeight) };
+            const VulkanRrRouting::Extent observed = ObservedOutputExtent(InParameters);
+            const auto presented = GetVulkanPresentedExtent();
+            const VulkanRrRouting::Extent presentation { presented.width, presented.height };
+            VulkanRrRouting::Decision decision {};
+            {
+                std::lock_guard<std::mutex> lock(rrRoutesMutex);
+                rrRoutes.Observe(handleId, viewport, observed);
+                decision = rrRoutes.Select(handleId, reinterpret_cast<uintptr_t>(vkDevice), viewport, slContext.frame,
+                                           presentation);
+            }
+
+            if (decision.log)
+                LOG_INFO("VK-RR-ROUTE handle={} viewport={} frame={} declared={}x{} observed={}x{} presented={}x{} selected={} decision={} nrCount={}",
+                         handleId, viewport, slContext.frame, declared.width, declared.height, observed.width,
+                         observed.height, presentation.width, presentation.height, decision.selectedHandle,
+                         VulkanRrRouting::ReasonName(decision.reason), decision.executionCount);
+
+            if (decision.execute)
+            {
+                if (decision.resetHistory)
+                    DlssNr::RequestHistoryResetVk();
+                DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+            }
+        }
+    }
 
     return upscaleResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 }
@@ -1126,6 +1203,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
 {
     shutdown = true;
+    {
+        std::lock_guard<std::mutex> lock(rrRoutesMutex);
+        rrRoutes.ResetLifecycle();
+    }
     DlssNr::ShutdownVk();
 
     // for (auto const& [key, val] : VkContexts) {
