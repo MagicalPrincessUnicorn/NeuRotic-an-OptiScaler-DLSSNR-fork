@@ -7164,8 +7164,10 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if (!ImGui::BeginTabBar("MainMenuPages", ImGuiTabBarFlags_FittingPolicyScroll))
         return;
 
-    const float viewportRemaining = ctx.io.DisplaySize.y - ImGui::GetCursorScreenPos().y -
-                                    70.0f * ctx.menuResScale;
+    // Keep the child height tied to the viewport rather than the window's dragged
+    // position. A manually moved window may extend below the monitor edge without
+    // resizing itself to pull the final support row back into view.
+    const float viewportRemaining = ctx.io.DisplaySize.y - 220.0f * ctx.menuResScale;
     const float pageHeight =
         std::max(120.0f * ctx.menuResScale, std::min(720.0f * ctx.menuResScale, viewportRemaining));
     const auto renderPage = [&](auto render)
