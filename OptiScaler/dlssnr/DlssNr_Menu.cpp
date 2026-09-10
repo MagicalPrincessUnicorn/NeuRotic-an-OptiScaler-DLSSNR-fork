@@ -6,6 +6,7 @@
 #include "DlssNr_BridgeTelemetry.h"
 #include "DlssNr_Present.h"
 #include "NrToggleBurst.h"
+#include "NrToggleNotes.h"
 
 
 #include <Config.h>
@@ -21,42 +22,17 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <chrono>
 
 namespace DlssNr
 {
 
-static constexpr const char* ToggleBurstMessages[] = {
-    "Are you trying to break me? That's really mean... :(",
-    "Hahaha, keep trying buddy--I won't break. Maybe.",
-    "Your funeral.",
-    "Did I leave the stove on?",
-    "Did I lock the door when I left home this morning?",
-    "Is soup a cereal",
-    "Whyyyyy are you doing thissss!!!",
-    "Hey! Stop doing that!",
-    "That switch has a family, you know.",
-    "I'm counting. You're at it again.",
-    "Toggle responsibly. Or don't. I'm not your manager.",
-    "A dramatic entrance, followed by an immediate exit.",
-    "Congratulations, you found the button.",
-    "This is becoming a long-distance relationship.",
-    "I have whiplash.",
-    "You can stop checking. I'm still here.",
-    "Plot twist: it still works.",
-    "If this is a benchmark, I demand snacks.",
-    "You're training my patience model.",
-    "One more toggle and I start charging rent.",
-    "The checkbox is beginning to take this personally.",
-    "We've achieved rhythm. Sadly, it's chaos.",
-    "Have you considered leaving it on for more than seven seconds?",
-    "I'm going to tell the GPU about this.",
-    "I'm turning on logging!"
-};
-
-static void NoteNrCheckboxClick()
+void NoteNrUserToggle()
 {
     static ToggleBurstTracker tracker;
-    const auto message = tracker.Click(ImGui::GetTime(), IM_ARRAYSIZE(ToggleBurstMessages));
+    const double now = std::chrono::duration<double>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    const auto message = tracker.Click(now, ToggleBurstMessages.size());
     if (!message)
         return;
     const auto translated = Neurotic::Translate(ToggleBurstMessages[*message]);
@@ -164,17 +140,16 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
 
-        static const char* routeNames[] = { "Native Temporal", "Present Image-Only" };
+        static const char* routeNames[] = { "Native Temporal", "Present Image-Only — Compatibility Route." };
         int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 1);
         if (ImGui::Combo("NR route", &route, routeNames, IM_ARRAYSIZE(routeNames)))
         {
             config->DlssNrRoute = (uint32_t) route;
             LOG_INFO("DLSS-NR route requested: {}", routeNames[route]);
         }
-        HelpMarker("Native Temporal is the existing upscaler-attached route with the game's temporal inputs."
-                   "\n\nPresent Image-Only is the isolated v9.6 experiment: DX12 direct queue only,"
-                   " constant private guides, no game depth/motion/jitter/reset/upscaler resources,"
-                   " and untouched-original fallback on every unsupported or failed frame.");
+        HelpMarker("Use it when Native Temporal is unavailable or cannot receive a usable game image; "
+                   "supported graphics setups expand over time.\n\nUnsupported targets keep the original "
+                   "image unchanged and perform no model work.");
         const bool presentRoute = route == 1;
 
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
@@ -196,7 +171,7 @@ void RenderMenu(Config* config, float menuResScale)
         if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
         {
             config->SetDlssNrEnabled(enabled);
-            NoteNrCheckboxClick();
+            NoteNrUserToggle();
         }
 
         HelpMarker("Synthesises detail in the upscaler's output, before frame generation sees it."
@@ -308,6 +283,13 @@ void RenderMenu(Config* config, float menuResScale)
         }
         else if (presentRoute)
         {
+            ImGui::TextDisabled("Use Native Temporal when it is available.");
+            if (presentTelemetry.active)
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
+                    "Present Image-Only is active. NR is processing the final image before it reaches the display.");
+            else
+                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
+                    "This game’s present target is not supported yet. Your image is unchanged.");
             const char* api = presentTelemetry.api == PresentApi::D3D12 ? "DX12"
                               : presentTelemetry.api == PresentApi::D3D11 ? "DX11"
                               : presentTelemetry.api == PresentApi::Vulkan ? "Vulkan" : "Unknown";
@@ -318,6 +300,8 @@ void RenderMenu(Config* config, float menuResScale)
             ImGui::Text("Swap effect %u | color space %u",
                         (unsigned int) presentTelemetry.swapEffect,
                         (unsigned int) presentTelemetry.colorSpace);
+            if (!presentTelemetry.compatibilityPath.empty())
+                ImGui::Text("Compatibility path: %s", presentTelemetry.compatibilityPath.c_str());
             ImGui::Text("%s | actual model work %ux%u",
                         PresentWorkloadName(presentTelemetry.workload), presentTelemetry.workWidth,
                         presentTelemetry.workHeight);
@@ -371,7 +355,7 @@ void RenderMenu(Config* config, float menuResScale)
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Failure: %s",
                                    presentTelemetry.failure.c_str());
             else if (!presentTelemetry.active)
-                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f), "Route selected but blocked by compatibility guard: %s",
+                ImGui::TextDisabled("Compatibility detail: %s",
                                    presentTelemetry.fallbackReason.empty()
                                        ? "waiting for the first safe successful frame"
                                        : presentTelemetry.fallbackReason.c_str());

@@ -52,6 +52,7 @@ struct PresentTelemetrySnapshot
     PresentPacing::WindowSummary pacingSummary;
     std::string requestedPlacement = "Native Temporal";
     std::string actualPlacement = "Native Temporal";
+    std::string compatibilityPath;
     std::string fallbackReason;
     std::string failure;
 };

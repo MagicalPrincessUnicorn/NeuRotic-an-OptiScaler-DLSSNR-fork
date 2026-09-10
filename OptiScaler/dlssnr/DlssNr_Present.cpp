@@ -1,6 +1,10 @@
 #include "pch.h"
 #include "DlssNr_Present.h"
+#include "DlssNr_PresentCompatibility.h"
 #include "DlssNrFeature_Dx12.h"
+
+#include <shaders/format_transfer/FT_Dx12.h>
+#include <with_dx12/dx11_with_dx12.h>
 
 #include <Config.h>
 #include <State.h>
@@ -10,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <mutex>
+#include <memory>
 #include <wrl/client.h>
 
 namespace DlssNr
@@ -50,6 +55,12 @@ struct PresentState
     ComPtr<ID3D12Resource> pacingReadback;
     std::array<PresentSlot, kSlotCount> slots;
     ComPtr<ID3D12Resource> frame;
+    ComPtr<ID3D12Resource> conversionSource;
+    ComPtr<ID3D12Resource> conversionOutput;
+    std::unique_ptr<FT_Dx12> inputTransfer;
+    std::unique_ptr<FT_Dx12> outputTransfer;
+    Dx11WithDx12::D3D11_TEXTURE2D_RESOURCE_C dx11Input;
+    Dx11WithDx12::D3D11_TEXTURE2D_RESOURCE_C dx11Output;
     ComPtr<ID3D12Resource> depth;
     ComPtr<ID3D12Resource> motion;
     ComPtr<ID3D12Resource> depthUpload;
@@ -181,6 +192,14 @@ void Transition(ID3D12GraphicsCommandList* list, ID3D12Resource* resource,
     list->ResourceBarrier(1, &barrier);
 }
 
+void UavBarrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource)
+{
+    D3D12_RESOURCE_BARRIER barrier {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    barrier.UAV.pResource = resource;
+    list->ResourceBarrier(1, &barrier);
+}
+
 void SetFallback(PresentApi api, const char* reason, bool failed = false)
 {
     g_present.telemetry.requested = true;
@@ -236,6 +255,12 @@ void ReleaseResources()
         slot.pacingExpected = false;
     }
     g_present.frame.Reset();
+    g_present.conversionSource.Reset();
+    g_present.conversionOutput.Reset();
+    g_present.inputTransfer.reset();
+    g_present.outputTransfer.reset();
+    Dx11WithDx12::ReleaseSharedResource(&g_present.dx11Input);
+    Dx11WithDx12::ReleaseSharedResource(&g_present.dx11Output);
     g_present.depth.Reset();
     g_present.motion.Reset();
     g_present.depthUpload.Reset();
@@ -345,7 +370,8 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
     g_present.colorSpace = colorSpace;
 
     if (FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(g_present.fence.GetAddressOf()))) ||
-        !CreateTexture(device, format, width, height, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_present.frame) ||
+        !CreateTexture(device, DXGI_FORMAT_R8G8B8A8_UNORM, width, height,
+                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_present.frame) ||
         !CreateTexture(device, DXGI_FORMAT_R32_FLOAT, workWidth, workHeight,
                        D3D12_RESOURCE_STATE_COPY_DEST, g_present.depth) ||
         !CreateTexture(device, DXGI_FORMAT_R16G16_FLOAT, workWidth, workHeight,
@@ -355,6 +381,26 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
     {
         ReleaseResources();
         return false;
+    }
+
+    if (format == DXGI_FORMAT_R10G10B10A2_UNORM)
+    {
+        if (!CreateTexture(device, format, width, height, D3D12_RESOURCE_STATE_COPY_DEST,
+                           g_present.conversionSource) ||
+            !CreateTexture(device, format, width, height, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                           g_present.conversionOutput))
+        {
+            ReleaseResources();
+            return false;
+        }
+        g_present.inputTransfer = std::make_unique<FT_Dx12>("Present R10 to RGBA8", device,
+                                                            DXGI_FORMAT_R8G8B8A8_UNORM);
+        g_present.outputTransfer = std::make_unique<FT_Dx12>("Present RGBA8 to R10", device, format);
+        if (!g_present.inputTransfer->Ready() || !g_present.outputTransfer->Ready())
+        {
+            ReleaseResources();
+            return false;
+        }
     }
 
     // Timing is best-effort observability. If any timestamp resource is unavailable, keep the
@@ -411,6 +457,29 @@ bool SameDevice(ID3D12Device* a, ID3D12Device* b)
 {
     return a != nullptr && b != nullptr && a->GetAdapterLuid().HighPart == b->GetAdapterLuid().HighPart &&
            a->GetAdapterLuid().LowPart == b->GetAdapterLuid().LowPart;
+}
+
+bool SameComObject(IUnknown* a, IUnknown* b)
+{
+    if (a == nullptr || b == nullptr) return false;
+    ComPtr<IUnknown> identityA;
+    ComPtr<IUnknown> identityB;
+    return SUCCEEDED(a->QueryInterface(IID_PPV_ARGS(identityA.GetAddressOf()))) &&
+           SUCCEEDED(b->QueryInterface(IID_PPV_ARGS(identityB.GetAddressOf()))) &&
+           identityA.Get() == identityB.Get();
+}
+
+bool FormatCapabilities(ID3D12Device* device, DXGI_FORMAT format, bool& texture,
+                        bool& shaderLoad, bool& typedStore)
+{
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT support {format};
+    if (device == nullptr || FAILED(device->CheckFeatureSupport(
+        D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))))
+        return false;
+    texture = (support.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D) != 0;
+    shaderLoad = (support.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_LOAD) != 0;
+    typedStore = (support.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE) != 0;
+    return true;
 }
 } // namespace
 
@@ -490,6 +559,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const bool presentRequested = enabled && route == 1;
     g_present.telemetry.requested = presentRequested;
     g_present.telemetry.active = false;
+    g_present.telemetry.compatibilityPath.clear();
     g_present.telemetry.requestedPlacement = route == 1 ? "Present Image-Only" : "Native Temporal";
     if (presentRequested)
         ++g_present.telemetry.presentAttempts;
@@ -519,36 +589,19 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     if (g_present.completionUntrackable)
     {
-        SetFallback(PresentApi::D3D12,
+        SetFallback(PresentApi::Unknown,
                     "private Present completion became untrackable; restart is required", true);
         return identity;
     }
     if ((presentFlags & (DXGI_PRESENT_TEST | DXGI_PRESENT_DO_NOT_SEQUENCE | DXGI_PRESENT_RESTART)) != 0)
     {
-        SetFallback(PresentApi::D3D12, "Present flags are not safe for full-frame processing");
+        SetFallback(PresentApi::Unknown, "Present flags are not safe for full-frame processing");
         return identity;
     }
     if (presentParameters != nullptr && (presentParameters->DirtyRectsCount != 0 ||
         presentParameters->pScrollRect != nullptr || presentParameters->pScrollOffset != nullptr))
     {
-        SetFallback(PresentApi::D3D12, "Present1 dirty-rectangle or scroll update is unsupported");
-        return identity;
-    }
-
-    ComPtr<ID3D12CommandQueue> queue;
-    if (FAILED(presentDevice->QueryInterface(IID_PPV_ARGS(queue.GetAddressOf()))) ||
-        queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT)
-    {
-        SetFallback(PresentApi::D3D11, "Present Image-Only is DX12 direct-queue only");
-        return identity;
-    }
-    g_present.telemetry.api = PresentApi::D3D12;
-
-    ComPtr<ID3D12Device> device;
-    if (FAILED(queue->GetDevice(IID_PPV_ARGS(device.GetAddressOf()))) ||
-        FAILED(device->GetDeviceRemovedReason()))
-    {
-        SetFallback(PresentApi::D3D12, "DX12 device is unavailable or removed", true);
+        SetFallback(PresentApi::Unknown, "Present1 dirty-rectangle or scroll update is unsupported");
         return identity;
     }
 
@@ -558,7 +611,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (FAILED(swapChain->QueryInterface(IID_PPV_ARGS(swapChain3.GetAddressOf()))) ||
         FAILED(swapChain3->GetDesc1(&swapDesc)))
     {
-        SetFallback(PresentApi::D3D12, "IDXGISwapChain3 or swapchain description unavailable");
+        SetFallback(PresentApi::Unknown, "IDXGISwapChain3 or swapchain description unavailable");
         return identity;
     }
     // DXGI exposes SetColorSpace1 but no getter. The wrapper records every color-space change in this
@@ -575,51 +628,146 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         (swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_DISCARD &&
          swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL))
     {
-        SetFallback(PresentApi::D3D12, "swapchain is not a single-sample flip-model swapchain");
+        SetFallback(PresentApi::Unknown, "target is not single-sample flip-model");
         return identity;
     }
     if (colorSpace != DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709)
     {
-        SetFallback(PresentApi::D3D12, "HDR or non-sRGB swapchain color space is unsupported");
+        SetFallback(PresentApi::Unknown, "HDR or non-SDR color space is unsupported");
         return identity;
     }
 
-    ComPtr<ID3D12Resource> backbuffer;
     const UINT bufferIndex = swapChain3->GetCurrentBackBufferIndex();
-    if (FAILED(swapChain3->GetBuffer(bufferIndex, IID_PPV_ARGS(backbuffer.GetAddressOf()))))
+    ComPtr<ID3D12CommandQueue> queue;
+    ComPtr<ID3D12Device> device;
+    ComPtr<ID3D12Resource> backbuffer12;
+    ComPtr<ID3D11Device5> device11;
+    ComPtr<ID3D11DeviceContext4> context11;
+    ComPtr<ID3D11Texture2D> backbuffer11;
+    PresentApi api = PresentApi::Unknown;
+    PresentCompatibility::Api compatibilityApi = PresentCompatibility::Api::D3D12;
+    D3D12_RESOURCE_DESC backDesc {};
+
+    if (SUCCEEDED(presentDevice->QueryInterface(IID_PPV_ARGS(queue.GetAddressOf()))))
     {
-        SetFallback(PresentApi::D3D12, "current backbuffer unavailable");
-        return identity;
+        api = PresentApi::D3D12;
+        compatibilityApi = PresentCompatibility::Api::D3D12;
+        if (queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT ||
+            FAILED(queue->GetDevice(IID_PPV_ARGS(device.GetAddressOf()))) ||
+            FAILED(device->GetDeviceRemovedReason()))
+        {
+            SetFallback(api, "a direct D3D12 queue is unavailable", true);
+            return identity;
+        }
+        if (FAILED(swapChain3->GetBuffer(bufferIndex, IID_PPV_ARGS(backbuffer12.GetAddressOf()))))
+        {
+            SetFallback(api, "current D3D12 backbuffer is unavailable");
+            return identity;
+        }
+        ComPtr<ID3D12Device> backbufferDevice;
+        if (FAILED(backbuffer12->GetDevice(IID_PPV_ARGS(backbufferDevice.GetAddressOf()))) ||
+            !SameComObject(device.Get(), backbufferDevice.Get()))
+        {
+            SetFallback(api, "Present target and NR queue use different devices");
+            return identity;
+        }
+        backDesc = backbuffer12->GetDesc();
     }
-    ComPtr<ID3D12Device> backbufferDevice;
-    if (FAILED(backbuffer->GetDevice(IID_PPV_ARGS(backbufferDevice.GetAddressOf()))) ||
-        !SameDevice(device.Get(), backbufferDevice.Get()))
+    else
     {
-        SetFallback(PresentApi::D3D12, "queue and backbuffer belong to different devices");
-        return identity;
+        ComPtr<ID3D11Device> baseDevice11;
+        if (FAILED(presentDevice->QueryInterface(IID_PPV_ARGS(baseDevice11.GetAddressOf()))) ||
+            FAILED(baseDevice11.As(&device11)))
+        {
+            SetFallback(PresentApi::Unknown, "Present graphics API is unsupported");
+            return identity;
+        }
+        api = PresentApi::D3D11;
+        compatibilityApi = PresentCompatibility::Api::D3D11;
+        ComPtr<ID3D11DeviceContext> baseContext11;
+        baseDevice11->GetImmediateContext(baseContext11.GetAddressOf());
+        if (baseContext11 == nullptr || FAILED(baseContext11.As(&context11)) ||
+            FAILED(swapChain3->GetBuffer(bufferIndex, IID_PPV_ARGS(backbuffer11.GetAddressOf()))))
+        {
+            SetFallback(api, "D3D11 backbuffer or synchronization context is unavailable");
+            return identity;
+        }
+        ComPtr<ID3D11Device> backbufferDevice11;
+        backbuffer11->GetDevice(backbufferDevice11.GetAddressOf());
+        if (!SameComObject(baseDevice11.Get(), backbufferDevice11.Get()))
+        {
+            SetFallback(api, "Present target and NR queue use different devices");
+            return identity;
+        }
+        Dx11WithDx12::Init(device11.Get(), context11.Get());
+        device = Dx11WithDx12::GetD3D12Device();
+        queue = Dx11WithDx12::GetD3D12CommandQueue();
+        if (device == nullptr || queue == nullptr ||
+            queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT ||
+            FAILED(device->GetDeviceRemovedReason()))
+        {
+            SetFallback(api, "D3D11 shared-resource synchronization is unavailable", true);
+            return identity;
+        }
+        D3D11_TEXTURE2D_DESC desc11 {};
+        backbuffer11->GetDesc(&desc11);
+        backDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        backDesc.Width = desc11.Width;
+        backDesc.Height = desc11.Height;
+        backDesc.DepthOrArraySize = static_cast<UINT16>(desc11.ArraySize);
+        backDesc.MipLevels = static_cast<UINT16>(desc11.MipLevels);
+        backDesc.Format = desc11.Format;
+        backDesc.SampleDesc = desc11.SampleDesc;
     }
-    const auto backDesc = backbuffer->GetDesc();
+    g_present.telemetry.api = api;
+
     // Record the actual Present target before any compatibility guard. This is the evidence needed
     // to identify Wilds/GTA descriptors while every unsupported frame still falls back untouched.
     g_present.telemetry.backbufferWidth = static_cast<unsigned int>(backDesc.Width);
     g_present.telemetry.backbufferHeight = backDesc.Height;
     g_present.telemetry.backbufferFormat = backDesc.Format;
     g_present.telemetry.backbufferSampleCount = backDesc.SampleDesc.Count;
-    if (backDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || backDesc.SampleDesc.Count != 1 ||
-        backDesc.Width == 0 || backDesc.Height == 0 || backDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM)
+    bool rgba8Texture = false;
+    bool rgba8ShaderLoad = false;
+    bool rgba8TypedStore = false;
+    bool targetTexture = false;
+    bool targetShaderLoad = false;
+    bool targetTypedStore = false;
+    FormatCapabilities(device.Get(), DXGI_FORMAT_R8G8B8A8_UNORM,
+                       rgba8Texture, rgba8ShaderLoad, rgba8TypedStore);
+    FormatCapabilities(device.Get(), backDesc.Format,
+                       targetTexture, targetShaderLoad, targetTypedStore);
+    const PresentCompatibility::Capabilities capabilities {
+        compatibilityApi,
+        queue != nullptr && queue->GetDesc().Type == D3D12_COMMAND_LIST_TYPE_DIRECT,
+        backDesc.SampleDesc.Count == 1,
+        swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_DISCARD ||
+            swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+        colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
+        backDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        backDesc.Width != 0 && backDesc.Height != 0,
+        true,
+        backDesc.Format == DXGI_FORMAT_R8G8B8A8_UNORM,
+        backDesc.Format == DXGI_FORMAT_R10G10B10A2_UNORM,
+        rgba8ShaderLoad,
+        rgba8TypedStore,
+        targetTexture && targetShaderLoad,
+        targetTexture && targetTypedStore,
+        api == PresentApi::D3D12 || (device11 != nullptr && context11 != nullptr),
+        api == PresentApi::D3D12 || (Dx11WithDx12::GetD3D12Device() == device.Get() &&
+                                     Dx11WithDx12::GetD3D12CommandQueue() == queue.Get())
+    };
+    const auto admission = PresentCompatibility::Admit(capabilities);
+    if (!admission.supported)
     {
-        SetFallback(PresentApi::D3D12, "backbuffer format or shape is outside the conservative R8 SDR path");
+        SetFallback(api, admission.reason);
         return identity;
     }
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport { backDesc.Format };
-    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport,
-                                           sizeof(formatSupport))) ||
-        (formatSupport.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D) == 0 ||
-        (formatSupport.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE) == 0)
-    {
-        SetFallback(PresentApi::D3D12, "backbuffer format lacks required texture/UAV support");
-        return identity;
-    }
+    g_present.telemetry.compatibilityPath = api == PresentApi::D3D11
+        ? (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
+            ? "D3D11 shared R10 SDR conversion" : "D3D11 shared RGBA8 direct")
+        : (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
+            ? "D3D12 R10 SDR conversion" : "D3D12 RGBA8 direct");
 
     const unsigned int workload = std::min(config->DlssNrPresentWorkload.value_or_default(), 5u);
     const unsigned int width = static_cast<unsigned int>(backDesc.Width);
@@ -634,7 +782,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     g_present.telemetry.workHeight = workHeight;
     if (workWidth == 0 || workHeight == 0)
     {
-        SetFallback(PresentApi::D3D12, "backbuffer is too small for an aligned model workload");
+        SetFallback(api, "backbuffer is too small for an aligned model workload");
         return identity;
     }
 
@@ -646,34 +794,66 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     {
         if (!AllComplete())
         {
-            SetFallback(PresentApi::D3D12, "waiting for prior Present resources after a device/resize/workload change");
+            SetFallback(api, "waiting for prior Present resources after a device/resize/workload change");
             return identity;
         }
         if (!BuildResources(device.Get(), queue.Get(), width, height, workWidth, workHeight,
                             backDesc.Format, colorSpace))
         {
-            SetFallback(PresentApi::D3D12, "private Present resources could not be created", true);
+            SetFallback(api, "private Present resources could not be created", true);
             return identity;
         }
     }
 
     if (!DirectD3D12Available(device.Get()))
     {
-        SetFallback(PresentApi::D3D12, "direct Feature 18 entry-point/capability probe failed", true);
+        SetFallback(api, "direct Feature 18 entry-point/capability probe failed", true);
         return identity;
+    }
+
+    ID3D12Resource* presentInput = backbuffer12.Get();
+    ID3D12Resource* presentOutput = backbuffer12.Get();
+    D3D12_RESOURCE_STATES presentRestingState = D3D12_RESOURCE_STATE_PRESENT;
+    if (api == PresentApi::D3D11)
+    {
+        const UINT64 frameId = identity.presentAttempt;
+        const bool inputReady = Dx11WithDx12::PrepareTextureFrom11To12(
+            "Present input", device.Get(), backbuffer11.Get(), &g_present.dx11Input,
+            true, false, false, frameId);
+        const bool outputReady = Dx11WithDx12::PrepareTextureFrom11To12(
+            "Present output", device.Get(), backbuffer11.Get(), &g_present.dx11Output,
+            false, false, false, frameId);
+        const bool resourcesArePrivate =
+            g_present.dx11Input.SharedTexture != backbuffer11.Get() &&
+            g_present.dx11Output.SharedTexture != backbuffer11.Get();
+        if (!inputReady || !outputReady || !resourcesArePrivate ||
+            g_present.dx11Input.Dx12Resource == nullptr ||
+            g_present.dx11Output.Dx12Resource == nullptr)
+        {
+            SetFallback(api, "D3D11 compatible private shared images could not be created", true);
+            return identity;
+        }
+        if (!Dx11WithDx12::SyncDx11ToDx12())
+        {
+            SetFallback(api, "D3D11-to-D3D12 input synchronization failed", true);
+            return identity;
+        }
+        presentInput = g_present.dx11Input.Dx12Resource;
+        presentOutput = g_present.dx11Output.Dx12Resource;
+        presentRestingState = D3D12_RESOURCE_STATE_COMMON;
     }
 
     const unsigned int slotIndex = g_present.nextSlot++ % kSlotCount;
     PresentSlot& slot = g_present.slots[slotIndex];
     if (slot.completion != 0 && g_present.fence->GetCompletedValue() < slot.completion)
     {
-        SetFallback(PresentApi::D3D12, "private Present command slots are still in flight");
+        SetFallback(api, "private Present command slots are still in flight");
         return identity;
     }
     if (FAILED(slot.modelAllocator->Reset()) ||
         FAILED(g_present.list->Reset(slot.modelAllocator.Get(), nullptr)))
     {
-        SetFallback(PresentApi::D3D12, "private model command list could not be reset", true);
+        SetFallback(api, "private model command list could not be reset", true);
         return identity;
     }
 
@@ -698,22 +878,44 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         RecordUpload(g_present.list.Get(), device.Get(), g_present.depth.Get(), g_present.depthUpload.Get());
         RecordUpload(g_present.list.Get(), device.Get(), g_present.motion.Get(), g_present.motionUpload.Get());
     }
-    Transition(g_present.list.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT,
+    Transition(g_present.list.Get(), presentInput, presentRestingState,
                D3D12_RESOURCE_STATE_COPY_SOURCE);
-    Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-               D3D12_RESOURCE_STATE_COPY_DEST);
-    g_present.list->CopyResource(g_present.frame.Get(), backbuffer.Get());
-    Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
-               D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    Transition(g_present.list.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
-               D3D12_RESOURCE_STATE_PRESENT);
+    bool inputPrepared = true;
+    if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
+    {
+        Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                   D3D12_RESOURCE_STATE_COPY_DEST);
+        g_present.list->CopyResource(g_present.frame.Get(), presentInput);
+        Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
+    else
+    {
+        g_present.list->CopyResource(g_present.conversionSource.Get(), presentInput);
+        Transition(g_present.list.Get(), g_present.conversionSource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        inputPrepared = g_present.inputTransfer->Dispatch(g_present.list.Get(),
+            g_present.conversionSource.Get(), g_present.frame.Get());
+        UavBarrier(g_present.list.Get(), g_present.frame.Get());
+        Transition(g_present.list.Get(), g_present.conversionSource.Get(),
+                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    }
+    Transition(g_present.list.Get(), presentInput, D3D12_RESOURCE_STATE_COPY_SOURCE,
+               presentRestingState);
+
+    if (!inputPrepared)
+    {
+        g_present.list->Close();
+        SetFallback(api, "10-bit input conversion could not be recorded", true);
+        return identity;
+    }
 
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
         g_present.frame.Get(), g_present.depth.Get(), g_present.motion.Get(), workWidth, workHeight);
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;
-        SetFallback(PresentApi::D3D12, "private model command list could not close", true);
+        SetFallback(api, "private model command list could not close", true);
         return identity;
     }
     ID3D12CommandList* modelLists[] = { g_present.list.Get() };
@@ -735,7 +937,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         else
             g_present.completionUntrackable = true;
         const char* reason = FailureReason();
-        SetFallback(PresentApi::D3D12,
+        SetFallback(api,
                     reason != nullptr && reason[0] != 0 ? reason : "model creation/evaluation not yet successful",
                     reason != nullptr && reason[0] != 0);
         return identity;
@@ -753,18 +955,57 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         }
         else
             g_present.completionUntrackable = true;
-        SetFallback(PresentApi::D3D12, "copyback command list could not be reset", true);
+        SetFallback(api, "copyback command list could not be reset", true);
         return identity;
     }
-    Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-               D3D12_RESOURCE_STATE_COPY_SOURCE);
-    Transition(g_present.list.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_PRESENT,
-               D3D12_RESOURCE_STATE_COPY_DEST);
-    g_present.list->CopyResource(backbuffer.Get(), g_present.frame.Get());
-    Transition(g_present.list.Get(), backbuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
-               D3D12_RESOURCE_STATE_PRESENT);
-    Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
-               D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    bool outputPrepared = true;
+    if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
+    {
+        Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                   D3D12_RESOURCE_STATE_COPY_SOURCE);
+        Transition(g_present.list.Get(), presentOutput, presentRestingState,
+                   D3D12_RESOURCE_STATE_COPY_DEST);
+        g_present.list->CopyResource(presentOutput, g_present.frame.Get());
+        Transition(g_present.list.Get(), presentOutput, D3D12_RESOURCE_STATE_COPY_DEST,
+                   presentRestingState);
+        Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
+                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
+    else
+    {
+        Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        outputPrepared = g_present.outputTransfer->Dispatch(g_present.list.Get(),
+            g_present.frame.Get(), g_present.conversionOutput.Get());
+        UavBarrier(g_present.list.Get(), g_present.conversionOutput.Get());
+        Transition(g_present.list.Get(), g_present.frame.Get(),
+                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        Transition(g_present.list.Get(), g_present.conversionOutput.Get(),
+                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        Transition(g_present.list.Get(), presentOutput, presentRestingState,
+                   D3D12_RESOURCE_STATE_COPY_DEST);
+        g_present.list->CopyResource(presentOutput, g_present.conversionOutput.Get());
+        Transition(g_present.list.Get(), presentOutput, D3D12_RESOURCE_STATE_COPY_DEST,
+                   presentRestingState);
+        Transition(g_present.list.Get(), g_present.conversionOutput.Get(),
+                   D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
+    if (!outputPrepared)
+    {
+        g_present.list->Close();
+        const UINT64 phaseOneSignal = g_present.nextFence++;
+        if (SUCCEEDED(queue->Signal(g_present.fence.Get(), phaseOneSignal)))
+        {
+            slot.completion = phaseOneSignal;
+            slot.completionObserved = false;
+            RecordSubmission(phaseOneSignal);
+        }
+        else
+            g_present.completionUntrackable = true;
+        SetFallback(api, "10-bit output conversion could not be recorded", true);
+        return identity;
+    }
     if (slot.timingStarted)
     {
         g_present.list->EndQuery(g_present.pacingQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -784,7 +1025,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             RecordSubmission(phaseOneSignal);
         }
         g_present.completionUntrackable = true;
-        SetFallback(PresentApi::D3D12, "copyback command list could not close", true);
+        SetFallback(api, "copyback command list could not close", true);
         return identity;
     }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };
@@ -794,13 +1035,25 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (FAILED(queue->Signal(g_present.fence.Get(), signal)))
     {
         g_present.completionUntrackable = true;
-        SetFallback(PresentApi::D3D12, "copyback completion signal failed", true);
+        SetFallback(api, "copyback completion signal failed", true);
         return identity;
     }
     slot.completion = signal;
     slot.completionObserved = false;
     slot.pacingExpected = g_present.pacing.expectGpu(identity.pacing);
     RecordSubmission(signal);
+
+    if (api == PresentApi::D3D11)
+    {
+        if (!Dx11WithDx12::SyncDx12ToDx11())
+        {
+            SetFallback(api, "D3D12-to-D3D11 output synchronization failed", true);
+            return identity;
+        }
+        context11->CopyResource(backbuffer11.Get(), g_present.dx11Output.SharedTexture);
+        context11->Flush();
+    }
+
     ++g_present.telemetry.modelEvaluations;
     ++g_present.telemetry.compositeEvaluations;
     g_present.telemetry.active = true;

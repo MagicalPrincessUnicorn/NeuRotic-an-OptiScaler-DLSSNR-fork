@@ -7,6 +7,7 @@
 #include <cfloat>
 
 #include <dlssnr/DlssNr.h>
+#include <dlssnr/NrToggleNotes.h>
 
 #include "input/input_system.h"
 
@@ -1375,6 +1376,7 @@ void MenuCommon::HandleMenuShortcuts(RenderMenuContext& ctx)
             inputDlssNr = false;
             const bool enabled = !config->GetDlssNrRuntimeSnapshot().enabled;
             config->SetDlssNrEnabled(enabled);
+            DlssNr::NoteNrUserToggle();
             LOG_DEBUG("Neural Rendering toggle key pressed, setting DlssNrEnabled to {}",
                       enabled);
 

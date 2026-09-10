@@ -11,7 +11,7 @@ $commit = (& git -c "safe.directory=$root" -C $root rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $commit -ne $manifest.commit) { throw 'Build commit does not match source.' }
 $status = & git -c "safe.directory=$root" -C $root status --porcelain
 if ($LASTEXITCODE -ne 0 -or $status) { throw 'Package only clean committed source.' }
-$stage = Join-Path $root 'release\NeuRotic-cross-game-diagnostic'
+$stage = Join-Path $root 'release\NeuRotic-present-compatibility-diagnostic'
 if (Test-Path -LiteralPath $stage) { throw 'Preserving existing package: destination already exists.' }
 $output = Join-Path $root 'x64\Release\a'
 $pair = @('OptiScaler.dll', 'nvngx.dll_dlssnr.dll')
@@ -35,7 +35,7 @@ foreach ($name in $pair + @('setup_linux.sh', '!! EXTRACT ALL FILES TO GAME FOLD
 }
 Copy-Item -LiteralPath $ini -Destination (Join-Path $stage 'OptiScaler.ini')
 Copy-Item -LiteralPath (Join-Path $root 'setup_windows.bat') -Destination (Join-Path $stage 'NeuRotic-Setup.bat')
-foreach ($name in @('NeuRotic-IniEdit.ps1', 'INSTALLATION AND NOTES.txt', 'INTEGRATION.md')) {
+foreach ($name in @('NeuRotic-IniEdit.ps1', 'INSTALLATION AND NOTES.txt', 'INTEGRATION.md', 'PRESENT-COMPATIBILITY.md')) {
     Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage
 }
 $files = @(Get-ChildItem -LiteralPath $stage -Recurse -File)
@@ -45,8 +45,8 @@ if ($files | Where-Object { $_.Name -ieq 'nvngx_dlssnr.dll' -or $_.Extension -in
 $records = @($files | Sort-Object FullName | ForEach-Object {
     [ordered]@{ path=$_.FullName.Substring($stage.Length+1); bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName).Hash }
 })
-$record = [ordered]@{ kind='cross-game diagnostic integration experiment; not a release'; branch=$manifest.branch; commit=$commit;
-    source_provenance=[ordered]@{ parent='62a70c1eb4fc2a9d673c97a9a070764cd097492d'; delta=$commit };
+$record = [ordered]@{ kind='Present compatibility diagnostic experiment; not a release'; branch=$manifest.branch; commit=$commit;
+    source_provenance=[ordered]@{ parent='606346ea4d6ed5418428ba8d0101cc9db5f57dc5'; delta=$commit };
     package_provenance=[ordered]@{ reviewed_layer='659b9801c2a339cacaddda04a842278bd8967d6f';
         ini_sha256='CD3D9E9908A3A61B4CDADFE2689E9444511DDADEB885CE12988C3D944A8D044D';
         dlss_performance_preset=12; dlss_ultra_performance_preset=12; dlssd_presets='auto' };

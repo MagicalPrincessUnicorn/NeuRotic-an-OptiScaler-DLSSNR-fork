@@ -31,6 +31,7 @@ class FT_Dx12 : public Shader_Dx12
 
     ID3D12Resource* Buffer() { return _buffer; }
     bool CanRender() const { return _init && _buffer != nullptr; }
+    bool Ready() const { return _init; }
     DXGI_FORMAT Format() const { return format; }
 
     FT_Dx12(std::string InName, ID3D12Device* InDevice, DXGI_FORMAT InFormat);

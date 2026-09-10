@@ -18,12 +18,23 @@ class ToggleBurstTracker
         if (messageCount == 0)
             return std::nullopt;
         if (!_clicks.empty() && nowSeconds < _clicks.back())
-            _clicks.clear();
+            Reset();
+        if (!_clicks.empty() && nowSeconds - _clicks.back() > 2.0)
+            Reset();
         while (!_clicks.empty() && nowSeconds - _clicks.front() > 2.0)
             _clicks.pop_front();
         _clicks.push_back(nowSeconds);
-        if (_clicks.size() < 4 || (_clicks.size() & 1u) != 0)
+        if (!_burstActive)
+        {
+            if (_clicks.size() < 4)
+                return std::nullopt;
+            _burstActive = true;
+            _togglesSinceMessage = 0;
+        }
+        else if (++_togglesSinceMessage < 2)
             return std::nullopt;
+        else
+            _togglesSinceMessage = 0;
 
         std::size_t candidate = Next() % messageCount;
         if (messageCount > 1 && _last && candidate == *_last)
@@ -33,6 +44,13 @@ class ToggleBurstTracker
     }
 
   private:
+    void Reset()
+    {
+        _clicks.clear();
+        _burstActive = false;
+        _togglesSinceMessage = 0;
+    }
+
     static std::uint32_t DefaultSeed()
     {
         return static_cast<std::uint32_t>(
@@ -50,5 +68,7 @@ class ToggleBurstTracker
     std::deque<double> _clicks;
     std::optional<std::size_t> _last;
     std::uint32_t _random;
+    std::size_t _togglesSinceMessage = 0;
+    bool _burstActive = false;
 };
 } // namespace DlssNr

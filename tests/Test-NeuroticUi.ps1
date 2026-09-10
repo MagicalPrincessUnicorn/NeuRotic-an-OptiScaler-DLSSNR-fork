@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $menu = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/menu/menu_common.cpp') -Raw
 $nr = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Menu.cpp') -Raw
+$notes = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/NrToggleNotes.h') -Raw
 $config = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/Config.cpp') -Raw
 $header = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/Config.h') -Raw
 function Assert-Ui([bool]$condition, [string]$message) {
@@ -28,10 +29,12 @@ Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apolo
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
 Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink\(\).*?Enjoying NeuRotic\?.*?Send Coffee.*?GetContentRegionAvail.*?SetCursorPosX.*?TextUnformatted\(prompt\).*?Button\(button\)') 'compact Send Coffee prompt right-aligned in final row'
 Assert-Ui (-not $menu.Contains('constexpr const char* button = "Buy Me a Coffee"')) 'old support-button label is no longer rendered'
-Assert-Ui ($nr -match '(?s)Checkbox\("Enable Neural Rendering".*?NoteNrCheckboxClick\(\)') 'toggle burst is driven only by the Neural Rendering checkbox'
-Assert-Ui (($nr | Select-String -Pattern 'NoteNrCheckboxClick\(\)' -AllMatches).Matches.Count -eq 2) 'toggle burst helper has one definition and one checkbox call site'
-$burst = [regex]::Match($nr, '(?s)ToggleBurstMessages\[\]\s*=\s*\{(.*?)\};').Groups[1].Value
-Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 25 -and $burst.Contains('I''m turning on logging!')) 'all 25 approved burst notes are present'
-Assert-Ui ($nr.Contains('Route selected but blocked by compatibility guard: %s')) 'Present selection distinguishes a blocked guard from active composition'
+Assert-Ui ($nr -match '(?s)Checkbox\("Enable Neural Rendering".*?NoteNrUserToggle\(\)') 'NR checkbox contributes to the shared user-toggle burst'
+Assert-Ui ($menu -match '(?s)inputDlssNr.*?SetDlssNrEnabled\(enabled\);\s*DlssNr::NoteNrUserToggle\(\);') 'NR hotkey contributes to the same user-toggle burst'
+Assert-Ui (($nr | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 2) 'shared tracker has one definition and one checkbox call'
+Assert-Ui (($menu | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 1) 'hotkey is the only shared-tracker call outside the NR menu'
+$burst = [regex]::Match($notes, '(?s)ToggleBurstMessages\s*=\s*\{(.*?)\};').Groups[1].Value
+Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 41 -and $burst.Contains('ZZZZZZZzzzzzzzzzzzz')) 'all 41 approved burst notes are present'
+Assert-Ui ($nr.Contains('Present Image-Only is active. NR is processing the final image before it reaches the display.') -and $nr.Contains('This game’s present target is not supported yet. Your image is unchanged.') -and $nr.Contains('Use Native Temporal when it is available.')) 'Present compatibility active, safe-fallback, and recommendation messages are visible'
 Assert-Ui ($header.Contains('MenuLanguage { "en" }')) 'English default'
 Assert-Ui ($config.Contains('readString("Menu", "Language", true)') -and $config.Contains('ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());')) 'language loads and saves in Menu section'

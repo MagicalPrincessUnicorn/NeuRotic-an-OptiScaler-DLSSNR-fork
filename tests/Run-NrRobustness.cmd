@@ -35,6 +35,11 @@ if errorlevel 1 goto failed
 "%testOut%\nr_toggle_burst.exe" >"%testOut%\toggle-burst-test.txt" 2>&1
 if errorlevel 1 goto failed
 type "%testOut%\toggle-burst-test.txt"
+cl /nologo /std:c++20 /EHsc /W4 /WX /I OptiScaler tests\nr_present_compatibility.cpp /Fe:"%testOut%\nr_present_compatibility.exe" /Fo:"%testOut%\nr_present_compatibility.obj" >"%testOut%\present-compatibility-build.txt" 2>&1
+if errorlevel 1 goto failed
+"%testOut%\nr_present_compatibility.exe" >"%testOut%\present-compatibility-test.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\present-compatibility-test.txt"
 cl /nologo /std:c++20 /EHsc /W4 /WX /I OptiScaler tests\nr_bridge_telemetry.cpp /Fe:"%testOut%\nr_bridge_telemetry.exe" /Fo:"%testOut%\nr_bridge_telemetry.obj" >"%testOut%\bridge-build.txt" 2>&1
 if errorlevel 1 goto failed
 "%testOut%\nr_bridge_telemetry.exe" >"%testOut%\bridge-test.txt" 2>&1

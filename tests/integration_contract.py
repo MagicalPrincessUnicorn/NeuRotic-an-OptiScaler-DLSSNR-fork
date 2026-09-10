@@ -45,15 +45,19 @@ for path in ['OptiScaler/dlssnr/DlssNr_Menu.cpp', 'OptiScaler/menu/menu_common.c
     for key in visible(source(path)) - visible(old):
         if normalize(key) not in inventory and not key.startswith('https://'):
             missing.add(key)
-for match in re.finditer(r'ToggleBurstMessages\[\]\s*=\s*\{(.*?)\}', source('OptiScaler/dlssnr/DlssNr_Menu.cpp'), re.S):
+for match in re.finditer(r'ToggleBurstMessages\s*=\s*\{(.*?)\}', source('OptiScaler/dlssnr/NrToggleNotes.h'), re.S):
     for key in joined_strings(match.group(1)):
         if normalize(key) not in inventory: missing.add(key)
 for key in strings(source('OptiScaler/dlssnr/DlssNr_BridgeTelemetry.h')):
     if key and normalize(key) not in inventory: missing.add(key)
 present = source('OptiScaler/dlssnr/DlssNr_Present.cpp')
-for match in re.finditer(r'SetFallback\(PresentApi::.*?\);', present, re.S):
+for match in re.finditer(r'SetFallback\(.*?\);', present, re.S):
     for key in joined_strings(match.group()):
-        if normalize(key) not in inventory: missing.add(key)
+        if key and not key.startswith('DLSS-NR Present diagnostic:') and normalize(key) not in inventory:
+            missing.add(key)
+for key in strings(source('OptiScaler/dlssnr/DlssNr_PresentCompatibility.h')):
+    if key and key not in {'supported', 'unsupported Present target'} and normalize(key) not in inventory:
+        missing.add(key)
 for path in ['OptiScaler/hooks/Vulkan_Hooks.cpp','OptiScaler/wrapped/wrapped_swapchain.cpp']:
     for match in re.finditer(r'ReportPresentUnavailable\(.*?\);', source(path), re.S):
         for key in joined_strings(match.group()):
