@@ -1,5 +1,7 @@
 # Present Compatibility Experiment
 
+This is the canonical Present Image-Only compatibility and runtime-evidence note for this diagnostic package. It supersedes the older Present compatibility limits in `INTEGRATION.md`; that older integration note is intentionally not included in this package.
+
 ## Scope and provenance
 
 - Branch: `exp/neurotic-present-compatibility`

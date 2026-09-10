@@ -35,7 +35,7 @@ foreach ($name in $pair + @('setup_linux.sh', '!! EXTRACT ALL FILES TO GAME FOLD
 }
 Copy-Item -LiteralPath $ini -Destination (Join-Path $stage 'OptiScaler.ini')
 Copy-Item -LiteralPath (Join-Path $root 'setup_windows.bat') -Destination (Join-Path $stage 'NeuRotic-Setup.bat')
-foreach ($name in @('NeuRotic-IniEdit.ps1', 'INSTALLATION AND NOTES.txt', 'INTEGRATION.md', 'PRESENT-COMPATIBILITY.md')) {
+foreach ($name in @('NeuRotic-IniEdit.ps1', 'INSTALLATION AND NOTES.txt', 'PRESENT-COMPATIBILITY.md')) {
     Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage
 }
 $files = @(Get-ChildItem -LiteralPath $stage -Recurse -File)
