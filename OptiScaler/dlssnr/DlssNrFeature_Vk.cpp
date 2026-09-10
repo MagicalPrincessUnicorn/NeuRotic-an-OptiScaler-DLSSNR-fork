@@ -2,6 +2,7 @@
 
 #include "DlssNrFeature_Vk.h"
 #include "VulkanNrTuning.h"
+#include "VulkanNrFrameParams.h"
 
 #include <Config.h>
 #include <State.h>
@@ -17,7 +18,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <string_view>
 
 namespace DlssNr
 {
@@ -709,17 +709,13 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
                  g_vk.gameExposure, g_vk.gamePreExposure, g_vk.gamePreExposure / g_vk.gameExposure);
     }
 
-    if (colour == nullptr || depth == nullptr || motion == nullptr)
+    VkFrame::Failure inputFailure;
+    if (!VkFrame::ValidateImage("RR.Output", colour, false, inputFailure) ||
+        !VkFrame::ValidateImage("RR.Depth", depth, false, inputFailure) ||
+        !VkFrame::ValidateImage("RR.MotionVectors", motion, false, inputFailure))
     {
-        static bool said = false;
-
-        if (!said)
-        {
-            said = true;
-            LOG_INFO("DLSS-NR Vulkan: the parameter block carried no {}",
-                     colour == nullptr ? "output" : (depth == nullptr ? "depth" : "motion vectors"));
-        }
-
+        LOG_ERROR("VK-NR frame input rejected key={} reason={}", inputFailure.key, inputFailure.reason);
+        Fail("invalid Vulkan input resource; see frame input log");
         return;
     }
 
@@ -727,6 +723,14 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     const uint32_t height = colour->Resource.ImageViewInfo.Height;
     const uint32_t guideWidth = depth->Resource.ImageViewInfo.Width;
     const uint32_t guideHeight = depth->Resource.ImageViewInfo.Height;
+
+    // Preserve the existing guide subrect, but prove that it fits motion as well as depth.
+    if (!VkFrame::ValidateRect("RR.MotionVectors", motion, 0, 0, guideWidth, guideHeight, false, inputFailure))
+    {
+        LOG_ERROR("VK-NR frame input rejected key={} reason={}", inputFailure.key, inputFailure.reason);
+        Fail("invalid Vulkan guide subrect; see frame input log");
+        return;
+    }
 
     if (width == 0 || height == 0)
         return;
@@ -1164,34 +1168,49 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     Transition(cmdBuffer, g_vk.output, VK_IMAGE_LAYOUT_GENERAL);
 
-    // Each model owns this block. Update only frame inputs, never requested (unapplied) tuning.
+    // Each model owns this block. Pointer/scalar readbacks gate the vendor call.
     auto* modelParams = g_vk.capabilityParams;
-    modelParams->Set("DLSSNR.Color", (unsigned long long) (uintptr_t) &modelInput->ngx);
-    modelParams->Set("DLSSNR.Depth", (unsigned long long) (uintptr_t) depth);
-    modelParams->Set("DLSSNR.MVec", (unsigned long long) (uintptr_t) motion);
-    modelParams->Set("DLSSNR.Output", (unsigned long long) (uintptr_t) &g_vk.output.ngx);
-    modelParams->Set("DLSSNR.DepthInverted", (unsigned int) depthInverted);
-    modelParams->Set("DLSSNR.Reset", (unsigned int) g_vk.reset);
-    for (const char* resource : { "Color", "Output", "Depth", "MVec" })
+    const VkFrame::Inputs frame { &modelInput->ngx, depth, motion, &g_vk.output.ngx,
+        workWidth, workHeight, guideWidth, guideHeight, depthInverted, g_vk.reset };
+    const bool phaseLog = g_vk.phasePending || g_vk.frames < 3 || (g_vk.frames + 1) % 300 == 0;
+    int evaluated = 0;
+    VkFrame::Failure failure;
+    const auto logResources = [&](const char* readback) {
+        for (const auto& b : frame.Bindings())
+        {
+            VkFrame::Failure invalid;
+            if (!VkFrame::ValidateImage(b.key, b.resource, b.writable, invalid))
+            {
+                LOG_ERROR("VK-NR resource key={} setter=void* readback={} pointer={} invalid={}",
+                          b.key, readback, (void*) b.resource, invalid.reason);
+                continue;
+            }
+            const auto& info = b.resource->Resource.ImageViewInfo;
+            LOG_INFO("VK-NR resource key={} setter=void* readback={} pointer={} image=0x{:X} view=0x{:X} imageExtent={}x{} subrect=0,0,{}x{} format={} writable={}",
+                     b.key, readback, (void*) b.resource, (uintptr_t) info.Image, (uintptr_t) info.ImageView,
+                     info.Width, info.Height, b.width, b.height, (uint32_t) info.Format, b.resource->ReadWrite);
+        }
+    };
+    const bool prepared = VkFrame::PrepareAndEvaluate(modelParams, frame, activeModel.settings, failure, [&] {
+        if (phaseLog)
+        {
+            logResources("match");
+            LOG_INFO("VK-NR evaluate begin slot={} cmd=0x{:X} reset={} frame parameters verified",
+                     g_vk.models.active + 1, (uintptr_t) cmdBuffer, g_vk.reset);
+        }
+        evaluated = g_vk.evaluate((void*) cmdBuffer, g_vk.feature, modelParams);
+        if (!phaseLog && evaluated != 1) logResources("match");
+        if (phaseLog || evaluated != 1) LOG_INFO("VK-NR evaluate end result=0x{:X}", (uint32_t) evaluated);
+    });
+    if (!prepared)
     {
-        const bool guide = std::string_view(resource) == "Depth" || std::string_view(resource) == "MVec";
-        const std::string prefix = std::string("DLSSNR.") + resource + "Subrect";
-        modelParams->Set((prefix + "BaseX").c_str(), 0u);
-        modelParams->Set((prefix + "BaseY").c_str(), 0u);
-        modelParams->Set((prefix + "Width").c_str(), guide ? guideWidth : workWidth);
-        modelParams->Set((prefix + "Height").c_str(), guide ? guideHeight : workHeight);
-    }
-    if (!VkTuning::WriteChecked(modelParams, "DLSSNR.MVecScaleX", 1.0f) ||
-        !VkTuning::WriteChecked(modelParams, "DLSSNR.MVecScaleY", 1.0f))
-    {
+        logResources("verification-incomplete");
+        LOG_ERROR("VK-NR frame parameter rejected key={} reason={} readbackAttempted={} getResult=0x{:X} expectedPointer={} observedPointer={}; model not called",
+                  failure.key, failure.reason, failure.readbackAttempted, failure.result,
+                  failure.expectedPointer, failure.observedPointer);
         Fail("model frame parameter verification failed");
         return;
     }
-    const bool phaseLog = g_vk.phasePending || g_vk.frames < 3 || (g_vk.frames + 1) % 300 == 0;
-    if (phaseLog) LOG_INFO("VK-NR evaluate begin slot={} cmd=0x{:X} reset={}",
-                          g_vk.models.active + 1, (uintptr_t) cmdBuffer, g_vk.reset);
-    const int evaluated = g_vk.evaluate((void*) cmdBuffer, g_vk.feature, modelParams);
-    if (phaseLog) LOG_INFO("VK-NR evaluate end result=0x{:X}", (uint32_t) evaluated);
 
     if (evaluated != 1)
     {
