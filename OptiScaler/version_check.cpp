@@ -24,7 +24,7 @@ struct LatestReleaseInfo
     std::string url;
 };
 
-feature_version CurrentVersion() { return { VER_MAJOR_VERSION, VER_MINOR_VERSION, VER_HOTFIX_VERSION }; }
+feature_version CurrentVersion() { return { NEUROTIC_VERSION_MAJOR, NEUROTIC_VERSION_MINOR, NEUROTIC_VERSION_PATCH }; }
 
 std::optional<LatestReleaseInfo> FetchLatestRelease()
 {
@@ -73,7 +73,7 @@ std::optional<LatestReleaseInfo> FetchLatestRelease()
         return std::nullopt;
     }
 
-    request = WinHttpOpenRequest(connection, L"GET", L"/repos/optiscaler/optiscaler/releases/latest", nullptr,
+    request = WinHttpOpenRequest(connection, L"GET", L"/repos/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/latest", nullptr,
                                  WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
     if (request == nullptr)
     {
@@ -216,13 +216,13 @@ void RunVersionCheck()
 
     if (updateAvailable)
     {
-        LOG_WARN("New OptiScaler release available: {} (current {}.{}.{}).", release->tag, VER_MAJOR_VERSION,
-                 VER_MINOR_VERSION, VER_HOTFIX_VERSION);
+        LOG_WARN("New NeuRotic release available: {} (current {}.{}.{}).", release->tag, NEUROTIC_VERSION_MAJOR,
+                 NEUROTIC_VERSION_MINOR, NEUROTIC_VERSION_PATCH);
     }
     else
     {
-        LOG_INFO("OptiScaler is up to date (current {}.{}.{})", VER_MAJOR_VERSION, VER_MINOR_VERSION,
-                 VER_HOTFIX_VERSION);
+        LOG_INFO("NeuRotic is up to date (current {}.{}.{})", NEUROTIC_VERSION_MAJOR, NEUROTIC_VERSION_MINOR,
+                 NEUROTIC_VERSION_PATCH);
     }
 }
 } // namespace
@@ -230,7 +230,7 @@ void RunVersionCheck()
 const std::string& VersionCheck::CurrentVersionString()
 {
     static const std::string version =
-        std::format("{}.{}.{}", VER_MAJOR_VERSION, VER_MINOR_VERSION, VER_HOTFIX_VERSION);
+        std::format("{}.{}.{}", NEUROTIC_VERSION_MAJOR, NEUROTIC_VERSION_MINOR, NEUROTIC_VERSION_PATCH);
     return version;
 }
 

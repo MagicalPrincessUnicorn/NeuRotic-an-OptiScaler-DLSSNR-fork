@@ -31,6 +31,12 @@
 #define VER_HOTFIX_VERSION 0
 #define VER_BUILD_NUMBER 1
 
+// NeuRotic has an independent public release stream. This value is compared with
+// published GitHub release tags and deliberately does not follow upstream's DLL version.
+#define NEUROTIC_VERSION_MAJOR 0
+#define NEUROTIC_VERSION_MINOR 9
+#define NEUROTIC_VERSION_PATCH 5
+
 #define VER_DEV_RELEASE
 // #define VER_PRE_RELEASE
 

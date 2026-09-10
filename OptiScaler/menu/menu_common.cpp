@@ -7102,6 +7102,27 @@ void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
 
 void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
 {
+    if (auto ch = ScopedCollapsingHeader("Updates", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
+    {
+        constexpr const char* repositoryUrl = "https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork";
+        const auto& update = ctx.versionStatus;
+        ImGui::Text("Installed NeuRotic version: %s", ctx.currentVersionText.c_str());
+        ImGui::TextLinkOpenURL("Open NeuRotic on GitHub", repositoryUrl);
+        if (!ctx.config->CheckForUpdate.value_or_default())
+            ImGui::TextUnformatted("Update checks are disabled.");
+        else if (!update.completed)
+            ImGui::TextUnformatted("Checking for updates...");
+        else if (update.updateAvailable && !update.latestTag.empty())
+        {
+            ImGui::TextColored(toneMapColor(ImVec4(1.f, .8f, 0.f, 1.f)), "Update available: %s", update.latestTag.c_str());
+            if (!update.latestUrl.empty()) ImGui::TextLinkOpenURL("View patch notes", update.latestUrl.c_str());
+            ImGui::TextDisabled("Automatic installation will be available after this update is downloaded.");
+        }
+        else if (!update.error.empty())
+            ImGui::TextUnformatted("Could not check for updates. Try going to NeuRotic on GitHub.");
+        else
+            ImGui::TextUnformatted("NeuRotic is up to date.");
+    }
     RenderKeybindSettings(ctx);
     RenderThemeSettings(ctx);
     RenderVsyncSettings(ctx);
@@ -7807,7 +7828,7 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
     }
 
     // Main menu window
-    windowTitle = Neurotic::Translate(StrFmt("Neurotic Alpha 0.9.4 | Based on %s", VER_PRODUCT_NAME)) +
+    windowTitle = Neurotic::Translate(StrFmt("NeuRotic v%s | Based on %s", VersionCheck::CurrentVersionString().c_str(), VER_PRODUCT_NAME)) +
                   StrFmt(" - %s %s %s %s###NeuroticMainMenu", state.gameExe.c_str(),
                          state.gameName.empty() ? "" : StrFmt("- %s", state.gameName.c_str()).c_str(),
                          (state.detectedQuirks.size() > 0) ? "(Q)" : "", state.isOptiPatcherSucceed ? "(OP)" : "");
