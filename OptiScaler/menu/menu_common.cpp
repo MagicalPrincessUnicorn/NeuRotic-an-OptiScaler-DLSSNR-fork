@@ -7144,11 +7144,6 @@ void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
     DlssNr::RenderMenu(ctx.config, ctx.menuResScale);
 }
 
-void MenuCommon::RenderNeuralRenderingMultipassPage(RenderMenuContext& ctx)
-{
-    DlssNr::RenderMultipassMenu(ctx.config, ctx.menuResScale);
-}
-
 void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
 {
     RenderFrameGenerationSelection(ctx);
@@ -7222,12 +7217,6 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if (ImGui::BeginTabItem("Neural Rendering"))
     {
         renderPage(RenderNeuralRenderingPage);
-        ImGui::EndTabItem();
-    }
-
-    if (ImGui::BeginTabItem("Neural Rendering Multipass"))
-    {
-        renderPage(RenderNeuralRenderingMultipassPage);
         ImGui::EndTabItem();
     }
 

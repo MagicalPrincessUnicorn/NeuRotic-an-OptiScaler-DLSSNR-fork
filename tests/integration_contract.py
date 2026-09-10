@@ -67,8 +67,9 @@ menu = source('OptiScaler/menu/menu_common.cpp')
 nr = source('OptiScaler/dlssnr/DlssNr_Menu.cpp')
 dx = source('OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp')
 require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCommon::RenderGeneralPage'), 'Updates remain in General')
-require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 1,
-        'NR and Multipass each own one top-level page')
+require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 0 and
+        nr.count('RenderMultipassMenu(config, menuResScale);') == 1,
+        'Multipass is a collapsible section within the Neural Rendering page')
 require(nr.count('ImGui::Combo("NR route"') == 1 and
         nr.count('ImGui::Checkbox("Enable NR Multipass"') == 1,
         'single route and bounded multipass controls')

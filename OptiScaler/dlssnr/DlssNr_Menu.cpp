@@ -129,6 +129,8 @@ static bool DeferredSlider(const char* label, NrOptional<float>* opt, float mn, 
     return changed;
 }
 
+static void RenderMultipassMenu(Config* config, float menuResScale);
+
 void RenderMenu(Config* config, float menuResScale)
 {
 
@@ -181,6 +183,26 @@ void RenderMenu(Config* config, float menuResScale)
         HelpMarker("Quality keeps NR after native DLSS Super Resolution. Performance runs NR before "
                    "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
                    "to the final output in one mode-aware pass, so NR remains after RR in both modes.");
+
+        static const char* passCounts[] = { "Standard (1 pass)", "2 passes", "3 passes", "4 passes",
+                                            "5 passes", "6 passes", "7 passes", "8 passes", "9 passes",
+                                            "10 passes" };
+        int passCountIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
+        if (ImGui::Combo("Passes", &passCountIndex, passCounts, IM_ARRAYSIZE(passCounts)))
+        {
+            config->DlssNrPasses = (uint32_t) (passCountIndex + 1);
+            // Retain the old field as an in-memory compatibility hint. The persisted alias remains
+            // derived from the Multipass switch, so choosing a count alone never activates it.
+            config->DlssNrSecondLayer = passCountIndex >= 1;
+        }
+        HelpMarker("Selects the total number of passes. Standard uses only the baseline Pass 1 settings above. "
+                   "Selecting more passes exposes independent Pass 2 and later profiles in Neural Rendering "
+                   "Multipass, even before it is enabled. The renderer uses only Pass 1 until Enable NR Multipass "
+                   "is turned on.");
+
+        if (passCountIndex > 0 && !config->DlssNrMultipassEnabled.value_or_default())
+            ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
+                               "More than one pass selected. Enable NR Multipass for multiple passes to be applied.");
 
         bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
@@ -1478,6 +1500,10 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
     }
+
+    // Multipass belongs to the same Neural Rendering page, but stays independently collapsible so
+    // the primary first-pass controls remain easy to scan.
+    RenderMultipassMenu(config, menuResScale);
 }
 
 struct PassOptionRefs
@@ -1547,16 +1573,35 @@ static void ResetPassOptions(const PassOptionRefs& pass)
     *pass.applyModel = true;
 }
 
+static void CopyPassOptions(const PassOptionRefs& source, const PassOptionRefs& destination)
+{
+    *destination.workingScale = source.workingScale->value_or_default();
+    *destination.scalingDownscaler = source.scalingDownscaler->value_or_default();
+    *destination.transfer = source.transfer->value_or_default();
+    *destination.preset = source.preset->value_or_default();
+    *destination.intensity = source.intensity->value_or_default();
+    *destination.style = source.style->value_or_default();
+    *destination.localStructure = source.localStructure->value_or_default();
+    *destination.localTone = source.localTone->value_or_default();
+    *destination.skinStructure = source.skinStructure->value_or_default();
+    *destination.autoMask = source.autoMask->value_or_default();
+    *destination.transferStrength = source.transferStrength->value_or_default();
+    *destination.colourStrength = source.colourStrength->value_or_default();
+    *destination.maxRatio = source.maxRatio->value_or_default();
+    *destination.reversibleMode = source.reversibleMode->value_or_default();
+    *destination.applyModel = source.applyModel->value_or_default();
+}
+
 static void ResetButton(const char* id, const std::function<void()>& reset)
 {
     ImGui::SameLine();
     if (ImGui::SmallButton(id)) reset();
 }
 
-void RenderMultipassMenu(Config* config, float menuResScale)
+static void RenderMultipassMenu(Config* config, float menuResScale)
 {
     ImGui::Spacing();
-    if (auto panel = ScopedCollapsingHeader("Neural Rendering Multipass", ImGuiTreeNodeFlags_DefaultOpen);
+    if (auto panel = ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection");
         panel.IsHeaderOpen())
     {
         ScopedIndent indent {};
@@ -1567,22 +1612,22 @@ void RenderMultipassMenu(Config* config, float menuResScale)
         if (!d3d12) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Enable NR Multipass", &enabled))
             config->DlssNrMultipassEnabled = enabled;
-        ResetButton("Reset##MultipassEnabled", [&] { config->DlssNrMultipassEnabled = false; });
         if (!d3d12) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
 
         if (ImGui::Button("Reset All")) ImGui::OpenPopup("Reset all multipass settings?");
-        HelpMarker("Restores the Multipass switch, pass count, and every setting on all ten passes to their shipped defaults. A confirmation is required.");
+        HelpMarker("Restores the Multipass switch and every setting in all nine saved additional pass profiles to "
+                   "their shipped defaults. Baseline Pass 1 and the shared pass count above remain unchanged. "
+                   "A confirmation is required.");
         if (ImGui::BeginPopupModal("Reset all multipass settings?", nullptr,
                                    ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::TextUnformatted("Reset every Neural Rendering Multipass setting to default?");
+            ImGui::TextUnformatted("Reset every additional Neural Rendering pass profile to default?");
             if (ImGui::Button("Confirm"))
             {
                 config->DlssNrMultipassEnabled = false;
                 config->DlssNrSecondLayer = false;
-                config->DlssNrPasses = 1u;
-                for (unsigned int pass = 0; pass < 10; ++pass)
+                for (unsigned int pass = 1; pass < 10; ++pass)
                     ResetPassOptions(PassOptions(config, pass));
                 ImGui::CloseCurrentPopup();
             }
@@ -1594,20 +1639,7 @@ void RenderMultipassMenu(Config* config, float menuResScale)
         if (!d3d12)
             ImGui::TextDisabled("Neural Rendering Multipass requires D3D12; Vulkan remains single-pass.");
 
-        int countIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
-        static const char* passCounts[] = { "1 pass", "2 passes", "3 passes", "4 passes", "5 passes",
-                                            "6 passes", "7 passes", "8 passes", "9 passes", "10 passes" };
-        if (!enabled || !d3d12) ImGui::BeginDisabled();
-        if (ImGui::Combo("Pass count", &countIndex, passCounts, IM_ARRAYSIZE(passCounts)))
-        {
-            config->DlssNrPasses = (uint32_t) (countIndex + 1);
-            config->DlssNrSecondLayer = enabled && countIndex >= 1;
-        }
-        ResetButton("Reset##MultipassCount", [&] { config->DlssNrPasses = 1u; countIndex = 0; });
-        if (!enabled || !d3d12) ImGui::EndDisabled();
-        HelpMarker("Selects how many sequential passes are exposed and requested. One preserves the established renderer. Ten is the hard safety cap; every added pass has its own feature, history, scratch surfaces and settings.");
-
-        const unsigned int passCount = (unsigned int) countIndex + 1;
+        const unsigned int passCount = std::clamp(config->DlssNrPasses.value_or_default(), 1u, 10u);
         const auto telemetry = DlssNr::Telemetry();
         if (enabled && d3d12)
         {
@@ -1621,18 +1653,84 @@ void RenderMultipassMenu(Config* config, float menuResScale)
                                    "High pass counts are experimental and may exhaust GPU memory or frame time.");
         }
 
-        if (!enabled || !d3d12) ImGui::BeginDisabled();
-        if (ImGui::BeginTabBar("NrMultipassLayers", ImGuiTabBarFlags_FittingPolicyScroll))
+        if (passCount > 1)
         {
-            static unsigned int selectedPass = 0;
-            if (selectedPass >= passCount) selectedPass = passCount - 1;
-            for (unsigned int index = 0; index < passCount; ++index)
+            int sharedScale =
+                (int) lroundf(PassOptions(config, 1).workingScale->value_or_default() * 100.0f);
+            bool mixedScale = false;
+            for (unsigned int index = 2; index < passCount; ++index)
+            {
+                const int current =
+                    (int) lroundf(PassOptions(config, index).workingScale->value_or_default() * 100.0f);
+                mixedScale = mixedScale || current != sharedScale;
+            }
+
+            static int pendingAdditionalPassScale = -1;
+            if (pendingAdditionalPassScale >= 0) sharedScale = pendingAdditionalPassScale;
+            if (ImGui::SliderInt("Additional pass model resolution", &sharedScale, 25, 200, "%d%%"))
+                pendingAdditionalPassScale = sharedScale;
+            if (ImGui::IsItemDeactivatedAfterEdit() && pendingAdditionalPassScale >= 0)
+            {
+                const float committed = std::clamp(pendingAdditionalPassScale, 25, 200) / 100.0f;
+                for (unsigned int index = 1; index < passCount; ++index)
+                    *PassOptions(config, index).workingScale = committed;
+                pendingAdditionalPassScale = -1;
+                mixedScale = false;
+            }
+            ResetButton("Reset##AdditionalPassModelResolution", [&]
+            {
+                for (unsigned int index = 1; index < passCount; ++index)
+                    *PassOptions(config, index).workingScale = 1.0f;
+                pendingAdditionalPassScale = -1;
+            });
+            HelpMarker("Sets Model resolution for every additional pass currently selected by Passes: Pass 2 through the final pass. Pass 1 remains independent in the main Neural Rendering controls. The value commits when released so the renderer rebuilds only once.");
+            if (mixedScale)
+                ImGui::TextDisabled("Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
+        }
+        else
+            ImGui::TextDisabled("Select two or more passes above to use the shared additional-pass resolution slider.");
+
+        if (passCount == 1)
+            ImGui::TextDisabled("Pass 1 is configured in the main Neural Rendering section. Select two or more passes above to configure additional passes here.");
+        else if (ImGui::BeginTabBar("NrMultipassLayers", ImGuiTabBarFlags_FittingPolicyScroll))
+        {
+            static unsigned int selectedPass = 1;
+            if (selectedPass < 1 || selectedPass >= passCount) selectedPass = 1;
+            for (unsigned int index = 1; index < passCount; ++index)
             {
                 char label[24] {};
                 snprintf(label, sizeof(label), "Pass %u", index + 1);
                 if (!ImGui::BeginTabItem(label)) continue;
                 selectedPass = index;
                 const auto pass = PassOptions(config, index);
+
+                char resetPopup[64] {};
+                snprintf(resetPopup, sizeof(resetPopup), "Reset Pass %u profile?##pass%u", index + 1, index + 1);
+                if (ImGui::Button("Reset this pass")) ImGui::OpenPopup(resetPopup);
+                HelpMarker("Restores only this additional pass profile to its shipped defaults. Baseline Pass 1, "
+                           "other additional pass profiles, and the shared pass count remain unchanged.");
+                if (ImGui::BeginPopupModal(resetPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+                {
+                    ImGui::Text("Reset every setting for Pass %u to default?", index + 1);
+                    if (ImGui::Button("Confirm"))
+                    {
+                        ResetPassOptions(pass);
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+                    ImGui::EndPopup();
+                }
+
+                if (index > 0)
+                {
+                    ImGui::SameLine();
+                    char copyLabel[48] {};
+                    snprintf(copyLabel, sizeof(copyLabel), "Copy Pass %u settings", index);
+                    if (ImGui::SmallButton(copyLabel))
+                        CopyPassOptions(PassOptions(config, index - 1), pass);
+                    HelpMarker("Copies every saved setting from the preceding pass into this pass. It does not change the shared pass count or enable Multipass.");
+                }
 
                 ImGui::PushItemWidth(220.0f * menuResScale);
                 char id[96] {};
@@ -1747,7 +1845,6 @@ void RenderMultipassMenu(Config* config, float menuResScale)
             }
             ImGui::EndTabBar();
         }
-        if (!enabled || !d3d12) ImGui::EndDisabled();
     }
 }
 

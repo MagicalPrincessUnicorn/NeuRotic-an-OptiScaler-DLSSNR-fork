@@ -63,7 +63,6 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
 
 // The settings panel, drawn inside OptiScaler's menu.
 void RenderMenu(::Config* config, float menuResScale);
-void RenderMultipassMenu(::Config* config, float menuResScale);
 
 // Clears the session failure latch and bounded transition circuits, so transient failure does not
 // require a restart.

@@ -164,10 +164,9 @@ class MenuCommon
     static void RenderMainMenuTabs(RenderMenuContext& ctx);
     static void RenderGeneralPage(RenderMenuContext& ctx);
     static void RenderUpscalingPage(RenderMenuContext& ctx);
-    // This is the single owner for the Neural Rendering page. Future layer-specific
-    // panels belong here; the existing Feature 18 settings remain unchanged for now.
+    // This is the single owner for the Neural Rendering page, including the separate
+    // collapsible Multipass section beneath the first-pass controls.
     static void RenderNeuralRenderingPage(RenderMenuContext& ctx);
-    static void RenderNeuralRenderingMultipassPage(RenderMenuContext& ctx);
     static void RenderFrameGenerationPage(RenderMenuContext& ctx);
     static void RenderAdvancedPage(RenderMenuContext& ctx);
     static void RenderToolsPage(RenderMenuContext& ctx);

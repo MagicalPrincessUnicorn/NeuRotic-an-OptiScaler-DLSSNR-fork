@@ -22,19 +22,33 @@ foreach ($label in @('Advanced Settings', 'Logging')) {
 Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded and remains collapsible'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
 Assert-Ui ($nr -match '(?s)SmallButton\("Reset##NrModelResolution"\).*?DlssNrWorkingScale = 1.0f;\s*pendingScale = -1;\s*scalePercent = 100;') 'model resolution reset restores 100 percent and cancels pending change'
-Assert-Ui ($menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
-           $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is its own top-level tab'
-$multipass = $nr.Substring($nr.IndexOf('void RenderMultipassMenu'))
-Assert-Ui ($multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass"')) 'Multipass page uses the requested full title'
+Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
+           -not $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is contained within Neural Rendering'
+$multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
+Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
+           $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
 Assert-Ui ($multipass.Contains('Checkbox("Enable NR Multipass"')) 'Multipass page uses the requested enable label'
-Assert-Ui ($multipass.Contains('Combo("Pass count"') -and $multipass.Contains('"10 passes"')) 'pass count exposes the complete one-to-ten range'
+Assert-Ui ($nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and $nr.Contains('"10 passes"')) 'shared pass selector exposes the complete one-to-ten range'
+Assert-Ui ($nr.Contains('More than one pass selected. Enable NR Multipass for multiple passes to be applied.') -and
+           $multipass -notmatch 'BeginDisabled\(\);\s*if \(ImGui::BeginTabBar\("NrMultipassLayers"') 'pass profiles remain configurable before Multipass is enabled'
 Assert-Ui ($multipass.Contains('BeginTabBar("NrMultipassLayers"') -and
            $multipass.Contains('"Pass %u"')) 'pass count drives numbered pass tabs'
 Assert-Ui ($multipass.Contains('Button("Reset All")') -and
            $multipass.Contains('BeginPopupModal("Reset all multipass settings?"') -and
            $multipass.Contains('Button("Confirm")') -and $multipass.Contains('Button("Cancel")')) 'Reset All requires confirm or cancel'
-Assert-Ui ($multipass.Contains('for (unsigned int pass = 0; pass < 10; ++pass)') -and
-           $multipass.Contains('DlssNrPasses = 1u')) 'Reset All restores all ten passes and the count'
+Assert-Ui ($multipass.Contains('for (unsigned int pass = 1; pass < 10; ++pass)') -and
+           -not $multipass.Contains('DlssNrPasses = 1u')) 'Reset All restores all additional profiles while preserving baseline Pass 1 and the shared pass count'
+Assert-Ui ($multipass.Contains('Button("Reset this pass")') -and
+           $multipass.Contains('Reset Pass %u profile?##pass%u') -and
+           $multipass.Contains('ResetPassOptions(pass)')) 'each selected pass has a confirmed profile reset'
+Assert-Ui ($multipass.Contains('Copy Pass %u settings') -and
+           $multipass.Contains('CopyPassOptions(PassOptions(config, index - 1), pass)')) 'later passes can copy the preceding profile'
+Assert-Ui ($multipass.Contains('SliderInt("Additional pass model resolution"') -and
+           $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)') -and
+           $multipass.Contains('Reset##AdditionalPassModelResolution')) 'additional passes share an optional model-resolution slider without changing pass 1'
+Assert-Ui ($multipass.Contains('if (passCount == 1)') -and
+           $multipass.Contains('Pass 1 is configured in the main Neural Rendering section.') -and
+           $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)')) 'baseline Pass 1 has one home and Multipass exposes only additional passes'
 foreach ($label in @('Model resolution##pass%u', 'Downscaler##pass%u', 'Model preset##pass%u',
     'Style##pass%u', 'Enlargement##pass%u', 'Detail strength##pass%u',
     'Colour strength##pass%u', 'Highlight guard##pass%u', 'Intensity##pass%u',
