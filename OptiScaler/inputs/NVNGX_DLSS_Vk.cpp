@@ -8,6 +8,7 @@
 
 #include "NVNGX_DLSS.h"
 #include "VulkanRrRouting.h"
+#include "VulkanNativeFeatures.h"
 #include <framegen/nvngx/Nvngx_FG.h>
 #include "NVNGX_Parameter.h"
 #include "proxies/NVNGX_Proxy.h"
@@ -34,6 +35,19 @@ static bool _skipInit = false;
 static wchar_t const** paths;
 static VulkanRrRouting::Registry rrRoutes;
 static std::mutex rrRoutesMutex;
+static VulkanNativeFeatures::Registry nativeFeatures;
+static std::mutex nativeFeaturesMutex;
+
+static void RegisterNativeFeature(NVSDK_NGX_Result result, NVSDK_NGX_Handle** handle,
+                                  NVSDK_NGX_Feature type, VkDevice device)
+{
+    if (result != NVSDK_NGX_Result_Success || !handle || !*handle) return;
+    std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+    const auto identity = nativeFeatures.Register((*handle)->Id, static_cast<uint32_t>(type),
+                                                   reinterpret_cast<uintptr_t>(device));
+    LOG_INFO("VK-NATIVE created handle={} feature={} device=0x{:X} generation={}",
+             (*handle)->Id, identity.type, identity.device, identity.generation);
+}
 
 static uint32_t ReadUIntParameter(NVSDK_NGX_Parameter* params, const char* name)
 {
@@ -857,6 +871,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
             auto result =
                 NVNGXProxy::VULKAN_CreateFeature1()(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature1 result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            RegisterNativeFeature(result, OutHandle, InFeatureID, InDevice);
             return result;
         }
         else
@@ -971,6 +986,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
         {
             auto result = NVNGXProxy::VULKAN_CreateFeature()(InCmdBuffer, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            RegisterNativeFeature(result, OutHandle, InFeatureID, vkDevice);
             return result;
         }
     }
@@ -993,6 +1009,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_ReleaseFeature() != nullptr)
         {
             auto result = NVNGXProxy::VULKAN_ReleaseFeature()(InHandle);
+            {
+                std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+                nativeFeatures.Release(handleId, result == NVSDK_NGX_Result_Success);
+                LOG_INFO("VK-NATIVE release handle={} result=0x{:X}", handleId, (uint32_t) result);
+            }
 
             if (!shutdown)
                 LOG_INFO("VULKAN_ReleaseFeature result for ({0}): {1:X}", handleId, (UINT) result);
@@ -1075,11 +1096,18 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
             auto result = NVNGXProxy::VULKAN_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
             LOG_INFO("VULKAN_EvaluateFeature result for ({0}): {1:X}", handleId, (UINT) result);
 
-            // Neural Rendering over what the upscaler just wrote, on the same command buffer -- the
-            // same placement as the D3D12 path, so frame generation interpolates from enhanced frames
-            // and the model still costs one run per rendered frame.
-            if (result == NVSDK_NGX_Result_Success)
-                DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+            // SR/RR are owned contexts below. Native pass-through features (including FG)
+            // must never acquire NR state, even when their parameter block happens to contain images.
+            {
+                std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+                const auto identity = nativeFeatures.Observe(handleId);
+                static uint64_t unknownEvaluations = 0;
+                const auto count = identity.generation ? identity.evaluations : ++unknownEvaluations;
+                if (count <= 3 || count % 300 == 0)
+                    LOG_INFO("VK-NATIVE bypass-NR handle={} feature={} generation={} cmd=0x{:X} count={}",
+                             handleId, identity.type, identity.generation, reinterpret_cast<uintptr_t>(InCmdList),
+                             count);
+            }
 
             return result;
         }
@@ -1183,7 +1211,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
             }
 
             if (decision.log)
-                LOG_INFO("VK-RR-ROUTE handle={} viewport={} frame={} declared={}x{} observed={}x{} presented={}x{} selected={} decision={} nrCount={}",
+                LOG_INFO("VK-RR-ROUTE handle={} viewport={} frame={} declared={}x{} observed={}x{} presented={}x{} selected={} decision={} eligibleCount={}",
                          handleId, viewport, slContext.frame, declared.width, declared.height, observed.width,
                          observed.height, presentation.width, presentation.height, decision.selectedHandle,
                          VulkanRrRouting::ReasonName(decision.reason), decision.executionCount);
@@ -1203,6 +1231,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
 {
     shutdown = true;
+    {
+        std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+        nativeFeatures.Clear();
+    }
     {
         std::lock_guard<std::mutex> lock(rrRoutesMutex);
         rrRoutes.ResetLifecycle();

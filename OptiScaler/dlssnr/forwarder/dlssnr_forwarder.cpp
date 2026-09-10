@@ -767,6 +767,26 @@ __declspec(dllexport) int dlssnr_vk_evaluate(void *cmdBuffer, void *feature, voi
     return (int) result;
 }
 
+// V2 accepts a fully prepared typed NGX block. No shared vtable setter state is consulted.
+__declspec(dllexport) int dlssnr_vk_create_v2(void *cmd, void *params, void **feature) {
+    if (!g_vk.create || !cmd || !params || !feature) return -1;
+    *feature = nullptr;
+    volatile int result = g_vk.create(cmd, 18, params, feature);
+    return result;
+}
+
+__declspec(dllexport) int dlssnr_vk_evaluate_v2(void *cmd, void *feature, void *params) {
+    if (!g_vk.evaluate || !cmd || !feature || !params) return -1;
+    volatile int result = g_vk.evaluate(cmd, feature, params, nullptr);
+    return result;
+}
+
+__declspec(dllexport) int dlssnr_vk_release_v2(void *feature) {
+    if (!g_vk.release || !feature) return -1;
+    volatile int result = g_vk.release(feature);
+    return result;
+}
+
 __declspec(dllexport) void dlssnr_vk_release(void *feature) {
     if (g_vk.release != nullptr && feature != nullptr) {
         volatile int ignored = g_vk.release(feature);

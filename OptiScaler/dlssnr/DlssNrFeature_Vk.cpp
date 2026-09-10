@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "DlssNrFeature_Vk.h"
+#include "VulkanNrTuning.h"
 
 #include <Config.h>
 #include <State.h>
@@ -16,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace DlssNr
 {
@@ -28,12 +30,9 @@ namespace
 // it, whichever API is being used, so these calls go through the same shim the D3D12 path does.
 using PFN_VkProbe = int(__cdecl*)(const wchar_t*);
 using PFN_VkInit = int(__cdecl*)(const wchar_t*, const wchar_t*, void*, void*, void*, int);
-using PFN_VkCreate = void*(__cdecl*)(void*, void*, unsigned int, unsigned int, int, float, int, float, float, float,
-                                     int, int);
-using PFN_VkEvaluate = int(__cdecl*)(void*, void*, void*, void*, void*, void*, void*, unsigned int, unsigned int,
-                                     unsigned int, unsigned int, int, int, float, int, float, float, float, int, float,
-                                     float);
-using PFN_VkRelease = void(__cdecl*)(void*);
+using PFN_VkCreate = int(__cdecl*)(void*, void*, void**);
+using PFN_VkEvaluate = int(__cdecl*)(void*, void*, void*);
+using PFN_VkRelease = int(__cdecl*)(void*);
 
 // One image this pass owns: the storage, the view, and the NGX wrapper that describes it. Kept
 // together because they are created, resized and destroyed as one thing.
@@ -71,6 +70,13 @@ struct VkState
     bool ngxInitialised = false;
     void* feature = nullptr;
     NVSDK_NGX_Parameter* capabilityParams = nullptr;
+    // feature/capabilityParams above are non-owning aliases of the active cache entry.
+    VkTuning::Cache<NVSDK_NGX_Parameter> models;
+    std::optional<VkTuning::Settings> requestedTuning;
+    VkTuning::Result tuningResult = VkTuning::Result::Applied;
+    std::string tuningMessage = "Waiting for NR";
+    VkFormat physicalFormat = VK_FORMAT_UNDEFINED;
+    bool phasePending = false;
 
     // What the model writes, the proxy it is shown, and the frame as the upscaler left it.
     OwnedImage output;
@@ -211,6 +217,9 @@ static VkImageInfo ImageInfoOf(const OwnedImage& img)
 
 bool CreateImage(OwnedImage& img, uint32_t width, uint32_t height, VkFormat format, bool readWrite)
 {
+    // Creation is initial-only. Never recycle an image referenced by recorded work.
+    if (img.image != VK_NULL_HANDLE || img.view != VK_NULL_HANDLE || img.memory != VK_NULL_HANDLE)
+        return false;
     OwnedImage replacement;
 
     VkImageCreateInfo info {};
@@ -264,9 +273,7 @@ bool CreateImage(OwnedImage& img, uint32_t width, uint32_t height, VkFormat form
         return false;
     }
 
-    // Existing callers drain before replacing live images. Preserve that lifetime policy,
-    // but do not discard the old image until the replacement has memory and a usable view.
-    DestroyImage(img);
+    // Only a new, never-submitted allocation is discarded on the failure paths above.
     img = replacement;
     img.width = width;
     img.height = height;
@@ -454,9 +461,9 @@ bool LoadForwarder()
 
     g_vk.probe = (PFN_VkProbe) GetProcAddress(g_vk.forwarder, "dlssnr_vk_probe");
     g_vk.init = (PFN_VkInit) GetProcAddress(g_vk.forwarder, "dlssnr_vk_init");
-    g_vk.create = (PFN_VkCreate) GetProcAddress(g_vk.forwarder, "dlssnr_vk_create");
-    g_vk.evaluate = (PFN_VkEvaluate) GetProcAddress(g_vk.forwarder, "dlssnr_vk_evaluate");
-    g_vk.release = (PFN_VkRelease) GetProcAddress(g_vk.forwarder, "dlssnr_vk_release");
+    g_vk.create = (PFN_VkCreate) GetProcAddress(g_vk.forwarder, "dlssnr_vk_create_v2");
+    g_vk.evaluate = (PFN_VkEvaluate) GetProcAddress(g_vk.forwarder, "dlssnr_vk_evaluate_v2");
+    g_vk.release = (PFN_VkRelease) GetProcAddress(g_vk.forwarder, "dlssnr_vk_release_v2");
     g_vk.shutdown = (int (*)(int)) GetProcAddress(g_vk.forwarder, "dlssnr_vk_shutdown");
 
     if (g_vk.init == nullptr || g_vk.create == nullptr || g_vk.evaluate == nullptr ||
@@ -557,6 +564,22 @@ std::optional<double> LastGpuTimeVk()
         runtime.resumeGeneration != g_vk.resumeGeneration)
         return {};
     return g_vk.lastGpuTime;
+}
+
+std::string TuningStatusVk()
+{
+    std::lock_guard<std::mutex> lock(g_vkMutex);
+    std::string status = g_vk.tuningMessage + " (" + std::to_string(g_vk.models.size) + "/8 slots)";
+    if (g_vk.models.active >= 0)
+    {
+        const auto& s = g_vk.models.entries[g_vk.models.active].settings;
+        status += "\nApplied slot " + std::to_string(g_vk.models.active + 1) +
+            ": preset " + std::to_string(s.preset) + ", style " + std::to_string(s.style) +
+            ", intensity " + std::to_string(s.intensity) + "\nStructure " + std::to_string(s.structure) +
+            ", tone " + std::to_string(s.tone) + ", skin " + std::to_string(s.skin) +
+            ", mask " + (s.mask ? "on" : "off");
+    }
+    return status;
 }
 
 void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
@@ -758,16 +781,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         LOG_INFO("DLSS-NR Vulkan: the model initialised on this device");
     }
 
-    if (g_vk.capabilityParams == nullptr)
-    {
-        if (NVSDK_NGX_VULKAN_AllocateParameters(&g_vk.capabilityParams) != NVSDK_NGX_Result_Success ||
-            g_vk.capabilityParams == nullptr)
-        {
-            Fail("a parameter block could not be allocated");
-            return;
-        }
-    }
-
     if (g_vk.queryPool == VK_NULL_HANDLE)
     {
         VkPhysicalDeviceProperties props {};
@@ -805,27 +818,18 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         }
     }
 
-    // Resize. The feature is built for a size and has to be rebuilt when the frame OR the working
-    // size changes -- moving the slider is a rebuild, which is why it is compared here.
+    // This experiment never retires live Vulkan resources during evaluation. A changed
+    // physical/working contract bypasses NR until shutdown; tuning uses retained model entries.
+    if (g_vk.width != 0 && (g_vk.width != width || g_vk.height != height ||
+        g_vk.workWidth != workWidth || g_vk.workHeight != workHeight ||
+        g_vk.physicalFormat != colour->Resource.ImageViewInfo.Format))
+    {
+        Fail("output or working-size contract changed; restart required");
+        return;
+    }
     if (g_vk.width != width || g_vk.height != height || g_vk.workWidth != workWidth ||
         g_vk.workHeight != workHeight)
     {
-        // This block releases the feature and frees the surfaces below IMMEDIATELY. A frame-size
-        // change is already fenced by the game -- it recreates the swapchain around it -- but moving
-        // the working-scale slider is not: the game is mid-flight and previous frames' command
-        // buffers still reference the feature and images about to be destroyed. Freeing a Vulkan
-        // resource that in-flight GPU work still touches is device removal (ERR_GFX_STATE, reproduced
-        // on RDR2 and Enshrouded by dragging the model-resolution slider). Drain the device first.
-        // Only the rare resize path reaches here, so the CPU stall is a one-off hitch, not per-frame.
-        if (g_vk.device != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(g_vk.device);
-
-        if (g_vk.feature != nullptr && g_vk.release != nullptr)
-        {
-            g_vk.release(g_vk.feature);
-            g_vk.feature = nullptr;
-        }
-
         const VkFormat working = VK_FORMAT_R16G16B16A16_SFLOAT;
 
         // The meter is a fixed 8x8 whatever the frame is, so it is only built the once -- but it is
@@ -836,9 +840,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
         if (!meterReady)
             LOG_WARN("DLSS-NR Vulkan: no exposure meter; the white point stays on the slider");
-
-        DestroyImage(g_vk.proxySmall);
-        DestroyImage(g_vk.outputNative);
 
         // output is the model's target, so it is the working size. proxy and keep are full: proxy is
         // the source the downsample reads, keep is the untouched frame the resolve composites onto.
@@ -859,25 +860,60 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         g_vk.height = height;
         g_vk.workWidth = workWidth;
         g_vk.workHeight = workHeight;
+        g_vk.physicalFormat = colour->Resource.ImageViewInfo.Format;
         g_vk.reset = true;
     }
 
-    if (g_vk.feature == nullptr)
+    const VkTuning::Settings requested { cfg.DlssNrPreset.value_or_default(), cfg.DlssNrStyle.value_or_default(),
+        cfg.DlssNrIntensity.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+        cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+        cfg.DlssNrAutoMask.value_or_default() };
+    const bool requestChanged = !g_vk.requestedTuning || !(*g_vk.requestedTuning == requested);
+    if (requestChanged)
     {
-        g_vk.feature = g_vk.create(
-            (void*) cmdBuffer, g_vk.capabilityParams, workWidth, workHeight, (int) cfg.DlssNrPreset.value_or_default(),
-            cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
-            cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
-            cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
-
-        if (g_vk.feature == nullptr)
+        g_vk.requestedTuning = requested;
+        LOG_INFO("VK-NR requested preset={} style={} intensity={} structure={} tone={} skin={} mask={}",
+                 requested.preset, requested.style, requested.intensity, requested.structure, requested.tone,
+                 requested.skin, requested.mask);
+    }
+    g_vk.tuningResult = g_vk.models.Select(requested, [&](auto& entry) {
+        const auto allocated = NVSDK_NGX_VULKAN_AllocateParameters(&entry.params);
+        if (allocated != NVSDK_NGX_Result_Success || !entry.params)
         {
-            Fail("the model would not build a feature on this device");
-            return;
+            LOG_ERROR("VK-NR parameter allocation failed result=0x{:X}", (uint32_t) allocated);
+            return false;
         }
-
-        LOG_INFO("DLSS-NR Vulkan: feature up at {}x{} (frame {}x{})", workWidth, workHeight, width, height);
+        const char* failedKey = "invalid configuration";
+        if (!VkTuning::Prepare(entry.params, entry.settings, workWidth, workHeight, &failedKey))
+        {
+            LOG_ERROR("VK-NR typed parameter verification failed key={}; model not created", failedKey);
+            return false;
+        }
+        LOG_INFO("VK-NR create begin slot={} cmd=0x{:X} typed parameters verified", g_vk.models.size,
+                 reinterpret_cast<uintptr_t>(cmdBuffer));
+        const int result = g_vk.create(cmdBuffer, entry.params, &entry.feature);
+        LOG_INFO("VK-NR create end slot={} result=0x{:X} feature={}", g_vk.models.size,
+                 (uint32_t) result, entry.feature);
+        return result == 1 && entry.feature != nullptr;
+    });
+    const char* status = g_vk.tuningResult == VkTuning::Result::Applied ? "Applied" :
+        g_vk.tuningResult == VkTuning::Result::Full ? "Pending: eight configurations used; restart for new settings" :
+        g_vk.tuningResult == VkTuning::Result::Invalid ? "Invalid model settings; keeping applied settings" :
+        "Model creation/verification failed; keeping applied settings";
+    g_vk.tuningMessage = status;
+    if (requestChanged) LOG_INFO("VK-NR tuning status={} active={} slots={}/8", status, g_vk.models.active + 1, g_vk.models.size);
+    if (g_vk.models.active < 0) return;
+    const auto& activeModel = g_vk.models.entries[g_vk.models.active];
+    g_vk.feature = activeModel.feature;
+    g_vk.capabilityParams = activeModel.params;
+    if (g_vk.models.changed)
+    {
         g_vk.reset = true;
+        g_vk.phasePending = true;
+        LOG_INFO("VK-NR applied slot={} preset={} style={} intensity={} structure={} tone={} skin={} mask={}",
+                 g_vk.models.active + 1, activeModel.settings.preset, activeModel.settings.style,
+                 activeModel.settings.intensity, activeModel.settings.structure, activeModel.settings.tone,
+                 activeModel.settings.skin, activeModel.settings.mask);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1002,15 +1038,12 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             const Scaler wantScaler = cfg.DlssNrScalingDownscaler.value_or_default();
             if (g_vk.nrScaler != wantScaler)
             {
-                // Rebuilding frees the old scalers' pipelines/descriptors. The filter dropdown changes
-                // no size, so this does NOT go through the resize block's drain -- and prior frames'
-                // submitted command buffers still bind these pipelines. Freeing them under in-flight GPU
-                // work is device removal (the same hazard the resize path drains for). Drain first. A
-                // filter change is rare, so the one-off stall is a hitch, not a per-frame cost.
-                if (g_vk.device != VK_NULL_HANDLE)
-                    vkDeviceWaitIdle(g_vk.device);
-                g_vk.superUp.reset();
-                g_vk.superDown.reset();
+                // Never retire live pipelines while recording an evaluation.
+                if (g_vk.nrScaler != Scaler::Count)
+                {
+                    Fail("supersampling filter changed; restart required");
+                    return;
+                }
                 g_vk.nrScaler = wantScaler;
             }
             if (!g_vk.superUp)
@@ -1131,12 +1164,34 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     Transition(cmdBuffer, g_vk.output, VK_IMAGE_LAYOUT_GENERAL);
 
-    const int evaluated = g_vk.evaluate(
-        (void*) cmdBuffer, g_vk.feature, g_vk.capabilityParams, &modelInput->ngx, depth, motion, &g_vk.output.ngx,
-        workWidth, workHeight, guideWidth, guideHeight, depthInverted ? 1 : 0, g_vk.reset ? 1 : 0,
-        cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
-        cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
-        cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1.0f, 1.0f);
+    // Each model owns this block. Update only frame inputs, never requested (unapplied) tuning.
+    auto* modelParams = g_vk.capabilityParams;
+    modelParams->Set("DLSSNR.Color", (unsigned long long) (uintptr_t) &modelInput->ngx);
+    modelParams->Set("DLSSNR.Depth", (unsigned long long) (uintptr_t) depth);
+    modelParams->Set("DLSSNR.MVec", (unsigned long long) (uintptr_t) motion);
+    modelParams->Set("DLSSNR.Output", (unsigned long long) (uintptr_t) &g_vk.output.ngx);
+    modelParams->Set("DLSSNR.DepthInverted", (unsigned int) depthInverted);
+    modelParams->Set("DLSSNR.Reset", (unsigned int) g_vk.reset);
+    for (const char* resource : { "Color", "Output", "Depth", "MVec" })
+    {
+        const bool guide = std::string_view(resource) == "Depth" || std::string_view(resource) == "MVec";
+        const std::string prefix = std::string("DLSSNR.") + resource + "Subrect";
+        modelParams->Set((prefix + "BaseX").c_str(), 0u);
+        modelParams->Set((prefix + "BaseY").c_str(), 0u);
+        modelParams->Set((prefix + "Width").c_str(), guide ? guideWidth : workWidth);
+        modelParams->Set((prefix + "Height").c_str(), guide ? guideHeight : workHeight);
+    }
+    if (!VkTuning::WriteChecked(modelParams, "DLSSNR.MVecScaleX", 1.0f) ||
+        !VkTuning::WriteChecked(modelParams, "DLSSNR.MVecScaleY", 1.0f))
+    {
+        Fail("model frame parameter verification failed");
+        return;
+    }
+    const bool phaseLog = g_vk.phasePending || g_vk.frames < 3 || (g_vk.frames + 1) % 300 == 0;
+    if (phaseLog) LOG_INFO("VK-NR evaluate begin slot={} cmd=0x{:X} reset={}",
+                          g_vk.models.active + 1, (uintptr_t) cmdBuffer, g_vk.reset);
+    const int evaluated = g_vk.evaluate((void*) cmdBuffer, g_vk.feature, modelParams);
+    if (phaseLog) LOG_INFO("VK-NR evaluate end result=0x{:X}", (uint32_t) evaluated);
 
     if (evaluated != 1)
     {
@@ -1146,7 +1201,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     }
 
     g_vk.reset = false;
-    g_vk.frames++;
 
     // -----------------------------------------------------------------------------------------
     // Resolve: proxy + the model's answer + the untouched copy -> the frame
@@ -1181,6 +1235,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     Transition(cmdBuffer, *resolveAnswer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     Transition(cmdBuffer, g_vk.keep, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+    if (phaseLog) LOG_INFO("VK-NR compose begin slot={}", g_vk.models.active + 1);
     if (!g_vk.pass->Dispatch(cmdBuffer, resolve, width, height, resolveProxy->view, resolveAnswer->view,
                              g_vk.keep.view, VK_NULL_HANDLE, colour->Resource.ImageViewInfo.ImageView,
                              VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
@@ -1188,6 +1243,11 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         Fail("the resolve dispatch failed");
         return;
     }
+
+    ++g_vk.frames;
+    g_vk.phasePending = false;
+    if (phaseLog) LOG_INFO("VK-NR compose recorded slot={} successfulNR={} output={}x{}",
+                          g_vk.models.active + 1, g_vk.frames, width, height);
 
     // Close it, and read the pair from three frames ago -- retired by now, so the read does not wait.
     if (g_vk.queryPool != VK_NULL_HANDLE)
@@ -1247,6 +1307,10 @@ static void ShutdownVkLocked(bool deviceAlive)
         // The wrapper can allocate through the driver core. Its old generation may already be
         // gone too, so do not call DestroyParameters on this abandonment path.
         g_vk.capabilityParams = nullptr;
+        g_vk.models = {};
+        g_vk.requestedTuning.reset();
+        g_vk.physicalFormat = VK_FORMAT_UNDEFINED;
+        g_vk.tuningMessage = "Device abandoned; restart required";
         if (g_vk.shutdown != nullptr)
             g_vk.shutdown(0);
         g_vk.queryPool = VK_NULL_HANDLE;
@@ -1279,14 +1343,25 @@ static void ShutdownVkLocked(bool deviceAlive)
         return;
     }
 
-    // The device is alive (real teardown): drain before freeing so nothing the GPU is still using is
-    // destroyed under it, the same rule as the resize path.
-    if (g_vk.device != VK_NULL_HANDLE)
-        vkDeviceWaitIdle(g_vk.device);
-
-    if (g_vk.feature != nullptr && g_vk.release != nullptr)
-        g_vk.release(g_vk.feature);
-
+    // Only the shutdown lifecycle may drain and retire the retained models.
+    if (g_vk.device != VK_NULL_HANDLE && vkDeviceWaitIdle(g_vk.device) != VK_SUCCESS)
+    {
+        g_vkShutdownFailed = true;
+        LOG_ERROR("VK-NR shutdown drain failed; retained resources not reported as cleaned up");
+        return;
+    }
+    for (auto& entry : g_vk.models.entries)
+    {
+        if (!entry.feature) continue;
+        const int result = g_vk.release ? g_vk.release(entry.feature) : -1;
+        if (result != 1)
+        {
+            g_vkShutdownFailed = true;
+            LOG_ERROR("VK-NR shutdown release failed result=0x{:X}; retaining remaining resources", (uint32_t) result);
+            return;
+        }
+        entry.feature = nullptr;
+    }
     g_vk.feature = nullptr;
 
     if (g_vk.shutdown != nullptr)
@@ -1297,6 +1372,7 @@ static void ShutdownVkLocked(bool deviceAlive)
             g_vkShutdownFailed = true;
             LOG_ERROR("DLSS-NR Vulkan: model shutdown returned 0x{:X}; further NR initialization blocked",
                       (unsigned int) result);
+            return;
         }
     }
 
@@ -1313,11 +1389,23 @@ static void ShutdownVkLocked(bool deviceAlive)
     g_vk.superDown.reset();
     g_vk.nrScaler = Scaler::Count;
 
-    if (g_vk.capabilityParams != nullptr)
+    for (auto& entry : g_vk.models.entries)
     {
-        NVSDK_NGX_VULKAN_DestroyParameters(g_vk.capabilityParams);
-        g_vk.capabilityParams = nullptr;
+        if (!entry.params) continue;
+        const auto result = NVSDK_NGX_VULKAN_DestroyParameters(entry.params);
+        if (result != NVSDK_NGX_Result_Success)
+        {
+            g_vkShutdownFailed = true;
+            LOG_ERROR("VK-NR shutdown parameter destruction failed result=0x{:X}", (uint32_t) result);
+            return;
+        }
+        entry.params = nullptr;
     }
+    g_vk.capabilityParams = nullptr;
+    g_vk.models = {};
+    g_vk.requestedTuning.reset();
+    g_vk.physicalFormat = VK_FORMAT_UNDEFINED;
+    g_vk.tuningMessage = "Waiting for NR";
 
     if (g_vk.queryPool != VK_NULL_HANDLE && g_vk.device != VK_NULL_HANDLE)
     {
