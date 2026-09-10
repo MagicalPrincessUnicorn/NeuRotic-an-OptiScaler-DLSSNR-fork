@@ -193,7 +193,8 @@ void RenderMenu(Config* config, float menuResScale)
             config->DlssNrPasses = (uint32_t) (passCountIndex + 1);
             // Retain the old field as an in-memory compatibility hint. The persisted alias remains
             // derived from the Multipass switch, so choosing a count alone never activates it.
-            config->DlssNrSecondLayer = passCountIndex >= 1;
+            config->DlssNrSecondLayer =
+                config->DlssNrMultipassEnabled.value_or_default() && passCountIndex >= 1;
         }
         HelpMarker("Selects the total number of passes. Standard uses only the baseline Pass 1 settings above. "
                    "Selecting more passes exposes independent Pass 2 and later profiles in Neural Rendering "
@@ -201,8 +202,17 @@ void RenderMenu(Config* config, float menuResScale)
                    "is turned on.");
 
         if (passCountIndex > 0 && !config->DlssNrMultipassEnabled.value_or_default())
-            ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
-                               "More than one pass selected. Enable NR Multipass for multiple passes to be applied.");
+        {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 0.72f, 0.25f, 0.14f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.72f, 0.25f, 0.80f));
+            if (ImGui::BeginChild("##DlssNrMultipassInactiveWarning", ImVec2(0.0f, 0.0f),
+                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
+                                      ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AlwaysAutoResize))
+                ImGui::TextWrapped(
+                    "More than one pass selected. Enable NR Multipass for multiple passes to be applied.");
+            ImGui::EndChild();
+            ImGui::PopStyleColor(2);
+        }
 
         bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
@@ -223,153 +233,6 @@ void RenderMenu(Config* config, float menuResScale)
         const auto presentTelemetry = DlssNr::PresentTelemetry();
         const auto bridgeTelemetry = DlssNr::BridgeTelemetry().Snapshot();
         const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
-
-        const auto renderSecondLayerControls = [&]()
-        {
-            if (auto panel = ScopedCollapsingHeader("Multipass##DlssNrMultipassSection"); panel.IsHeaderOpen())
-            {
-                ScopedIndent indent {};
-                ScopedNestedTextWrap wrap {};
-                ImGui::Spacing();
-
-                const bool d3d12 = !vulkan && State::Instance().api == API::DX12;
-                bool secondLayer = config->DlssNrSecondLayer.value_or_default();
-                if (!d3d12)
-                    ImGui::BeginDisabled();
-                if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
-                    config->DlssNrSecondLayer = secondLayer;
-                if (!d3d12)
-                    ImGui::EndDisabled();
-
-                HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer frame. It owns its model session, history, working resolution and composition settings. Each layer owns separate temporal history. Enabling it roughly doubles the model cost. This experimental D3D12-only pass can be extremely expensive; lower its working resolution if the game stops being playable.");
-
-                if (!d3d12)
-                    ImGui::TextDisabled("Second neural-rendering layer requires D3D12.");
-                else if (enabled && nrTelemetry.layer2Requested)
-                {
-                    if (nrTelemetry.layer2Failed)
-                        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Layer 2 unavailable: %s.",
-                                           nrTelemetry.layer2FailureReason);
-                    else if (nrTelemetry.layer2Retiring)
-                        ImGui::TextDisabled("Layer 2 is retiring safely; NR evaluation is paused.");
-                    else if (!nrTelemetry.layer2Loaded)
-                        ImGui::TextDisabled("Layer 2 requested: waiting for a lifecycle-only creation frame.");
-                    else if (!nrTelemetry.layer2Ready)
-                        ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
-                    else
-                        ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Two composed NR layers ready.");
-                }
-
-                const bool disableSettings = !secondLayer || !d3d12;
-                if (disableSettings)
-                    ImGui::BeginDisabled();
-
-                ImGui::TextDisabled("Independent layer-2 tuning. Lower Model resolution first when testing performance.");
-                ImGui::PushItemWidth(220.0f * menuResScale);
-
-                static int pendingLayer2Scale = -1;
-                int scale = pendingLayer2Scale >= 0
-                                ? pendingLayer2Scale
-                                : (int) lroundf(config->DlssNrSecondLayerWorkingScale.value_or_default() * 100.0f);
-                if (ImGui::SliderInt("Model resolution##layer2", &scale, 25, 200, "%d%%"))
-                    pendingLayer2Scale = scale;
-                if (ImGui::IsItemDeactivatedAfterEdit() && pendingLayer2Scale >= 0)
-                {
-                    config->DlssNrSecondLayerWorkingScale =
-                        std::clamp(pendingLayer2Scale, 25, 200) / 100.0f;
-                    pendingLayer2Scale = -1;
-                }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Reset##NrLayer2ModelResolution"))
-                {
-                    config->DlssNrSecondLayerWorkingScale = 1.0f;
-                    pendingLayer2Scale = -1;
-                    scale = 100;
-                }
-                HelpMarker("The working resolution of layer 2 only. Dragging previews the percentage, then releasing rebuilds only the second model session. Cost falls roughly with the square of this value, while the full-resolution frame underneath stays untouched.");
-
-                if (scale > 100)
-                {
-                    static const char* downscalerNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
-                                                             "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
-                    int downscaler = (int) config->DlssNrSecondLayerScalingDownscaler.value_or_default();
-                    downscaler = std::clamp(downscaler, 0, IM_ARRAYSIZE(downscalerNames) - 1);
-                    if (ImGui::Combo("Downscaler##layer2", &downscaler, downscalerNames, IM_ARRAYSIZE(downscalerNames)))
-                        config->DlssNrSecondLayerScalingDownscaler = (Scaler) downscaler;
-                    HelpMarker("The filter that averages only layer 2's above-native model answer back to display size. It never changes the first pass or Output Scaling downscaler.");
-                }
-
-                static const char* presetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
-                int preset = std::clamp((int) config->DlssNrSecondLayerPreset.value_or_default(), 0, 3);
-                if (ImGui::Combo("Model preset##layer2", &preset, presetNames, IM_ARRAYSIZE(presetNames)))
-                    config->DlssNrSecondLayerPreset = (uint32_t) preset;
-                HelpMarker("The second model session's preset. Default leaves the choice to that session; it is independent of the first NR pass and DLSS Super Resolution presets.");
-
-                static const char* styleNames[] = { "Default (standard)", "Natural", "Cinematic" };
-                int style = std::clamp((int) config->DlssNrSecondLayerStyle.value_or_default(), 0, 2);
-                if (ImGui::Combo("Style##layer2", &style, styleNames, IM_ARRAYSIZE(styleNames)))
-                    config->DlssNrSecondLayerStyle = (uint32_t) style;
-                HelpMarker("The processing profile used by layer 2 only. Default is strongest, Natural is gentler, and Cinematic tones down shine and over-processing. Changing it rebuilds only the second model session.");
-
-                const bool reduced = config->DlssNrSecondLayerWorkingScale.value_or_default() < 0.999f;
-                if (!reduced)
-                    ImGui::BeginDisabled();
-                static const char* enlargementNames[] = { "Classic", "Matched residual" };
-                int enlargement = config->DlssNrSecondLayerTransfer.value_or_default() == 1 ? 1 : 0;
-                if (ImGui::Combo("Enlargement##layer2", &enlargement, enlargementNames, IM_ARRAYSIZE(enlargementNames)))
-                    config->DlssNrSecondLayerTransfer = (uint32_t) enlargement;
-                if (!reduced)
-                    ImGui::EndDisabled();
-                HelpMarker("How layer 2's edit returns to full size below 100 percent. Matched residual carries up only the model's difference and usually preserves colour better; it has no effect on the first pass.");
-
-                float detail = config->DlssNrSecondLayerTransferStrength.value_or_default();
-                if (ImGui::SliderFloat("Detail strength##layer2", &detail, 0.0f, 2.0f, "%.2f"))
-                    config->DlssNrSecondLayerTransferStrength = std::clamp(detail, 0.0f, 2.0f);
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Reset##layer2-detail"))
-                    config->DlssNrSecondLayerTransferStrength = 1.0f;
-                HelpMarker("How far the composed frame moves toward layer 2's picture. Zero keeps the completed first-pass frame, one uses the second model's picture, and values above one exaggerate only layer 2's edit.");
-
-                float colour = config->DlssNrSecondLayerColourStrength.value_or_default();
-                if (ImGui::SliderFloat("Colour strength##layer2", &colour, 0.0f, 4.0f, "%.2f"))
-                    config->DlssNrSecondLayerColourStrength = std::clamp(colour, 0.0f, 4.0f);
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Reset##layer2-colour"))
-                    config->DlssNrSecondLayerColourStrength = 1.0f;
-                HelpMarker("How much of layer 2's colour accompanies its lighting edit. Zero preserves the completed first-pass hue, one uses the second model's colour, and values above one oversaturate only this pass.");
-
-                float guard = config->DlssNrSecondLayerMaxRatio.value_or_default();
-                if (ImGui::SliderFloat("Highlight guard##layer2", &guard, 1.0f, 8.0f, "%.1fx"))
-                    config->DlssNrSecondLayerMaxRatio = std::clamp(guard, 1.0f, 8.0f);
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Reset##layer2-guard"))
-                    config->DlssNrSecondLayerMaxRatio = 2.0f;
-                HelpMarker("The maximum brightness change layer 2 may apply in either direction. The 2x default protects moving highlights without limiting the first pass.");
-
-                DeferredSlider("Intensity##layer2", &config->DlssNrSecondLayerIntensity, 0.0f, 2.0f, 1.0f);
-                HelpMarker("Layer 2's internal model strength. It is read when the second model session is built, so the value commits on release and does not change layer 1's Detail strength.");
-                DeferredSlider("Local structure##layer2", &config->DlssNrSecondLayerLocalStructure, 0.0f, 2.0f, 1.0f);
-                HelpMarker("Layer 2's internal local-structure strength. It commits on release and rebuilds only the second model session.");
-                DeferredSlider("Local tone##layer2", &config->DlssNrSecondLayerLocalTone, 0.0f, 2.0f, 1.0f);
-                HelpMarker("Layer 2's internal local-tone strength. It commits on release and rebuilds only the second model session.");
-                DeferredSlider("Skin structure##layer2", &config->DlssNrSecondLayerSkinStructure, -1.0f, 2.0f, -1.0f);
-                HelpMarker("Layer 2's skin-structure strength. Minus one follows its Local structure value; zero and above tune skin independently, without changing the first pass.");
-
-                bool autoMask = config->DlssNrSecondLayerAutoMask.value_or_default();
-                if (ImGui::Checkbox("Auto skin mask##layer2", &autoMask))
-                    config->DlssNrSecondLayerAutoMask = autoMask;
-                HelpMarker("Lets the second model session identify skin instead of treating its input uniformly. The first pass keeps its own mask setting.");
-
-                bool apply = config->DlssNrSecondLayerApplyModel.value_or_default();
-                if (ImGui::Checkbox("Apply the model##layer2", &apply))
-                    config->DlssNrSecondLayerApplyModel = apply;
-                HelpMarker("Off keeps layer 2 evaluating but hides only its edit, leaving the completed first-pass frame visible for a same-frame comparison.");
-
-                ImGui::PopItemWidth();
-                if (disableSettings)
-                    ImGui::EndDisabled();
-            }
-        };
 
         if (!enabled)
         {
@@ -1607,11 +1470,16 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
         const bool d3d12 = !IsVulkanInput() && State::Instance().api == API::DX12;
+        static int pendingAdditionalPassScale = -1;
+        static std::unordered_map<std::string, int> pendingScales;
 
         bool enabled = config->DlssNrMultipassEnabled.value_or_default();
         if (!d3d12) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Enable NR Multipass", &enabled))
+        {
             config->DlssNrMultipassEnabled = enabled;
+            config->DlssNrSecondLayer = enabled && config->DlssNrPasses.value_or_default() > 1;
+        }
         if (!d3d12) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
 
@@ -1625,10 +1493,13 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
             ImGui::TextUnformatted("Reset every additional Neural Rendering pass profile to default?");
             if (ImGui::Button("Confirm"))
             {
+                enabled = false;
                 config->DlssNrMultipassEnabled = false;
                 config->DlssNrSecondLayer = false;
                 for (unsigned int pass = 1; pass < 10; ++pass)
                     ResetPassOptions(PassOptions(config, pass));
+                pendingAdditionalPassScale = -1;
+                pendingScales.clear();
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -1665,7 +1536,6 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 mixedScale = mixedScale || current != sharedScale;
             }
 
-            static int pendingAdditionalPassScale = -1;
             if (pendingAdditionalPassScale >= 0) sharedScale = pendingAdditionalPassScale;
             if (ImGui::SliderInt("Additional pass model resolution", &sharedScale, 25, 200, "%d%%"))
                 pendingAdditionalPassScale = sharedScale;
@@ -1688,7 +1558,10 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 ImGui::TextDisabled("Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
         }
         else
+        {
+            pendingAdditionalPassScale = -1;
             ImGui::TextDisabled("Select two or more passes above to use the shared additional-pass resolution slider.");
+        }
 
         if (passCount == 1)
             ImGui::TextDisabled("Pass 1 is configured in the main Neural Rendering section. Select two or more passes above to configure additional passes here.");
@@ -1703,6 +1576,9 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 if (!ImGui::BeginTabItem(label)) continue;
                 selectedPass = index;
                 const auto pass = PassOptions(config, index);
+                char scaleLabel[96] {};
+                snprintf(scaleLabel, sizeof(scaleLabel), "Model resolution##pass%u", index + 1);
+                const std::string scaleId = scaleLabel;
 
                 char resetPopup[64] {};
                 snprintf(resetPopup, sizeof(resetPopup), "Reset Pass %u profile?##pass%u", index + 1, index + 1);
@@ -1715,6 +1591,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                     if (ImGui::Button("Confirm"))
                     {
                         ResetPassOptions(pass);
+                        pendingScales.erase(scaleId);
                         ImGui::CloseCurrentPopup();
                     }
                     ImGui::SameLine();
@@ -1728,20 +1605,20 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                     char copyLabel[48] {};
                     snprintf(copyLabel, sizeof(copyLabel), "Copy Pass %u settings", index);
                     if (ImGui::SmallButton(copyLabel))
+                    {
                         CopyPassOptions(PassOptions(config, index - 1), pass);
+                        pendingScales.erase(scaleId);
+                    }
                     HelpMarker("Copies every saved setting from the preceding pass into this pass. It does not change the shared pass count or enable Multipass.");
                 }
 
                 ImGui::PushItemWidth(220.0f * menuResScale);
                 char id[96] {};
-                static std::unordered_map<std::string, int> pendingScales;
-                snprintf(id, sizeof(id), "Model resolution##pass%u", index + 1);
-                const std::string scaleId = id;
                 const auto pendingScale = pendingScales.find(scaleId);
                 int scale = pendingScale != pendingScales.end()
                     ? pendingScale->second
                     : (int) lroundf(pass.workingScale->value_or_default() * 100.0f);
-                if (ImGui::SliderInt(id, &scale, 25, 200, "%d%%"))
+                if (ImGui::SliderInt(scaleLabel, &scale, 25, 200, "%d%%"))
                     pendingScales[scaleId] = scale;
                 if (ImGui::IsItemDeactivatedAfterEdit())
                 {

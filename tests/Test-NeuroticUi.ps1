@@ -30,6 +30,8 @@ Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
 Assert-Ui ($multipass.Contains('Checkbox("Enable NR Multipass"')) 'Multipass page uses the requested enable label'
 Assert-Ui ($nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and $nr.Contains('"10 passes"')) 'shared pass selector exposes the complete one-to-ten range'
 Assert-Ui ($nr.Contains('More than one pass selected. Enable NR Multipass for multiple passes to be applied.') -and
+           $nr.Contains('BeginChild("##DlssNrMultipassInactiveWarning"') -and
+           $nr.Contains('ImGuiCol_ChildBg') -and $nr.Contains('ImGuiCol_Border') -and
            $multipass -notmatch 'BeginDisabled\(\);\s*if \(ImGui::BeginTabBar\("NrMultipassLayers"') 'pass profiles remain configurable before Multipass is enabled'
 Assert-Ui ($multipass.Contains('BeginTabBar("NrMultipassLayers"') -and
            $multipass.Contains('"Pass %u"')) 'pass count drives numbered pass tabs'
@@ -37,12 +39,14 @@ Assert-Ui ($multipass.Contains('Button("Reset All")') -and
            $multipass.Contains('BeginPopupModal("Reset all multipass settings?"') -and
            $multipass.Contains('Button("Confirm")') -and $multipass.Contains('Button("Cancel")')) 'Reset All requires confirm or cancel'
 Assert-Ui ($multipass.Contains('for (unsigned int pass = 1; pass < 10; ++pass)') -and
-           -not $multipass.Contains('DlssNrPasses = 1u')) 'Reset All restores all additional profiles while preserving baseline Pass 1 and the shared pass count'
+           -not $multipass.Contains('DlssNrPasses = 1u') -and
+           $multipass.Contains('pendingAdditionalPassScale = -1;') -and
+           $multipass.Contains('pendingScales.clear();')) 'Reset All restores all additional profiles, cancels pending resolution edits, and preserves baseline Pass 1 and the shared pass count'
 Assert-Ui ($multipass.Contains('Button("Reset this pass")') -and
            $multipass.Contains('Reset Pass %u profile?##pass%u') -and
-           $multipass.Contains('ResetPassOptions(pass)')) 'each selected pass has a confirmed profile reset'
+           $multipass -match '(?s)ResetPassOptions\(pass\);\s*pendingScales\.erase\(scaleId\);') 'each selected pass has a confirmed profile reset that cancels its pending resolution edit'
 Assert-Ui ($multipass.Contains('Copy Pass %u settings') -and
-           $multipass.Contains('CopyPassOptions(PassOptions(config, index - 1), pass)')) 'later passes can copy the preceding profile'
+           $multipass -match '(?s)CopyPassOptions\(PassOptions\(config, index - 1\), pass\);\s*pendingScales\.erase\(scaleId\);') 'later passes can copy the preceding profile without a stale pending resolution edit overwriting it'
 Assert-Ui ($multipass.Contains('SliderInt("Additional pass model resolution"') -and
            $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)') -and
            $multipass.Contains('Reset##AdditionalPassModelResolution')) 'additional passes share an optional model-resolution slider without changing pass 1'
@@ -60,7 +64,11 @@ Assert-Ui (([regex]::Matches($multipass, 'HelpMarker\(')).Count -ge 18) 'every M
 Assert-Ui ($multipass.Contains('Reset##pass%u-resolution') -and
            $multipass.Contains('Reset##pass%u-auto-mask') -and
            $multipass.Contains('Reset##pass%u-apply')) 'every Multipass setting family exposes an individual reset'
-Assert-Ui (-not ($nr -match 'renderSecondLayerControls\(\);')) 'legacy nested Multipass panel is no longer rendered in DLSS Neural Rendering'
+Assert-Ui (-not $nr.Contains('renderSecondLayerControls') -and
+           -not $nr.Contains('Enable second neural-rendering layer') -and
+           ([regex]::Matches($nr, 'DlssNrMultipassSection')).Count -eq 1) 'legacy two-layer editor is removed and the Multipass header has one stable ImGui ID'
+Assert-Ui ($nr -match '(?s)DlssNrSecondLayer\s*=\s*config->DlssNrMultipassEnabled\.value_or_default\(\)\s*&&\s*passCountIndex >= 1;' -and
+           $multipass -match '(?s)DlssNrSecondLayer\s*=\s*enabled\s*&&\s*config->DlssNrPasses\.value_or_default\(\) > 1;') 'legacy second-layer compatibility state follows both the Multipass switch and selected pass count'
 Assert-Ui ($menu.Contains('https://ko-fi.com/espiownage')) 'approved Ko-fi destination'
 Assert-Ui ($menu -match '(?s)Button\("Open Wiki"\).*?ShowHelpMarker\(.*?BeginCombo\("Language"') 'language control follows Wiki button'
 Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apology removed from UI'
