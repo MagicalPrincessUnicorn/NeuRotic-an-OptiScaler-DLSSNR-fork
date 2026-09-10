@@ -63,6 +63,19 @@ void FT_Dx12::SetBufferState(ID3D12GraphicsCommandList* InCommandList, D3D12_RES
     return Shader_Dx12::SetBufferState(InCommandList, InState, _buffer, &_bufferState);
 }
 
+bool FT_Dx12::BindImmutableDescriptors(ID3D12Resource* input, ID3D12Resource* output)
+{
+    if (!_init || input == nullptr || output == nullptr)
+        return false;
+    if (_immutableInput != nullptr)
+        return input == _immutableInput && output == _immutableOutput;
+    CreateShaderResourceView(_device, input, _frameHeaps[0].GetSrvCPU(0));
+    CreateUnorderedAccessView(_device, output, _frameHeaps[0].GetUavCPU(0), 0);
+    _immutableInput = input;
+    _immutableOutput = output;
+    return true;
+}
+
 bool FT_Dx12::Dispatch(ID3D12GraphicsCommandList* InCmdList, ID3D12Resource* InResource, ID3D12Resource* OutResource)
 {
     if (!_init || _device == nullptr || InCmdList == nullptr || InResource == nullptr || OutResource == nullptr)
@@ -72,12 +85,19 @@ bool FT_Dx12::Dispatch(ID3D12GraphicsCommandList* InCmdList, ID3D12Resource* InR
 
     ScopedGpuTime_Dx12 scopedGpuTime(GpuTime.get(), InCmdList);
 
-    _counter++;
-    _counter = _counter % FT_NUM_OF_HEAPS;
+    if (_immutableInput != nullptr)
+    {
+        if (InResource != _immutableInput || OutResource != _immutableOutput)
+            return false;
+        _counter = 0;
+    }
+    else
+    {
+        _counter = (_counter + 1) % FT_NUM_OF_HEAPS;
+        CreateShaderResourceView(_device, InResource, _frameHeaps[_counter].GetSrvCPU(0));
+        CreateUnorderedAccessView(_device, OutResource, _frameHeaps[_counter].GetUavCPU(0), 0);
+    }
     FrameDescriptorHeap& currentHeap = _frameHeaps[_counter];
-
-    CreateShaderResourceView(_device, InResource, currentHeap.GetSrvCPU(0));
-    CreateUnorderedAccessView(_device, OutResource, currentHeap.GetUavCPU(0), 0);
 
     ID3D12DescriptorHeap* heaps[] = { currentHeap.GetHeapCSU() };
     InCmdList->SetDescriptorHeaps(_countof(heaps), heaps);

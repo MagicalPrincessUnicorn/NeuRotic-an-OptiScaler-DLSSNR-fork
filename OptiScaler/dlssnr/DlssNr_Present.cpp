@@ -417,7 +417,11 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
         g_present.inputTransfer = std::make_unique<FT_Dx12>("Present R10 to RGBA8", device,
                                                             DXGI_FORMAT_R8G8B8A8_UNORM);
         g_present.outputTransfer = std::make_unique<FT_Dx12>("Present RGBA8 to R10", device, format);
-        if (!g_present.inputTransfer->Ready() || !g_present.outputTransfer->Ready())
+        // These texture pairs remain fixed until the existing generation-drain gate permits
+        // recreation. Never rewrite descriptors referenced by an in-flight conversion.
+        if (!g_present.inputTransfer->Ready() || !g_present.outputTransfer->Ready() ||
+            !g_present.inputTransfer->BindImmutableDescriptors(g_present.conversionSource.Get(), g_present.frame.Get()) ||
+            !g_present.outputTransfer->BindImmutableDescriptors(g_present.frame.Get(), g_present.conversionOutput.Get()))
         {
             ReleaseResources();
             return false;
