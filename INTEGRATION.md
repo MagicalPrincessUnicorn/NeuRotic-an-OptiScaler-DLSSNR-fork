@@ -1,13 +1,13 @@
-# NeuRotic approved-component integration experiment
+# NeuRotic cross-game Present diagnostics and BG3 bridge experiment
 
-This is one combined source-and-package experiment, not a release or candidate promotion.
-Branch: `exp/neurotic-approved-integration`. Parent/control:
-`2cad2876aaefed3d904af012ca96ba53319e0414`, including flagship
-`7040d75d6bc53e747a6448c82ddf3470e016e840`.
+This is one isolated source-and-package diagnostic experiment, not a release or candidate
+promotion. Branch: `exp/neurotic-cross-game-bg3-bridge`. Parent/control:
+`62a70c1eb4fc2a9d673c97a9a070764cd097492d`, the approved-component integration described below.
 
-Hypothesis: the approved runtime and package components can coexist with the flagship
-UI, preserving routing, resource ownership, fallback behavior and image quality.
-Result: **Inconclusive** until the combined runtime matrix is completed.
+Hypothesis: the existing D3D11-to-D3D12 bridge can run Native Temporal NR by following the
+same Pre-SR/upscale/restore/Post-SR order as the native DX12 path, while added Present target
+telemetry identifies unsupported Wilds and GTA frames without widening compatibility.
+Result: **Inconclusive** until the focused runtime matrix is completed.
 Decision: **keep experimental**. No installation, live INI edit, tag, push or publication.
 
 ## Exact component provenance
@@ -19,6 +19,8 @@ Decision: **keep experimental**. No installation, live INI edit, tag, push or pu
 | Exposure hold | `cde28f4d991fe798d96dc2584ee0515f1da20c00` | Delta from `b2ce284aefea13ce6e87e00b70700d49e1ced945`, including exact HLSL and precompiled shader pair |
 | Present Image-Only/pacing | `01d5cfa2cb923cca47c896a70a5d7461c1167027` | Runtime delta from `5b4d8793`, including route `c9bcb695`, compile fix `989fe0d2`, completion latch `04706781`, diagnostics `b2ce284a` |
 | Installer/configuration | `659b9801c2a339cacaddda04a842278bd8967d6f` | Exact installer, distinct INI helper and installation notes; separate local package assembly; never a source parent |
+| Approved integration parent | `62a70c1eb4fc2a9d673c97a9a070764cd097492d` | Exact source parent for this diagnostic experiment |
+| Cross-game diagnostics/BG3 repair | This experiment commit | Bridge sequencing and outcome telemetry, exact Present target telemetry, status UI, support label and checkbox notes |
 
 Exposure record `b5c78a29de586f5e532f8e864556e46c22268ce5` and Present closeout
 `b5391d0bd2828f0a4d73e724b0d469487bedb168` are evidence, not implementation imports.
@@ -40,6 +42,17 @@ the new artifact as an unvalidated integration experiment, not a new Alpha relea
   removed pass-feature array. Layer 1 also waits for its recorded retirement before reuse.
 - Present's synthetic guides, per-evaluation reset, original Present count, format gates,
   private queue submission order and terminal untrackable-completion latch are preserved.
+- The D3D11 bridge now captures one immutable NR settings snapshot, runs Pre-SR NR before
+  its D3D12 upscaler when requested, restores the output binding, then admits Post-SR NR.
+  Model builds, evaluations and completed compositions are counted before D3D11 copy-back.
+  The speculative direct D3D11 model probe is not called.
+- Present fallback logs the actual target width, height, format, sample count, swap effect and
+  color space before the existing guard returns the untouched frame. No format/API is admitted.
+- Neural Rendering reports selected-but-blocked Present separately from active composition and
+  reports the latest D3D11 bridge outcome. The support action is `Send Coffee` in its existing row.
+- The main NR checkbox owns a session-only two-second burst tracker: click 4 and every second
+  click after it display one of 25 localized notes without immediate repeats. Hotkeys and config
+  changes do not call the tracker.
 - The updater's misleading automatic-installation promise is replaced by manual release-page
   guidance. Repository/release-note links, one-shot check and terminal failure remain.
 - New strings and dynamic fallback reasons have English/Spanish/French/German/Portuguese
@@ -56,13 +69,13 @@ only `[DLSS] RenderPresetPerformance` changes 11 to 12; Ultra Performance stays 
 The root source INI separately documents the imported Route/PresentWorkload keys at their
 existing native/full defaults. The package omits those optional keys, resolving to the same defaults.
 
-`Package-Integration.ps1` assembles a new local folder from the canonical build manifest's
+`Package-Integration.ps1` assembles a new local diagnostic folder from the canonical build manifest's
 verified pair. It performs no build, installation, deletion, ZIP creation or network action.
 The folder has one `NeuRotic-Setup.bat`, the distinct `NeuRotic-IniEdit.ps1`, reviewed notes,
 this experiment record, the reviewed INI and explicit build dependencies. Proprietary
 `nvngx_dlssnr.dll` is excluded. Installer tests use disposable workspace fixtures only.
 
-## Focused runtime matrix (not executed)
+## Focused runtime matrix (runtime execution pending)
 
 Record game/GPU/driver/model/provider versions, exact DLL/INI hashes, resolution, mode,
 route, layer count, exposure source, NR workload and FG state for every interval. Compare
@@ -71,18 +84,20 @@ references. Do not compare unequal workloads as a performance regression/equival
 
 | Game | Focused intervals and transitions | Evidence and acceptance gate |
 |---|---|---|
-| Crimson Desert | Native Temporal at fixed SDR/HDR scene: cold enable, dark-to-bright and flashbang; RR/SR/DLAA and menu/loading transitions; Present full workload in SDR, FG off, Present → Native → Present, >=900 eligible samples per interval after 32 warm-up calls; repeat with layer 2 off/on using paced toggles | Inspect first invalid exposure sample separately from later holds; no persistent green/static field, unintended manual fallback after a valid sample, readiness alternation or new image defects; route-separated p50/p95/max CPU/GPU/interval data; actual delivery requires external presentation evidence |
-| Monster Hunter Wilds | Performance and Ultra Performance Preset L, other modes unchanged; Native Temporal, RR and loading/cutscene/resize transitions; exposure hold; layer 2 off/on and route changes; all five UI languages, 0.5/1.0/1.5/2.0 scales, saved language restart and dragged window | Preset routing and native dimensions confirmed; separate layer build/retire/reset counters advance; no stale layer output; startup artifact recorded; General update success/failure/disabled states and links, NR tooltips, scrolling and persistence visually checked |
-| GTA V Enhanced | Reproduce approved pool-demand scene on Native Temporal, layer 2 off then on; FG off then actual supported FG on; paced NR/route transitions; long session and resize; supported SDR Present interval | Growth can exceed 128 without recycling replayable owners; cap/allocation/tracking failure bypass stays safe; no flicker; distinguish reset/readiness recoveries from pool rejection; measure actual FG presentations, not selector state |
+| Crimson Desert | Use the previously working Present Image-Only scene as control. Record the new target descriptor, then run >=900 eligible samples after 32 warm-up calls; switch Present → Native → Present with FG off. | `active` is true; model and composite counters rise together; fallback streak remains zero; descriptor and pacing window are retained as the known-working control. |
+| Monster Hunter Wilds | Select Present Image-Only in the reported scene and capture the first guard line plus the menu target descriptor. Repeat after one resize/display-mode transition. | Route says selected-but-blocked; width, height, format, samples, swap effect and color space are nonzero where available; model/composite/submission counters remain zero; original frames continue. Do not admit the descriptor in this experiment. |
+| GTA V Enhanced | Repeat the Wilds descriptor capture at the reported resolution and after one display-mode transition. | Same fail-closed requirements as Wilds. Record the actual guard independently rather than assuming it matches Wilds. |
+| Baldur's Gate 3 | Launch `bg3_dx11.exe`, select Native Temporal, enable NR, and test Performance then Quality after a restart where required. Retain the bridge status/counter lines and ordered log events. | Bridge reports config/route/resources accepted, model build or reuse, model evaluation and composition before copy-back. The live image changes with Apply Model; disabling it gives the clean upscaler control. D3D11 Present selection remains blocked and untouched. |
 
 All games: reject unsupported Present HDR/DX11/Vulkan/DXVK/partial updates safely; preserve
 the original presentation. Confirm dimensions and actual model/composite counts. Repeat
 long-session and motion/occlusion comparisons before any candidate or baseline decision.
 
-Known limitations: first invalid exposure sample still uses manual fallback; one-time startup
+Known limitations: BG3 runtime output is not validated by offline tests; first invalid exposure sample still uses manual fallback; one-time startup
 artifacts were reported in component testing. Present is conservative SDR D3D12 and uses
 synthetic guides/reset each evaluation; reduced workloads remain image-quality-unvalidated.
-Fence/CPU timing does not prove scanout. Two layers roughly double model cost and inherit
+Fence/CPU timing does not prove scanout. Wilds and GTA target formats are still unknown until
+this package records them. D3D11 Present remains unsupported. Two layers roughly double model cost and inherit
 tuning. Extreme rapid NR toggle bursts have historical Event 153 risk. Translations are
 assistant-authored and need native-speaker/runtime visual review. Offline checks cannot
 validate NVIDIA model output, cross-game image quality or actual FG delivery.

@@ -3,12 +3,15 @@
 
 #include "DlssNr.h"
 #include "DlssNr_ExposureScan.h"
+#include "DlssNr_BridgeTelemetry.h"
 #include "DlssNr_Present.h"
+#include "NrToggleBurst.h"
 
 
 #include <Config.h>
 #include <State.h>
 #include <menu/menu_common.h>
+#include <menu/Localization.h>
 
 #include <imgui/imgui.h>
 
@@ -20,6 +23,46 @@
 
 namespace DlssNr
 {
+
+static constexpr const char* ToggleBurstMessages[] = {
+    "Are you trying to break me? That's really mean... :(",
+    "Hahaha, keep trying buddy--I won't break. Maybe.",
+    "Your funeral.",
+    "Did I leave the stove on?",
+    "Did I lock the door when I left home this morning?",
+    "Is soup a cereal",
+    "Whyyyyy are you doing thissss!!!",
+    "Hey! Stop doing that!",
+    "That switch has a family, you know.",
+    "I'm counting. You're at it again.",
+    "Toggle responsibly. Or don't. I'm not your manager.",
+    "A dramatic entrance, followed by an immediate exit.",
+    "Congratulations, you found the button.",
+    "This is becoming a long-distance relationship.",
+    "I have whiplash.",
+    "You can stop checking. I'm still here.",
+    "Plot twist: it still works.",
+    "If this is a benchmark, I demand snacks.",
+    "You're training my patience model.",
+    "One more toggle and I start charging rent.",
+    "The checkbox is beginning to take this personally.",
+    "We've achieved rhythm. Sadly, it's chaos.",
+    "Have you considered leaving it on for more than seven seconds?",
+    "I'm going to tell the GPU about this.",
+    "I'm turning on logging!"
+};
+
+static void NoteNrCheckboxClick()
+{
+    static ToggleBurstTracker tracker;
+    const auto message = tracker.Click(ImGui::GetTime(), IM_ARRAYSIZE(ToggleBurstMessages));
+    if (!message)
+        return;
+    const auto translated = Neurotic::Translate(ToggleBurstMessages[*message]);
+    ImGuiToast notification { ImGuiToastType::Info, 5000, translated.c_str() };
+    notification.setTitle("NeuRotic");
+    ImGui::InsertNotification(notification);
+}
 
 static bool IsVulkanInput()
 {
@@ -150,7 +193,10 @@ void RenderMenu(Config* config, float menuResScale)
 
         bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
+        {
             config->SetDlssNrEnabled(enabled);
+            NoteNrCheckboxClick();
+        }
 
         HelpMarker("Synthesises detail in the upscaler's output, before frame generation sees it."
                        "\n\nNeeds two similarly named files beside OptiScaler, one character apart:"
@@ -162,6 +208,7 @@ void RenderMenu(Config* config, float menuResScale)
         // replacement-resource, reset, seed, and display-ready checks have all passed.
         const auto nrTelemetry = DlssNr::Telemetry();
         const auto presentTelemetry = DlssNr::PresentTelemetry();
+        const auto bridgeTelemetry = DlssNr::BridgeTelemetry().Snapshot();
         const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
 
         const auto renderSecondLayerControls = [&]()
@@ -263,9 +310,13 @@ void RenderMenu(Config* config, float menuResScale)
             const char* api = presentTelemetry.api == PresentApi::D3D12 ? "DX12"
                               : presentTelemetry.api == PresentApi::D3D11 ? "DX11"
                               : presentTelemetry.api == PresentApi::Vulkan ? "Vulkan" : "Unknown";
-            ImGui::Text("API %s | backbuffer %ux%u (format %u)", api,
+            ImGui::Text("API %s | target %ux%u | format %u | samples %u", api,
                         presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight,
-                        (unsigned int) presentTelemetry.backbufferFormat);
+                        (unsigned int) presentTelemetry.backbufferFormat,
+                        presentTelemetry.backbufferSampleCount);
+            ImGui::Text("Swap effect %u | color space %u",
+                        (unsigned int) presentTelemetry.swapEffect,
+                        (unsigned int) presentTelemetry.colorSpace);
             ImGui::Text("%s | actual model work %ux%u",
                         PresentWorkloadName(presentTelemetry.workload), presentTelemetry.workWidth,
                         presentTelemetry.workHeight);
@@ -319,9 +370,10 @@ void RenderMenu(Config* config, float menuResScale)
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Failure: %s",
                                    presentTelemetry.failure.c_str());
             else if (!presentTelemetry.active)
-                ImGui::TextDisabled("Fallback: %s", presentTelemetry.fallbackReason.empty()
-                                                       ? "waiting for the first safe successful frame"
-                                                       : presentTelemetry.fallbackReason.c_str());
+                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f), "Route selected but blocked by compatibility guard: %s",
+                                   presentTelemetry.fallbackReason.empty()
+                                       ? "waiting for the first safe successful frame"
+                                       : presentTelemetry.fallbackReason.c_str());
         }
         else if (!nrTelemetry.running && !vulkan)
         {
@@ -375,6 +427,19 @@ void RenderMenu(Config* config, float menuResScale)
                                   "\nmodel. Timing only the model would flatter the number."
                                   "\n\nCompare it against the frame time at the bottom of this window to"
                                   "\nsee what it is costing you.");
+        }
+
+        if (!presentRoute && bridgeTelemetry.observed)
+        {
+            const auto translatedReason = Neurotic::Translate(bridgeTelemetry.reason);
+            const ImVec4 bridgeColor = bridgeTelemetry.stage == BridgeStage::CopyBackComplete
+                                           ? ImVec4(0.4f, 0.9f, 0.5f, 1.0f)
+                                           : ImVec4(1.0f, 0.72f, 0.25f, 1.0f);
+            ImGui::TextColored(bridgeColor, "D3D11 native bridge: %s", translatedReason.c_str());
+            ImGui::Text("Bridge handoffs %llu | model builds %llu | evaluations %llu | compositions %llu | copy-backs %llu",
+                        bridgeTelemetry.handoffs, bridgeTelemetry.modelCreations,
+                        bridgeTelemetry.modelEvaluations, bridgeTelemetry.compositions,
+                        bridgeTelemetry.copyBacks);
         }
 
         renderApplyModelControl();

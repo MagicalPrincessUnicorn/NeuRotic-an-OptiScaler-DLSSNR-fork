@@ -166,7 +166,7 @@ int main()
                     ImGui::EndTabBar();
                 }
                 const char* supportPrompt = "Enjoying NeuRotic?";
-                const char* supportButton = "Buy Me a Coffee";
+                const char* supportButton = "Send Coffee";
                 const auto& style = ImGui::GetStyle();
                 const float supportWidth = ImGui::CalcTextSize(supportPrompt).x + style.ItemSpacing.x +
                                            ImGui::CalcTextSize(supportButton).x + style.FramePadding.x * 2.0f;

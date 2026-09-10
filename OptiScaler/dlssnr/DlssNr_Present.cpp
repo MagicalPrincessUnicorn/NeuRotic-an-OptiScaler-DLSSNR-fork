@@ -194,9 +194,14 @@ void SetFallback(PresentApi api, const char* reason, bool failed = false)
     ++g_present.telemetry.skippedFrames;
     ++g_present.telemetry.consecutiveFallbacks;
     g_present.telemetry.lastFallbackAttempt = g_present.telemetry.presentAttempts;
-    LOG_WARN("DLSS-NR Present diagnostic: fallback #{} (streak {}, attempt {}): {} | completed fence {} | submitted fence {} | pending slots {}",
+    LOG_WARN("DLSS-NR Present diagnostic: fallback #{} (streak {}, attempt {}): {} | target {}x{} format {} samples {} swap effect {} color space {} | completed fence {} | submitted fence {} | pending slots {}",
              g_present.telemetry.skippedFrames, g_present.telemetry.consecutiveFallbacks,
              g_present.telemetry.presentAttempts, g_present.telemetry.fallbackReason,
+             g_present.telemetry.backbufferWidth, g_present.telemetry.backbufferHeight,
+             static_cast<unsigned int>(g_present.telemetry.backbufferFormat),
+             g_present.telemetry.backbufferSampleCount,
+             static_cast<unsigned int>(g_present.telemetry.swapEffect),
+             static_cast<unsigned int>(g_present.telemetry.colorSpace),
              g_present.telemetry.lastCompletedFence, g_present.telemetry.lastSubmittedFence,
              g_present.telemetry.pendingSlots);
 }
@@ -560,6 +565,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     // process; combine that state with the strict 8-bit format gate below and fail closed for HDR.
     colorSpace = State::Instance().isHdrActive ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
                                                 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    g_present.telemetry.backbufferWidth = swapDesc.Width;
+    g_present.telemetry.backbufferHeight = swapDesc.Height;
+    g_present.telemetry.backbufferFormat = swapDesc.Format;
+    g_present.telemetry.backbufferSampleCount = swapDesc.SampleDesc.Count;
+    g_present.telemetry.swapEffect = swapDesc.SwapEffect;
+    g_present.telemetry.colorSpace = colorSpace;
     if (swapDesc.SampleDesc.Count != 1 ||
         (swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_DISCARD &&
          swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL))
@@ -588,6 +599,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
     const auto backDesc = backbuffer->GetDesc();
+    // Record the actual Present target before any compatibility guard. This is the evidence needed
+    // to identify Wilds/GTA descriptors while every unsupported frame still falls back untouched.
+    g_present.telemetry.backbufferWidth = static_cast<unsigned int>(backDesc.Width);
+    g_present.telemetry.backbufferHeight = backDesc.Height;
+    g_present.telemetry.backbufferFormat = backDesc.Format;
+    g_present.telemetry.backbufferSampleCount = backDesc.SampleDesc.Count;
     if (backDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || backDesc.SampleDesc.Count != 1 ||
         backDesc.Width == 0 || backDesc.Height == 0 || backDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM)
     {

@@ -4869,6 +4869,7 @@ TelemetrySnapshot Telemetry()
     TelemetrySnapshot t {};
     const auto runtime = Config::Instance()->GetDlssNrRuntimeSnapshot();
     t.enabled = runtime.enabled;
+    t.lifecycleOpen = !g_sessionClosed && !g_shutdownFailed;
     t.modelLoaded = g_nr.feature != nullptr;
     t.frames = g_frames;
     t.gameResets = g_gameResetEvents;
@@ -4880,6 +4881,7 @@ TelemetrySnapshot Telemetry()
     t.layer2FeatureBuilds = g_layer2FeatureBuilds;
     t.layer2FeatureRetires = g_layer2FeatureRetires;
     t.successfulEvaluations = g_nr.successfulEvaluations;
+    t.completedPipelineEvaluations = g_nr.completedPipelineEvaluations;
     t.frameWidth = g_nr.width;
     t.frameHeight = g_nr.height;
     t.workWidth = g_nr.workWidth;

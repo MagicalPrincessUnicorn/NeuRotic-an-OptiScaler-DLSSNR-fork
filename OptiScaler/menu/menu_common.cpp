@@ -7502,7 +7502,7 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
 void MenuCommon::RenderMainMenuSupportLink()
 {
     constexpr const char* prompt = "Enjoying NeuRotic?";
-    constexpr const char* button = "Buy Me a Coffee";
+    constexpr const char* button = "Send Coffee";
     const auto& style = ImGui::GetStyle();
     const float width = ImGui::CalcTextSize(prompt).x + style.ItemSpacing.x + ImGui::CalcTextSize(button).x +
                         style.FramePadding.x * 2.0f;

@@ -26,6 +26,12 @@ Assert-Ui ($menu.Contains('https://ko-fi.com/espiownage')) 'approved Ko-fi desti
 Assert-Ui ($menu -match '(?s)Button\("Open Wiki"\).*?ShowHelpMarker\(.*?BeginCombo\("Language"') 'language control follows Wiki button'
 Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apology removed from UI'
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
-Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink\(\).*?Enjoying NeuRotic\?.*?Buy Me a Coffee.*?GetContentRegionAvail.*?SetCursorPosX.*?TextUnformatted\(prompt\).*?Button\(button\)') 'compact support prompt right-aligned in final row'
+Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink\(\).*?Enjoying NeuRotic\?.*?Send Coffee.*?GetContentRegionAvail.*?SetCursorPosX.*?TextUnformatted\(prompt\).*?Button\(button\)') 'compact Send Coffee prompt right-aligned in final row'
+Assert-Ui (-not $menu.Contains('constexpr const char* button = "Buy Me a Coffee"')) 'old support-button label is no longer rendered'
+Assert-Ui ($nr -match '(?s)Checkbox\("Enable Neural Rendering".*?NoteNrCheckboxClick\(\)') 'toggle burst is driven only by the Neural Rendering checkbox'
+Assert-Ui (($nr | Select-String -Pattern 'NoteNrCheckboxClick\(\)' -AllMatches).Matches.Count -eq 2) 'toggle burst helper has one definition and one checkbox call site'
+$burst = [regex]::Match($nr, '(?s)ToggleBurstMessages\[\]\s*=\s*\{(.*?)\};').Groups[1].Value
+Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 25 -and $burst.Contains('I''m turning on logging!')) 'all 25 approved burst notes are present'
+Assert-Ui ($nr.Contains('Route selected but blocked by compatibility guard: %s')) 'Present selection distinguishes a blocked guard from active composition'
 Assert-Ui ($header.Contains('MenuLanguage { "en" }')) 'English default'
 Assert-Ui ($config.Contains('readString("Menu", "Language", true)') -and $config.Contains('ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());')) 'language loads and saves in Menu section'

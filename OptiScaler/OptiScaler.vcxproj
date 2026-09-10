@@ -778,6 +778,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="upscalers\IFeature_Dx11.cpp" />
     <ClCompile Include="upscalers\IFeature_Dx11wDx12.cpp" />
     <ClInclude Include="upscalers\IFeature_Dx11wDx12.h" />
+    <ClInclude Include="dlssnr\DlssNr_BridgeTelemetry.h" />
+    <ClInclude Include="dlssnr\NrToggleBurst.h" />
     <ClCompile Include="Config.cpp" />
     <ClCompile Include="upscalers\fsr2\FSR2Feature.cpp" />
     <ClCompile Include="upscalers\fsr2\FSR2Feature_Dx11.cpp" />

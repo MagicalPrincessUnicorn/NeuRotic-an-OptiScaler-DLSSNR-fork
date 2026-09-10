@@ -2,6 +2,7 @@
 #include "IFeature_Dx11wDx12.h"
 
 #include <dlssnr/DlssNr.h>
+#include <dlssnr/DlssNr_BridgeTelemetry.h>
 
 #include <Config.h>
 
@@ -429,11 +430,16 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
     bool dx12EvalResult = false;
     bool commandListRecording = false;
     bool commandListExecuted = false;
+    const auto nrSettings = TryNrConfigSnapshot(*Config::Instance());
+    const auto nrBefore = DlssNr::Telemetry();
     do
     {
         if (!ProcessDx11Textures(InParameters))
         {
             LOG_ERROR("Can't process Dx11 textures!");
+            DlssNr::BridgeTelemetry().Begin((bool) nrSettings, nrSettings && nrSettings->GetDlssNrRuntimeSnapshot().enabled,
+                                            nrSettings && nrSettings->DlssNrRoute.value_or_default() == 0,
+                                            nrBefore.lifecycleOpen, false, nrBefore.failureReason);
             break;
         }
 
@@ -456,8 +462,25 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
             InParameters->Set(NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask,
                               (void*) dx11Reactive.Dx12Resource);
 
+        const bool bridgeInputsAvailable = dx11Color.Dx12Resource != nullptr && dx11Mv.Dx12Resource != nullptr &&
+                                           dx11Out.Dx12Resource != nullptr && dx11Depth.Dx12Resource != nullptr;
+        const bool nrEnabled = nrSettings && nrSettings->GetDlssNrRuntimeSnapshot().enabled;
+        const bool nativeRoute = nrSettings && nrSettings->DlssNrRoute.value_or_default() == 0;
+        DlssNr::BridgeTelemetry().Begin((bool) nrSettings, nrEnabled, nativeRoute, nrBefore.lifecycleOpen,
+                                        bridgeInputsAvailable, nrBefore.failureReason);
+
+        // Match the proven native-DX12 order. Performance mode composes into a private Pre-SR
+        // scratch before the upscaler; RestoreAfterUpscale puts the game's output binding back.
+        // Quality mode then composes after the upscaler. One immutable settings snapshot covers
+        // both sides, so a menu edit cannot schedule both routes during a single bridge frame.
+        if (nrSettings && nrEnabled && nativeRoute && nrBefore.lifecycleOpen && bridgeInputsAvailable)
+            DlssNr::EvaluateBeforeUpscale(cmdList, InParameters, Dx12CommandQueue, &*nrSettings);
+
         LOG_DEBUG("Dispatch!!");
         dx12EvalResult = dx12Feature->Evaluate(cmdList, InParameters);
+
+        if (nrSettings && nrEnabled && nativeRoute)
+            DlssNr::RestoreAfterUpscale(InParameters);
 
         // DLSS 5 Neural Rendering rides the bridge: at this moment the block carries the D3D12 copies
         // of every input, the list is still recording, and the model's edit lands on the D3D12 output
@@ -473,16 +496,15 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
 
         }
 
-        if (dx12EvalResult && Config::Instance()->GetDlssNrRuntimeSnapshot().enabled)
-        {
-            DlssNr::EvaluateAfterUpscale(cmdList, InParameters, Dx12CommandQueue);
+        if (dx12EvalResult && nrSettings && nrEnabled && nativeRoute && nrBefore.lifecycleOpen &&
+            bridgeInputsAvailable)
+            DlssNr::EvaluateAfterUpscale(cmdList, InParameters, Dx12CommandQueue, false, &*nrSettings);
 
-            // Asked only after the D3D12 path has had its turn. Probing first would have made a D3D11
-            // init the very first thing to ever touch the snippet, and if that had left its core
-            // holding a D3D11 device the D3D12 create would have failed -- killing the feature in
-            // exactly the games the probe was written to help. Off by default regardless.
-            DlssNr::ProbeD3D11(Dx11Device);
-        }
+        const auto nrAfter = DlssNr::Telemetry();
+        DlssNr::BridgeTelemetry().RecordNr(nrBefore.featureBuilds, nrAfter.featureBuilds,
+                                           nrBefore.successfulEvaluations, nrAfter.successfulEvaluations,
+                                           nrBefore.completedPipelineEvaluations,
+                                           nrAfter.completedPipelineEvaluations, nrAfter.failureReason);
 
     } while (false);
 
@@ -510,6 +532,7 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
         if (closeResult != S_OK)
         {
             LOG_ERROR("CommandList Close error: {:X}", (UINT) closeResult);
+            DlssNr::BridgeTelemetry().CommandListClosed(false);
             dx12EvalResult = false;
         }
     }
@@ -525,6 +548,7 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
         if (result != S_OK)
         {
             LOG_ERROR("Dx12CommandQueue Signal failed for feature fence {}: {:X}", fenceValue, (UINT) result);
+            DlssNr::BridgeTelemetry().Submitted(false);
             dx12EvalResult = false;
         }
         else
@@ -543,9 +567,11 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
         if (!CopyBackOutput())
         {
             LOG_ERROR("Can't copy output texture back!");
+            DlssNr::BridgeTelemetry().CopyBack(false);
             break;
         }
 
+        DlssNr::BridgeTelemetry().CopyBack(true);
         evalResult = true;
 
     } while (false);

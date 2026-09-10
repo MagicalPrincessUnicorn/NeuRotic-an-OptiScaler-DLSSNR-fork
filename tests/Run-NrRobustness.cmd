@@ -30,6 +30,19 @@ if errorlevel 1 goto failed
 "%testOut%\nr_present_pacing.exe" >"%testOut%\pacing-test.txt" 2>&1
 if errorlevel 1 goto failed
 type "%testOut%\pacing-test.txt"
+cl /nologo /std:c++20 /EHsc /W4 /WX /I OptiScaler tests\nr_toggle_burst.cpp /Fe:"%testOut%\nr_toggle_burst.exe" /Fo:"%testOut%\nr_toggle_burst.obj" >"%testOut%\toggle-burst-build.txt" 2>&1
+if errorlevel 1 goto failed
+"%testOut%\nr_toggle_burst.exe" >"%testOut%\toggle-burst-test.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\toggle-burst-test.txt"
+cl /nologo /std:c++20 /EHsc /W4 /WX /I OptiScaler tests\nr_bridge_telemetry.cpp /Fe:"%testOut%\nr_bridge_telemetry.exe" /Fo:"%testOut%\nr_bridge_telemetry.obj" >"%testOut%\bridge-build.txt" 2>&1
+if errorlevel 1 goto failed
+"%testOut%\nr_bridge_telemetry.exe" >"%testOut%\bridge-test.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\bridge-test.txt"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\Test-NrCrossGameDiagnostics.ps1 >"%testOut%\cross-game-static.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\cross-game-static.txt"
 call tests\Run-NrConfig.cmd >"%testOut%\config-suite.txt" 2>&1
 if errorlevel 1 goto failed
 call tests\Run-NrDispatchResources.cmd >"%testOut%\dispatch-suite.txt" 2>&1

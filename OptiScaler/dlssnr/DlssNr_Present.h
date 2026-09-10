@@ -24,6 +24,9 @@ struct PresentTelemetrySnapshot
     unsigned int backbufferWidth = 0;
     unsigned int backbufferHeight = 0;
     DXGI_FORMAT backbufferFormat = DXGI_FORMAT_UNKNOWN;
+    unsigned int backbufferSampleCount = 0;
+    DXGI_SWAP_EFFECT swapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
     unsigned int workload = 0;
     unsigned int workWidth = 0;
     unsigned int workHeight = 0;

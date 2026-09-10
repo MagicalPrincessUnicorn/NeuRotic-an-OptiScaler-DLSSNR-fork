@@ -150,6 +150,7 @@ struct TelemetrySnapshot
     unsigned long long layer2FeatureBuilds = 0;
     unsigned long long layer2FeatureRetires = 0;
     unsigned long long successfulEvaluations = 0;
+    unsigned long long completedPipelineEvaluations = 0;
 
     unsigned int frameWidth = 0;
     unsigned int frameHeight = 0;
@@ -160,6 +161,7 @@ struct TelemetrySnapshot
 
     bool runBeforeSr = false;
     bool enabled = false;
+    bool lifecycleOpen = false;
     bool modelLoaded = false;
     unsigned int layerCount = 0;
     bool layer2Requested = false;
