@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentCompatibility.h"
+#include "DlssNr_PresentHistory.h"
 #include "DlssNrFeature_Dx12.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
@@ -76,6 +77,9 @@ struct PresentState
     UINT64 timestampFrequency = 0;
     UINT64 timingCallSequence = 0;
     PresentPacing::Window<> pacing;
+    PresentHistory::Continuity history;
+    bool presentWasRequested = false;
+    UINT64 resumeGeneration = 0;
     bool guidesNeedUpload = true;
     // Set when submitted work can no longer be paired with a trustworthy completion value, or when
     // an unsubmitted command list has already been registered with the shared GPU-safety tracker.
@@ -85,6 +89,20 @@ struct PresentState
 };
 
 PresentState g_present;
+
+void SyncHistoryTelemetry()
+{
+    g_present.telemetry.historyResetPending = g_present.history.ResetForNextEvaluation();
+    g_present.telemetry.uninterruptedFrames = g_present.history.CompletedFrames();
+    g_present.telemetry.historyResetReason = g_present.history.ResetReason();
+    g_present.telemetry.historyInvalidationReason = g_present.history.LastInvalidationReason();
+}
+
+void InvalidateHistory(const char* reason)
+{
+    g_present.history.Invalidate(reason != nullptr ? reason : "unknown continuity interruption");
+    SyncHistoryTelemetry();
+}
 
 void EmitPacingSummary(const std::optional<PresentPacing::WindowSummary>& completed)
 {
@@ -202,6 +220,9 @@ void UavBarrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource)
 
 void SetFallback(PresentApi api, const char* reason, bool failed = false)
 {
+    // A fallback leaves the game image alone, so its successor must never inherit the last model
+    // result.  This covers admission, bridge, conversion, queue, copy-back, and model failures.
+    InvalidateHistory(reason);
     g_present.telemetry.requested = true;
     g_present.telemetry.active = false;
     g_present.telemetry.api = api;
@@ -513,6 +534,19 @@ PresentTelemetrySnapshot PresentTelemetry()
 void ReportPresentCallTiming(const PresentCallTimingSample& sample)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
+    if (sample.identity.pacing.route == PresentPacing::Route::PresentImageOnly &&
+        sample.identity.completedOutput)
+    {
+        if (SUCCEEDED(sample.result))
+        {
+            g_present.history.CompleteOutputPresent();
+            SyncHistoryTelemetry();
+        }
+        else
+        {
+            InvalidateHistory("original Present failed");
+        }
+    }
     if (sample.identity.pacing.route == PresentPacing::Route::PresentImageOnly)
     {
         g_present.telemetry.adapterCpuMs = sample.adapterCpuMs;
@@ -554,7 +588,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto* config = Config::Instance();
-    const bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+    const auto runtime = config->GetDlssNrRuntimeSnapshot();
+    const bool enabled = runtime.enabled;
     const unsigned int route = std::min(config->DlssNrRoute.value_or_default(), 1u);
     const bool presentRequested = enabled && route == 1;
     g_present.telemetry.requested = presentRequested;
@@ -575,12 +610,22 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
 
     if (!presentRequested)
     {
+        if (g_present.presentWasRequested)
+            InvalidateHistory("Present route or enable state changed");
+        g_present.presentWasRequested = false;
         g_present.telemetry.actualPlacement = "Native Temporal";
         g_present.telemetry.fallbackReason.clear();
         g_present.telemetry.failure.clear();
         g_present.telemetry.failed = false;
         return identity;
     }
+
+    if (!g_present.presentWasRequested)
+        InvalidateHistory("Present route or enable state changed");
+    else if (runtime.resumeGeneration != g_present.resumeGeneration)
+        InvalidateHistory("NR resume generation changed");
+    g_present.presentWasRequested = true;
+    g_present.resumeGeneration = runtime.resumeGeneration;
 
     if (swapChain == nullptr || presentDevice == nullptr)
     {
@@ -792,6 +837,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         g_present.format != backDesc.Format || g_present.colorSpace != colorSpace;
     if (signatureChanged)
     {
+        InvalidateHistory("Present target signature changed");
         if (!AllComplete())
         {
             SetFallback(api, "waiting for prior Present resources after a device/resize/workload change");
@@ -911,7 +957,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
-        g_present.frame.Get(), g_present.depth.Get(), g_present.motion.Get(), workWidth, workHeight);
+        g_present.frame.Get(), g_present.depth.Get(), g_present.motion.Get(), workWidth, workHeight,
+        g_present.history.ResetForNextEvaluation());
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;
@@ -1056,6 +1103,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
 
     ++g_present.telemetry.modelEvaluations;
     ++g_present.telemetry.compositeEvaluations;
+    identity.completedOutput = true;
     g_present.telemetry.active = true;
     g_present.telemetry.failed = false;
     if (g_present.telemetry.consecutiveFallbacks != 0)

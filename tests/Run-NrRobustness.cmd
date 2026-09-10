@@ -40,6 +40,11 @@ if errorlevel 1 goto failed
 "%testOut%\nr_present_compatibility.exe" >"%testOut%\present-compatibility-test.txt" 2>&1
 if errorlevel 1 goto failed
 type "%testOut%\present-compatibility-test.txt"
+cl /nologo /std:c++20 /EHsc /W4 /WX /I OptiScaler tests\nr_present_history.cpp /Fe:"%testOut%\nr_present_history.exe" /Fo:"%testOut%\nr_present_history.obj" >"%testOut%\present-history-build.txt" 2>&1
+if errorlevel 1 goto failed
+"%testOut%\nr_present_history.exe" >"%testOut%\present-history-test.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\present-history-test.txt"
 cl /nologo /std:c++20 /EHsc /W4 /WX /I OptiScaler tests\nr_bridge_telemetry.cpp /Fe:"%testOut%\nr_bridge_telemetry.exe" /Fo:"%testOut%\nr_bridge_telemetry.obj" >"%testOut%\bridge-build.txt" 2>&1
 if errorlevel 1 goto failed
 "%testOut%\nr_bridge_telemetry.exe" >"%testOut%\bridge-test.txt" 2>&1

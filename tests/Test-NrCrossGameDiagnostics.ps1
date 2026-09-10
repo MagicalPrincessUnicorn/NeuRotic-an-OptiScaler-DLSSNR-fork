@@ -2,6 +2,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $present = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp') -Raw
 $compat = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssNr_PresentCompatibility.h') -Raw
+$history = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssNr_PresentHistory.h') -Raw
+$feature = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp') -Raw
 $bridge = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/upscalers/IFeature_Dx11wDx12.cpp') -Raw
 function Assert-Contract([bool]$condition, [string]$message) {
     if (-not $condition) { throw $message }
@@ -14,6 +16,10 @@ foreach ($field in @('backbufferWidth', 'backbufferHeight', 'backbufferFormat', 
     Assert-Contract ($assignment -gt $descriptor -and $assignment -lt $guard) "$field captured before the compatibility guard"
 }
 Assert-Contract ($present.Contains('target {}x{} format {} samples {} swap effect {} color space {}')) 'fallback log contains the exact Present target descriptor'
+Assert-Contract ($history.Contains('CompleteOutputPresent') -and $history.Contains('Invalidate') -and $history.Contains('ResetForNextEvaluation')) 'Present history state distinguishes continuity from interruption'
+Assert-Contract ($feature.Contains('frame.Reset = resetHistory;')) 'Present history reset value reaches Feature 18'
+Assert-Contract ($present -match '(?s)EvaluateImageOnlyCommandList\(.*?g_present\.history\.ResetForNextEvaluation\(\)') 'Present passes continuity reset state into Feature 18'
+Assert-Contract ($present -match '(?s)completedOutput.*?SUCCEEDED\(sample\.result\).*?CompleteOutputPresent\(\).*?original Present failed') 'only a successful original Present completes temporal continuity'
 Assert-Contract ($compat.Contains('PixelPath::Rgba8Direct') -and $compat.Contains('PixelPath::Rgb10Conversion')) 'capability admission distinguishes direct RGBA8 and converted 10-bit SDR'
 Assert-Contract ($present -match '(?s)Rgba8Direct.*?CopyResource\(g_present\.frame\.Get\(\), presentInput\).*?EvaluateImageOnlyCommandList') 'D3D12 RGBA8 direct copy route is preserved'
 Assert-Contract ($present -match '(?s)conversionSource.*?inputTransfer->Dispatch.*?EvaluateImageOnlyCommandList.*?outputTransfer->Dispatch.*?conversionOutput') 'R10G10B10A2 conversion brackets model work'

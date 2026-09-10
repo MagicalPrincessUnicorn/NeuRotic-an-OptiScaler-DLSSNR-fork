@@ -38,6 +38,10 @@ struct PresentTelemetrySnapshot
     unsigned long long presentAttempts = 0;
     unsigned long long consecutiveFallbacks = 0;
     unsigned long long lastFallbackAttempt = 0;
+    bool historyResetPending = true;
+    unsigned long long uninterruptedFrames = 0;
+    std::string historyResetReason = "initial Present frame";
+    std::string historyInvalidationReason;
     unsigned long long lastSubmittedFence = 0;
     unsigned long long lastCompletedFence = 0;
     unsigned long long adapterCpuSlowCalls = 0;
@@ -61,6 +65,9 @@ struct PresentCallIdentity
 {
     PresentPacing::CallToken pacing;
     unsigned long long presentAttempt = 0;
+    // Set only after the complete private output path has reached the game backbuffer.  The original
+    // Present result decides whether this frame may become temporal history for the next one.
+    bool completedOutput = false;
 };
 
 struct PresentCallTimingSample

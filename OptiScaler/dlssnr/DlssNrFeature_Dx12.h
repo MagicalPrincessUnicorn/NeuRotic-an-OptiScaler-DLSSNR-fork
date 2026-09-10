@@ -51,7 +51,7 @@ bool DirectD3D12Available(ID3D12Device* device);
 bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12CommandQueue* queue,
                                   ID3D12Resource* frame, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
-                                  unsigned int workHeight);
+                                  unsigned int workHeight, bool resetHistory);
 
 
 

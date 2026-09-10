@@ -152,6 +152,21 @@ void RenderMenu(Config* config, float menuResScale)
                    "image unchanged and perform no model work.");
         const bool presentRoute = route == 1;
 
+        if (presentRoute)
+        {
+            static const char* presentWorkNames[] = {
+                "Full / Native (100%)", "Ultra Quality (77%)", "Quality (67%)",
+                "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
+            };
+            int workload = std::clamp((int) config->DlssNrPresentWorkload.value_or_default(), 0, 5);
+            if (ImGui::Combo("Present workload", &workload, presentWorkNames,
+                             IM_ARRAYSIZE(presentWorkNames)))
+                config->DlssNrPresentWorkload = (uint32_t) workload;
+            HelpMarker("A fixed, auditable Present workload. The full-resolution frame is always preserved;"
+                       " only the private model input is reduced. The model answer is spatially enlarged"
+                       " and conservatively composed over that untouched source.");
+        }
+
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
         int renderMode = std::clamp(config->DlssNrRenderingMode.value_or_default(), 0, 1);
         if (presentRoute) ImGui::BeginDisabled();
@@ -308,6 +323,13 @@ void RenderMenu(Config* config, float menuResScale)
             ImGui::Text("Model evaluations %llu | spatial upscale/composites %llu | skipped %llu",
                         presentTelemetry.modelEvaluations, presentTelemetry.compositeEvaluations,
                         presentTelemetry.skippedFrames);
+            ImGui::Text("Present history: %s | uninterrupted output frames %llu",
+                        presentTelemetry.historyResetPending ? "reset pending" : "continuous",
+                        presentTelemetry.uninterruptedFrames);
+            ImGui::TextDisabled("Reset reason: %s | last interruption: %s",
+                                presentTelemetry.historyResetReason.c_str(),
+                                presentTelemetry.historyInvalidationReason.empty()
+                                    ? "none" : presentTelemetry.historyInvalidationReason.c_str());
             ImGui::Text("Command submissions: model %llu | composite %llu",
                         presentTelemetry.modelSubmissions, presentTelemetry.compositeSubmissions);
             ImGui::Text("Attempts %llu | fallback streak %llu | last fallback attempt %llu",
@@ -530,21 +552,6 @@ void RenderMenu(Config* config, float menuResScale)
                            "\n\nFrom hhkbble's multi-pass work on this fork.");
         }
         }
-        else
-        {
-            static const char* presentWorkNames[] = {
-                "Full / Native (100%)", "Ultra Quality (77%)", "Quality (67%)",
-                "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
-            };
-            int workload = std::clamp((int) config->DlssNrPresentWorkload.value_or_default(), 0, 5);
-            if (ImGui::Combo("Present workload", &workload, presentWorkNames,
-                             IM_ARRAYSIZE(presentWorkNames)))
-                config->DlssNrPresentWorkload = (uint32_t) workload;
-            HelpMarker("A fixed, auditable Present workload. The full-resolution frame is always preserved;"
-                       " only the private model input is reduced. The model answer is spatially enlarged"
-                       " and conservatively composed over that untouched source.");
-        }
-
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
         int preset = (int) config->DlssNrPreset.value_or_default();
         if (ImGui::Combo("Model preset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))

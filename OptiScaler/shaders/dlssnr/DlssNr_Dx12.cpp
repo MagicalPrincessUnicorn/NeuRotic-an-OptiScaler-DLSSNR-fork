@@ -4623,7 +4623,7 @@ bool DirectD3D12Available(ID3D12Device* device)
 bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12CommandQueue* queue,
                                   ID3D12Resource* frameResource, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
-                                  unsigned int workHeight)
+                                  unsigned int workHeight, bool resetHistory)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
@@ -4667,7 +4667,9 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
     cfg.DlssNrScanMeter = false;
 
     DlssNrFrameInfo frame {};
-    frame.Reset = true;
+    // Present owns the continuity decision because it is the only layer that knows whether the
+    // previous private output reached the original game Present unchanged.
+    frame.Reset = resetHistory;
     frame.DepthInverted = false;
     frame.ColourIsLinearHdr = false;
     frame.RenderSubrectWidth = workWidth;
