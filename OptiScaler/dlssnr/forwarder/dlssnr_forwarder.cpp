@@ -97,6 +97,19 @@ bool loadSnippet(const wchar_t *path) {
 
 extern "C" {
 
+// Capability surface for the opt-in Present adapter. No NGX state is created: this only proves the
+// exact direct D3D12 entry points required by Feature 18 exist in the selected model DLL.
+__declspec(dllexport) int dlssnr_call_probe_d3d12(const wchar_t *snippetPath) {
+    if (!loadSnippet(snippetPath)) return 0;
+    int bits = 0;
+    if (g_snip.init) bits |= 1;
+    if (g_snip.create) bits |= 2;
+    if (g_snip.evaluate) bits |= 4;
+    if (g_snip.release) bits |= 8;
+    if (g_snip.shutdown) bits |= 16;
+    return bits;
+}
+
 // Called once, after the host has worked out which slot this block keeps floats in.
 __declspec(dllexport) void dlssnr_call_set_float_slot(int slot) {
     if (slot >= 0 && slot < 8) {

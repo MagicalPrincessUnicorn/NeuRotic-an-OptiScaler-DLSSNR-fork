@@ -13,6 +13,7 @@ struct CatalogEntry
     const char* translated[Neurotic::LanguageCount - 1];
 };
 #include "menu/locales/catalog.inc"
+#include "menu/locales/integration.inc"
 
 static int checks = 0;
 static void Check(bool condition, const char* description)
@@ -83,8 +84,9 @@ int main()
         for (int language = 0; language < Neurotic::LanguageCount; ++language)
         {
             Neurotic::SetLanguage(Neurotic::Languages[language].code);
-            for (float scale : { 0.5f, 1.0f, 2.0f })
+            for (int scaleStep = 5; scaleStep <= 20; ++scaleStep)
             {
+                const float scale = scaleStep / 10.0f;
                 ImGui::GetStyle() = baseStyle;
                 ImGui::GetStyle().ScaleAllSizes(scale);
                 ImGui::NewFrame();
@@ -139,6 +141,19 @@ int main()
                 ImGui::SameLine(0, 10 * scale);
                 ImGui::Text("GPU: %s", "Test GPU");
                 Check(ImGui::GetItemRectMax().x < 900 * scale, "resolution and GPU row fits");
+                // Same translated measurement/render hooks and wrap boundary used by the NR page.
+                // Measure every new tooltip/status/diagnostic at every supported scale, including
+                // the long German and French strings. Scroll vertically, never widen the page.
+                for (const auto& entry : IntegrationCatalog)
+                {
+                    const auto text = Neurotic::Translate(entry.source);
+                    Check(text == (language ? entry.translated[language - 1] : entry.source),
+                          "integration translation including explicit line breaks");
+                    const float wrapWidth = 820.0f * scale;
+                    const auto size = ImGui::GetFont()->CalcTextSizeA(
+                        ImGui::GetFontSize(), FLT_MAX, wrapWidth, text.c_str());
+                    Check(size.x <= wrapWidth + 1.0f, "integration text fits wrapped NR page");
+                }
                 if (ImGui::BeginTabBar("Pages"))
                 {
                     for (const char* label : { "General", "Upscaling", "Frame Generation", "Neural Rendering",
@@ -192,7 +207,7 @@ int main()
         ImGui::DestroyContext();
         const auto ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-        std::printf("PASS: %d checks; catalogs, dynamic values, IDs, five languages at three scales, UTF-8 glyphs; UI "
+        std::printf("PASS: %d checks; catalogs, dynamic values, IDs, five languages at all 16 scales, UTF-8 glyphs; UI "
                     "test %lld ms\n",
                     checks, ms);
         return 0;

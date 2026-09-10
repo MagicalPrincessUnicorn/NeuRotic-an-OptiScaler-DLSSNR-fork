@@ -7116,7 +7116,7 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
         {
             ImGui::TextColored(toneMapColor(ImVec4(1.f, .8f, 0.f, 1.f)), "Update available: %s", update.latestTag.c_str());
             if (!update.latestUrl.empty()) ImGui::TextLinkOpenURL("View patch notes", update.latestUrl.c_str());
-            ImGui::TextDisabled("Automatic installation will be available after this update is downloaded.");
+            ImGui::TextDisabled("Updates are installed manually from the repository release page.");
         }
         else if (!update.error.empty())
             ImGui::TextUnformatted("Could not check for updates. Try going to NeuRotic on GitHub.");

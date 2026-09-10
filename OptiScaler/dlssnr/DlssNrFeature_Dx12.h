@@ -45,6 +45,14 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                           bool forceAfterUpscale = false,
                           const NrConfigSnapshot<Config>* settings = nullptr);
 
+// Narrow surface used by the DX12 Present adapter. It accepts only OptiScaler-owned resources and a
+// private command list; no game depth, motion, jitter, reset, or upscaler parameter block crosses it.
+bool DirectD3D12Available(ID3D12Device* device);
+bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12CommandQueue* queue,
+                                  ID3D12Resource* frame, ID3D12Resource* constantDepth,
+                                  ID3D12Resource* zeroMotion, unsigned int workWidth,
+                                  unsigned int workHeight);
+
 
 
 // Frame generation titles tag their UI layer through Streamline; a copy of it makes the HUD mask
@@ -141,6 +149,7 @@ struct TelemetrySnapshot
     unsigned long long layer2EvaluateFailures = 0;
     unsigned long long layer2FeatureBuilds = 0;
     unsigned long long layer2FeatureRetires = 0;
+    unsigned long long successfulEvaluations = 0;
 
     unsigned int frameWidth = 0;
     unsigned int frameHeight = 0;

@@ -67,8 +67,8 @@ struct CatalogIndex
     {
         for (const auto& entry : Catalog)
         {
-            exact.emplace(entry.source, &entry);
-            const std::string source = entry.source;
+            exact.emplace(Normalize(entry.source), &entry);
+            const std::string source = Normalize(entry.source);
             std::sregex_iterator it(source.begin(), source.end(), Format), end;
             if (it == end)
                 continue;

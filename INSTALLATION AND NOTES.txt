@@ -1,0 +1,130 @@
+NEUROTIC ALPHA 0.9.4 - INSTALLATION AND NOTES
+================================================
+
+NeuRotic is an experimental OptiScaler fork focused on DLSS Neural
+Rendering. Read this file before installing.
+
+IMPORTANT
+---------
+
+* Use NeuRotic only in single-player games without active anti-cheat.
+* Fully close the game before installing, updating, or removing files.
+* Back up an existing OptiScaler installation and OptiScaler.ini first.
+* Game, GPU, driver, DLSS-model, and third-party injector compatibility
+  varies. A successful launch alone does not prove Neural Rendering works.
+
+WINDOWS INSTALLATION
+--------------------
+
+1. Find the folder containing the game's real executable file.
+
+2. Extract ALL files from NeuRotic-alpha-0.9.4.zip directly into that
+   folder. Do not place the package inside an extra NeuRotic subfolder.
+
+3. Run NeuRotic-Setup.bat.
+
+   Use Windows "Extract All" or a normal archive tool first. Do not run or
+   copy individual files from inside an archive preview. The installer checks
+   the package layout and stops before changing anything if files are missing
+   or appear under the wrong names.
+
+4. Choose the proxy filename appropriate for the game. For DirectX 12,
+   dxgi.dll is the normal first choice. Vulkan commonly uses winmm.dll.
+   Some games or other injectors require a different supported filename.
+
+5. Supply your own licensed NVIDIA Neural Rendering model in the same
+   folder as the game executable:
+
+     nvngx_dlssnr.dll       NVIDIA model; not included
+     nvngx.dll_dlssnr.dll   NeuRotic forwarder; included
+
+   These filenames differ by one dot. Both files are required. Do not
+   rename nvngx_dlssd.dll, because that is a different DLSS component.
+
+6. Start the game, open the OptiScaler overlay, and find the DLSS Neural
+   Rendering section. Neural Rendering is off by default.
+
+7. Enable Neural Rendering and confirm the overlay reports successful
+   evaluations and the live picture changes. Do not judge operation from
+   the checkbox or a static timer alone.
+
+UPDATING AN EXISTING INSTALLATION
+---------------------------------
+
+1. Close the game.
+2. Back up the current proxy DLL, OptiScaler folder, OptiScaler.ini, and
+   any proprietary nvngx_dlssnr.dll model you supplied.
+3. Preserve your existing INI if you want to retain game-specific choices.
+4. Extract the new package and run NeuRotic-Setup.bat again.
+5. Verify the model is still present before launching the game.
+
+GAME-SPECIFIC NOTES
+-------------------
+
+NeuRotic detects the running executable and can apply built-in compatibility
+rules. An explicit value in OptiScaler.ini normally takes precedence over an
+automatic rule. Compatibility can also change with a game or driver update.
+
+The included profile sets DLSS Perf Preset and UltraP Preset to Preset L.
+
+Dragon's Dogma 2, NVIDIA, DirectX 12:
+
+If the game crashes when Neural Rendering first becomes active, set only the
+following value and fully restart the game before testing again:
+
+  [Hotfix]
+  RestoreComputeSignature = true
+
+This setting prevented the observed first-enable NVIDIA driver access
+violation in Dragon's Dogma 2 3.2.0.0 on the tested system. It is one runtime
+result, not a universal certification for every version or configuration.
+
+TROUBLESHOOTING AND CRASH REPORTS
+---------------------------------
+
+If Neural Rendering does not start, first confirm that both similarly named
+DLSS-NR files listed above are present. The overlay status and OptiScaler.log
+should explain whether the model is missing, waiting, unsupported, or failed.
+
+For a useful crash report, temporarily use:
+
+  [Log]
+  LogToFile = true
+  LogLevel = 0
+  LogAsync = false
+
+Fully restart the game, reproduce the problem once, then attach:
+
+* OptiScaler.log
+* The game's crash dump or crash log, if one was created
+* The game executable name and version
+* GPU model and driver version
+* Whether Neural Rendering was being enabled, disabled, or changing mode
+* The relevant OptiScaler.ini settings
+
+Trace and synchronous logging cost more, so restore normal logging after the
+report is captured.
+
+KNOWN LIMITS
+------------
+
+* Neural Rendering and the NVIDIA model are experimental and undocumented.
+* Installer text and included notes are currently English only. Windows setup
+  supports Unicode folder paths and preserves UTF-8 or UTF-16 INI encoding.
+* Rapidly hammering the NR toggle is unsupported. Allow each transition and
+  resumed rendering to settle before toggling again.
+* Other overlays, ReShade, REFramework, frame-generation tools, and proxy DLLs
+  can introduce separate compatibility problems.
+* Performance Mode runs NR before native DLSS Super Resolution. Quality Mode
+  runs NR after native Super Resolution and normally costs more.
+* The proprietary nvngx_dlssnr.dll model is not redistributed by NeuRotic.
+
+REMOVAL
+-------
+
+Close the game and run Remove_OptiScaler.bat if the installer created it.
+Review its list before confirming removal. Restore your backup if another mod
+previously owned the same proxy DLL filename.
+
+For the full change list, validation scope, credits, and licensing information,
+read RELEASE NOTES - Alpha 0.9.4.md and the Licenses folder.

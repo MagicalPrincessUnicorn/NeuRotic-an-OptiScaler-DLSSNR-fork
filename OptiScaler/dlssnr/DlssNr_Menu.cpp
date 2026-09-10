@@ -3,6 +3,7 @@
 
 #include "DlssNr.h"
 #include "DlssNr_ExposureScan.h"
+#include "DlssNr_Present.h"
 
 
 #include <Config.h>
@@ -119,14 +120,29 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
 
+        static const char* routeNames[] = { "Native Temporal", "Present Image-Only" };
+        int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 1);
+        if (ImGui::Combo("NR route", &route, routeNames, IM_ARRAYSIZE(routeNames)))
+        {
+            config->DlssNrRoute = (uint32_t) route;
+            LOG_INFO("DLSS-NR route requested: {}", routeNames[route]);
+        }
+        HelpMarker("Native Temporal is the existing upscaler-attached route with the game's temporal inputs."
+                   "\n\nPresent Image-Only is the isolated v9.6 experiment: DX12 direct queue only,"
+                   " constant private guides, no game depth/motion/jitter/reset/upscaler resources,"
+                   " and untouched-original fallback on every unsupported or failed frame.");
+        const bool presentRoute = route == 1;
+
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
         int renderMode = std::clamp(config->DlssNrRenderingMode.value_or_default(), 0, 1);
+        if (presentRoute) ImGui::BeginDisabled();
         if (ImGui::Combo("Rendering mode", &renderMode, renderModeNames, IM_ARRAYSIZE(renderModeNames)))
         {
             config->SetDlssNrRenderingMode(renderMode);
             LOG_INFO("DLSS-NR rendering mode applied: {} (Super Resolution placement only; native RR remains RR -> NR)",
                      renderModeNames[renderMode]);
         }
+        if (presentRoute) ImGui::EndDisabled();
 
         HelpMarker("Quality keeps NR after native DLSS Super Resolution. Performance runs NR before "
                    "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
@@ -145,16 +161,18 @@ void RenderMenu(Config* config, float menuResScale)
         // The setting requests Pre-SR. It is deliberately not described as active until the
         // replacement-resource, reset, seed, and display-ready checks have all passed.
         const auto nrTelemetry = DlssNr::Telemetry();
+        const auto presentTelemetry = DlssNr::PresentTelemetry();
         const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
 
         const auto renderSecondLayerControls = [&]()
         {
+            const bool d3d12 = !vulkan && State::Instance().api == API::DX12;
             bool secondLayer = config->DlssNrSecondLayer.value_or_default();
-            if (vulkan)
+            if (!d3d12)
                 ImGui::BeginDisabled();
             if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
                 config->DlssNrSecondLayer = secondLayer;
-            if (vulkan)
+            if (!d3d12)
                 ImGui::EndDisabled();
 
             HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer"
@@ -162,8 +180,8 @@ void RenderMenu(Config* config, float menuResScale)
                        "\n\nEach layer owns separate temporal history. Enabling it roughly doubles"
                        "\nthe model cost. This experiment implements the route on D3D12 only.");
 
-            if (vulkan)
-                ImGui::TextDisabled("Second neural-rendering layer unavailable on Vulkan in this experiment.");
+            if (!d3d12)
+                ImGui::TextDisabled("Second neural-rendering layer requires D3D12.");
             else if (enabled && nrTelemetry.layer2Requested)
             {
                 if (nrTelemetry.layer2Failed)
@@ -183,6 +201,15 @@ void RenderMenu(Config* config, float menuResScale)
         if (!enabled)
         {
             ImGui::TextDisabled("Rendering mode selected: %s.", renderModeNames[renderMode]);
+        }
+        else if (presentRoute)
+        {
+            ImGui::TextDisabled("Requested placement: %s.", presentTelemetry.requestedPlacement.c_str());
+            if (presentTelemetry.active)
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Actual placement: %s.",
+                                   presentTelemetry.actualPlacement.c_str());
+            else
+                ImGui::TextDisabled("Actual placement: %s.", presentTelemetry.actualPlacement.c_str());
         }
         else if (nrTelemetry.failed)
         {
@@ -230,6 +257,71 @@ void RenderMenu(Config* config, float menuResScale)
         if (!enabled)
         {
             ImGui::TextDisabled("Off. Any loaded model is retained for the next enable request.");
+        }
+        else if (presentRoute)
+        {
+            const char* api = presentTelemetry.api == PresentApi::D3D12 ? "DX12"
+                              : presentTelemetry.api == PresentApi::D3D11 ? "DX11"
+                              : presentTelemetry.api == PresentApi::Vulkan ? "Vulkan" : "Unknown";
+            ImGui::Text("API %s | backbuffer %ux%u (format %u)", api,
+                        presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight,
+                        (unsigned int) presentTelemetry.backbufferFormat);
+            ImGui::Text("%s | actual model work %ux%u",
+                        PresentWorkloadName(presentTelemetry.workload), presentTelemetry.workWidth,
+                        presentTelemetry.workHeight);
+            ImGui::Text("Model evaluations %llu | spatial upscale/composites %llu | skipped %llu",
+                        presentTelemetry.modelEvaluations, presentTelemetry.compositeEvaluations,
+                        presentTelemetry.skippedFrames);
+            ImGui::Text("Command submissions: model %llu | composite %llu",
+                        presentTelemetry.modelSubmissions, presentTelemetry.compositeSubmissions);
+            ImGui::Text("Attempts %llu | fallback streak %llu | last fallback attempt %llu",
+                        presentTelemetry.presentAttempts, presentTelemetry.consecutiveFallbacks,
+                        presentTelemetry.lastFallbackAttempt);
+            ImGui::Text("Fence submitted %llu | completed %llu | pending slots %u / 8",
+                        presentTelemetry.lastSubmittedFence, presentTelemetry.lastCompletedFence,
+                        presentTelemetry.pendingSlots);
+            ImGui::Text("Adapter CPU %.2f ms (max %.2f; >=4 ms: %llu) | original Present CPU %.2f ms (max %.2f; >=33.3 ms: %llu)",
+                        presentTelemetry.adapterCpuMs, presentTelemetry.adapterCpuMaxMs,
+                        presentTelemetry.adapterCpuSlowCalls, presentTelemetry.originalPresentMs,
+                        presentTelemetry.originalPresentMaxMs, presentTelemetry.originalPresentSlowCalls);
+            if (presentTelemetry.hasPacingSummary)
+            {
+                const auto& summary = presentTelemetry.pacingSummary;
+                const char* summaryRoute = summary.route == PresentPacing::Route::PresentImageOnly
+                                               ? "Present Image-Only" : "Native Temporal";
+                ImGui::TextDisabled("Completed pacing window %llu: %s | %llu samples; warm-up discarded %llu",
+                                    summary.serial, summaryRoute,
+                                    static_cast<unsigned long long>(summary.frameInterval.samples),
+                                    summary.warmupDiscarded);
+                ImGui::Text("Frame ms avg %.2f | median %.2f | p95 %.2f | max %.2f",
+                            summary.frameInterval.average, summary.frameInterval.median,
+                            summary.frameInterval.p95, summary.frameInterval.maximum);
+                ImGui::Text("CPU p95/max ms: adapter %.3f/%.3f | hook %.3f/%.3f | Present %.3f/%.3f",
+                            summary.adapterCpu.p95, summary.adapterCpu.maximum, summary.hookCpu.p95,
+                            summary.hookCpu.maximum, summary.originalPresentCpu.p95,
+                            summary.originalPresentCpu.maximum);
+                if (summary.route == PresentPacing::Route::PresentImageOnly)
+                {
+                    ImGui::Text("Present GPU %llu/%llu: median %.2f | p95 %.2f | max %.2f ms",
+                                static_cast<unsigned long long>(summary.presentGpu.samples),
+                                summary.expectedGpuSamples, summary.presentGpu.median,
+                                summary.presentGpu.p95, summary.presentGpu.maximum);
+                    ImGui::Text("Completion-observed upper bound p95/max %.2f/%.2f ms | fence age p95/max %.0f/%.0f attempts",
+                                summary.completionObservation.p95, summary.completionObservation.maximum,
+                                summary.fenceAge.p95, summary.fenceAge.maximum);
+                    ImGui::Text("Pending high-water %u / 8 | missing GPU %llu | unmatched late GPU %llu",
+                                summary.pendingSlotsHighWater, summary.missingGpuSamples,
+                                presentTelemetry.unmatchedGpuTimingSamples);
+                }
+            }
+            ImGui::TextDisabled("CPU call timing and fence completion do not measure scanout or prove displayed frames.");
+            if (!presentTelemetry.failure.empty())
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Failure: %s",
+                                   presentTelemetry.failure.c_str());
+            else if (!presentTelemetry.active)
+                ImGui::TextDisabled("Fallback: %s", presentTelemetry.fallbackReason.empty()
+                                                       ? "waiting for the first safe successful frame"
+                                                       : presentTelemetry.fallbackReason.c_str());
         }
         else if (!nrTelemetry.running && !vulkan)
         {
@@ -289,6 +381,8 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushItemWidth(220.0f * menuResScale);
 
+        if (!presentRoute)
+        {
         // Any percentage, rather than a handful of steps somebody chose in advance. The lower bound
         // is 25%: below that the model is working on so little of the picture that its answer no
         // longer survives being enlarged onto it.
@@ -383,7 +477,22 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nthing that came from the small raster is the edit itself."
                        "\n\nNo effect at 100% or above: there is no residual to carry and the two are"
                        "\nidentical (supersampling brings its answer down to frame size before this)."
-                       "\n\nFrom hhkbble's multi-pass work on this fork.");
+                           "\n\nFrom hhkbble's multi-pass work on this fork.");
+        }
+        }
+        else
+        {
+            static const char* presentWorkNames[] = {
+                "Full / Native (100%)", "Ultra Quality (77%)", "Quality (67%)",
+                "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
+            };
+            int workload = std::clamp((int) config->DlssNrPresentWorkload.value_or_default(), 0, 5);
+            if (ImGui::Combo("Present workload", &workload, presentWorkNames,
+                             IM_ARRAYSIZE(presentWorkNames)))
+                config->DlssNrPresentWorkload = (uint32_t) workload;
+            HelpMarker("A fixed, auditable Present workload. The full-resolution frame is always preserved;"
+                       " only the private model input is reduced. The model answer is spatially enlarged"
+                       " and conservatively composed over that untouched source.");
         }
 
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };

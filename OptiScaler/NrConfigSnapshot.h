@@ -8,6 +8,8 @@
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
     X(DlssNrSecondLayer) \
+    X(DlssNrRoute) \
+    X(DlssNrPresentWorkload) \
     X(DlssNrRunBeforeSr) \
     X(DlssNrRenderingMode) \
     X(DlssNrPreDlaa) \

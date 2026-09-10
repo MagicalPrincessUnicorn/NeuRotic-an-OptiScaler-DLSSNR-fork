@@ -837,6 +837,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="shaders\dlssnr\DlssNr_Vk.cpp" />
     <ClCompile Include="dlssnr\DlssNrFeature_Vk.cpp" />
     <ClCompile Include="dlssnr\DlssNr_ExposureScan.cpp" />
+    <ClCompile Include="dlssnr\DlssNr_Present.cpp" />
     <ClCompile Include="dlssnr\NrGpuSafety.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>

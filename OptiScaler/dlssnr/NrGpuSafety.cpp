@@ -242,6 +242,31 @@ bool Reusable(const Ticket& ticket)
     std::lock_guard lock(State().mutex);
     return !ticket || (ticket->sealed && Completed(ticket));
 }
+SlotSnapshot InspectSlots(const Ticket* tickets, unsigned int count)
+{
+    std::lock_guard lock(State().mutex);
+    SlotSnapshot snapshot;
+    snapshot.registryFailed = State().failed;
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        const auto& ticket = tickets[i];
+        if (!ticket) { ++snapshot.reusable; continue; }
+        bool failed = ticket->failed;
+        bool pending = false;
+        for (const auto& point : ticket->points)
+        {
+            const UINT64 done = point.timeline->fence->GetCompletedValue();
+            failed = failed || done == UINT64_MAX;
+            pending = pending || done < point.value;
+        }
+        if (failed) ++snapshot.failed;
+        else if (pending) ++snapshot.gpuPending;
+        else if (ticket->sealed) ++snapshot.reusable;
+        else if (ticket->points.empty()) ++snapshot.unsubmittedUnsealed;
+        else ++snapshot.completedUnsealed;
+    }
+    return snapshot;
+}
 bool Readable(const Ticket& ticket)
 {
     std::lock_guard lock(State().mutex);

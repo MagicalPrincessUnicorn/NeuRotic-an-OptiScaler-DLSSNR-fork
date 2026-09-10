@@ -519,7 +519,8 @@ bool IsRunningVk()
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
     const auto runtime = Config::Instance()->GetDlssNrRuntimeSnapshot();
-    return runtime.enabled && !g_vkSessionClosed && !g_vkShutdownFailed &&
+    return runtime.enabled && Config::Instance()->DlssNrRoute.value_or_default() == 0 &&
+           !g_vkSessionClosed && !g_vkShutdownFailed &&
            g_vk.feature != nullptr && !g_vk.failed && g_vk.frames != 0 && !g_vk.reset &&
            runtime.resumeGeneration == g_vk.resumeGeneration;
 }
@@ -547,7 +548,8 @@ std::optional<double> LastGpuTimeVk()
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
     const auto runtime = Config::Instance()->GetDlssNrRuntimeSnapshot();
-    if (!runtime.enabled || g_vkSessionClosed || g_vkShutdownFailed || g_vk.failed || g_vk.reset ||
+    if (!runtime.enabled || Config::Instance()->DlssNrRoute.value_or_default() != 0 ||
+        g_vkSessionClosed || g_vkShutdownFailed || g_vk.failed || g_vk.reset ||
         runtime.resumeGeneration != g_vk.resumeGeneration)
         return {};
     return g_vk.lastGpuTime;
@@ -560,7 +562,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     if (!settings) return;
     const auto& cfg = *settings;
 
-    if (!cfg.GetDlssNrRuntimeSnapshot().enabled)
+    if (!cfg.GetDlssNrRuntimeSnapshot().enabled || cfg.DlssNrRoute.value_or_default() != 0)
         return;
 
     if (cmdBuffer == VK_NULL_HANDLE || params == nullptr || device == VK_NULL_HANDLE ||

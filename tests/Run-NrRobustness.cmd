@@ -15,11 +15,21 @@ cl /nologo /std:c++20 /EHsc /W4 /I tests\exposure_scan_stubs tests\nr_exposure_s
 if errorlevel 1 goto failed
 "%testOut%\nr_exposure_scan.exe" >"%testOut%\scan-test.txt" 2>&1
 if errorlevel 1 goto failed
+cl /nologo /std:c++20 /EHsc /W4 /WX tests\nr_exposure_guard.cpp /Fe:"%testOut%\nr_exposure_guard.exe" /Fo:"%testOut%\nr_exposure_guard.obj" >"%testOut%\exposure-guard-build.txt" 2>&1
+if errorlevel 1 goto failed
+"%testOut%\nr_exposure_guard.exe" >"%testOut%\exposure-guard-test.txt" 2>&1
+if errorlevel 1 goto failed
 type "%testOut%\gpu-test.txt"
 type "%testOut%\scan-test.txt"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\Test-NrSecondLayer.ps1 >"%testOut%\second-layer-static.txt" 2>&1
 if errorlevel 1 goto failed
 type "%testOut%\second-layer-static.txt"
+type "%testOut%\exposure-guard-test.txt"
+cl /nologo /std:c++20 /EHsc /W4 /WX tests\nr_present_pacing.cpp /Fe:"%testOut%\nr_present_pacing.exe" /Fo:"%testOut%\nr_present_pacing.obj" >"%testOut%\pacing-build.txt" 2>&1
+if errorlevel 1 goto failed
+"%testOut%\nr_present_pacing.exe" >"%testOut%\pacing-test.txt" 2>&1
+if errorlevel 1 goto failed
+type "%testOut%\pacing-test.txt"
 call tests\Run-NrConfig.cmd >"%testOut%\config-suite.txt" 2>&1
 if errorlevel 1 goto failed
 call tests\Run-NrDispatchResources.cmd >"%testOut%\dispatch-suite.txt" 2>&1

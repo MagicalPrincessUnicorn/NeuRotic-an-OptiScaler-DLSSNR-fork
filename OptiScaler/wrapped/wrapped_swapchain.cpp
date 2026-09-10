@@ -3,6 +3,7 @@
 
 #include <Util.h>
 #include <Config.h>
+#include <dlssnr/DlssNr_Present.h>
 
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
@@ -160,6 +161,10 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     LOG_DEBUG("{}", _frameCounter);
 
     HRESULT presentResult;
+    DlssNr::PresentCallIdentity nrPresentIdentity {};
+    double presentFrameIntervalMs = 0.0;
+    double nrAdapterCpuMs = 0.0;
+    double presentHookStartMs = 0.0;
 
     auto willPresent = (Flags & DXGI_PRESENT_TEST) == 0;
 
@@ -173,6 +178,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
             ftDelta = now - _lastFrameTime;
 
         _lastFrameTime = now;
+        presentFrameIntervalMs = ftDelta;
         State::Instance().presentFrameTime = ftDelta;
 
         if (State::Instance().currentFG == nullptr)
@@ -326,6 +332,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     // DXVK check, it's here because of upscaler time calculations
     if (IdentifyGpu::getPrimaryGpu().usesDxvk)
     {
+        DlssNr::ReportPresentUnavailable(DlssNr::PresentApi::Vulkan,
+                                         "DXVK/cross-API Present is unsupported");
         if (pPresentParameters == nullptr)
             presentResult = pSwapChain->Present(SyncInterval, Flags);
         else
@@ -361,6 +369,13 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         // Tick feature to let it know if it's frozen
         if (auto currentFeature = State::Instance().currentFeature; currentFeature != nullptr)
             currentFeature->TickFrozenCheck();
+
+        // v9.6 owns no Present call. It may enqueue same-queue DX12 work, then this function continues
+        // to the one original Present/Present1 invocation with the existing arguments and return path.
+        presentHookStartMs = Util::MillisecondsNow();
+        nrPresentIdentity =
+            DlssNr::EvaluatePresentImageOnly(pSwapChain, pDevice, Flags, pPresentParameters);
+        nrAdapterCpuMs = Util::MillisecondsNow() - presentHookStartMs;
 
         // Draw overlay
         MenuOverlayDx::Present(pSwapChain, SyncInterval, Flags, pPresentParameters, pDevice, hWnd, isUWP);
@@ -398,10 +413,18 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     LOG_DEBUG("Calling original present");
 
     // swapchain present
+    const auto originalPresentStart = Util::MillisecondsNow();
     if (pPresentParameters == nullptr)
         presentResult = pSwapChain->Present(SyncInterval, Flags);
     else
         presentResult = ((IDXGISwapChain1*) pSwapChain)->Present1(SyncInterval, Flags, pPresentParameters);
+    const double originalPresentCpuMs = Util::MillisecondsNow() - originalPresentStart;
+    if (willPresent)
+    {
+        DlssNr::ReportPresentCallTiming({nrPresentIdentity, presentFrameIntervalMs, nrAdapterCpuMs,
+                                        Util::MillisecondsNow() - presentHookStartMs,
+                                        originalPresentCpuMs, presentResult});
+    }
 
     if (presentResult == S_OK)
     {

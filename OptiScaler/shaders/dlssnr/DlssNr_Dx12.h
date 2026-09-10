@@ -18,6 +18,7 @@
 //   Resolve  proxy + model answer + untouched copy -> the frame, edited
 
 #include "DlssNr_Common.h"
+#include "NrCompositionPool.h"
 #include <dlssnr/NrGpuSafety.h>
 
 #include <d3d12.h>
@@ -25,41 +26,33 @@
 #include <shaders/Shader_Dx12.h>
 #include <shaders/Shader_Dx12Utils.h>
 
-// Bounded descriptor/constant capacity, not a frame-age safety guarantee. Each dispatch reserves
-// a slot until its recording is reset/destroyed AND all observed GPU executions have completed.
-// If the pool is busy, the entry point bypasses NR before recording output transitions.
-#define DLSSNR_NUM_OF_HEAPS 48
-
 class Config;
 template<class Source> struct NrConfigSnapshot;
 
 class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
 {
   private:
-    FrameDescriptorHeap _frameHeaps[DLSSNR_NUM_OF_HEAPS];
-
-    // One constant buffer per heap, not one for the class.
-    //
-    // The shared buffer in the base class suits a shader that dispatches once a frame. Three
-    // dispatches recorded onto one command list all map and overwrite the same upload buffer before
-    // any of them executes, so every pass ends up reading whichever constants were written last --
-    // encode and downsample would run with the resolve's parameters.
-    ID3D12Resource* _constantBuffers[DLSSNR_NUM_OF_HEAPS] = {};
-
-    uint32_t _heapIndex = 0;
-    DlssNr::GpuSafety::Ticket _slotUse[DLSSNR_NUM_OF_HEAPS];
+    DlssNr::CompositionPool _pool;
+    unsigned long long _lastPoolReportMs = 0;
+    unsigned long long _reportedGrowthEvents = 0;
+    bool _lastPoolPreSr = false;
+    DlssNr::CompositionPool::Admission _lastAdmission = DlssNr::CompositionPool::Admission::Accepted;
+    void ReportPool(DlssNr::CompositionPool::Admission admission, bool preSr, bool force = false);
 
     // The shader reads five inputs and writes two, and not every mode uses all of them. Unused slots
     // still need a view bound -- an unbound descriptor is not an empty read, it is a read from
     // nothing -- so a stand-in is written into whichever are spare.
-    static constexpr uint32_t kSrvCount = 5;
-    static constexpr uint32_t kUavCount = 2;
+    static constexpr uint32_t kSrvCount = DlssNr::CompositionPool::SrvCount;
+    static constexpr uint32_t kUavCount = DlssNr::CompositionPool::UavCount;
 
     uint32_t _numThreadsX = 8;
     uint32_t _numThreadsY = 8;
 
   public:
-    bool HasFreeSlots(unsigned int count) const;
+    // Caller holds the lifecycle lock. Reserves before Pre-SR copies or composition transitions.
+    bool Prepare(ID3D12GraphicsCommandList* list, bool preSr, bool secondLayer = false);
+    // Caller holds the same locks as shutdown; report even when drain later fails.
+    void ReportFinalPool() { ReportPool(_lastAdmission, _lastPoolPreSr, true); }
     DlssNr_Dx12(std::string InName, ID3D12Device* InDevice);
     ~DlssNr_Dx12();
 
@@ -74,7 +67,9 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // resource. timingQueue is the queue this list will be executed on, when the caller knows it.
     void Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                   ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
-                  ID3D12CommandQueue* timingQueue, const NrConfigSnapshot<Config>& cfg);
+                  ID3D12CommandQueue* timingQueue, const NrConfigSnapshot<Config>& cfg,
+                  bool privateCommandList = false, unsigned int exactWorkWidth = 0,
+                  unsigned int exactWorkHeight = 0);
 
     // Records one pass. Resources that a given mode does not read may be null; a stand-in is bound in
     // their place so every descriptor in the table is valid.

@@ -1,0 +1,73 @@
+"""Source/UI integration gates. Run from any directory with Python 3; no network."""
+import ast
+import importlib.util
+import pathlib
+import re
+import subprocess
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('catalog', ROOT/'tools/localization/catalog.py')
+catalog = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(catalog)
+catalog.verify()
+normalize = lambda text: ' '.join(text.split())
+inventory = {normalize(key) for key in catalog.inventory()}
+literal = r'"(?:[^"\\]|\\.)*"'
+sequence = re.compile(literal + r'(?:\s*' + literal + r')*')
+def strings(text):
+    return [ast.literal_eval(match.group()) for match in re.finditer(literal, text)]
+def joined_strings(text):
+    return [''.join(strings(match.group())) for match in sequence.finditer(text)]
+def visible(text):
+    result = set()
+    # Balanced calls, so ImVec4 and nested casts do not terminate TextColored early.
+    for start in re.finditer(r'(?:ImGui::(?:Text\w*|Combo|Checkbox|Button|SmallButton)|HelpMarker)\(', text):
+        depth, pos, end = 1, start.end(), start.end()
+        while depth and end < len(text):
+            token = re.match(literal, text[end:])
+            if token:
+                end += len(token.group()); continue
+            if text[end] == '(': depth += 1
+            if text[end] == ')': depth -= 1
+            end += 1
+        result.update(joined_strings(text[pos:end]))
+    for match in re.finditer(r'(?:routeNames|presentWorkNames)\[\]\s*=\s*\{(.*?)\}', text, re.S):
+        result.update(joined_strings(match.group(1)))
+    return result
+def source(path): return (ROOT/path).read_text(encoding='utf-8')
+def require(value, message):
+    if not value: raise AssertionError(message)
+    print('PASS:', message)
+missing = set()
+for path in ['OptiScaler/dlssnr/DlssNr_Menu.cpp', 'OptiScaler/menu/menu_common.cpp']:
+    old = subprocess.check_output(['git','-c','safe.directory='+ROOT.as_posix(),'-C',str(ROOT),
+                                   'show','7040d75d:'+path]).decode('utf-8')
+    for key in visible(source(path)) - visible(old):
+        if normalize(key) not in inventory and not key.startswith('https://'):
+            missing.add(key)
+present = source('OptiScaler/dlssnr/DlssNr_Present.cpp')
+for match in re.finditer(r'SetFallback\(PresentApi::.*?\);', present, re.S):
+    for key in joined_strings(match.group()):
+        if normalize(key) not in inventory: missing.add(key)
+for path in ['OptiScaler/hooks/Vulkan_Hooks.cpp','OptiScaler/wrapped/wrapped_swapchain.cpp']:
+    for match in re.finditer(r'ReportPresentUnavailable\(.*?\);', source(path), re.S):
+        for key in joined_strings(match.group()):
+            if normalize(key) not in inventory: missing.add(key)
+require(not missing, 'all imported visible UI strings and fallback reasons localized: '+repr(sorted(missing)))
+menu = source('OptiScaler/menu/menu_common.cpp')
+nr = source('OptiScaler/dlssnr/DlssNr_Menu.cpp')
+dx = source('OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp')
+require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCommon::RenderGeneralPage'), 'Updates remain in General')
+require(menu.count('DlssNr::RenderMenu(') == 1, 'one NR page, no duplicated imported page')
+require(nr.count('ImGui::Combo("NR route"') == 1 and nr.count('ImGui::Checkbox("Enable second neural-rendering layer"') == 1, 'single route and layer controls')
+require('inherits the first layer\'s model and composition settings' in nr, 'layer tuning inheritance disclosed')
+require('!vulkan && State::Instance().api == API::DX12' in nr, 'second-layer enable requires D3D12')
+require('CompositionPool' not in nr and 'HardCap' not in nr, 'adaptive capacity has no menu control')
+require('Automatic installation will' not in menu, 'no automatic installer promise')
+require('ParkSecondLayerFeature("NR route domain changed")' in dx and 'g_nr.resumeFeatureAwaitingRelease = g_nr.feature;' in dx, 'both history domains retire safely')
+require('secondLayerHealthy ? DlssNr::CompositionPool::TwoLayerAdmissionSlots' in dx and
+        'Prepare(cmdList, true, cfg.DlssNrSecondLayer.value_or_default())' in dx, 'Pre-SR and Post-SR reserve for both layers')
+require('cfg.DlssNrRoute.value_or_default() != 0' in dx and 'frame.Reset = true;' in dx, 'native bypass and image-only reset retained')
+require('completionUntrackable' in present and 'DXGI_PRESENT_TEST' in present and 'DirtyRectsCount' in present, 'Present failure-safe gates retained')
+require('dlssnr_call_probe_d3d12' in source('OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp'), 'direct Feature 18 capability probe retained')
+print('PASS: integration source contracts; runtime evidence remains required')

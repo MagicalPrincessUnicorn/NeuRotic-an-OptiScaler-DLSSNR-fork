@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_Present.h>
 
 #include "Vulkan_Hooks.h"
 
@@ -192,7 +193,8 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
     // not start.
     DlssNr::VkExt::Merged nrExtensions;
 
-    if (Config::Instance()->GetDlssNrRuntimeSnapshot().enabled)
+    if (Config::Instance()->GetDlssNrRuntimeSnapshot().enabled &&
+        Config::Instance()->DlssNrRoute.value_or_default() == 0)
     {
         const auto supported = DlssNr::VkExt::SupportedDeviceExtensions(
             o_vkGetInstanceProcAddr, State::Instance().VulkanInstance, physicalDevice);
@@ -236,7 +238,8 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
     auto result = o_vkCreateDevice(physicalDevice, &localCreteInfo, pAllocator, pDevice);
 
-    if (Config::Instance()->GetDlssNrRuntimeSnapshot().enabled)
+    if (Config::Instance()->GetDlssNrRuntimeSnapshot().enabled &&
+        Config::Instance()->DlssNrRoute.value_or_default() == 0)
         LOG_INFO("DLSS-NR Vulkan: vkCreateDevice returned {} with {} extensions requested", (int) result,
                  localCreteInfo.enabledExtensionCount);
 
@@ -314,6 +317,9 @@ static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPres
     // Tick feature to let it know if it's frozen
     if (auto currentFeature = State::Instance().currentFeature; currentFeature != nullptr)
         currentFeature->TickFrozenCheck();
+
+    DlssNr::ReportPresentUnavailable(DlssNr::PresentApi::Vulkan,
+                                     "native Vulkan Present Image-Only is not implemented in v9.6");
 
     VkPresentInfoKHR localPresentInfo {};
     memcpy(&localPresentInfo, pPresentInfo, sizeof(VkPresentInfoKHR));

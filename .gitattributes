@@ -1,3 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 *.sh eol=lf
+
+# This reviewed package input is byte-exact provenance, including its CRLF layout.
+integration/OptiScaler.ini -text -diff

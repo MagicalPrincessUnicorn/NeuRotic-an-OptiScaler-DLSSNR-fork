@@ -19,7 +19,10 @@ def extra_rows():
             if line and not line.startswith('#')]
 
 def inventory():
-    return json.loads((DEST / 'en.json').read_text(encoding='utf-8')) + [row[0] for row in extra_rows()]
+    return json.loads((DEST / 'en.json').read_text(encoding='utf-8')) + [row[0] for row in extra_rows()] + [row[0] for row in integration_rows()]
+
+def integration_rows():
+    return json.loads((DEST / 'integration.json').read_text(encoding='utf-8'))
 
 def materialize():
     source = json.loads((DEST / 'en.json').read_text(encoding='utf-8'))
@@ -53,6 +56,10 @@ def materialize():
             if len(row) != 5:
                 raise ValueError(f'Expected five extra fields: {row}')
             data[row[0]] = row[i + 1]
+        for row in integration_rows():
+            if len(row) != 5:
+                raise ValueError('Integration entry must have English plus four translations')
+            data[row[0]] = row[i + 1]
         (DEST / (language + '.json')).write_text(
             json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
     verify()
@@ -76,6 +83,11 @@ def verify():
                 errors.append(f'{language} row {index}: invalid translation')
             if FORMAT.findall(key) != FORMAT.findall(value):
                 errors.append(f'{language} row {index}: format mismatch {FORMAT.findall(key)} != {FORMAT.findall(value)}')
+            if key in {row[0] for row in integration_rows()}:
+                if key.count('\n') != value.count('\n'):
+                    errors.append(f'{language} row {index}: line breaks differ')
+                if re.findall(r'https?://[^\s]+', key) != re.findall(r'https?://[^\s]+', value):
+                    errors.append(f'{language} row {index}: links differ')
         print(f'{language}: {len(data)} entries')
     if errors:
         raise ValueError('\n'.join(errors))
@@ -90,6 +102,11 @@ def build():
         rows.append('    {' + cpp(key) + ', {' + ', '.join(cpp(c[key]) for c in catalogs) + '}},')
     rows.append('};\n')
     (DEST / 'catalog.inc').write_text('\n'.join(rows), encoding='ascii', newline='\n')
+    integration = ['// Generated integration UI inventory.', 'static const CatalogEntry IntegrationCatalog[] = {']
+    for row in integration_rows():
+        integration.append('    {' + cpp(row[0]) + ', {' + ', '.join(cpp(value) for value in row[1:]) + '}},')
+    integration.append('};\n')
+    (DEST / 'integration.inc').write_text('\n'.join(integration), encoding='ascii', newline='\n')
     print('Bundled catalog SHA256:', hashlib.sha256((DEST / 'catalog.inc').read_bytes()).hexdigest())
 
 if __name__ == '__main__':

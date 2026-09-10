@@ -29,6 +29,8 @@ struct TestConfig
     NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
     NrOptional<bool> DlssNrEnabled { false };
     NrOptional<bool> DlssNrSecondLayer { false };
+    NrOptional<uint32_t> DlssNrRoute { 0 };
+    NrOptional<uint32_t> DlssNrPresentWorkload { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR

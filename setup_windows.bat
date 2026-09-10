@@ -1,6 +1,9 @@
-REM Setup OptiScaler for your game
+REM Install NeuRotic for your game
 @echo off
+title NeuRotic Alpha 0.9.4 Installer
 cls
+echo                    NeuRotic Alpha 0.9.4 Installer
+echo.
 echo  ::::::::  :::::::::  ::::::::::: :::::::::::  ::::::::   ::::::::      :::     :::        :::::::::: :::::::::  
 echo :+:    :+: :+:    :+:     :+:         :+:     :+:    :+: :+:    :+:   :+: :+:   :+:        :+:        :+:    :+: 
 echo +:+    +:+ +:+    +:+     +:+         +:+     +:+        +:+         +:+   +:+  +:+        +:+        +:+    +:+ 
@@ -16,6 +19,7 @@ echo.
 del "!! README_EXTRACT ALL FILES TO GAME FOLDER !!.txt" 2>nul
 
 setlocal enabledelayedexpansion
+set "setupExitCode=0"
 
 if exist OptiScaler.sln (
     echo Detected OptiScaler.sln or .git files^^!
@@ -31,6 +35,33 @@ if exist OptiScaler.sln (
     goto end
 )
 
+REM Refuse a damaged or misnamed package before touching an existing install.
+if not exist "NeuRotic-IniEdit.ps1" (
+    echo ERROR: NeuRotic-IniEdit.ps1 is missing.
+    echo Extract the ZIP with Extract All, then run NeuRotic-Setup.bat.
+    echo Do not copy individual files from an archive preview.
+    echo.
+    set "setupExitCode=1"
+    goto end
+)
+
+if not exist "OptiScaler.ini" (
+    echo ERROR: OptiScaler.ini is missing.
+    echo Extract the complete NeuRotic ZIP again before running setup.
+    echo.
+    set "setupExitCode=1"
+    goto end
+)
+
+for %%F in ("OptiScaler.ini") do if %%~zF GTR 1048576 (
+    echo ERROR: OptiScaler.ini is over 1 MB and is not a valid text configuration.
+    echo The package files were copied under the wrong names. Nothing was changed.
+    echo Extract the complete ZIP into a new folder and try again.
+    echo.
+    set "setupExitCode=1"
+    goto end
+)
+
 if not exist OptiScaler.dll (
     echo OptiScaler "OptiScaler.dll" file is not found^^!
     echo Detected a folder permissions issue most likely. Might have more luck running the BAT as admin.
@@ -39,8 +70,35 @@ if not exist OptiScaler.dll (
 	echo.
     echo If "OptiScaler.dll" exists, please manually rename to a supported filename ^(e.g. dxgi/winmm.dll^) and you are done^^!
 	echo No need to run the setup BAT again after renaming.
-	echo.
     echo.
+    echo.
+    set "setupExitCode=1"
+    goto end
+)
+
+for %%F in ("OptiScaler.dll") do if %%~zF LSS 1048576 (
+    echo ERROR: OptiScaler.dll is too small to be the NeuRotic main DLL.
+    echo The package files were copied under the wrong names. Nothing was changed.
+    echo Extract the complete ZIP into a new folder and try again.
+    echo.
+    set "setupExitCode=1"
+    goto end
+)
+
+if not exist "nvngx.dll_dlssnr.dll" (
+    echo ERROR: nvngx.dll_dlssnr.dll is missing from the package.
+    echo Extract the complete NeuRotic ZIP again before running setup.
+    echo.
+    set "setupExitCode=1"
+    goto end
+)
+
+for %%F in ("nvngx.dll_dlssnr.dll") do if %%~zF LSS 32768 (
+    echo ERROR: nvngx.dll_dlssnr.dll is too small to be the NeuRotic forwarder.
+    echo The package files were copied under the wrong names. Nothing was changed.
+    echo Extract the complete ZIP into a new folder and try again.
+    echo.
+    set "setupExitCode=1"
     goto end
 )
 
@@ -270,7 +328,11 @@ if "%enablingSpoofing%"=="2" (
         pause
     )
 
-    powershell -Command "(Get-Content '%configFile%') -replace 'Dxgi=auto', 'Dxgi=false' | Set-Content '%configFile%'"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\NeuRotic-IniEdit.ps1" -Path "%configFile%" -Key "Dxgi" -Value "false"
+    if errorlevel 1 (
+        echo Warning: Could not update Dxgi without changing the INI encoding.
+        goto completeSetup
+    )
 )
 
 REM Decide whether to run OptiPatcher
@@ -358,8 +420,12 @@ if "!OPTI_MATCH!"=="YES" (
             echo OptiPatcher.asi downloaded successfully.
             echo Enabling ASI loading in OptiScaler.ini...
             if exist "%configFile%" (
-                powershell -Command "(Get-Content '%configFile%') -replace 'LoadAsiPlugins=auto', 'LoadAsiPlugins=true' | Set-Content '%configFile%'"
-                echo Successfully enabled ASI loading in OptiScaler.ini^^!
+                powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\NeuRotic-IniEdit.ps1" -Path "%configFile%" -Key "LoadAsiPlugins" -Value "true"
+                if errorlevel 1 (
+                    echo Warning: Could not enable ASI loading without changing the INI encoding.
+                ) else (
+                    echo Successfully enabled ASI loading in OptiScaler.ini^^!
+                )
             ) else (
                 echo Warning: OptiScaler.ini not found, could not enable LoadAsiPlugins.
             )
@@ -391,12 +457,12 @@ if errorlevel 1 (
     goto end
 )
 
-goto create_uninstaller
+call :create_uninstaller
 
 :create_uninstaller_return
 
 cls
-echo  OptiScaler setup completed successfully...
+echo  NeuRotic setup completed successfully...
 echo.
 echo   ___                 
 echo  (_         '        
@@ -430,7 +496,7 @@ if exist "nvngx_dlssnr.dll" (
 echo.
 echo   Two similarly named files matter here, one character apart:
 echo.
-echo     nvngx.dll_dlssnr.dll   ships in this package  ^(about 13 KB^)
+echo     nvngx.dll_dlssnr.dll   ships in this package  ^(small forwarder^)
 echo     nvngx_dlssnr.dll       you supply it          ^(about 165 MB^)
 echo.
 echo   To check you have the right file: Properties ^> Details should
@@ -442,9 +508,9 @@ echo   Neural Rendering is OFF by default. Turn it on in the OptiScaler
 echo   overlay under "DLSS Neural Rendering", or set Enabled=true under
 echo   the DlssNr section of OptiScaler.ini.
 echo.
-echo   Needs an RTX 50 series card and a driver new enough to ship the
-echo   model. If it cannot run, the overlay says why rather than failing
-echo   quietly.
+echo   Needs a compatible NVIDIA RTX GPU, a driver new enough to ship
+echo   the model, and the supplied model file. GPU and driver support
+echo   varies; if it cannot run, the overlay explains why.
 echo.
 
 :end
@@ -452,10 +518,10 @@ pause
 
 if "%setupSuccess%"=="true" (
     del "setup_linux.sh"
-    del "%~nx0"
+    exit /b 0
 )
 
-exit /b
+exit /b %setupExitCode%
 
 :create_uninstaller
 setlocal DisableDelayedExpansion
@@ -511,6 +577,8 @@ echo echo.
 echo if "%%removeChoice%%"=="1" ^(
 echo     del OptiScaler.log
 echo     del OptiScaler.ini
+echo     del "NeuRotic-IniEdit.ps1"
+echo     del "NeuRotic-Setup.bat"
 echo     del OptiScaler.asi
 echo     for %%%%F in ^(!OPTI_DLL_LIST!^) do ^(del "%%%%F"^)
 echo     del /Q Licenses\*
@@ -549,4 +617,4 @@ echo.
 echo Uninstaller created.
 echo.
 
-goto create_uninstaller_return
+exit /b
