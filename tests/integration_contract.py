@@ -76,7 +76,8 @@ require('Automatic installation will' not in menu, 'no automatic installer promi
 require('ParkSecondLayerFeature("NR route domain changed")' in dx and 'g_nr.resumeFeatureAwaitingRelease = g_nr.feature;' in dx, 'both history domains retire safely')
 require('secondLayerHealthy ? DlssNr::CompositionPool::TwoLayerAdmissionSlots' in dx and
         'Prepare(cmdList, true, cfg.DlssNrSecondLayer.value_or_default())' in dx, 'Pre-SR and Post-SR reserve for both layers')
-require('cfg.DlssNrRoute.value_or_default() != 0' in dx and 'frame.Reset = true;' in dx, 'native bypass and image-only reset retained')
+require('cfg.DlssNrRoute.value_or_default() != 0' in dx and 'frame.Reset = gameReset != 0;' in dx and
+        'frame.Reset = resetHistory;' in dx, 'native game reset and explicit Present-history reset are retained')
 require('completionUntrackable' in present and 'DXGI_PRESENT_TEST' in present and 'DirtyRectsCount' in present, 'Present failure-safe gates retained')
 require('dlssnr_call_probe_d3d12' in source('OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp'), 'direct Feature 18 capability probe retained')
 print('PASS: integration source contracts; runtime evidence remains required')
