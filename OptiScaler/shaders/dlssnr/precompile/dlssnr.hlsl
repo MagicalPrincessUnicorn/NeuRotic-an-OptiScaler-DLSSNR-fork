@@ -484,6 +484,36 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     // Normalised, so the source may be any size relative to this dispatch.
     float2 uv = (float2(id.xy) + 0.5) / float2(gWidth, gHeight);
 
+    // Display-only comparison. Source is complete; Original is from the first encode.
+    // Neither the layout nor its divider enters a neural history.
+    if (gMode == 6)
+    {
+        float2 displayUv = uv;
+        bool originalSide = false;
+        bool divider = false;
+        bool outside = false;
+        if (gCompareMode == 1)
+        {
+            originalSide = (uv.x < 0.5) != (gCompareSwap != 0);
+            float2 halfUv = float2(uv.x < 0.5 ? uv.x * 2.0 : (uv.x - 0.5) * 2.0, uv.y) - 0.5;
+            displayUv = float2(0.5 + halfUv.x / max(gCompareZoom, 1.0),
+                               0.5 + halfUv.y * 2.0 / max(gCompareZoom, 1.0));
+            outside = any(displayUv < 0.0) || any(displayUv > 1.0);
+            divider = abs(uv.x - 0.5) < (1.0 / max(gWidth, 1u));
+        }
+        else if (gCompareMode == 2)
+        {
+            originalSide = (uv.x < gCompareSplit) != (gCompareSwap != 0);
+            divider = abs(uv.x - gCompareSplit) < (1.0 / max(gWidth, 1u));
+        }
+        float4 shown = originalSide ? gOriginal.SampleLevel(gLinear, displayUv, 0)
+                                    : gSource.SampleLevel(gLinear, displayUv, 0);
+        if (outside) shown.rgb = 0.0;
+        if (divider) shown.rgb = WhitePoint();
+        gTarget[id.xy] = shown;
+        return;
+    }
+
     // EXPERIMENT V10: mode 5 -- fractional re-jitter of a stable same-resolution NR image.
     // gMvScaleX/Y are repurposed here as the engine's ORIGINAL DLSS jitter, in render pixels.
     // A +projection jitter moves scene content +jitter on the raster, so synthesising that raster

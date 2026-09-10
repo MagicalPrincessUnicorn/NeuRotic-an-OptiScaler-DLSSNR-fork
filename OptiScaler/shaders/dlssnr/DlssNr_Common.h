@@ -20,8 +20,17 @@ enum DlssNrMode : uint32_t
     DlssNrMode_Resolve = 1,    // proxy + the model's answer + the untouched copy -> the edited frame
     DlssNrMode_Downsample = 2, // the proxy -> a smaller proxy, when the model works below full size
     DlssNrMode_Meter = 3,      // the exposure texture -> tile (0,0), for the white point
-    DlssNrMode_Calibrate = 4   // the untouched frame -> a grid of tile peak luminances
+    DlssNrMode_Calibrate = 4,  // the untouched frame -> a grid of tile peak luminances
+    DlssNrMode_Present = 6    // completed frame + untouched original -> comparison display only
 };
+
+struct DlssNrMotionScale { float x; float y; };
+inline DlssNrMotionScale DlssNrWorkingMotionScale(uint32_t width, uint32_t height,
+                                                uint32_t workWidth, uint32_t workHeight)
+{
+    return { width != 0 ? static_cast<float>(workWidth) / width : 1.0f,
+             height != 0 ? static_cast<float>(workHeight) / height : 1.0f };
+}
 
 // The meter's grid. 64 x 64 tiles over the whole frame, whatever its size.
 //

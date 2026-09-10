@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <memory>
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -67,6 +68,22 @@ class ScratchTransaction
         _ready = false;
     }
 };
+
+enum class LayerScratchResult { Ready, FirstUnavailable, SecondUnavailable };
+
+// Optional allocation cannot cancel a prepared first layer. Discard unpublished replacements only.
+template <typename Allocate>
+LayerScratchResult PrepareLayerScratch(ScratchTransaction& first,
+                                      std::unique_ptr<ScratchTransaction>& second, Allocate allocate)
+{
+    if (!first.Prepare(allocate)) return LayerScratchResult::FirstUnavailable;
+    if (second && !second->Prepare(allocate))
+    {
+        second.reset();
+        return LayerScratchResult::SecondUnavailable;
+    }
+    return LayerScratchResult::Ready;
+}
 
 // Track only transitions actually recorded by this invocation. A retained guide clone may not
 // have been used this frame, so its mere presence must never cause a restoration barrier.

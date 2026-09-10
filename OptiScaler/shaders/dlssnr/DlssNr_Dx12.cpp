@@ -2124,7 +2124,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // Enough for meter/encode/downsample/resolve and the optional Pre-SR re-jitter. If the
     // bounded pool is busy, bypass before transitions. Keep the flagship's 12-slot two-layer
     // preflight and the approved adaptive pool's eight-slot single-layer preflight.
-    const bool secondLayerHealthy = secondLayerRequested && !g_nr.layer2.failed;
+    bool secondLayerHealthy = secondLayerRequested && !g_nr.layer2.failed;
     auto use = DlssNr::GpuSafety::Record(cmdList);
     // Pre-SR reserved before touching its scratch/output path; Post-SR admits here.
     const bool preSr = output == g_nr.preSrScratch;
@@ -2172,7 +2172,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // command list, even though the old GPU work has now completed.
         return;
     }
-    if (g_nr.layer2.featureAwaitingRelease != nullptr)
+    if (g_nr.layer2.featureAwaitingRelease != nullptr && !g_nr.layer2.failed)
     {
         ReportSkipOnce("layer 2 is waiting for completion-gated retirement");
         return;
@@ -2424,8 +2424,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     const auto allocateScratch =
         [&](DXGI_FORMAT format, UINT w, UINT h) { return CreateScratch(device, format, w, h); };
-    if (!scratch.Prepare(allocateScratch) ||
-        (layer2Scratch != nullptr && !layer2Scratch->Prepare(allocateScratch)))
+    const auto scratchResult = DlssNr::Detail::PrepareLayerScratch(scratch, layer2Scratch, allocateScratch);
+    if (scratchResult == DlssNr::Detail::LayerScratchResult::FirstUnavailable)
     {
         g_nr.reset = true;
         g_nr.layer2.reset = true;
@@ -2433,6 +2433,17 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ReportSkipOnce("the scratch resource bundle could not be allocated");
         device->Release();
         return;
+    }
+
+    if (scratchResult == DlssNr::Detail::LayerScratchResult::SecondUnavailable)
+    {
+        secondLayerHealthy = false;
+        g_nr.layer2.failed = true;
+        g_nr.layer2.ready = false;
+        g_nr.layer2.reason = "the second-layer scratch resource bundle could not be allocated";
+        ParkSecondLayerFeature(g_nr.layer2.reason);
+        // No retry storm or reset of healthy layer 1. Layer-2 off/on explicitly retries.
+        LOG_WARN("DLSS-NR layer 2 unavailable: {}; continuing with layer 1", g_nr.layer2.reason);
     }
 
     ReleaseSurfacesIfFormatChanged(desc.Format, target);
@@ -3028,10 +3039,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return;
     }
 
-    // The vectors were scaled to full-frame pixels; the image the model reprojects is the working size.
-    // The vectors were scaled to full-frame pixels; the image the model reprojects is the
-    // working size.
-    const float mvToWork = width != 0 ? (float) workWidth / (float) width : 1.0f;
+    // Each axis follows its actual rounded raster, including proxy-provider evaluations.
+    const auto mvToWork = DlssNrWorkingMotionScale(width, height, workWidth, workHeight);
 
     SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
 
@@ -3052,15 +3061,15 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const int result = useProxy ? static_cast<int>(DlssNr::Proxy::Run(
         cmdList, device, modelInput, depthIn, motionIn, g_nr.output, workWidth, workHeight,
         guideWidth, guideHeight, g_nr.guideDepthInverted, g_nr.reset,
-        g_nr.guideMvScaleX * mvToWork, g_nr.guideMvScaleY * mvToWork,
+        g_nr.guideMvScaleX * mvToWork.x, g_nr.guideMvScaleY * mvToWork.y,
         frame.JitterX, frame.JitterY, cfg)) : g_nr.evaluate(
         cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
         workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
         g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
         (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
         cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
-        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork,
-        g_nr.guideMvScaleY * mvToWork, frame.JitterX, frame.JitterY);
+        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
+        g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY);
 
     if (g_ngxTime != nullptr)
         g_ngxTime->End(cmdList);
@@ -3227,6 +3236,18 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ID3D12Resource* resolveProxy = superDownOk ? g_nr.colorCopy : modelInput;
         ID3D12Resource* resolveAnswer = superDownOk ? g_nr.outputNative : g_nr.output;
 
+        // Presentation never enters a later model. Diagnostics inspect the last completed layer.
+        const DlssNrConstants presentationParams = resolveParams;
+        if (secondLayerActive)
+        {
+            resolveParams.CompareMode = 0;
+            resolveParams.DebugView = 0;
+        }
+        DlssNrConstants diagnosticParams = resolveParams;
+        ID3D12Resource* diagnosticProxy = resolveProxy;
+        ID3D12Resource* diagnosticAnswer = resolveAnswer;
+        ID3D12Resource* diagnosticOriginal = g_nr.hdrCopy;
+
         if (!DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, motionIn,
                           exposureTex, target, nullptr))
         {
@@ -3248,7 +3269,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             // Layer 1 is now fully composed onto target. Layer 2 starts a new complete pipeline from
             // that result; it never consumes layer 1's raw model output.
             const auto layer2Tuning = SecondLayerTuning(cfg);
-            const float mvToLayer2Work = width != 0 ? (float) layer2WorkWidth / (float) width : 1.0f;
+            const auto mvToLayer2Work = DlssNrWorkingMotionScale(width, height, layer2WorkWidth, layer2WorkHeight);
             DlssNrConstants layer2Encode = encodeParams;
             layer2Encode.ReversibleMode = cfg.DlssNrSecondLayerReversibleMode.value_or_default();
             resourceStates.Transition(target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -3361,7 +3382,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                         (int) layer2Tuning.style, layer2Tuning.localStructure,
                         layer2Tuning.localTone, layer2Tuning.skinStructure,
                         layer2Tuning.autoMask ? 1 : 0,
-                        g_nr.guideMvScaleX * mvToLayer2Work, g_nr.guideMvScaleY * mvToLayer2Work,
+                        g_nr.guideMvScaleX * mvToLayer2Work.x, g_nr.guideMvScaleY * mvToLayer2Work.y,
                         frame.JitterX, frame.JitterY);
 
                     if (g_ngxTimeLayer2 != nullptr)
@@ -3432,6 +3453,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                             g_nr.layer2.routeWasPreSr = currentRouteIsPreSr;
                             g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
                             g_lastLayerCount = 2;
+                            diagnosticParams = layer2Resolve;
+                            diagnosticProxy = layer2ResolveProxy;
+                            diagnosticAnswer = layer2ResolveAnswer;
+                            diagnosticOriginal = g_nr.layer2.hdrCopy;
 
                             static bool reportedReady = false;
                             if (!reportedReady)
@@ -3459,6 +3484,19 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
         }
 
+        if (secondLayerActive && presentationParams.DebugView != 0)
+        {
+            diagnosticParams.DebugView = presentationParams.DebugView;
+            diagnosticParams.CompareMode = 0;
+            resourceStates.Transition(diagnosticAnswer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            if (!DispatchPass(cmdList, diagnosticParams, diagnosticProxy, diagnosticAnswer,
+                              diagnosticOriginal, motionIn, exposureTex, target, nullptr))
+                LOG_WARN("DLSS-NR: diagnostic display unavailable; retaining the completed image");
+            resourceStates.Transition(diagnosticAnswer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
+
         // On-demand capture works in this path too: the staging copy still holds the frame as the
         // upscaler produced it, and the edited frame is the output itself. A later evaluation writes
         // the capture only after its recording tickets confirm completion, never by frame age.
@@ -3467,6 +3505,26 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             g_capture.record(cmdList, device, g_nr.colorCopy,
                              D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, target,
                              D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
+
+        if (secondLayerActive && presentationParams.CompareMode != 0)
+        {
+            // Both model evaluations and capture have finished reading the first proxy.
+            // Reuse it for a display copy, avoiding a read/write alias of target.
+            resourceStates.Transition(target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                      D3D12_RESOURCE_STATE_COPY_SOURCE);
+            resourceStates.Transition(g_nr.colorCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                      D3D12_RESOURCE_STATE_COPY_DEST);
+            cmdList->CopyResource(g_nr.colorCopy, target);
+            resourceStates.Transition(g_nr.colorCopy, D3D12_RESOURCE_STATE_COPY_DEST,
+                                      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            resourceStates.Transition(target, D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            DlssNrConstants display = presentationParams;
+            display.Mode = DlssNrMode_Present;
+            if (!DispatchPass(cmdList, display, g_nr.colorCopy, nullptr, g_nr.hdrCopy,
+                              nullptr, exposureTex, target, nullptr))
+                LOG_WARN("DLSS-NR: comparison display unavailable; retaining the completed image");
         }
     }
     else

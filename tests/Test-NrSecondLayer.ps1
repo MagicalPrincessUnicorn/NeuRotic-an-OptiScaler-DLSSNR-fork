@@ -51,3 +51,26 @@ Require (-not $dx12.Contains('ParkSecondLayerFeature(resolutionChanged ?')) `
     'A layer-1-only tuning or working-scale change must not retire layer 2.'
 
 Write-Output 'PASS second NR layer: default-off config, independent controls/resources, composed ordering, lifecycle-only create/release'
+
+$normalFirst = $dx12.IndexOf('resolveParams.CompareMode = 0;')
+$normalDebug = $dx12.IndexOf('resolveParams.DebugView = 0;')
+$firstDispatch = $dx12.IndexOf('DispatchPass(cmdList, resolveParams, resolveProxy')
+$lateDebug = $dx12.IndexOf('diagnosticParams.DebugView = presentationParams.DebugView;')
+$lateCompare = $dx12.IndexOf('display.Mode = DlssNrMode_Present;')
+Require ($normalFirst -lt $firstDispatch -and $normalDebug -lt $firstDispatch -and `
+         $normalFirst -ge 0 -and $normalDebug -ge 0 -and `
+         $lateDebug -gt $secondResolve -and $lateCompare -gt $lateDebug) `
+    'Display comparison/debug must be excluded from both model inputs and run after the second resolve.'
+Require ($dx12.Contains('display, g_nr.colorCopy, nullptr, g_nr.hdrCopy')) `
+    'Late comparison must use the original first-layer frame.'
+Require ($dx12.Contains('mvToWork.y') -and $dx12.Contains('mvToLayer2Work.y')) `
+    'Both layers must scale vertical motion by the actual working height.'
+$failure = $dx12.IndexOf('if (scratchResult == DlssNr::Detail::LayerScratchResult::SecondUnavailable)')
+$failureEnd = $dx12.IndexOf('ReleaseSurfacesIfFormatChanged(desc.Format, target);', $failure)
+$fallback = $dx12.Substring($failure, $failureEnd - $failure)
+Require ($fallback.Contains('secondLayerHealthy = false;') -and $fallback.Contains('g_nr.layer2.failed = true;') -and `
+         -not $fallback.Contains('return;') -and -not $fallback.Contains('g_nr.reset = true;')) `
+    'Optional allocation failure must disable layer 2 without skipping or resetting layer 1.'
+Require ($dx12.Contains('g_nr.layer2.featureAwaitingRelease != nullptr && !g_nr.layer2.failed')) `
+    'A failed optional layer must not stall layer 1 throughout pending retirement.'
+Write-Output 'PASS multipass review fixes: late presentation, independent motion axes, optional allocation fallback'

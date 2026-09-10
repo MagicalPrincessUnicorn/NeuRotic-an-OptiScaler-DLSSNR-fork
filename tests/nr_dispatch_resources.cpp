@@ -1,5 +1,7 @@
 // Production allocation/epilogue helpers on WARP; no game, model, or installation.
 #include "../OptiScaler/dlssnr/NrDispatchResources.h"
+#include "../OptiScaler/shaders/dlssnr/DlssNr_Common.h"
+#include <cmath>
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
 #include <cstdio>
@@ -198,6 +200,52 @@ static void EpilogueFaults(ID3D12Device* device)
     CloseHandle(event);
 }
 
+static void OptionalLayerFaults(ID3D12Device* device)
+{
+    constexpr auto format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    // Fail every optional allocation, with either matching or resized first-layer resources.
+    for (bool resizeFirst : { false, true })
+    for (int failAt = 1; failAt <= 5; ++failAt)
+    {
+        std::array<ID3D12Resource*, 5> first {}, second {};
+        std::array<ScratchTransaction::Request, 5> firstRequests, secondRequests;
+        for (size_t i = 0; i < 5; ++i)
+        {
+            first[i] = Allocate(device, format, resizeFirst ? 8 : 16, resizeFirst ? 8 : 16);
+            second[i] = Allocate(device, format, 8, 8);
+            firstRequests[i] = { &first[i], format, 16, 16, true };
+            secondRequests[i] = { &second[i], format, 32, 32, true };
+        }
+        const auto oldFirst = first, oldSecond = second;
+        ScratchTransaction firstTx(firstRequests);
+        auto secondTx = std::make_unique<ScratchTransaction>(secondRequests);
+        int secondAllocations = 0;
+        const auto result = DlssNr::Detail::PrepareLayerScratch(firstTx, secondTx,
+            [&](DXGI_FORMAT f, UINT w, UINT h) -> ID3D12Resource*
+            {
+                if (w == 32 && ++secondAllocations == failAt) return nullptr;
+                return Allocate(device, f, w, h);
+            });
+        Require(result == DlssNr::Detail::LayerScratchResult::SecondUnavailable);
+        Require(!secondTx && first == oldFirst && second == oldSecond);
+        firstTx.Commit([](ID3D12Resource*& resource) { resource->Release(); resource = nullptr; });
+        for (size_t i = 0; i < 5; ++i)
+        {
+            Require(first[i]->GetDesc().Width == 16 && second[i] == oldSecond[i]);
+            if (!resizeFirst) Require(first[i] == oldFirst[i]);
+            first[i]->Release(); second[i]->Release();
+        }
+    }
+    const auto motion = DlssNrWorkingMotionScale(1920, 1080, 960, 536);
+    Require(motion.x == 0.5f && std::abs(motion.y - 536.0f / 1080.0f) < 1e-7f);
+    // Convert one normalized vertical screen traversal to exactly the working raster's height.
+    Require(std::abs(1080.0f * motion.y - 536.0f) < 1e-4f);
+    const auto native = DlssNrWorkingMotionScale(1920, 1080, 1920, 1080);
+    Require(native.x == 1.0f && native.y == 1.0f);
+    const auto safe = DlssNrWorkingMotionScale(0, 0, 8, 8);
+    Require(safe.x == 1.0f && safe.y == 1.0f);
+}
+
 int main()
 {
     ComPtr<ID3D12Debug> debug;
@@ -212,6 +260,7 @@ int main()
     ComPtr<ID3D12InfoQueue> messages;
     Check(device.As(&messages));
     AllocationFaults(device.Get());
+    OptionalLayerFaults(device.Get());
     EpilogueFaults(device.Get());
     for (UINT64 i = 0; i < messages->GetNumStoredMessages(); ++i)
     {
