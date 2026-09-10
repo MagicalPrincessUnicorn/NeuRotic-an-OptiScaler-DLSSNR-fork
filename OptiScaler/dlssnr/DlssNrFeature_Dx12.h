@@ -206,6 +206,9 @@ std::optional<double> LastGpuTime();
 // The pair is a control: same frames, same run, one variable.
 void RequestCapture(unsigned int frames);
 bool CaptureInProgress();
+// Experimental Present-only matched stage capture; UI request never changes saved settings.
+void RequestPresentStageCapture();
+std::string PresentStageCaptureStatus();
 
 bool Shutdown();
 // Reopens evaluation after an explicit host NGX initialization.

@@ -411,6 +411,12 @@ void RenderMenu(Config* config, float menuResScale)
         }
         else if (presentRoute)
         {
+            if (ImGui::Button("Capture face diagnostic (5-second delay)"))
+                DlssNr::RequestPresentStageCapture();
+            ImGui::TextWrapped("%s", DlssNr::PresentStageCaptureStatus().c_str());
+            HelpMarker("Close the menu and keep turning the camera. This saves matched model inputs,"
+                       "\nraw model answers and the blended image beside the game in dlssnr-present-capture."
+                       "\nWait for Saved before closing the game. Your NR settings and history stay unchanged.");
             ImGui::TextDisabled("Use Native Temporal when it is available.");
             if (presentTelemetry.active)
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),

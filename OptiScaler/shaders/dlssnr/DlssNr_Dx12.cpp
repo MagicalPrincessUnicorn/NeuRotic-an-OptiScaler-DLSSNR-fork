@@ -7,6 +7,8 @@
 
 
 #include <dlssnr/DlssNr_Capture.h>
+#include <dlssnr/NrPresentStageCapture.h>
+#include <sstream>
 #include <dlssnr/DlssNr_Proxy.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/NrDispatchResources.h>
@@ -545,6 +547,7 @@ std::optional<double> g_lastGpuTime;
 
 // Writes matched before/after frames on request, so comparisons stop depending on video.
 capture::FrameCapture g_capture;
+DlssNr::StageCapture::PresentStages g_presentStages;
 
 // One capture happens on its own each session, so there is always a fresh sample without anyone having
 // to remember to ask. Started after the scene has had a moment to settle: the first frames after a
@@ -2065,6 +2068,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
     const bool secondLayerRequested = cfg.DlssNrSecondLayer.value_or_default();
 
+    if (g_presentStages.active())
+    {
+        if (!privateCommandList) g_presentStages.cancel();
+        g_presentStages.poll(Util::DllPath().remove_filename() / "dlssnr-present-capture");
+    }
+
     if (!runtime.enabled || g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr ||
         motion == nullptr || output == nullptr)
     {
@@ -3247,6 +3256,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ID3D12Resource* diagnosticProxy = resolveProxy;
         ID3D12Resource* diagnosticAnswer = resolveAnswer;
         ID3D12Resource* diagnosticOriginal = g_nr.hdrCopy;
+        ID3D12Resource* capturedLayer2Input = nullptr;
 
         if (!DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, motionIn,
                           exposureTex, target, nullptr))
@@ -3453,6 +3463,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                             g_nr.layer2.routeWasPreSr = currentRouteIsPreSr;
                             g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
                             g_lastLayerCount = 2;
+                            capturedLayer2Input = layer2ModelInput;
                             diagnosticParams = layer2Resolve;
                             diagnosticProxy = layer2ResolveProxy;
                             diagnosticAnswer = layer2ResolveAnswer;
@@ -3495,6 +3506,52 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 LOG_WARN("DLSS-NR: diagnostic display unavailable; retaining the completed image");
             resourceStates.Transition(diagnosticAnswer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
+
+        if (privateCommandList && g_presentStages.wantsFrame(GetTickCount64()))
+        {
+            // All resources still contain this evaluation's images here. In particular, each
+            // raw answer is the model output before resampling or composition, even at reduced
+            // workloads. Copies restore their entry states and never become a model input.
+            std::vector<DlssNr::StageCapture::StageInput> stages {
+                {"layer1_input", modelInput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE},
+                {"layer1_raw", g_nr.output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS}};
+            if (capturedLayer2Input != nullptr)
+            {
+                stages.push_back({"layer1_composed", g_nr.layer2.hdrCopy,
+                                  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
+                stages.push_back({"layer2_input", capturedLayer2Input,
+                                  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
+                stages.push_back({"layer2_raw", g_nr.layer2.output,
+                                  D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
+            }
+            stages.push_back({"final_composed", target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
+            const auto l2 = SecondLayerTuning(cfg);
+            std::ostringstream settings;
+            settings << "route Present; colour display-encoded; conversion before final backbuffer copy\n"
+                     << "layers " << g_lastLayerCount << " frame " << width << 'x' << height
+                     << " work " << workWidth << 'x' << workHeight
+                     << " layer2_work " << layer2WorkWidth << 'x' << layer2WorkHeight
+                     << " session " << g_nr.feature << '\n'
+                     << "layer1 apply " << resolveParams.ApplyModel
+                     << " strength " << resolveParams.TransferStrength
+                     << " colour " << resolveParams.ColourStrength << " guard " << resolveParams.MaxRatio
+                     << " transfer " << resolveParams.Transfer << " style " << cfg.DlssNrStyle.value_or_default()
+                     << " intensity " << cfg.DlssNrIntensity.value_or_default()
+                     << " localStructure " << cfg.DlssNrLocalStructure.value_or_default()
+                     << " localTone " << cfg.DlssNrLocalTone.value_or_default()
+                     << " skinStructure " << cfg.DlssNrSkinStructure.value_or_default()
+                     << " autoMask " << cfg.DlssNrAutoMask.value_or_default() << '\n'
+                     << "layer2 apply " << cfg.DlssNrSecondLayerApplyModel.value_or_default()
+                     << " strength " << cfg.DlssNrSecondLayerTransferStrength.value_or_default()
+                     << " colour " << cfg.DlssNrSecondLayerColourStrength.value_or_default()
+                     << " guard " << cfg.DlssNrSecondLayerMaxRatio.value_or_default()
+                     << " transfer " << cfg.DlssNrSecondLayerTransfer.value_or_default()
+                     << " style " << l2.style << " intensity " << l2.intensity
+                     << " localStructure " << l2.localStructure << " localTone " << l2.localTone
+                     << " skinStructure " << l2.skinStructure << " autoMask " << l2.autoMask;
+            g_presentStages.record(cmdList, device, stages, g_nr.successfulEvaluations,
+                                   frame.Reset, settings.str());
         }
 
         // On-demand capture works in this path too: the staging copy still holds the frame as the
@@ -5078,6 +5135,20 @@ void RequestCapture(unsigned int frames)
     g_capture.request(frames);
 }
 
+void RequestPresentStageCapture()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    if (!g_sessionClosed && !g_shutdownFailed) g_presentStages.request(GetTickCount64());
+}
+
+std::string PresentStageCaptureStatus()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return g_presentStages.status();
+}
+
 bool CaptureInProgress()
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
@@ -5316,6 +5387,7 @@ bool Shutdown()
     }
 
     g_capture.release();
+    g_presentStages.release();
 
     g_frames = 0;
     g_gameResetEvents = 0;
