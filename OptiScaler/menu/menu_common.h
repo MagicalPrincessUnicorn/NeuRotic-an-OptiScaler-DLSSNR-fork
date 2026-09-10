@@ -167,6 +167,7 @@ class MenuCommon
     // This is the single owner for the Neural Rendering page. Future layer-specific
     // panels belong here; the existing Feature 18 settings remain unchanged for now.
     static void RenderNeuralRenderingPage(RenderMenuContext& ctx);
+    static void RenderNeuralRenderingMultipassPage(RenderMenuContext& ctx);
     static void RenderFrameGenerationPage(RenderMenuContext& ctx);
     static void RenderAdvancedPage(RenderMenuContext& ctx);
     static void RenderToolsPage(RenderMenuContext& ctx);

@@ -23,7 +23,15 @@ class CompositionPool
     // This counts slots, independently of the tracker's 256-recording bound.
     static constexpr unsigned int HardCap = 256;
     static constexpr unsigned int AdmissionSlots = 8;
-    static constexpr unsigned int TwoLayerAdmissionSlots = 12;
+    static constexpr unsigned int SlotsPerAdditionalPass = 4;
+    static constexpr unsigned int MaxPasses = 10;
+    static constexpr unsigned int MaxAdmissionSlots =
+        AdmissionSlots + SlotsPerAdditionalPass * (MaxPasses - 1);
+    static constexpr unsigned int RequiredSlots(unsigned int passes)
+    {
+        return AdmissionSlots + SlotsPerAdditionalPass * (std::clamp(passes, 1u, MaxPasses) - 1);
+    }
+    static constexpr unsigned int TwoLayerAdmissionSlots = AdmissionSlots + SlotsPerAdditionalPass;
     static constexpr unsigned int SrvCount = 5;
     static constexpr unsigned int UavCount = 2;
 
@@ -87,7 +95,9 @@ class CompositionPool
         ++_counts.checks;
         if (!device || FAILED(device->GetDeviceRemovedReason())) return Reject(Admission::Device);
         if (!ticket) return Reject(Admission::Tracking);
-        if (required != AdmissionSlots && required != TwoLayerAdmissionSlots) return Reject(Admission::Capacity);
+        if (required < AdmissionSlots || required > MaxAdmissionSlots ||
+            (required - AdmissionSlots) % SlotsPerAdditionalPass != 0)
+            return Reject(Admission::Capacity);
         const auto state = GpuSafety::InspectSlots(&ticket, 1);
         if (state.registryFailed || state.failed) return Reject(Admission::Device);
 
@@ -142,7 +152,7 @@ class CompositionPool
 
   private:
     std::array<std::unique_ptr<Slot>, HardCap> _slots;
-    std::array<unsigned int, TwoLayerAdmissionSlots> _reserved {};
+    std::array<unsigned int, MaxAdmissionSlots> _reserved {};
     unsigned int _capacity = 0, _remaining = 0, _nextReserved = 0, _usedAtAdmission = 0;
     GpuSafety::Ticket _reservation;
     Counters _counts;
@@ -153,7 +163,7 @@ class CompositionPool
         for (unsigned int i = 0; i < _capacity; ++i)
             if (GpuSafety::Reusable(_slots[i]->owner))
             {
-                if (free < TwoLayerAdmissionSlots) _reserved[free] = i;
+                if (free < MaxAdmissionSlots) _reserved[free] = i;
                 ++free;
             }
         return free;

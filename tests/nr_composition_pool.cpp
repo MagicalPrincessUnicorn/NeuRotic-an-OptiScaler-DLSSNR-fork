@@ -307,6 +307,24 @@ int main()
         std::puts("PASS: new device and pool after drained session own independent resources and tickets.");
     }
 
+    // Ten passes reserve the first-pass budget plus four composition dispatches for each later
+    // pass. The reservation is bounded, consumes every slot exactly once, and rejects overflow.
+    {
+        Pool pool;
+        auto owner = makeCommands();
+        const unsigned int required = Pool::RequiredSlots(10);
+        assert(required == 44);
+        assert(pool.Begin(device.Get(), owner->ticket, &Pool::CreateSlot, required) == Admission::Accepted);
+        consume(pool, owner->ticket, required);
+        assert(!pool.Consume(owner->ticket));
+        assert(pool.Begin(device.Get(), owner->ticket, &Pool::CreateSlot,
+                          Pool::MaxAdmissionSlots + Pool::SlotsPerAdditionalPass) == Admission::Capacity);
+        Check(owner->list->Close()); submit(*owner);
+        assert(Safety::Drain(5000));
+        seal(*owner);
+        std::puts("PASS: ten-pass forty-four-slot bounded admission and ownership.");
+    }
+
     // Integration: preserve the flagship's conservative twelve-slot two-layer reservation.
     // A completed recording remains replayable; growth must not recycle any of its slots.
     {

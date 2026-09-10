@@ -11,6 +11,8 @@ if errorlevel 1 goto failed
 "%testOut%\display.exe" >"%testOut%\display-test.txt" 2>&1
 if errorlevel 1 goto failed
 type "%testOut%\display-test.txt"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\Test-NrMultipassTen.ps1
+if errorlevel 1 goto failed
 popd
 exit /b 0
 :failed

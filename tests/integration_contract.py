@@ -67,15 +67,23 @@ menu = source('OptiScaler/menu/menu_common.cpp')
 nr = source('OptiScaler/dlssnr/DlssNr_Menu.cpp')
 dx = source('OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp')
 require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCommon::RenderGeneralPage'), 'Updates remain in General')
-require(menu.count('DlssNr::RenderMenu(') == 1, 'one NR page, no duplicated imported page')
-require(nr.count('ImGui::Combo("NR route"') == 1 and nr.count('ImGui::Checkbox("Enable second neural-rendering layer"') == 1, 'single route and layer controls')
-require('inherits the first layer\'s model and composition settings' in nr, 'layer tuning inheritance disclosed')
-require('!vulkan && State::Instance().api == API::DX12' in nr, 'second-layer enable requires D3D12')
+require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 1,
+        'NR and Multipass each own one top-level page')
+require(nr.count('ImGui::Combo("NR route"') == 1 and
+        nr.count('ImGui::Checkbox("Enable NR Multipass"') == 1,
+        'single route and bounded multipass controls')
+require('one to ten Neural Rendering passes' in nr and 'independent model session and temporal history' in nr,
+        'independent pass-chain behavior and cost are disclosed')
+require('!IsVulkanInput() && State::Instance().api == API::DX12' in nr,
+        'multipass enable requires D3D12')
 require('CompositionPool' not in nr and 'HardCap' not in nr, 'adaptive capacity has no menu control')
 require('Automatic installation will' not in menu, 'no automatic installer promise')
-require('ParkSecondLayerFeature("NR route domain changed")' in dx and 'g_nr.resumeFeatureAwaitingRelease = g_nr.feature;' in dx, 'both history domains retire safely')
-require('secondLayerHealthy ? DlssNr::CompositionPool::TwoLayerAdmissionSlots' in dx and
-        'Prepare(cmdList, true, cfg.DlssNrSecondLayer.value_or_default())' in dx, 'Pre-SR and Post-SR reserve for both layers')
+require('ParkAllAdditionalLayerFeatures("NR route domain changed")' in dx and
+        'g_nr.resumeFeatureAwaitingRelease = g_nr.feature;' in dx,
+        'all independent history domains retire safely')
+require('CompositionPool::RequiredSlots(healthyPassCount)' in dx and
+        'Prepare(cmdList, true, RequestedPassCount(cfg))' in dx,
+        'Pre-SR and Post-SR reserve for the complete requested chain')
 require('cfg.DlssNrRoute.value_or_default() != 0' in dx and 'frame.Reset = gameReset != 0;' in dx and
         'frame.Reset = resetHistory;' in dx, 'native game reset and explicit Present-history reset are retained')
 require('completionUntrackable' in present and 'DXGI_PRESENT_TEST' in present and 'DirtyRectsCount' in present, 'Present failure-safe gates retained')

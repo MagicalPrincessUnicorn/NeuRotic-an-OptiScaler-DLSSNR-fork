@@ -71,6 +71,6 @@ $fallback = $dx12.Substring($failure, $failureEnd - $failure)
 Require ($fallback.Contains('secondLayerHealthy = false;') -and $fallback.Contains('g_nr.layer2.failed = true;') -and `
          -not $fallback.Contains('return;') -and -not $fallback.Contains('g_nr.reset = true;')) `
     'Optional allocation failure must disable layer 2 without skipping or resetting layer 1.'
-Require ($dx12.Contains('g_nr.layer2.featureAwaitingRelease != nullptr && !g_nr.layer2.failed')) `
+Require ($dx12.Contains('layer.featureAwaitingRelease != nullptr && !layer.failed')) `
     'A failed optional layer must not stall layer 1 throughout pending retirement.'
 Write-Output 'PASS multipass review fixes: late presentation, independent motion axes, optional allocation fallback'

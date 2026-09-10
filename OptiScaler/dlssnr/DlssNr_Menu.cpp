@@ -1475,11 +1475,279 @@ void RenderMenu(Config* config, float menuResScale)
                        "\ncentred on grey. A flat grey frame there means it is doing nothing.");
         }
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        renderSecondLayerControls();
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
+    }
+}
+
+struct PassOptionRefs
+{
+    NrOptional<float>* workingScale;
+    NrOptional<Scaler>* scalingDownscaler;
+    NrOptional<uint32_t>* transfer;
+    NrOptional<uint32_t>* preset;
+    NrOptional<float>* intensity;
+    NrOptional<uint32_t>* style;
+    NrOptional<float>* localStructure;
+    NrOptional<float>* localTone;
+    NrOptional<float>* skinStructure;
+    NrOptional<bool>* autoMask;
+    NrOptional<float>* transferStrength;
+    NrOptional<float>* colourStrength;
+    NrOptional<float>* maxRatio;
+    NrOptional<uint32_t>* reversibleMode;
+    NrOptional<bool>* applyModel;
+};
+
+static PassOptionRefs PassOptions(Config* config, unsigned int pass)
+{
+    if (pass == 0)
+        return { &config->DlssNrWorkingScale, &config->DlssNrScalingDownscaler,
+                 &config->DlssNrTransfer, &config->DlssNrPreset, &config->DlssNrIntensity,
+                 &config->DlssNrStyle, &config->DlssNrLocalStructure, &config->DlssNrLocalTone,
+                 &config->DlssNrSkinStructure, &config->DlssNrAutoMask,
+                 &config->DlssNrTransferStrength, &config->DlssNrColourStrength,
+                 &config->DlssNrMaxRatio, &config->DlssNrReversibleMode,
+                 &config->DlssNrApplyModel };
+    if (pass == 1)
+        return { &config->DlssNrSecondLayerWorkingScale,
+                 &config->DlssNrSecondLayerScalingDownscaler,
+                 &config->DlssNrSecondLayerTransfer, &config->DlssNrSecondLayerPreset,
+                 &config->DlssNrSecondLayerIntensity, &config->DlssNrSecondLayerStyle,
+                 &config->DlssNrSecondLayerLocalStructure, &config->DlssNrSecondLayerLocalTone,
+                 &config->DlssNrSecondLayerSkinStructure, &config->DlssNrSecondLayerAutoMask,
+                 &config->DlssNrSecondLayerTransferStrength,
+                 &config->DlssNrSecondLayerColourStrength, &config->DlssNrSecondLayerMaxRatio,
+                 &config->DlssNrSecondLayerReversibleMode,
+                 &config->DlssNrSecondLayerApplyModel };
+
+    auto& layer = config->DlssNrExtraLayers.values[pass - 2];
+    return { &layer.workingScale, &layer.scalingDownscaler, &layer.transfer, &layer.preset,
+             &layer.intensity, &layer.style, &layer.localStructure, &layer.localTone,
+             &layer.skinStructure, &layer.autoMask, &layer.transferStrength,
+             &layer.colourStrength, &layer.maxRatio, &layer.reversibleMode, &layer.applyModel };
+}
+
+static void ResetPassOptions(const PassOptionRefs& pass)
+{
+    *pass.workingScale = 1.0f;
+    *pass.scalingDownscaler = Scaler::Lanczos3;
+    *pass.transfer = 1u;
+    *pass.preset = 0u;
+    *pass.intensity = 1.0f;
+    *pass.style = 0u;
+    *pass.localStructure = 1.0f;
+    *pass.localTone = 1.0f;
+    *pass.skinStructure = -1.0f;
+    *pass.autoMask = true;
+    *pass.transferStrength = 1.0f;
+    *pass.colourStrength = 1.0f;
+    *pass.maxRatio = 2.0f;
+    *pass.reversibleMode = 0u;
+    *pass.applyModel = true;
+}
+
+static void ResetButton(const char* id, const std::function<void()>& reset)
+{
+    ImGui::SameLine();
+    if (ImGui::SmallButton(id)) reset();
+}
+
+void RenderMultipassMenu(Config* config, float menuResScale)
+{
+    ImGui::Spacing();
+    if (auto panel = ScopedCollapsingHeader("Neural Rendering Multipass", ImGuiTreeNodeFlags_DefaultOpen);
+        panel.IsHeaderOpen())
+    {
+        ScopedIndent indent {};
+        ScopedNestedTextWrap wrap {};
+        const bool d3d12 = !IsVulkanInput() && State::Instance().api == API::DX12;
+
+        bool enabled = config->DlssNrMultipassEnabled.value_or_default();
+        if (!d3d12) ImGui::BeginDisabled();
+        if (ImGui::Checkbox("Enable NR Multipass", &enabled))
+            config->DlssNrMultipassEnabled = enabled;
+        ResetButton("Reset##MultipassEnabled", [&] { config->DlssNrMultipassEnabled = false; });
+        if (!d3d12) ImGui::EndDisabled();
+        HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
+
+        if (ImGui::Button("Reset All")) ImGui::OpenPopup("Reset all multipass settings?");
+        HelpMarker("Restores the Multipass switch, pass count, and every setting on all ten passes to their shipped defaults. A confirmation is required.");
+        if (ImGui::BeginPopupModal("Reset all multipass settings?", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextUnformatted("Reset every Neural Rendering Multipass setting to default?");
+            if (ImGui::Button("Confirm"))
+            {
+                config->DlssNrMultipassEnabled = false;
+                config->DlssNrSecondLayer = false;
+                config->DlssNrPasses = 1u;
+                for (unsigned int pass = 0; pass < 10; ++pass)
+                    ResetPassOptions(PassOptions(config, pass));
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+
+        if (!d3d12)
+            ImGui::TextDisabled("Neural Rendering Multipass requires D3D12; Vulkan remains single-pass.");
+
+        int countIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
+        static const char* passCounts[] = { "1 pass", "2 passes", "3 passes", "4 passes", "5 passes",
+                                            "6 passes", "7 passes", "8 passes", "9 passes", "10 passes" };
+        if (!enabled || !d3d12) ImGui::BeginDisabled();
+        if (ImGui::Combo("Pass count", &countIndex, passCounts, IM_ARRAYSIZE(passCounts)))
+        {
+            config->DlssNrPasses = (uint32_t) (countIndex + 1);
+            config->DlssNrSecondLayer = enabled && countIndex >= 1;
+        }
+        ResetButton("Reset##MultipassCount", [&] { config->DlssNrPasses = 1u; countIndex = 0; });
+        if (!enabled || !d3d12) ImGui::EndDisabled();
+        HelpMarker("Selects how many sequential passes are exposed and requested. One preserves the established renderer. Ten is the hard safety cap; every added pass has its own feature, history, scratch surfaces and settings.");
+
+        const unsigned int passCount = (unsigned int) countIndex + 1;
+        const auto telemetry = DlssNr::Telemetry();
+        if (enabled && d3d12)
+        {
+            if (telemetry.running)
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "%u of %u requested passes completed on the last frame.",
+                                   telemetry.layerCount, passCount);
+            else
+                ImGui::TextDisabled("The pass chain becomes active when DLSS Neural Rendering is enabled and ready.");
+            if (passCount >= 4)
+                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
+                                   "High pass counts are experimental and may exhaust GPU memory or frame time.");
+        }
+
+        if (!enabled || !d3d12) ImGui::BeginDisabled();
+        if (ImGui::BeginTabBar("NrMultipassLayers", ImGuiTabBarFlags_FittingPolicyScroll))
+        {
+            static unsigned int selectedPass = 0;
+            if (selectedPass >= passCount) selectedPass = passCount - 1;
+            for (unsigned int index = 0; index < passCount; ++index)
+            {
+                char label[24] {};
+                snprintf(label, sizeof(label), "Pass %u", index + 1);
+                if (!ImGui::BeginTabItem(label)) continue;
+                selectedPass = index;
+                const auto pass = PassOptions(config, index);
+
+                ImGui::PushItemWidth(220.0f * menuResScale);
+                char id[96] {};
+                static std::unordered_map<std::string, int> pendingScales;
+                snprintf(id, sizeof(id), "Model resolution##pass%u", index + 1);
+                const std::string scaleId = id;
+                const auto pendingScale = pendingScales.find(scaleId);
+                int scale = pendingScale != pendingScales.end()
+                    ? pendingScale->second
+                    : (int) lroundf(pass.workingScale->value_or_default() * 100.0f);
+                if (ImGui::SliderInt(id, &scale, 25, 200, "%d%%"))
+                    pendingScales[scaleId] = scale;
+                if (ImGui::IsItemDeactivatedAfterEdit())
+                {
+                    const auto commit = pendingScales.find(scaleId);
+                    if (commit != pendingScales.end())
+                    {
+                        *pass.workingScale = std::clamp(commit->second, 25, 200) / 100.0f;
+                        pendingScales.erase(commit);
+                    }
+                }
+                snprintf(id, sizeof(id), "Reset##pass%u-resolution", index + 1);
+                ResetButton(id, [&] { *pass.workingScale = 1.0f; pendingScales.erase(scaleId); scale = 100; });
+                HelpMarker("Sets this pass's model raster from 25 to 200 percent. The composed frame remains full resolution; cost changes roughly with the square of this value.");
+
+                static const char* downscalers[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
+                                                     "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+                int downscaler = std::clamp((int) pass.scalingDownscaler->value_or_default(), 0, 7);
+                if (scale <= 100) ImGui::BeginDisabled();
+                snprintf(id, sizeof(id), "Downscaler##pass%u", index + 1);
+                if (ImGui::Combo(id, &downscaler, downscalers, IM_ARRAYSIZE(downscalers)))
+                    *pass.scalingDownscaler = (Scaler) downscaler;
+                snprintf(id, sizeof(id), "Reset##pass%u-downscaler", index + 1);
+                ResetButton(id, [&] { *pass.scalingDownscaler = Scaler::Lanczos3; });
+                if (scale <= 100) ImGui::EndDisabled();
+                HelpMarker("Chooses the filter that averages this pass's above-native model answer back to the full-resolution frame. It applies only above 100 percent.");
+
+                static const char* presets[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
+                int preset = std::clamp((int) pass.preset->value_or_default(), 0, 3);
+                snprintf(id, sizeof(id), "Model preset##pass%u", index + 1);
+                if (ImGui::Combo(id, &preset, presets, IM_ARRAYSIZE(presets))) *pass.preset = (uint32_t) preset;
+                snprintf(id, sizeof(id), "Reset##pass%u-preset", index + 1);
+                ResetButton(id, [&] { *pass.preset = 0u; });
+                HelpMarker("Selects the model preset for this pass's independent Feature 18 session. Changing it rebuilds only this pass.");
+
+                static const char* styles[] = { "Default (standard)", "Natural", "Cinematic" };
+                int style = std::clamp((int) pass.style->value_or_default(), 0, 2);
+                snprintf(id, sizeof(id), "Style##pass%u", index + 1);
+                if (ImGui::Combo(id, &style, styles, IM_ARRAYSIZE(styles))) *pass.style = (uint32_t) style;
+                snprintf(id, sizeof(id), "Reset##pass%u-style", index + 1);
+                ResetButton(id, [&] { *pass.style = 0u; });
+                HelpMarker("Selects this pass's model processing profile. Default is strongest; Natural and Cinematic are progressively gentler alternatives.");
+
+                static const char* transfers[] = { "Classic", "Matched residual" };
+                int transfer = pass.transfer->value_or_default() == 1 ? 1 : 0;
+                if (scale >= 100) ImGui::BeginDisabled();
+                snprintf(id, sizeof(id), "Enlargement##pass%u", index + 1);
+                if (ImGui::Combo(id, &transfer, transfers, IM_ARRAYSIZE(transfers))) *pass.transfer = (uint32_t) transfer;
+                snprintf(id, sizeof(id), "Reset##pass%u-enlargement", index + 1);
+                ResetButton(id, [&] { *pass.transfer = 1u; });
+                if (scale >= 100) ImGui::EndDisabled();
+                HelpMarker("Chooses how a sub-native model edit returns to full size. Matched residual enlarges only the model's difference and generally preserves colour better.");
+
+                snprintf(id, sizeof(id), "Detail strength##pass%u", index + 1);
+                DeferredSlider(id, pass.transferStrength, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Controls how much of this pass's detail edit reaches the composed frame. Zero hides this pass's edit; values above one exaggerate it.");
+                snprintf(id, sizeof(id), "Colour strength##pass%u", index + 1);
+                DeferredSlider(id, pass.colourStrength, 0.0f, 4.0f, 1.0f);
+                HelpMarker("Controls how much of this pass's colour change accompanies its lighting edit. Zero preserves the preceding pass's hue.");
+                snprintf(id, sizeof(id), "Highlight guard##pass%u", index + 1);
+                DeferredSlider(id, pass.maxRatio, 1.0f, 8.0f, 2.0f, "%.1fx");
+                HelpMarker("Limits the brightness multiplication or division this pass may apply. The 2x default protects moving highlights.");
+                snprintf(id, sizeof(id), "Intensity##pass%u", index + 1);
+                DeferredSlider(id, pass.intensity, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Sets this pass's internal model strength. It commits when the slider is released and rebuilds only this pass's feature.");
+                snprintf(id, sizeof(id), "Local structure##pass%u", index + 1);
+                DeferredSlider(id, pass.localStructure, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Sets the local-structure strength for this pass's independent model session.");
+                snprintf(id, sizeof(id), "Local tone##pass%u", index + 1);
+                DeferredSlider(id, pass.localTone, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Sets the local-tone strength for this pass's independent model session.");
+                snprintf(id, sizeof(id), "Skin structure##pass%u", index + 1);
+                DeferredSlider(id, pass.skinStructure, -1.0f, 2.0f, -1.0f);
+                HelpMarker("Sets skin-structure strength for this pass. Minus one follows Local structure; zero and above tune it independently.");
+
+                bool autoMask = pass.autoMask->value_or_default();
+                snprintf(id, sizeof(id), "Auto skin mask##pass%u", index + 1);
+                if (ImGui::Checkbox(id, &autoMask)) *pass.autoMask = autoMask;
+                snprintf(id, sizeof(id), "Reset##pass%u-auto-mask", index + 1);
+                ResetButton(id, [&] { *pass.autoMask = true; });
+                HelpMarker("Lets this pass's model identify skin rather than treating every region uniformly.");
+
+                static const char* reversibleModes[] = { "Soft-knee composition", "Neutwo composition",
+                                                          "Neutwo pure inverse" };
+                int reversible = std::clamp((int) pass.reversibleMode->value_or_default(), 0, 2);
+                snprintf(id, sizeof(id), "Proxy composition##pass%u", index + 1);
+                if (ImGui::Combo(id, &reversible, reversibleModes, IM_ARRAYSIZE(reversibleModes)))
+                    *pass.reversibleMode = (uint32_t) reversible;
+                snprintf(id, sizeof(id), "Reset##pass%u-proxy", index + 1);
+                ResetButton(id, [&] { *pass.reversibleMode = 0u; });
+                HelpMarker("Chooses this pass's reversible proxy/composition path. Soft-knee is the shipped default; the Neutwo modes remain experimental.");
+
+                bool apply = pass.applyModel->value_or_default();
+                snprintf(id, sizeof(id), "Apply the model##pass%u", index + 1);
+                if (ImGui::Checkbox(id, &apply)) *pass.applyModel = apply;
+                snprintf(id, sizeof(id), "Reset##pass%u-apply", index + 1);
+                ResetButton(id, [&] { *pass.applyModel = true; });
+                HelpMarker("Off keeps this pass evaluating and preserving its history but hides only its edit, leaving the preceding completed image visible.");
+
+                ImGui::PopItemWidth();
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+        if (!enabled || !d3d12) ImGui::EndDisabled();
     }
 }
 

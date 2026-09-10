@@ -7141,11 +7141,12 @@ void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
 
 void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
 {
-    // Layer-specific UI will stay contained in this page when the existing optional
-    // second layer evolves into independently configurable layers. This experiment
-    // deliberately keeps its current single shared settings panel and Feature 18
-    // lifecycle unchanged.
     DlssNr::RenderMenu(ctx.config, ctx.menuResScale);
+}
+
+void MenuCommon::RenderNeuralRenderingMultipassPage(RenderMenuContext& ctx)
+{
+    DlssNr::RenderMultipassMenu(ctx.config, ctx.menuResScale);
 }
 
 void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
@@ -7221,6 +7222,12 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if (ImGui::BeginTabItem("Neural Rendering"))
     {
         renderPage(RenderNeuralRenderingPage);
+        ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Neural Rendering Multipass"))
+    {
+        renderPage(RenderNeuralRenderingMultipassPage);
         ImGui::EndTabItem();
     }
 

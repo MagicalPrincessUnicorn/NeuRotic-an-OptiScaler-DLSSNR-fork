@@ -26,8 +26,13 @@ constexpr int UnboundKey = -1;
 enum class Scaler : uint32_t { Lanczos3 = 4 };
 struct TestConfig
 {
+    struct ExtraLayers
+    {
+        int CopyForSnapshot(const NrConfigSynchronization::Transaction&) const { return 0; }
+    };
     NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
     NrOptional<bool> DlssNrEnabled { false };
+    NrOptional<bool> DlssNrMultipassEnabled { false };
     NrOptional<bool> DlssNrSecondLayer { false };
     NrOptional<float> DlssNrSecondLayerWorkingScale { 1.0f };
     NrOptional<Scaler> DlssNrSecondLayerScalingDownscaler { Scaler::Lanczos3 };
@@ -44,6 +49,7 @@ struct TestConfig
     NrOptional<float> DlssNrSecondLayerMaxRatio { 2.0f };
     NrOptional<uint32_t> DlssNrSecondLayerReversibleMode { 0 };
     NrOptional<bool> DlssNrSecondLayerApplyModel { true };
+    ExtraLayers DlssNrExtraLayers;
     NrOptional<uint32_t> DlssNrRoute { 0 };
     NrOptional<uint32_t> DlssNrPresentWorkload { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
