@@ -209,6 +209,11 @@ bool CaptureInProgress();
 // Experimental Present-only matched stage capture; UI request never changes saved settings.
 void RequestPresentStageCapture();
 std::string PresentStageCaptureStatus();
+void RequestComparisonScreenshot(bool menuDelay = false);
+void CancelComparisonScreenshot();
+std::string ComparisonScreenshotStatus();
+bool ComparisonScreenshotBusy();
+void RenderScreenshotMenu(::Config* config);
 
 bool Shutdown();
 // Reopens evaluation after an explicit host NGX initialization.

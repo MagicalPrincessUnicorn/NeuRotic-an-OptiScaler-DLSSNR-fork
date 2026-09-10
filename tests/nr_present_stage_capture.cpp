@@ -180,6 +180,77 @@ int main(int argc, char** argv)
             assert(raw.get() == 16 + 7 * 8 + 1);
         }
     }
+    // Checkbox selection never silently requests the other route or additional images.
+    for (unsigned int mask = 0; mask < 8; ++mask)
+    {
+        assert(DlssNr::Screenshots::AvailableSelection(mask, false) == (mask & 3u));
+        assert(DlssNr::Screenshots::AvailableSelection(mask, true) == (mask & 5u));
+    }
+    // A screenshot request records exactly one frame's selected pair and writes actual PNGs.
+    std::vector<DlssNr::StageCapture::StageInput> screenshotInputs {inputs[0], inputs[2]};
+    screenshotInputs[0].name = "NR-Off";
+    screenshotInputs[1].name = "Present-NR-On";
+    capture.request(GetTickCount64(), 0, 1, true);
+    assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 600, false, "same_evaluation true"));
+    assert(capture.count() == 1 && capture.wanted() == 1);
+    assert(!capture.record(lists[0].Get(), device.Get(), screenshotInputs, 601, false, "same_evaluation true"));
+    Check(lists[0]->Close());
+    ID3D12CommandList* submitted[] = {lists[0].Get()}; queue->ExecuteCommandLists(1, submitted);
+    assert(Safety::Drain(10000));
+    Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+    capture.poll(root / "screenshots");
+    assert(!capture.active() && capture.status().find("Saved:") == 0);
+    const auto pngDir = std::filesystem::directory_iterator(root / "screenshots")->path();
+    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 3);
+    Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
+    {
+        ComPtr<IWICImagingFactory> imaging;
+        Check(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&imaging)));
+        auto verifyPng = [&](const std::filesystem::path& path, UINT expectedWidth, UINT expectedHeight,
+                             std::array<unsigned char, 3> expected)
+        {
+            ComPtr<IWICBitmapDecoder> decoder; ComPtr<IWICBitmapFrameDecode> decoded;
+            ComPtr<IWICFormatConverter> converter;
+            Check(imaging->CreateDecoderFromFilename(path.wstring().c_str(), nullptr, GENERIC_READ,
+                                                     WICDecodeMetadataCacheOnLoad, &decoder));
+            Check(decoder->GetFrame(0, &decoded));
+            UINT width = 0, height = 0; Check(decoded->GetSize(&width, &height));
+            assert(width == expectedWidth && height == expectedHeight);
+            Check(imaging->CreateFormatConverter(&converter));
+            Check(converter->Initialize(decoded.Get(), GUID_WICPixelFormat32bppRGBA,
+                WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom));
+            std::vector<unsigned char> rgba(static_cast<size_t>(width) * height * 4);
+            Check(converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(rgba.size()), rgba.data()));
+            for (size_t i = 0; i < rgba.size(); i += 4)
+                assert(rgba[i] == expected[0] && rgba[i+1] == expected[1] && rgba[i+2] == expected[2] && rgba[i+3] == 255);
+        };
+        verifyPng(pngDir / "NR-Off_0.png", 7, 5, {72, 72, 72});
+        constexpr UINT packed = 0x4a4a4a4a;
+        verifyPng(pngDir / "Present-NR-On_0.png", 11, 7,
+            {static_cast<unsigned char>(((packed & 1023) * 255 + 511) / 1023),
+             static_cast<unsigned char>((((packed >> 10) & 1023) * 255 + 511) / 1023),
+             static_cast<unsigned char>((((packed >> 20) & 1023) * 255 + 511) / 1023)});
+        // Padded BGRA input, engine alpha zero: colour order correct and exported PNG opaque.
+        const unsigned char bgra[] {9, 30, 200, 0, 0, 0, 0, 0};
+        assert(DlssNr::Screenshots::WritePng(pngDir / "bgra.png", bgra, 1, 1, 8, DXGI_FORMAT_B8G8R8A8_UNORM));
+        verifyPng(pngDir / "bgra.png", 1, 1, {200, 30, 9});
+        assert(!DlssNr::Screenshots::WritePng(pngDir / "bad.png", bgra, 2, 1, 4, DXGI_FORMAT_B8G8R8A8_UNORM));
+        assert(!DlssNr::Screenshots::WritePng(pngDir / "bad.png", bgra, 1, 1, 8, DXGI_FORMAT_R32_FLOAT));
+        const unsigned short halfPixel[] {0x3800, 0x3c00, 0, 0};
+        assert(DlssNr::Screenshots::WritePng(pngDir / "half.png", reinterpret_cast<const unsigned char*>(halfPixel),
+            1, 1, 8, DXGI_FORMAT_R16G16B16A16_FLOAT));
+        verifyPng(pngDir / "half.png", 1, 1, {128, 255, 0});
+        const float floatPixel[] {0.25f, 2.0f, -1.0f, 0.0f};
+        assert(DlssNr::Screenshots::WritePng(pngDir / "float.png", reinterpret_cast<const unsigned char*>(floatPixel),
+            1, 1, 16, DXGI_FORMAT_R32G32B32A32_FLOAT));
+        verifyPng(pngDir / "float.png", 1, 1, {64, 255, 0});
+        assert(DlssNr::Screenshots::HalfToFloat(0x0001) == std::ldexp(1.0f, -24));
+        assert(DlssNr::Screenshots::HalfToFloat(0x7bff) == 65504.0f);
+        assert(DlssNr::Screenshots::HalfToFloat(0xbc00) == -1.0f);
+        assert(std::isinf(DlssNr::Screenshots::HalfToFloat(0x7c00)));
+        assert(std::isnan(DlssNr::Screenshots::HalfToFloat(0x7e00)));
+    }
+    CoUninitialize();
     ComPtr<ID3D12InfoQueue> info; Check(device.As(&info));
     for (UINT64 i = 0; i < info->GetNumStoredMessages(); ++i)
     {
@@ -190,4 +261,5 @@ int main(int argc, char** argv)
     }
     std::cout << "PASS: matched stage pixels/formats/pitches across 8 delayed submissions; completion and replay gates; cancellation, layer/settings/reset changes; six-stage output and write failure; no debug-layer errors.\n";
     std::cout << "Evidence: " << root.string() << '\n';
+    std::cout << "PASS screenshots: every selection mask, exactly one matched GPU frame, PNG decode/pixel/dimension checks, RGBA/BGRA/R10, opaque alpha and invalid-format/stride rejection.\n";
 }

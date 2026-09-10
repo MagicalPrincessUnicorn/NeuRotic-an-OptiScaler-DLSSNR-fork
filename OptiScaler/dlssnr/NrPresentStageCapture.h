@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NrGpuSafety.h"
+#include "NrScreenshotPng.h"
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -30,13 +31,16 @@ class PresentStages
     unsigned int count() const { return captured_; }
     unsigned int wanted() const { return wanted_; }
     bool wantsFrame(ULONGLONG now) const { return armed_ && !ready_ && now >= start_; }
+    void setIdleStatus(std::string value) { if (!active()) status_ = std::move(value); }
 
-    void request(ULONGLONG now, unsigned int delayMs = 5000)
+    void request(ULONGLONG now, unsigned int delayMs = 5000, unsigned int frames = MaxFrames, bool png = false)
     {
         if (active()) return;
         start_ = now + delayMs;
+        limit_ = (std::max)(1u, (std::min)(frames, MaxFrames));
+        png_ = png;
         armed_ = true;
-        status_ = "Capture starts in 5 seconds. Close the menu and turn the camera.";
+        status_ = delayMs ? "Capture starts in 5 seconds. Close the menu." : "Waiting for the next complete NR frame.";
     }
 
     void cancel()
@@ -104,21 +108,22 @@ class PresentStages
         bool created = false;
         for (unsigned int attempt = 0; !ec && attempt < 32 && !created; ++attempt)
         {
-            directory = root / ("capture-" + std::to_string(GetTickCount64()) + "-" + std::to_string(attempt));
+            directory = root / ((png_ ? "comparison-" : "capture-") + std::to_string(GetTickCount64()) + "-" + std::to_string(attempt));
             created = std::filesystem::create_directory(directory, ec);
         }
         bool ok = created && !ec;
         for (const auto& stage : stages_)
             for (unsigned int i = 0; ok && i < captured_; ++i)
-                ok = dump(directory / (stage.name + "_" + std::to_string(i) + ".raw"), stage, i);
+                ok = dump(directory / (stage.name + "_" + std::to_string(i) + (png_ ? ".png" : ".raw")), stage, i, png_);
         // The complete manifest is written last; a partial directory never claims success.
         if (ok)
         {
             const auto path = directory / "manifest.txt";
             if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
             {
-                bool manifestOk = std::fprintf(file, "Present NR matched stages v1\nframes %u\n%s\n",
-                                               captured_, settings_.c_str()) >= 0;
+                bool manifestOk = std::fprintf(file, "%s\nframes %u\n%s\n",
+                    png_ ? "NeuRotic same-frame screenshots v1" : "Present NR matched stages v1",
+                    captured_, settings_.c_str()) >= 0;
                 for (const auto& stage : stages_)
                     manifestOk = (std::fprintf(file, "%s width %llu height %u format %d rowPitch %u bytes %llu\n",
                         stage.name.c_str(), stage.desc.Width, stage.desc.Height, (int) stage.desc.Format,
@@ -160,6 +165,8 @@ class PresentStages
     std::vector<Stage> stages_;
     std::vector<Frame> frames_;
     unsigned int captured_ = 0, wanted_ = 0;
+    unsigned int limit_ = MaxFrames;
+    bool png_ = false;
     ULONGLONG start_ = 0;
     bool armed_ = false, ready_ = false, discarded_ = false;
     std::string settings_;
@@ -170,6 +177,7 @@ class PresentStages
         return d.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && d.Width && d.Height &&
                d.DepthOrArraySize == 1 && d.MipLevels == 1 && d.SampleDesc.Count == 1 &&
                (d.Format == DXGI_FORMAT_R8G8B8A8_UNORM || d.Format == DXGI_FORMAT_R16G16B16A16_FLOAT ||
+                d.Format == DXGI_FORMAT_R32G32B32A32_FLOAT ||
                 d.Format == DXGI_FORMAT_R10G10B10A2_UNORM || d.Format == DXGI_FORMAT_B8G8R8A8_UNORM);
     }
     static bool sameShape(const D3D12_RESOURCE_DESC& a, const D3D12_RESOURCE_DESC& b)
@@ -190,7 +198,7 @@ class PresentStages
             bytesPerFrame += stage.bytes;
             stages_.push_back(std::move(stage));
         }
-        wanted_ = static_cast<unsigned int>((std::min)(UINT64(MaxFrames), MaxBytes / bytesPerFrame));
+        wanted_ = static_cast<unsigned int>((std::min)(UINT64(limit_), MaxBytes / bytesPerFrame));
         frames_.reserve(wanted_);
         D3D12_HEAP_PROPERTIES heap {};
         heap.Type = D3D12_HEAP_TYPE_READBACK;
@@ -229,13 +237,16 @@ class PresentStages
             cmd->ResourceBarrier(1, &barrier);
         }
     }
-    static bool dump(const std::filesystem::path& path, const Stage& stage, unsigned int i)
+    static bool dump(const std::filesystem::path& path, const Stage& stage, unsigned int i, bool png)
     {
         void* mapped = nullptr;
         const D3D12_RANGE range {0, static_cast<SIZE_T>(stage.bytes)};
         if (FAILED(stage.shots[i]->Map(0, &range, &mapped)) || !mapped) return false;
         bool ok = false;
-        if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
+        if (png)
+            ok = Screenshots::WritePng(path, static_cast<const unsigned char*>(mapped),
+                static_cast<UINT>(stage.desc.Width), stage.desc.Height, stage.layout.Footprint.RowPitch, stage.desc.Format);
+        else if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
         {
             const auto written = std::fwrite(mapped, 1, static_cast<size_t>(stage.bytes), file);
             ok = (std::fclose(file) == 0) && written == stage.bytes;

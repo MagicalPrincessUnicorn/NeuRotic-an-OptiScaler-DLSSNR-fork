@@ -411,12 +411,12 @@ void RenderMenu(Config* config, float menuResScale)
         }
         else if (presentRoute)
         {
-            if (ImGui::Button("Capture face diagnostic (5-second delay)"))
-                DlssNr::RequestPresentStageCapture();
-            ImGui::TextWrapped("%s", DlssNr::PresentStageCaptureStatus().c_str());
-            HelpMarker("Close the menu and keep turning the camera. This saves matched model inputs,"
-                       "\nraw model answers and the blended image beside the game in dlssnr-present-capture."
-                       "\nWait for Saved before closing the game. Your NR settings and history stay unchanged.");
+            if (auto diagnostics = ScopedCollapsingHeader("Developer capture"); diagnostics.IsHeaderOpen())
+            {
+                if (ImGui::Button("Capture model stages (5-second delay)"))
+                    DlssNr::RequestPresentStageCapture();
+                ImGui::TextWrapped("%s", DlssNr::PresentStageCaptureStatus().c_str());
+            }
             ImGui::TextDisabled("Use Native Temporal when it is available.");
             if (presentTelemetry.active)
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
@@ -1486,6 +1486,37 @@ void RenderMenu(Config* config, float menuResScale)
         renderSecondLayerControls();
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
+    }
+}
+
+void RenderScreenshotMenu(Config* config)
+{
+    if (auto section = ScopedCollapsingHeader("Screenshots", ImGuiTreeNodeFlags_DefaultOpen); section.IsHeaderOpen())
+    {
+        ScopedIndent indent {};
+        ScopedNestedTextWrap wrap {};
+        const bool present = config->DlssNrRoute.value_or_default() == 1;
+        const bool busy = ComparisonScreenshotBusy();
+        ImGui::TextWrapped("Save selected images from the same NR frame. Files go into NeuroticScreenshots beside the game.");
+        ImGui::BeginDisabled(busy);
+        bool before = config->ScreenshotNrOff.value_or_default();
+        if (ImGui::Checkbox("NR off (before NR)", &before)) config->ScreenshotNrOff = before;
+        bool native = config->ScreenshotNativeNr.value_or_default();
+        ImGui::BeginDisabled(present);
+        if (ImGui::Checkbox("Native NR on", &native)) config->ScreenshotNativeNr = native;
+        ImGui::EndDisabled();
+        bool imageOnly = config->ScreenshotPresentNr.value_or_default();
+        ImGui::BeginDisabled(!present);
+        if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
+        ImGui::EndDisabled();
+        ImGui::TextWrapped("Only the active NR route is available. Capturing never switches routes or changes NR history.");
+        if (!present)
+            ImGui::TextWrapped("Native images are captured at NR's processing stage, before the game's later effects. Performance mode captures before upscaling. HDR images use matching NR preview encoding.");
+        if (ImGui::Button("Take screenshots (5-second delay)")) RequestComparisonScreenshot(true);
+        ImGui::EndDisabled();
+        if (busy && ImGui::Button("Cancel screenshots")) CancelComparisonScreenshot();
+        ImGui::TextWrapped("%s", ComparisonScreenshotStatus().c_str());
+        ImGui::TextWrapped("For immediate capture, bind Comparison screenshots in Keybinds. Keep Apply Model on and Debug view / Compare off for an NR-on image.");
     }
 }
 

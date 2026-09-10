@@ -164,6 +164,11 @@ class Config
     // Toggles the pass in game. Unbound by default -- a key that does something unexpected is worse
     // than one that does nothing.
     NrOptional<int> DlssNrToggleKey { UnboundKey };
+    // Screenshot preferences do not enter the model's tuning snapshot.
+    NrOptional<bool> ScreenshotNrOff { true };
+    NrOptional<bool> ScreenshotNativeNr { true };
+    NrOptional<bool> ScreenshotPresentNr { true };
+    NrOptional<int> ScreenshotKey { UnboundKey };
     NrOptional<uint32_t> DlssNrPreset { 0 };
     NrOptional<float> DlssNrIntensity { 1.0f };
     // 0 default (standard), 1 natural, 2 cinematic -- the model's own processing profiles.

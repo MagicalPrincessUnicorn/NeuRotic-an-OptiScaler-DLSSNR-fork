@@ -162,6 +162,7 @@ static float lastMenuScale = 0.0f;
 static CustomOptional<uint32_t> comboPreset { 0 };
 static int lastKey = 0;
 static bool inputDlssNr = false;
+static bool inputScreenshot = false;
 static bool capturingKey = false;
 
 template <typename T, size_t N> struct RingBuffer
@@ -281,6 +282,8 @@ void MenuCommon::UpdateManualInput(HWND targetHwnd)
                       "Menu key pressed, will be switching FPS mode");
         CheckShortcut(config->DlssNrToggleKey.value_or_default(), inputDlssNr,
                       "Neural Rendering key pressed, will be toggling the pass");
+        CheckShortcut(config->ScreenshotKey.value_or_default(), inputScreenshot,
+                      "Screenshot key pressed, will capture the selected same-frame comparisons");
     }
     else if (capturingKey)
     {
@@ -1369,6 +1372,12 @@ void MenuCommon::HandleMenuShortcuts(RenderMenuContext& ctx)
         {
             inputFps = false;
             config->ShowFps = !config->ShowFps.value_or_default();
+        }
+
+        if (inputScreenshot)
+        {
+            inputScreenshot = false;
+            DlssNr::RequestComparisonScreenshot();
         }
 
         if (inputDlssNr)
@@ -7093,17 +7102,20 @@ void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
         static auto fpsOverlayCycle = Keybind("FPS Overlay Cycle", 12);
         static auto fgEnable = Keybind("Frame Generation", 13);
         static auto dlssNrToggle = Keybind("Neural Rendering", 14);
+        static auto screenshot = Keybind("Comparison screenshots", 15);
 
         menu.Render(config->ShortcutKey);
         fpsOverlay.Render(config->FpsShortcutKey);
         fpsOverlayCycle.Render(config->FpsCycleShortcutKey);
         fgEnable.Render(config->FGShortcutKey);
         dlssNrToggle.Render(config->DlssNrToggleKey);
+        screenshot.Render(config->ScreenshotKey);
     }
 }
 
 void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
 {
+    DlssNr::RenderScreenshotMenu(ctx.config);
     if (auto ch = ScopedCollapsingHeader("Updates", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
     {
         constexpr const char* repositoryUrl = "https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork";
