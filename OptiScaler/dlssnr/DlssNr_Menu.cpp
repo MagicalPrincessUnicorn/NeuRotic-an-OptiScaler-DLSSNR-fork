@@ -129,6 +129,27 @@ static bool DeferredSlider(const char* label, NrOptional<float>* opt, float mn, 
     return changed;
 }
 
+static unsigned int RenderPassCountSelector(Config* config)
+{
+    static const char* passCounts[] = { "Standard (1 pass)", "2 passes", "3 passes", "4 passes",
+                                        "5 passes", "6 passes", "7 passes", "8 passes", "9 passes",
+                                        "10 passes" };
+    int passCountIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
+    if (ImGui::Combo("Passes", &passCountIndex, passCounts, IM_ARRAYSIZE(passCounts)))
+    {
+        config->DlssNrPasses = (uint32_t) (passCountIndex + 1);
+        // Retain the old field as an in-memory compatibility hint. The persisted alias remains
+        // derived from the Multipass switch, so choosing a count alone never activates it.
+        config->DlssNrSecondLayer =
+            config->DlssNrMultipassEnabled.value_or_default() && passCountIndex >= 1;
+    }
+    HelpMarker("Selects the total number of passes. Standard uses only the baseline Pass 1 settings above. "
+               "Selecting more passes exposes independent Pass 2 and later profiles in Neural Rendering "
+               "Multipass, even before it is enabled. The renderer uses only Pass 1 until Enable NR Multipass "
+               "is turned on.");
+    return (unsigned int) (passCountIndex + 1);
+}
+
 static void RenderMultipassMenu(Config* config, float menuResScale);
 
 void RenderMenu(Config* config, float menuResScale)
@@ -184,24 +205,9 @@ void RenderMenu(Config* config, float menuResScale)
                    "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
                    "to the final output in one mode-aware pass, so NR remains after RR in both modes.");
 
-        static const char* passCounts[] = { "Standard (1 pass)", "2 passes", "3 passes", "4 passes",
-                                            "5 passes", "6 passes", "7 passes", "8 passes", "9 passes",
-                                            "10 passes" };
-        int passCountIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
-        if (ImGui::Combo("Passes", &passCountIndex, passCounts, IM_ARRAYSIZE(passCounts)))
-        {
-            config->DlssNrPasses = (uint32_t) (passCountIndex + 1);
-            // Retain the old field as an in-memory compatibility hint. The persisted alias remains
-            // derived from the Multipass switch, so choosing a count alone never activates it.
-            config->DlssNrSecondLayer =
-                config->DlssNrMultipassEnabled.value_or_default() && passCountIndex >= 1;
-        }
-        HelpMarker("Selects the total number of passes. Standard uses only the baseline Pass 1 settings above. "
-                   "Selecting more passes exposes independent Pass 2 and later profiles in Neural Rendering "
-                   "Multipass, even before it is enabled. The renderer uses only Pass 1 until Enable NR Multipass "
-                   "is turned on.");
+        const unsigned int passCount = RenderPassCountSelector(config);
 
-        if (passCountIndex > 0 && !config->DlssNrMultipassEnabled.value_or_default())
+        if (passCount > 1 && !config->DlssNrMultipassEnabled.value_or_default())
         {
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 0.72f, 0.25f, 0.14f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.72f, 0.25f, 0.80f));
@@ -1483,6 +1489,8 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         if (!d3d12) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
 
+        const unsigned int passCount = RenderPassCountSelector(config);
+
         if (ImGui::Button("Reset All")) ImGui::OpenPopup("Reset all multipass settings?");
         HelpMarker("Restores the Multipass switch and every setting in all nine saved additional pass profiles to "
                    "their shipped defaults. Baseline Pass 1 and the shared pass count above remain unchanged. "
@@ -1510,7 +1518,6 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         if (!d3d12)
             ImGui::TextDisabled("Neural Rendering Multipass requires D3D12; Vulkan remains single-pass.");
 
-        const unsigned int passCount = std::clamp(config->DlssNrPasses.value_or_default(), 1u, 10u);
         const auto telemetry = DlssNr::Telemetry();
         if (enabled && d3d12)
         {
@@ -1553,7 +1560,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                     *PassOptions(config, index).workingScale = 1.0f;
                 pendingAdditionalPassScale = -1;
             });
-            HelpMarker("Sets Model resolution for every additional pass currently selected by Passes: Pass 2 through the final pass. Pass 1 remains independent in the main Neural Rendering controls. The value commits when released so the renderer rebuilds only once.");
+            HelpMarker("Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once.");
             if (mixedScale)
                 ImGui::TextDisabled("Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
         }

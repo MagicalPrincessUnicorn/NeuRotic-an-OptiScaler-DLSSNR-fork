@@ -1198,11 +1198,11 @@ static void ApplyThemeStyle()
 
     c[ImGuiCol_Tab] = AccentSoft();
     c[ImGuiCol_TabHovered] = AccentMed();
-    c[ImGuiCol_TabSelected] = AccentSoft();
+    c[ImGuiCol_TabSelected] = AccentStrong();
     c[ImGuiCol_TabSelectedOverline] = AccentStrong();
     c[ImGuiCol_TabDimmed] = BgTint(bgDark, 0.60f);
-    c[ImGuiCol_TabDimmedSelected] = AccentSoft(0.75f);
-    c[ImGuiCol_TabDimmedSelectedOverline] = borderCol;
+    c[ImGuiCol_TabDimmedSelected] = AccentMed(0.90f);
+    c[ImGuiCol_TabDimmedSelectedOverline] = AccentStrong();
 
     c[ImGuiCol_DockingPreview] = AccentStrong(0.70f);
 

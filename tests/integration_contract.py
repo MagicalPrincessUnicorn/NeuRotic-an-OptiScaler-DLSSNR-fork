@@ -73,6 +73,12 @@ require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMul
 require(nr.count('ImGui::Combo("NR route"') == 1 and
         nr.count('ImGui::Checkbox("Enable NR Multipass"') == 1,
         'single route and bounded multipass controls')
+require(nr.count('RenderPassCountSelector(config)') == 2 and
+        nr.count('ImGui::Combo("Passes"') == 1,
+        'one pass-count implementation is rendered in primary and Multipass sections')
+require('c[ImGuiCol_TabSelected] = AccentStrong();' in menu and
+        'c[ImGuiCol_TabDimmedSelected] = AccentMed(0.90f);' in menu,
+        'parent and pass tabs share a visibly stronger selected color')
 require('renderSecondLayerControls' not in nr and
         'Enable second neural-rendering layer' not in nr and
         nr.count('DlssNrMultipassSection') == 1,

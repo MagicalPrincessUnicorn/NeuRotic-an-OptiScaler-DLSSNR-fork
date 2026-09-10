@@ -28,7 +28,10 @@ $multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
 Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
            $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
 Assert-Ui ($multipass.Contains('Checkbox("Enable NR Multipass"')) 'Multipass page uses the requested enable label'
-Assert-Ui ($nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and $nr.Contains('"10 passes"')) 'shared pass selector exposes the complete one-to-ten range'
+Assert-Ui ($nr.Contains('static unsigned int RenderPassCountSelector(Config* config)') -and
+           ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 2 -and
+           $nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and
+           $nr.Contains('"10 passes"')) 'one shared pass selector exposes the complete one-to-ten range in both Neural Rendering sections'
 Assert-Ui ($nr.Contains('More than one pass selected. Enable NR Multipass for multiple passes to be applied.') -and
            $nr.Contains('BeginChild("##DlssNrMultipassInactiveWarning"') -and
            $nr.Contains('ImGuiCol_ChildBg') -and $nr.Contains('ImGuiCol_Border') -and
@@ -50,6 +53,8 @@ Assert-Ui ($multipass.Contains('Copy Pass %u settings') -and
 Assert-Ui ($multipass.Contains('SliderInt("Additional pass model resolution"') -and
            $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)') -and
            $multipass.Contains('Reset##AdditionalPassModelResolution')) 'additional passes share an optional model-resolution slider without changing pass 1'
+Assert-Ui ($multipass.Contains('Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass.') -and
+           $multipass.Contains('releasing commits that percentage to all additional passes and rebuilds them once.')) 'shared model-resolution tooltip clearly describes its all-additional-pass scope and release behavior'
 Assert-Ui ($multipass.Contains('if (passCount == 1)') -and
            $multipass.Contains('Pass 1 is configured in the main Neural Rendering section.') -and
            $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)')) 'baseline Pass 1 has one home and Multipass exposes only additional passes'
@@ -70,6 +75,10 @@ Assert-Ui (-not $nr.Contains('renderSecondLayerControls') -and
 Assert-Ui ($nr -match '(?s)DlssNrSecondLayer\s*=\s*config->DlssNrMultipassEnabled\.value_or_default\(\)\s*&&\s*passCountIndex >= 1;' -and
            $multipass -match '(?s)DlssNrSecondLayer\s*=\s*enabled\s*&&\s*config->DlssNrPasses\.value_or_default\(\) > 1;') 'legacy second-layer compatibility state follows both the Multipass switch and selected pass count'
 Assert-Ui ($menu.Contains('https://ko-fi.com/espiownage')) 'approved Ko-fi destination'
+Assert-Ui ($menu.Contains('c[ImGuiCol_TabSelected] = AccentStrong();') -and
+           $menu.Contains('c[ImGuiCol_TabDimmedSelected] = AccentMed(0.90f);') -and
+           $menu.Contains('BeginTabBar("MainMenuPages"') -and
+           $multipass.Contains('BeginTabBar("NrMultipassLayers"')) 'selected parent and Multipass tabs use the brighter shared active-tab palette'
 Assert-Ui ($menu -match '(?s)Button\("Open Wiki"\).*?ShowHelpMarker\(.*?BeginCombo\("Language"') 'language control follows Wiki button'
 Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apology removed from UI'
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
