@@ -14,6 +14,7 @@
 #include <menu/Localization.h>
 
 #include <imgui/imgui.h>
+#include <imgui/ImGuiNotify.hpp>
 
 #include <string>
 #include <unordered_map>
