@@ -204,96 +204,148 @@ void RenderMenu(Config* config, float menuResScale)
 
         const auto renderSecondLayerControls = [&]()
         {
-            const bool d3d12 = !vulkan && State::Instance().api == API::DX12;
-            bool secondLayer = config->DlssNrSecondLayer.value_or_default();
-            if (!d3d12)
-                ImGui::BeginDisabled();
-            if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
-                config->DlssNrSecondLayer = secondLayer;
-            if (!d3d12)
-                ImGui::EndDisabled();
-
-            HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer frame. It owns its model session, history, working resolution and composition settings. Each layer owns separate temporal history. Enabling it roughly doubles the model cost. This experimental D3D12-only pass can be extremely expensive; lower its working resolution if the game stops being playable.");
-
-            if (!d3d12)
-                ImGui::TextDisabled("Second neural-rendering layer requires D3D12.");
-            else if (enabled && nrTelemetry.layer2Requested)
-            {
-                if (nrTelemetry.layer2Failed)
-                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Layer 2 unavailable: %s.",
-                                       nrTelemetry.layer2FailureReason);
-                else if (nrTelemetry.layer2Retiring)
-                    ImGui::TextDisabled("Layer 2 is retiring safely; NR evaluation is paused.");
-                else if (!nrTelemetry.layer2Loaded)
-                    ImGui::TextDisabled("Layer 2 requested: waiting for a lifecycle-only creation frame.");
-                else if (!nrTelemetry.layer2Ready)
-                    ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
-                else
-                    ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Two composed NR layers ready.");
-            }
-
-            if (auto panel = ScopedCollapsingHeader("Second-pass settings (experimental)"); panel.IsHeaderOpen())
+            if (auto panel = ScopedCollapsingHeader("Multipass##DlssNrMultipassSection"); panel.IsHeaderOpen())
             {
                 ScopedIndent indent {};
                 ScopedNestedTextWrap wrap {};
-                if (!secondLayer || !d3d12)
+                ImGui::Spacing();
+
+                const bool d3d12 = !vulkan && State::Instance().api == API::DX12;
+                bool secondLayer = config->DlssNrSecondLayer.value_or_default();
+                if (!d3d12)
+                    ImGui::BeginDisabled();
+                if (ImGui::Checkbox("Enable second neural-rendering layer", &secondLayer))
+                    config->DlssNrSecondLayer = secondLayer;
+                if (!d3d12)
+                    ImGui::EndDisabled();
+
+                HelpMarker("Runs a second independent Feature 18 layer over the fully composed first-layer frame. It owns its model session, history, working resolution and composition settings. Each layer owns separate temporal history. Enabling it roughly doubles the model cost. This experimental D3D12-only pass can be extremely expensive; lower its working resolution if the game stops being playable.");
+
+                if (!d3d12)
+                    ImGui::TextDisabled("Second neural-rendering layer requires D3D12.");
+                else if (enabled && nrTelemetry.layer2Requested)
+                {
+                    if (nrTelemetry.layer2Failed)
+                        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Layer 2 unavailable: %s.",
+                                           nrTelemetry.layer2FailureReason);
+                    else if (nrTelemetry.layer2Retiring)
+                        ImGui::TextDisabled("Layer 2 is retiring safely; NR evaluation is paused.");
+                    else if (!nrTelemetry.layer2Loaded)
+                        ImGui::TextDisabled("Layer 2 requested: waiting for a lifecycle-only creation frame.");
+                    else if (!nrTelemetry.layer2Ready)
+                        ImGui::TextDisabled("Layer 2 created: waiting for its first reset evaluation.");
+                    else
+                        ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "Two composed NR layers ready.");
+                }
+
+                const bool disableSettings = !secondLayer || !d3d12;
+                if (disableSettings)
                     ImGui::BeginDisabled();
 
                 ImGui::TextDisabled("Independent layer-2 tuning. Lower Model resolution first when testing performance.");
                 ImGui::PushItemWidth(220.0f * menuResScale);
 
-                int scale = (int) lroundf(config->DlssNrSecondLayerWorkingScale.value_or_default() * 100.0f);
+                static int pendingLayer2Scale = -1;
+                int scale = pendingLayer2Scale >= 0
+                                ? pendingLayer2Scale
+                                : (int) lroundf(config->DlssNrSecondLayerWorkingScale.value_or_default() * 100.0f);
                 if (ImGui::SliderInt("Model resolution##layer2", &scale, 25, 200, "%d%%"))
-                    config->DlssNrSecondLayerWorkingScale = std::clamp(scale, 25, 200) / 100.0f;
+                    pendingLayer2Scale = scale;
+                if (ImGui::IsItemDeactivatedAfterEdit() && pendingLayer2Scale >= 0)
+                {
+                    config->DlssNrSecondLayerWorkingScale =
+                        std::clamp(pendingLayer2Scale, 25, 200) / 100.0f;
+                    pendingLayer2Scale = -1;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reset##NrLayer2ModelResolution"))
+                {
+                    config->DlssNrSecondLayerWorkingScale = 1.0f;
+                    pendingLayer2Scale = -1;
+                    scale = 100;
+                }
+                HelpMarker("The working resolution of layer 2 only. Dragging previews the percentage, then releasing rebuilds only the second model session. Cost falls roughly with the square of this value, while the full-resolution frame underneath stays untouched.");
 
                 if (scale > 100)
                 {
-                    static const char* downscalerNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+                    static const char* downscalerNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
+                                                             "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
                     int downscaler = (int) config->DlssNrSecondLayerScalingDownscaler.value_or_default();
                     downscaler = std::clamp(downscaler, 0, IM_ARRAYSIZE(downscalerNames) - 1);
                     if (ImGui::Combo("Downscaler##layer2", &downscaler, downscalerNames, IM_ARRAYSIZE(downscalerNames)))
                         config->DlssNrSecondLayerScalingDownscaler = (Scaler) downscaler;
+                    HelpMarker("The filter that averages only layer 2's above-native model answer back to display size. It never changes the first pass or Output Scaling downscaler.");
                 }
 
                 static const char* presetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
                 int preset = std::clamp((int) config->DlssNrSecondLayerPreset.value_or_default(), 0, 3);
                 if (ImGui::Combo("Model preset##layer2", &preset, presetNames, IM_ARRAYSIZE(presetNames)))
                     config->DlssNrSecondLayerPreset = (uint32_t) preset;
+                HelpMarker("The second model session's preset. Default leaves the choice to that session; it is independent of the first NR pass and DLSS Super Resolution presets.");
 
                 static const char* styleNames[] = { "Default (standard)", "Natural", "Cinematic" };
                 int style = std::clamp((int) config->DlssNrSecondLayerStyle.value_or_default(), 0, 2);
                 if (ImGui::Combo("Style##layer2", &style, styleNames, IM_ARRAYSIZE(styleNames)))
                     config->DlssNrSecondLayerStyle = (uint32_t) style;
+                HelpMarker("The processing profile used by layer 2 only. Default is strongest, Natural is gentler, and Cinematic tones down shine and over-processing. Changing it rebuilds only the second model session.");
 
                 const bool reduced = config->DlssNrSecondLayerWorkingScale.value_or_default() < 0.999f;
-                if (!reduced) ImGui::BeginDisabled();
+                if (!reduced)
+                    ImGui::BeginDisabled();
                 static const char* enlargementNames[] = { "Classic", "Matched residual" };
                 int enlargement = config->DlssNrSecondLayerTransfer.value_or_default() == 1 ? 1 : 0;
                 if (ImGui::Combo("Enlargement##layer2", &enlargement, enlargementNames, IM_ARRAYSIZE(enlargementNames)))
                     config->DlssNrSecondLayerTransfer = (uint32_t) enlargement;
-                if (!reduced) ImGui::EndDisabled();
+                if (!reduced)
+                    ImGui::EndDisabled();
+                HelpMarker("How layer 2's edit returns to full size below 100 percent. Matched residual carries up only the model's difference and usually preserves colour better; it has no effect on the first pass.");
 
                 float detail = config->DlssNrSecondLayerTransferStrength.value_or_default();
                 if (ImGui::SliderFloat("Detail strength##layer2", &detail, 0.0f, 2.0f, "%.2f"))
                     config->DlssNrSecondLayerTransferStrength = std::clamp(detail, 0.0f, 2.0f);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reset##layer2-detail"))
+                    config->DlssNrSecondLayerTransferStrength = 1.0f;
+                HelpMarker("How far the composed frame moves toward layer 2's picture. Zero keeps the completed first-pass frame, one uses the second model's picture, and values above one exaggerate only layer 2's edit.");
+
                 float colour = config->DlssNrSecondLayerColourStrength.value_or_default();
                 if (ImGui::SliderFloat("Colour strength##layer2", &colour, 0.0f, 4.0f, "%.2f"))
                     config->DlssNrSecondLayerColourStrength = std::clamp(colour, 0.0f, 4.0f);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reset##layer2-colour"))
+                    config->DlssNrSecondLayerColourStrength = 1.0f;
+                HelpMarker("How much of layer 2's colour accompanies its lighting edit. Zero preserves the completed first-pass hue, one uses the second model's colour, and values above one oversaturate only this pass.");
+
                 float guard = config->DlssNrSecondLayerMaxRatio.value_or_default();
                 if (ImGui::SliderFloat("Highlight guard##layer2", &guard, 1.0f, 8.0f, "%.1fx"))
                     config->DlssNrSecondLayerMaxRatio = std::clamp(guard, 1.0f, 8.0f);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reset##layer2-guard"))
+                    config->DlssNrSecondLayerMaxRatio = 2.0f;
+                HelpMarker("The maximum brightness change layer 2 may apply in either direction. The 2x default protects moving highlights without limiting the first pass.");
 
                 DeferredSlider("Intensity##layer2", &config->DlssNrSecondLayerIntensity, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Layer 2's internal model strength. It is read when the second model session is built, so the value commits on release and does not change layer 1's Detail strength.");
                 DeferredSlider("Local structure##layer2", &config->DlssNrSecondLayerLocalStructure, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Layer 2's internal local-structure strength. It commits on release and rebuilds only the second model session.");
                 DeferredSlider("Local tone##layer2", &config->DlssNrSecondLayerLocalTone, 0.0f, 2.0f, 1.0f);
+                HelpMarker("Layer 2's internal local-tone strength. It commits on release and rebuilds only the second model session.");
                 DeferredSlider("Skin structure##layer2", &config->DlssNrSecondLayerSkinStructure, -1.0f, 2.0f, -1.0f);
+                HelpMarker("Layer 2's skin-structure strength. Minus one follows its Local structure value; zero and above tune skin independently, without changing the first pass.");
 
                 bool autoMask = config->DlssNrSecondLayerAutoMask.value_or_default();
-                if (ImGui::Checkbox("Auto skin mask##layer2", &autoMask)) config->DlssNrSecondLayerAutoMask = autoMask;
+                if (ImGui::Checkbox("Auto skin mask##layer2", &autoMask))
+                    config->DlssNrSecondLayerAutoMask = autoMask;
+                HelpMarker("Lets the second model session identify skin instead of treating its input uniformly. The first pass keeps its own mask setting.");
+
                 bool apply = config->DlssNrSecondLayerApplyModel.value_or_default();
-                if (ImGui::Checkbox("Apply the model##layer2", &apply)) config->DlssNrSecondLayerApplyModel = apply;
+                if (ImGui::Checkbox("Apply the model##layer2", &apply))
+                    config->DlssNrSecondLayerApplyModel = apply;
+                HelpMarker("Off keeps layer 2 evaluating but hides only its edit, leaving the completed first-pass frame visible for a same-frame comparison.");
+
                 ImGui::PopItemWidth();
-                if (!secondLayer || !d3d12) ImGui::EndDisabled();
+                if (disableSettings)
+                    ImGui::EndDisabled();
             }
         };
 

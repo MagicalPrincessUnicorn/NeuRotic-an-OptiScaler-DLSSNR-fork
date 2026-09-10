@@ -17,11 +17,20 @@
 
 ## Behaviour
 
-The existing second-pass checkbox remains default-off. Its compact, collapsible
-settings panel is directly below it in Neural Rendering and is disabled while the
-pass is unavailable. Layer 2 persists its values under `[DlssNrLayer2]`; an older
-profile without that section is seeded once from its already-loaded first-pass
-values, preserving its former two-pass picture before any later edits diverge.
+The existing second-pass checkbox remains default-off. One default-collapsed
+`Multipass` panel inside Neural Rendering owns the checkbox, status, experimental
+cost warning, and every layer-2 control; there is no nested second-pass header.
+The checkbox remains available on D3D12 while subordinate settings are disabled
+when the pass is off or unsupported. Layer 2 persists its values under
+`[DlssNrLayer2]`; an older profile without that section is seeded once from its
+already-loaded first-pass values, preserving its former two-pass picture before
+any later edits diverge.
+
+Layer-2 Model resolution now previews its percentage during a drag and commits
+only when the handle is released. Its Reset restores 100% and cancels a pending
+drag. Detail strength, Colour strength, and Highlight guard have independent
+Reset controls restoring 1.0, 1.0, and 2.0x. Every layer-2 setting has a tooltip
+that explicitly scopes its effect to the second pass.
 
 The layer owns working scale, resampler, enlargement mode, model preset/style and
 tuning, composition controls, skin mask and model application. It has a separate
@@ -39,8 +48,12 @@ controls and an experimental performance warning.
 
 ## Offline validation
 
-`tests\Run-NrRobustness.cmd` passes D3D12 lifecycle/resource tests, second-layer
-ordering and isolation checks, Present-history checks, and the 62-option snapshot
-fixture. `tests\Test-NeuroticUi.ps1` and localization catalog verification pass.
-These checks do not replace a game runtime test of disabled/enabled pass state,
-first/second-pass isolation, or performance at full and reduced layer-2 scale.
+The static UI checks cover the single Multipass hierarchy, disabled state,
+release-only Model-resolution write, pending-state reset, new reset defaults,
+tooltip coverage, and first-pass configuration isolation. Localization catalog
+verification covers English, Spanish, French, German, and Portuguese at all
+supported UI scales. The complete NR robustness suite still covers D3D12
+lifecycle/resources, second-layer ordering and isolation, Present history, and
+the 62-option snapshot fixture. These checks do not replace a game runtime test
+of one rebuild per Model-resolution release, reset behavior, first/second-pass
+isolation, or performance at full and reduced layer-2 scale.
