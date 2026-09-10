@@ -3522,7 +3522,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         if (g_screenshots.wantsFrame(GetTickCount64()))
         {
             using namespace DlssNr::Screenshots;
-            const bool saveAfter = (g_screenshotSelection & (Native | Present)) != 0;
+            const bool saveAfter = (g_screenshotSelection & (Native | DlssNr::Screenshots::Present)) != 0;
             const bool applied = cfg.DlssNrApplyModel.value_or_default() ||
                 (g_lastLayerCount == 2 && cfg.DlssNrSecondLayerApplyModel.value_or_default());
             if (cfg.DlssNrDebugView.value_or_default() != 0 || cfg.DlssNrCompare.value_or_default() != 0 ||
