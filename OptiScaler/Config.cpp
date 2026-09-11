@@ -345,7 +345,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrMultipassEnabled.set_from_config(multipassEnabled);
             DlssNrSecondLayer.set_from_config(readBool("DlssNr", "SecondLayer"));
             if (auto route = readUInt("DlssNr", "Route"))
-                DlssNrRoute.set_from_config(std::min(route.value(), 1u));
+                DlssNrRoute.set_from_config(std::min(route.value(), 2u));
             else
                 DlssNrRoute.reset();
             if (auto workload = readUInt("DlssNr", "PresentWorkload"))

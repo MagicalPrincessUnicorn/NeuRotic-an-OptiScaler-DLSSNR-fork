@@ -5,6 +5,7 @@
 #include "DlssNr_ExposureScan.h"
 #include "DlssNr_BridgeTelemetry.h"
 #include "DlssNr_Present.h"
+#include "DlssNr_PresentGuides.h"
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
@@ -169,8 +170,8 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
 
-        static const char* routeNames[] = { "Native Temporal", "Present Image-Only — Compatibility Route." };
-        int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 1);
+        static const char* routeNames[] = { "Native Temporal", "Present Image-Only", "Present Enhanced" };
+        int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 2);
         if (ImGui::Combo("NR route", &route, routeNames, IM_ARRAYSIZE(routeNames)))
         {
             config->DlssNrRoute = (uint32_t) route;
@@ -179,10 +180,22 @@ void RenderMenu(Config* config, float menuResScale)
         HelpMarker("Use it when Native Temporal is unavailable or cannot receive a usable game image; "
                    "supported graphics setups expand over time.\n\nUnsupported targets keep the original "
                    "image unchanged and perform no model work.");
-        const bool presentRoute = route == 1;
+        const bool presentRoute = route != 0;
 
         if (presentRoute)
         {
+            const auto guides = PresentGuides::Instance().Inspect();
+            HelpMarker("Present Enhanced uses captured Native depth and motion. Both Present routes retain the game HUD. "
+                "Enhanced requires DX12 SDR, 100%, NR Multipass OFF and frame generation OFF. "
+                "Enhanced copies Native guides and their motion scale, jitter and reset metadata. "
+                "No fresh matching pair means original-image fallback, NOT constant-guide NR. "
+                "This does not test a pre-HUD hook or prove HDR/tone-mapping causality.");
+            ImGui::TextWrapped("%s", guides.status.c_str());
+            ImGui::Text("Native capture calls %llu", guides.captureAttempts);
+            if (!guides.inputDescription.empty()) ImGui::TextWrapped("%s", guides.inputDescription.c_str());
+            if (!guides.captureError.empty()) ImGui::TextWrapped("Capture failure: %s", guides.captureError.c_str());
+            ImGui::Text("Guide copies %llu | matched %llu | evaluated %llu | rejected %llu",
+                guides.captures, guides.matched, guides.evaluated, guides.rejected);
             static const char* presentWorkNames[] = {
                 "Full / Native (100%)", "Ultra Quality (77%)", "Quality (67%)",
                 "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
@@ -320,7 +333,7 @@ void RenderMenu(Config* config, float menuResScale)
                     "Present Image-Only is active. NR is processing the final image before it reaches the display.");
             else
                 ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
-                    "This game’s present target is not supported yet. Your image is unchanged.");
+                    "Present NR was bypassed. Your image is unchanged; see the reason below.");
             const char* api = presentTelemetry.api == PresentApi::D3D12 ? "DX12"
                               : presentTelemetry.api == PresentApi::D3D11 ? "DX11"
                               : presentTelemetry.api == PresentApi::Vulkan ? "Vulkan" : "Unknown";

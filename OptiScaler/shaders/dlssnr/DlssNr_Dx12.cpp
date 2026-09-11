@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_PresentGuides.h>
 
 #include <set>
 #include <map>
@@ -4358,6 +4359,8 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                                    : std::optional<NrConfigSnapshot<Config>>{};
     if (settings == nullptr && !localSettings) return nullptr;
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
+    PresentGuides::Instance().Enable(cfg.GetDlssNrRuntimeSnapshot().enabled &&
+                                    cfg.DlssNrRoute.value_or_default() == 2);
 
     if (cfg.DlssNrRoute.value_or_default() != 0 || !cfg.GetDlssNrRuntimeSnapshot().enabled ||
         !cfg.DlssNrRunBeforeSr.value_or_default() ||
@@ -4908,8 +4911,45 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                                                    : std::optional<NrConfigSnapshot<Config>>{};
     if (settings == nullptr && !localSettings) return;
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
+    PresentGuides::Instance().Enable(cfg.GetDlssNrRuntimeSnapshot().enabled &&
+                                    cfg.DlssNrRoute.value_or_default() == 2);
     if (cfg.DlssNrRoute.value_or_default() != 0)
+    {
+        if (cfg.GetDlssNrRuntimeSnapshot().enabled && cmdList && params &&
+            PresentGuides::Instance().Inspect().enabled)
+        {
+            auto* target = GetResource(params, NVSDK_NGX_Parameter_Output, "DLSSD.Output");
+            auto* depth = GetResource(params, NVSDK_NGX_Parameter_Depth, "DLSSD.Depth");
+            auto* motion = GetResource(params, NVSDK_NGX_Parameter_MotionVectors, "DLSSD.MotionVectors");
+            Microsoft::WRL::ComPtr<IDXGISwapChain3> swapchain;
+            Microsoft::WRL::ComPtr<IUnknown> identity;
+            auto* current = State::Instance().currentSwapchain;
+            if (current && SUCCEEDED(current->QueryInterface(IID_PPV_ARGS(&swapchain))))
+                identity = PresentGuides::Identity(swapchain.Get());
+            DlssNrFrameInfo frame {};
+            unsigned int flags = 0, reset = 0;
+            params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &flags);
+            params->Get(NVSDK_NGX_Parameter_Reset, &reset);
+            frame.DepthInverted = (flags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
+            frame.Reset = reset != 0;
+            params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &frame.RenderSubrectWidth);
+            params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, &frame.RenderSubrectHeight);
+            params->Get(NVSDK_NGX_Parameter_MV_Scale_X, &frame.MvScaleX);
+            params->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &frame.MvScaleY);
+            params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &frame.JitterX);
+            params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &frame.JitterY);
+            const auto desc = target ? target->GetDesc() : D3D12_RESOURCE_DESC{};
+            const auto* config = Config::Instance();
+            PresentGuides::Instance().Capture(cmdList, depth, motion, frame, identity.Get(),
+                swapchain ? swapchain->GetCurrentBackBufferIndex() : 0,
+                static_cast<UINT>(desc.Width), desc.Height,
+                static_cast<D3D12_RESOURCE_STATES>(config->DepthResourceBarrier.value_or(
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)),
+                static_cast<D3D12_RESOURCE_STATES>(config->MVResourceBarrier.value_or(
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)));
+        }
         return;
+    }
     EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, forceAfterUpscale, cfg);
 }
 
@@ -5212,7 +5252,8 @@ bool DirectD3D12Available(ID3D12Device* device)
 bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12CommandQueue* queue,
                                   ID3D12Resource* frameResource, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
-                                  unsigned int workHeight, bool resetHistory)
+                                  unsigned int workHeight, bool resetHistory,
+                                  const DlssNrFrameInfo* nativeGuideFrame)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
@@ -5221,7 +5262,7 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
         return false;
 
     auto settings = TryNrConfigSnapshot(*Config::Instance());
-    if (!settings || settings->DlssNrRoute.value_or_default() != 1 ||
+    if (!settings || settings->DlssNrRoute.value_or_default() == 0 ||
         !settings->GetDlssNrRuntimeSnapshot().enabled)
         return false;
 
@@ -5268,6 +5309,16 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
     frame.JitterX = 0.0f;
     frame.JitterY = 0.0f;
     frame.PreExposure = 1.0f;
+    if (nativeGuideFrame)
+    {
+        frame = *nativeGuideFrame;
+        frame.Reset = frame.Reset || resetHistory;
+        // Native temporal conventions travel with their guides; Native scene exposure does NOT
+        // apply to the already tone-mapped Present color. This experiment does not change color.
+        frame.ColourIsLinearHdr = false;
+        frame.ExposureTexture = nullptr;
+        frame.PreExposure = 1.0f;
+    }
 
     unsigned long long before = 0;
     {

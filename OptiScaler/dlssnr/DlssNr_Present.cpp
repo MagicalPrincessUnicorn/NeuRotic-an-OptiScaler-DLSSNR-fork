@@ -3,6 +3,7 @@
 #include "DlssNr_PresentCompatibility.h"
 #include "DlssNr_PresentHistory.h"
 #include "DlssNrFeature_Dx12.h"
+#include "DlssNr_PresentGuides.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
 #include <with_dx12/dx11_with_dx12.h>
@@ -47,6 +48,7 @@ struct PresentSlot
 struct PresentState
 {
     std::mutex mutex;
+    UINT64 guideGeneration = 0;
     PresentTelemetrySnapshot telemetry;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12CommandQueue> queue;
@@ -220,13 +222,15 @@ void UavBarrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource)
 
 void SetFallback(PresentApi api, const char* reason, bool failed = false)
 {
+    const bool changedReason = g_present.telemetry.fallbackReason != (reason ? reason : "unknown fallback");
     // A fallback leaves the game image alone, so its successor must never inherit the last model
     // result.  This covers admission, bridge, conversion, queue, copy-back, and model failures.
     InvalidateHistory(reason);
     g_present.telemetry.requested = true;
     g_present.telemetry.active = false;
     g_present.telemetry.api = api;
-    g_present.telemetry.requestedPlacement = "Present Image-Only";
+    g_present.telemetry.requestedPlacement = Config::Instance()->DlssNrRoute.value_or_default() == 2
+        ? "Present Enhanced" : "Present Image-Only";
     g_present.telemetry.actualPlacement = "Original Present fallback";
     g_present.telemetry.fallbackReason = reason != nullptr ? reason : "unknown fallback";
     g_present.telemetry.failure = failed ? g_present.telemetry.fallbackReason : "";
@@ -234,6 +238,8 @@ void SetFallback(PresentApi api, const char* reason, bool failed = false)
     ++g_present.telemetry.skippedFrames;
     ++g_present.telemetry.consecutiveFallbacks;
     g_present.telemetry.lastFallbackAttempt = g_present.telemetry.presentAttempts;
+    if (changedReason || g_present.telemetry.consecutiveFallbacks == 1 ||
+        g_present.telemetry.consecutiveFallbacks % 300 == 0)
     LOG_WARN("DLSS-NR Present diagnostic: fallback #{} (streak {}, attempt {}): {} | target {}x{} format {} samples {} swap effect {} color space {} | completed fence {} | submitted fence {} | pending slots {}",
              g_present.telemetry.skippedFrames, g_present.telemetry.consecutiveFallbacks,
              g_present.telemetry.presentAttempts, g_present.telemetry.fallbackReason,
@@ -579,7 +585,8 @@ void ReportPresentUnavailable(PresentApi api, const char* reason)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto* config = Config::Instance();
-    if (!config->GetDlssNrRuntimeSnapshot().enabled || config->DlssNrRoute.value_or_default() != 1)
+    PresentGuides::Instance().BeginPresent(); // discard candidates even on unavailable Presents
+    if (!config->GetDlssNrRuntimeSnapshot().enabled || config->DlssNrRoute.value_or_default() == 0)
         return;
     ++g_present.telemetry.presentAttempts;
     RefreshCompletionTelemetry();
@@ -593,13 +600,21 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto* config = Config::Instance();
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
+    PresentGuides::Instance().Enable(runtime.enabled && config->DlssNrRoute.value_or_default() == 2);
+    const auto guideSelection = PresentGuides::Instance().BeginPresent();
+    if (g_present.guideGeneration != guideSelection.generation)
+    {
+        InvalidateHistory("Present route changed");
+        g_present.guideGeneration = guideSelection.generation;
+    }
     const bool enabled = runtime.enabled;
-    const unsigned int route = std::min(config->DlssNrRoute.value_or_default(), 1u);
-    const bool presentRequested = enabled && route == 1;
+    const unsigned int route = std::min(config->DlssNrRoute.value_or_default(), 2u);
+    const bool presentRequested = enabled && route != 0;
     g_present.telemetry.requested = presentRequested;
     g_present.telemetry.active = false;
     g_present.telemetry.compatibilityPath.clear();
-    g_present.telemetry.requestedPlacement = route == 1 ? "Present Image-Only" : "Native Temporal";
+    g_present.telemetry.requestedPlacement = route == 2 ? "Present Enhanced" :
+        route == 1 ? "Present Image-Only" : "Native Temporal";
     if (presentRequested)
         ++g_present.telemetry.presentAttempts;
     RefreshCompletionTelemetry();
@@ -630,6 +645,18 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         InvalidateHistory("NR resume generation changed");
     g_present.presentWasRequested = true;
     g_present.resumeGeneration = runtime.resumeGeneration;
+
+    if (guideSelection.enabled && (config->DlssNrMultipassEnabled.value_or_default() || config->FGEnabled.value_or_default() ||
+        State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive))
+    {
+        SetFallback(PresentApi::Unknown, "Present Enhanced requires NR Multipass off and frame generation off");
+        return identity;
+    }
+    if (guideSelection.enabled && Telemetry().nativeRayReconstructionActive)
+    {
+        SetFallback(PresentApi::Unknown, "Present Enhanced does not support Ray Reconstruction");
+        return identity;
+    }
 
     if (swapChain == nullptr || presentDevice == nullptr)
     {
@@ -818,7 +845,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         : (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
             ? "D3D12 R10 SDR conversion" : "D3D12 RGBA8 direct");
 
-    const unsigned int workload = std::min(config->DlssNrPresentWorkload.value_or_default(), 5u);
+    const unsigned int workload = route == 2 ? 0u : std::min(config->DlssNrPresentWorkload.value_or_default(), 5u);
     const unsigned int width = static_cast<unsigned int>(backDesc.Width);
     const unsigned int height = backDesc.Height;
     const unsigned int workWidth = PresentWorkDimension(width, workload);
@@ -907,6 +934,22 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
+    PresentGuides::Inputs nativeGuides;
+    if (guideSelection.enabled)
+    {
+        auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
+        if (api != PresentApi::D3D12 || !PresentGuides::Instance().Bind(guideSelection,
+            g_present.list.Get(), queue.Get(), swapchainIdentity.Get(), bufferIndex,
+            static_cast<UINT>(backDesc.Width), backDesc.Height, nativeGuides))
+        {
+            g_present.list->Close();
+            const auto guideStatus = PresentGuides::Instance().Inspect();
+            SetFallback(api, api != PresentApi::D3D12 ? "Native guide test requires DX12" :
+                guideStatus.status.c_str());
+            return identity;
+        }
+    }
+
     slot.pacing = identity.pacing;
     slot.presentAttempt = identity.presentAttempt;
     slot.firstSubmissionMs = 0.0;
@@ -961,8 +1004,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
-        g_present.frame.Get(), g_present.depth.Get(), g_present.motion.Get(), workWidth, workHeight,
-        g_present.history.ResetForNextEvaluation());
+        g_present.frame.Get(), guideSelection.enabled ? nativeGuides.depth.Get() : g_present.depth.Get(),
+        guideSelection.enabled ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
+        g_present.history.ResetForNextEvaluation(), guideSelection.enabled ? &nativeGuides.frame : nullptr);
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;
@@ -973,6 +1017,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     slot.firstSubmissionMs = Util::MillisecondsNow();
     queue->ExecuteCommandLists(1, modelLists);
     ++g_present.telemetry.modelSubmissions;
+    if (modelSucceeded && guideSelection.enabled) PresentGuides::Instance().Evaluated();
     if (uploadingGuides)
         g_present.guidesNeedUpload = false;
 
@@ -1114,7 +1159,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         LOG_INFO("DLSS-NR Present diagnostic: processing recovered on attempt {} after {} consecutive fallback(s)",
                  g_present.telemetry.presentAttempts, g_present.telemetry.consecutiveFallbacks);
     g_present.telemetry.consecutiveFallbacks = 0;
-    g_present.telemetry.actualPlacement = "Present Image-Only";
+    g_present.telemetry.actualPlacement = guideSelection.enabled ?
+        "Present Enhanced (game HUD included)" : "Present Image-Only";
     g_present.telemetry.fallbackReason.clear();
     g_present.telemetry.failure.clear();
     return identity;

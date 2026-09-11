@@ -46,12 +46,14 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                           const NrConfigSnapshot<Config>* settings = nullptr);
 
 // Narrow surface used by the DX12 Present adapter. It accepts only OptiScaler-owned resources and a
-// private command list; no game depth, motion, jitter, reset, or upscaler parameter block crosses it.
+// private command list. Optional test metadata accompanies owned copies of Native guides, never
+// live game resources or exposure. The default remains constant depth and zero motion.
 bool DirectD3D12Available(ID3D12Device* device);
 bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12CommandQueue* queue,
                                   ID3D12Resource* frame, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
-                                  unsigned int workHeight, bool resetHistory);
+                                  unsigned int workHeight, bool resetHistory,
+                                  const DlssNrFrameInfo* nativeGuideFrame = nullptr);
 
 
 

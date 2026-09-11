@@ -36,6 +36,7 @@ int main()
     auto submit = [&](ID3D12CommandQueue* q) { ID3D12CommandList* lists[] = {list.Get()}; q->ExecuteCommandLists(1, lists); };
 
     auto abandoned = Safety::Record(list.Get());
+    assert(!Safety::OrderedOn(abandoned, queue.Get()));
     assert(abandoned && !Safety::Reusable(abandoned) && !Safety::Drain(0));
     Check(list->Close());
     Check(list->Reset(allocator.Get(), nullptr));
@@ -51,6 +52,8 @@ int main()
     Check(list->Close());
     submit(queue.Get());
     Check(list->Reset(nextAllocator.Get(), nullptr)); // list Reset is legal while old work runs
+    assert(Safety::OrderedOn(pending, queue.Get())); // GPU need not be CPU-complete
+    assert(!Safety::OrderedOn(pending, otherQueue.Get()));
     for (int i = 0; i < 1000; ++i)
     {
         if (Safety::Reusable(retirement)) retiredSessionReleased = true;
@@ -75,6 +78,7 @@ int main()
     Check(queue->Wait(gate.Get(), 2));
     submit(queue.Get());
     Check(list->Reset(allocator.Get(), nullptr));
+    assert(!Safety::OrderedOn(replay, queue.Get()));
     assert(!Safety::Reusable(replay) && !Safety::Drain(0));
     Check(gate->Signal(2));
     assert(Safety::Drain(5000) && Safety::Reusable(replay));

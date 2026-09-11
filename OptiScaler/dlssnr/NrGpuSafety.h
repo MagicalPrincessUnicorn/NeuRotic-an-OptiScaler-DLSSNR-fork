@@ -28,6 +28,9 @@ struct SlotSnapshot
 };
 SlotSnapshot InspectSlots(const Ticket* tickets, unsigned int count);
 bool Readable(const Ticket& ticket);
+// GPU consumer ordering only, NOT permission to reuse/free. Exactly one observed submission,
+// on the consumer's queue; no CPU wait and no inferred cross-queue dependency.
+bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue);
 UINT64 TimestampFrequency(const Ticket& ticket);
 CompletionSet Pending();
 bool Reusable(const CompletionSet& tickets);

@@ -27,6 +27,7 @@ struct Recording
 {
     bool sealed = false;
     bool failed = false;
+    UINT64 submissions = 0;
     std::vector<Point> points;
 };
 namespace
@@ -165,6 +166,7 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     if (!ok) s.failed = true;
     for (auto& ticket : uses)
     {
+        ++ticket->submissions;
         if (!ok) { ticket->failed = true; continue; }
         auto found = std::find_if(ticket->points.begin(), ticket->points.end(),
                                  [&](const Point& p) { return p.timeline == timeline; });
@@ -236,6 +238,16 @@ Ticket Record(ID3D12GraphicsCommandList* list)
     if (!Put(list, recordingGuid, ticket)) return Unavailable("command-list lifetime cookie failed");
     s.pending.push_back(ticket);
     return ticket;
+}
+bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue)
+{
+    if (!ticket || !queue) return false;
+    std::lock_guard lock(State().mutex);
+    if (State().failed || ticket->failed || ticket->submissions != 1 || ticket->points.size() != 1)
+        return false;
+    auto timeline = Get<Timeline>(NativeObject(queue), timelineGuid);
+    return timeline && timeline == ticket->points.front().timeline &&
+           timeline->fence->GetCompletedValue() != UINT64_MAX;
 }
 bool Reusable(const Ticket& ticket)
 {
