@@ -859,7 +859,7 @@ __declspec(dllexport) void *dlssnr_call_create(const wchar_t *snippetPath, const
 
 // Colour and output are display resolution; depth and motion come from the game's own DLSS evaluation and
 // may be render resolution, so each resource carries its own subrect and motion scales by the ratio.
-__declspec(dllexport) int dlssnr_call_evaluate(ID3D12GraphicsCommandList *cmd, void *feature,
+static int evaluateWithGuideOrigins(ID3D12GraphicsCommandList *cmd, void *feature,
                                                void *capabilityParams, ID3D12Resource *color,
                                                ID3D12Resource *depth, ID3D12Resource *motion,
                                                ID3D12Resource *output, unsigned int width,
@@ -868,7 +868,8 @@ __declspec(dllexport) int dlssnr_call_evaluate(ID3D12GraphicsCommandList *cmd, v
                                                float intensity, int style, float localStructure,
                                                float localTone, float skinStructure, int useAutoMask,
                                                float mvScaleX, float mvScaleY,
-                                               float jitterX, float jitterY) {
+                                               float jitterX, float jitterY,
+                                               const unsigned int* origins) {
     if (!feature || !capabilityParams || !g_snip.evaluate) {
         return 0;
     }
@@ -902,6 +903,12 @@ __declspec(dllexport) int dlssnr_call_evaluate(ID3D12GraphicsCommandList *cmd, v
     setUInt(capabilityParams, "DLSSNR.MVecSubrectWidth", guideWidth);
     setUInt(capabilityParams, "DLSSNR.MVecSubrectHeight", guideHeight);
 
+    if (origins) {
+        setUInt(capabilityParams, "DLSSNR.DepthSubrectBaseX", origins[0]);
+        setUInt(capabilityParams, "DLSSNR.DepthSubrectBaseY", origins[1]);
+        setUInt(capabilityParams, "DLSSNR.MVecSubrectBaseX", origins[2]);
+        setUInt(capabilityParams, "DLSSNR.MVecSubrectBaseY", origins[3]);
+    }
     // The game's own encoding, passed through. Deriving this from the resolutions was a guess, and at
     // native resolution it came out as exactly 1.0 -- so a game using normalised vectors was telling
     // the model almost nothing had moved.
@@ -925,6 +932,28 @@ __declspec(dllexport) int dlssnr_call_evaluate(ID3D12GraphicsCommandList *cmd, v
     // a return through this module, which is the whole reason this file exists.
     volatile int result = g_snip.evaluate(cmd, feature, capabilityParams, nullptr);
     return result;
+}
+
+// Preserve the existing ABI and zero-origin Native behavior. Enhanced opts into a separate export.
+__declspec(dllexport) int dlssnr_call_evaluate(ID3D12GraphicsCommandList* cmd, void* feature,
+    void* params, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
+    ID3D12Resource* output, unsigned int width, unsigned int height, unsigned int guideWidth,
+    unsigned int guideHeight, int inverted, int reset, float intensity, int style,
+    float structure, float tone, float skin, int mask, float mvX, float mvY, float jitterX, float jitterY) {
+    return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
+        guideWidth, guideHeight, inverted, reset, intensity, style, structure, tone, skin, mask,
+        mvX, mvY, jitterX, jitterY, nullptr);
+}
+__declspec(dllexport) int dlssnr_call_evaluate_guided(ID3D12GraphicsCommandList* cmd, void* feature,
+    void* params, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
+    ID3D12Resource* output, unsigned int width, unsigned int height, unsigned int guideWidth,
+    unsigned int guideHeight, int inverted, int reset, float intensity, int style,
+    float structure, float tone, float skin, int mask, float mvX, float mvY, float jitterX, float jitterY,
+    const unsigned int* origins) {
+    if (!origins) return 0;
+    return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
+        guideWidth, guideHeight, inverted, reset, intensity, style, structure, tone, skin, mask,
+        mvX, mvY, jitterX, jitterY, origins);
 }
 
 // Inputs NVIDIA's own Streamline plugin sets that the positional exports predate: the model's global

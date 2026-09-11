@@ -324,6 +324,57 @@ int main(int argc, char** argv)
     assert(errors.Inspect().status.find("format=42") != std::string::npos);
     assert(!errors.Bind(errors.BeginPresent(), consumer.Get(), queue.Get(), device.Get(), 2, 16, 8, inputs));
     assert(errors.Inspect().status.find("callback not observed") != std::string::npos);
+    // Metadata-only Follow native does not require guide textures or allocate/copy them.
+    Guides::Bridge metadata; metadata.Enable(true, 77);
+    auto metadataFrame = frame;
+    metadataFrame.RenderSubrectWidth = 13; metadataFrame.RenderSubrectHeight = 7;
+    auto captureMetadata = [&](const char* reason = nullptr) {
+        metadata.Capture(producer.Get(), nullptr, nullptr, metadataFrame, device.Get(), 2, 16, 8,
+            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COMMON, false, reason);
+    };
+    captureMetadata(); auto meta = metadata.BeginPresent();
+    assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 16, 8)); // not submitted
+    submit(producer.Get());
+    assert(!metadata.MatchMetadata(meta, other.Get(), device.Get(), 2, 16, 8));
+    assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 1, 16, 8));
+    assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 32, 16));
+    assert(metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 16, 8));
+    assert(meta.frame.RenderSubrectWidth == 13 && !meta.frame.ExposureTexture);
+    assert(metadata.Inspect().captures == 0);
+    metadata.Enable(true, 78); // route/resolution change with capture still enabled
+    assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 16, 8));
+    assert(Safety::Drain(5000)); reset(producer.Get(), pa.Get());
+    captureMetadata(); captureMetadata(); meta = metadata.BeginPresent();
+    assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 16, 8));
+    Check(producer->Close()); reset(producer.Get(), pa.Get());
+    metadataFrame.RenderSubrectWidth = 0; captureMetadata(); meta = metadata.BeginPresent();
+    assert(meta.captureError.find("render-subrect") != std::string::npos);
+    metadataFrame.RenderSubrectWidth = 17; captureMetadata(); meta = metadata.BeginPresent();
+    assert(meta.captureError.find("render-subrect") != std::string::npos);
+    metadataFrame.RenderSubrectWidth = 12; captureMetadata("Missing jitter"); meta = metadata.BeginPresent();
+    assert(meta.captureError == "Missing jitter");
+    // Full copies preserve nonzero valid guide subrects; overflow must fail before any copy.
+    Guides::Bridge offsets; offsets.Enable(true);
+    auto subrect = frame; subrect.RenderSubrectWidth = 4; subrect.RenderSubrectHeight = 2;
+    subrect.DepthSubrectX = 3; subrect.DepthSubrectY = 1;
+    subrect.MotionSubrectX = 2; subrect.MotionSubrectY = 2;
+    offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    auto offsetChoice = offsets.BeginPresent(); submit(producer.Get());
+    assert(offsets.MatchMetadata(offsetChoice, queue.Get(), device.Get(), 2, 16, 8));
+    assert(offsets.Bind(offsetChoice, consumer.Get(), queue.Get(), device.Get(), 2, 16, 8, inputs));
+    assert(inputs.frame.DepthSubrectX == 3 && inputs.frame.MotionSubrectY == 2);
+    submit(consumer.Get()); assert(Safety::Drain(5000));
+    reset(producer.Get(), pa.Get()); reset(consumer.Get(), ca.Get());
+    subrect.DepthSubrectX = UINT_MAX;
+    offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    assert(offsets.BeginPresent().captureError.find("subrect exceeds") != std::string::npos);
+    subrect = frame; subrect.JitterX = NAN;
+    offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    assert(offsets.BeginPresent().captureError.find("non-finite") != std::string::npos);
+    std::puts("PASS fresh metadata-only dimensions, same-queue/output matching, resolution generation, subrect origins/bounds and missing temporal metadata.");
     producer.Reset(); consumer.Reset();
     assert(Safety::Drain(5000));
     if (debugEnabled)

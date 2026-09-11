@@ -110,6 +110,10 @@ struct DlssNrFrameInfo
     // available and is what gets used.
     unsigned int RenderSubrectWidth = 0;
     unsigned int RenderSubrectHeight = 0;
+    // Present Enhanced retains full guide copies and forwards their valid origins.
+    // Native callers retain their existing zero-origin behavior.
+    unsigned int DepthSubrectX = 0, DepthSubrectY = 0;
+    unsigned int MotionSubrectX = 0, MotionSubrectY = 0;
 };
 
 struct alignas(256) DlssNrConstants

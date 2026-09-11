@@ -49,6 +49,9 @@ struct PresentState
 {
     std::mutex mutex;
     UINT64 guideGeneration = 0;
+    UINT64 resourceRouteKey = 0;
+    UINT nativeWidth = 0, nativeHeight = 0;
+    DlssNrFrameInfo nativeFrame;
     PresentTelemetrySnapshot telemetry;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12CommandQueue> queue;
@@ -112,7 +115,8 @@ void EmitPacingSummary(const std::optional<PresentPacing::WindowSummary>& comple
         return;
 
     const auto& summary = completed.value();
-    const char* route = summary.route == PresentPacing::Route::PresentImageOnly
+    const char* route = summary.route == PresentPacing::Route::PresentEnhanced ? "Present Enhanced" :
+        summary.route == PresentPacing::Route::PresentImageOnly
                             ? "Present Image-Only" : "Native Temporal";
     g_present.telemetry.pacingSummary = summary;
     g_present.telemetry.hasPacingSummary = true;
@@ -544,7 +548,7 @@ PresentTelemetrySnapshot PresentTelemetry()
 void ReportPresentCallTiming(const PresentCallTimingSample& sample)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
-    if (sample.identity.pacing.route == PresentPacing::Route::PresentImageOnly &&
+    if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal &&
         sample.identity.completedOutput)
     {
         if (SUCCEEDED(sample.result))
@@ -557,7 +561,7 @@ void ReportPresentCallTiming(const PresentCallTimingSample& sample)
             InvalidateHistory("original Present failed");
         }
     }
-    if (sample.identity.pacing.route == PresentPacing::Route::PresentImageOnly)
+    if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal)
     {
         g_present.telemetry.adapterCpuMs = sample.adapterCpuMs;
         g_present.telemetry.adapterCpuMaxMs =
@@ -568,10 +572,10 @@ void ReportPresentCallTiming(const PresentCallTimingSample& sample)
         g_present.telemetry.originalPresentMaxMs =
             std::max(g_present.telemetry.originalPresentMaxMs, sample.originalPresentCpuMs);
     }
-    if (sample.identity.pacing.route == PresentPacing::Route::PresentImageOnly &&
+    if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal &&
         sample.originalPresentCpuMs >= 33.3)
         ++g_present.telemetry.originalPresentSlowCalls;
-    if (sample.identity.pacing.route == PresentPacing::Route::PresentImageOnly &&
+    if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal &&
         FAILED(sample.result))
         LOG_WARN("DLSS-NR Present diagnostic: original Present returned {:X} after {:.3f} ms",
                   static_cast<unsigned int>(sample.result), sample.originalPresentCpuMs);
@@ -600,7 +604,21 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto* config = Config::Instance();
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
-    PresentGuides::Instance().Enable(runtime.enabled && config->DlssNrRoute.value_or_default() == 2);
+    const auto capturedSettings = TryNrConfigSnapshot(*config);
+    if (!capturedSettings)
+    {
+        PresentGuides::Instance().BeginPresent();
+        const char* reason = "NR settings snapshot unavailable";
+        SetFallback(PresentApi::Unknown, reason);
+        return {};
+    }
+    const auto& settings = *capturedSettings;
+    const auto resolution = PresentResolution::Selected(settings);
+    const bool enhanced = settings.DlssNrRoute.value_or_default() == 2;
+    const bool observeNative = enhanced || (settings.DlssNrRoute.value_or_default() == 1 &&
+        resolution.mode == PresentResolution::FollowNative);
+    const auto routeKey = PresentResolution::CaptureKey(settings);
+    PresentGuides::Instance().Enable(runtime.enabled && observeNative, routeKey);
     const auto guideSelection = PresentGuides::Instance().BeginPresent();
     if (g_present.guideGeneration != guideSelection.generation)
     {
@@ -608,11 +626,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         g_present.guideGeneration = guideSelection.generation;
     }
     const bool enabled = runtime.enabled;
-    const unsigned int route = std::min(config->DlssNrRoute.value_or_default(), 2u);
+    const unsigned int route = std::min(settings.DlssNrRoute.value_or_default(), 2u);
     const bool presentRequested = enabled && route != 0;
     g_present.telemetry.requested = presentRequested;
     g_present.telemetry.active = false;
     g_present.telemetry.compatibilityPath.clear();
+    g_present.telemetry.workWidth = g_present.telemetry.workHeight = 0;
     g_present.telemetry.requestedPlacement = route == 2 ? "Present Enhanced" :
         route == 1 ? "Present Image-Only" : "Native Temporal";
     if (presentRequested)
@@ -621,8 +640,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
 
     PresentCallIdentity identity {};
     identity.presentAttempt = presentRequested ? g_present.telemetry.presentAttempts : 0;
-    const auto pacingRoute = presentRequested ? PresentPacing::Route::PresentImageOnly
-                                              : PresentPacing::Route::NativeTemporal;
+    const auto pacingRoute = !presentRequested ? PresentPacing::Route::NativeTemporal :
+        enhanced ? PresentPacing::Route::PresentEnhanced : PresentPacing::Route::PresentImageOnly;
     EmitPacingSummary(g_present.pacing.beginCall(pacingRoute, ++g_present.timingCallSequence,
                                                  identity.pacing));
     g_present.pacing.observePending(identity.pacing, g_present.telemetry.pendingSlots);
@@ -646,13 +665,13 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     g_present.presentWasRequested = true;
     g_present.resumeGeneration = runtime.resumeGeneration;
 
-    if (guideSelection.enabled && (config->DlssNrMultipassEnabled.value_or_default() || config->FGEnabled.value_or_default() ||
+    if (enhanced && (config->DlssNrMultipassEnabled.value_or_default() || config->FGEnabled.value_or_default() ||
         State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive))
     {
         SetFallback(PresentApi::Unknown, "Present Enhanced requires NR Multipass off and frame generation off");
         return identity;
     }
-    if (guideSelection.enabled && Telemetry().nativeRayReconstructionActive)
+    if (enhanced && Telemetry().nativeRayReconstructionActive)
     {
         SetFallback(PresentApi::Unknown, "Present Enhanced does not support Ray Reconstruction");
         return identity;
@@ -845,27 +864,54 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         : (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
             ? "D3D12 R10 SDR conversion" : "D3D12 RGBA8 direct");
 
-    const unsigned int workload = route == 2 ? 0u : std::min(config->DlssNrPresentWorkload.value_or_default(), 5u);
     const unsigned int width = static_cast<unsigned int>(backDesc.Width);
     const unsigned int height = backDesc.Height;
-    const unsigned int workWidth = PresentWorkDimension(width, workload);
-    const unsigned int workHeight = PresentWorkDimension(height, workload);
+    if (observeNative)
+    {
+        auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
+        if (api != PresentApi::D3D12 || !PresentGuides::Instance().MatchMetadata(guideSelection,
+                queue.Get(), swapchainIdentity.Get(), bufferIndex, width, height))
+        {
+            const auto status = PresentGuides::Instance().Inspect();
+            SetFallback(api, api != PresentApi::D3D12 ? "Captured Native metadata requires DX12" : status.status.c_str());
+            return identity;
+        }
+        if (g_present.nativeWidth != guideSelection.frame.RenderSubrectWidth ||
+            g_present.nativeHeight != guideSelection.frame.RenderSubrectHeight)
+            InvalidateHistory("Native render subrect changed");
+        const auto& next = guideSelection.frame;
+        const auto& old = g_present.nativeFrame;
+        if (enhanced && (next.DepthSubrectX != old.DepthSubrectX || next.DepthSubrectY != old.DepthSubrectY ||
+            next.MotionSubrectX != old.MotionSubrectX || next.MotionSubrectY != old.MotionSubrectY ||
+            next.DepthInverted != old.DepthInverted || next.MvScaleX != old.MvScaleX || next.MvScaleY != old.MvScaleY))
+            InvalidateHistory("Native guide convention or subrect origin changed");
+        if (enhanced && next.Reset) InvalidateHistory("Native reset requested");
+        g_present.nativeFrame = next;
+        g_present.nativeWidth = guideSelection.frame.RenderSubrectWidth;
+        g_present.nativeHeight = guideSelection.frame.RenderSubrectHeight;
+    }
+    const auto size = PresentResolution::Resolve(resolution, width, height,
+        observeNative ? guideSelection.frame.RenderSubrectWidth : 0,
+        observeNative ? guideSelection.frame.RenderSubrectHeight : 0);
+    const unsigned int workWidth = size.width, workHeight = size.height;
     g_present.telemetry.backbufferWidth = width;
     g_present.telemetry.backbufferHeight = height;
     g_present.telemetry.backbufferFormat = backDesc.Format;
-    g_present.telemetry.workload = workload;
+    g_present.telemetry.resolution = resolution.mode;
+    g_present.telemetry.workload = resolution.scale;
     g_present.telemetry.workWidth = workWidth;
     g_present.telemetry.workHeight = workHeight;
     if (workWidth == 0 || workHeight == 0)
     {
-        SetFallback(api, "backbuffer is too small for an aligned model workload");
+        SetFallback(api, size.reason);
         return identity;
     }
 
     const bool signatureChanged = g_present.device == nullptr || !SameDevice(g_present.device.Get(), device.Get()) ||
         g_present.queue.Get() != queue.Get() || g_present.width != width || g_present.height != height ||
         g_present.workWidth != workWidth || g_present.workHeight != workHeight ||
-        g_present.format != backDesc.Format || g_present.colorSpace != colorSpace;
+        g_present.format != backDesc.Format || g_present.colorSpace != colorSpace ||
+        g_present.resourceRouteKey != routeKey;
     if (signatureChanged)
     {
         InvalidateHistory("Present target signature changed");
@@ -880,6 +926,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             SetFallback(api, "private Present resources could not be created", true);
             return identity;
         }
+        g_present.resourceRouteKey = routeKey;
     }
 
     if (!DirectD3D12Available(device.Get()))
@@ -935,7 +982,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     PresentGuides::Inputs nativeGuides;
-    if (guideSelection.enabled)
+    if (enhanced)
     {
         auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
         if (api != PresentApi::D3D12 || !PresentGuides::Instance().Bind(guideSelection,
@@ -944,7 +991,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         {
             g_present.list->Close();
             const auto guideStatus = PresentGuides::Instance().Inspect();
-            SetFallback(api, api != PresentApi::D3D12 ? "Native guide test requires DX12" :
+            SetFallback(api, api != PresentApi::D3D12 ? "Captured Native metadata requires DX12" :
                 guideStatus.status.c_str());
             return identity;
         }
@@ -1004,9 +1051,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
-        g_present.frame.Get(), guideSelection.enabled ? nativeGuides.depth.Get() : g_present.depth.Get(),
-        guideSelection.enabled ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
-        g_present.history.ResetForNextEvaluation(), guideSelection.enabled ? &nativeGuides.frame : nullptr);
+        g_present.frame.Get(), enhanced ? nativeGuides.depth.Get() : g_present.depth.Get(),
+        enhanced ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
+        g_present.history.ResetForNextEvaluation(), enhanced ? &nativeGuides.frame : nullptr);
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;
@@ -1017,7 +1064,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     slot.firstSubmissionMs = Util::MillisecondsNow();
     queue->ExecuteCommandLists(1, modelLists);
     ++g_present.telemetry.modelSubmissions;
-    if (modelSucceeded && guideSelection.enabled) PresentGuides::Instance().Evaluated();
+    if (modelSucceeded && enhanced) PresentGuides::Instance().Evaluated();
     if (uploadingGuides)
         g_present.guidesNeedUpload = false;
 
@@ -1159,7 +1206,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         LOG_INFO("DLSS-NR Present diagnostic: processing recovered on attempt {} after {} consecutive fallback(s)",
                  g_present.telemetry.presentAttempts, g_present.telemetry.consecutiveFallbacks);
     g_present.telemetry.consecutiveFallbacks = 0;
-    g_present.telemetry.actualPlacement = guideSelection.enabled ?
+    g_present.telemetry.actualPlacement = enhanced ?
         "Present Enhanced (game HUD included)" : "Present Image-Only";
     g_present.telemetry.fallbackReason.clear();
     g_present.telemetry.failure.clear();

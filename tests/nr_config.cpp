@@ -51,7 +51,10 @@ struct TestConfig
     NrOptional<bool> DlssNrSecondLayerApplyModel { true };
     ExtraLayers DlssNrExtraLayers;
     NrOptional<uint32_t> DlssNrRoute { 0 };
-    NrOptional<uint32_t> DlssNrPresentWorkload { 0 };
+    NrOptional<uint32_t> DlssNrPresentResolution { 1 };
+    NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
+    NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR

@@ -28,6 +28,7 @@ struct PresentTelemetrySnapshot
     DXGI_SWAP_EFFECT swapEffect = DXGI_SWAP_EFFECT_DISCARD;
     DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
     unsigned int workload = 0;
+    unsigned int resolution = 1;
     unsigned int workWidth = 0;
     unsigned int workHeight = 0;
     unsigned long long modelEvaluations = 0;

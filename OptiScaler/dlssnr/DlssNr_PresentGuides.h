@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NrGpuSafety.h"
+#include "DlssNr_PresentResolution.h"
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>
@@ -59,6 +60,10 @@ struct Selection
     unsigned int count = 0;
     int slot = -1;
     std::string captureError;
+    DlssNrFrameInfo frame;
+    ComPtr<IUnknown> swapchain;
+    GpuSafety::Ticket producer;
+    UINT backbuffer = 0, width = 0, height = 0;
 };
 struct Inputs
 {
@@ -86,6 +91,8 @@ class Bridge
     unsigned int count = 0;
     int candidate = -1;
     std::string epochError;
+    Selection metadata;
+    UINT64 configurationKey = 0;
 
     void Reject(const std::string& reason) { telemetry.status = reason; ++telemetry.rejected; }
     void RejectCapture(const std::string& reason)
@@ -171,28 +178,35 @@ class Bridge
     }
   public:
     Snapshot Inspect() { std::lock_guard lock(mutex); return telemetry; }
-    void Enable(bool enabled)
+    void Enable(bool enabled, UINT64 key = 0)
     {
         std::lock_guard lock(mutex);
-        if (telemetry.enabled == enabled) return;
+        if (telemetry.enabled == enabled && configurationKey == key) return;
+        configurationKey = key;
         telemetry.enabled = enabled;
         ++telemetry.generation;
         ++epoch; count = 0; candidate = -1;
+        metadata = {};
         epochError.clear(); telemetry.captureError.clear(); telemetry.inputDescription.clear();
         telemetry.status = enabled ? "Waiting for Native guides" : "Control: constant depth / zero motion";
     }
     Selection BeginPresent()
     {
         std::lock_guard lock(mutex);
-        Selection selection {telemetry.enabled, epoch++, telemetry.generation, count, candidate, epochError};
+        Selection selection = metadata;
+        selection.enabled = telemetry.enabled; selection.epoch = epoch++;
+        selection.generation = telemetry.generation; selection.count = count;
+        selection.slot = candidate; selection.captureError = epochError;
         count = 0; candidate = -1;
+        metadata = {};
         epochError.clear();
         return selection;
     }
     void Capture(ID3D12GraphicsCommandList* list, ID3D12Resource* depth, ID3D12Resource* motion,
                  const DlssNrFrameInfo& frame, IUnknown* swapchain, UINT backbuffer,
                  UINT width, UINT height, D3D12_RESOURCE_STATES depthState,
-                 D3D12_RESOURCE_STATES motionState)
+                 D3D12_RESOURCE_STATES motionState, bool copyGuides = true,
+                 const char* metadataError = nullptr)
     {
         std::lock_guard lock(mutex);
         if (!telemetry.enabled) return;
@@ -205,13 +219,27 @@ class Bridge
         if (!list) { RejectCapture("Native capture: command list missing"); return; }
         if (!swapchain) { RejectCapture("Native capture: current swapchain/identity unavailable"); return; }
         if (!width || !height) { RejectCapture("Native capture: output missing or empty"); return; }
+        if (metadataError) { RejectCapture(metadataError); return; }
+        if (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight ||
+            frame.RenderSubrectWidth > width || frame.RenderSubrectHeight > height)
+        { RejectCapture("Native capture: missing or invalid render-subrect dimensions"); return; }
+        metadata.frame = frame; metadata.frame.ExposureTexture = nullptr;
+        metadata.swapchain = swapchain; metadata.backbuffer = backbuffer;
+        metadata.width = width; metadata.height = height;
+        metadata.producer = GpuSafety::Record(list);
+        if (!metadata.producer) { RejectCapture("Native metadata producer tracking unavailable"); return; }
+        if (!copyGuides) return;
         if (!Describe(depth, false, dd)) { RejectCapture("Native capture: unsupported depth: " + telemetry.inputDescription); return; }
         if (!Describe(motion, true, md)) { RejectCapture("Native capture: unsupported motion: " + telemetry.inputDescription); return; }
         if (!std::isfinite(frame.MvScaleX) || !std::isfinite(frame.MvScaleY) ||
             !std::isfinite(frame.JitterX) || !std::isfinite(frame.JitterY))
         { RejectCapture("Native capture: non-finite motion scale/jitter"); return; }
-        if (frame.RenderSubrectWidth > dd.Width || frame.RenderSubrectHeight > dd.Height ||
-            frame.RenderSubrectWidth > md.Width || frame.RenderSubrectHeight > md.Height)
+        if (frame.DepthSubrectX > dd.Width || frame.DepthSubrectY > dd.Height ||
+            frame.MotionSubrectX > md.Width || frame.MotionSubrectY > md.Height ||
+            frame.RenderSubrectWidth > dd.Width - frame.DepthSubrectX ||
+            frame.RenderSubrectHeight > dd.Height - frame.DepthSubrectY ||
+            frame.RenderSubrectWidth > md.Width - frame.MotionSubrectX ||
+            frame.RenderSubrectHeight > md.Height - frame.MotionSubrectY)
         { RejectCapture("Native capture: render subrect exceeds guide dimensions: " + telemetry.inputDescription); return; }
         ComPtr<ID3D12Device> device, depthDevice, motionDevice;
         if (FAILED(list->GetDevice(IID_PPV_ARGS(&device))) ||
@@ -307,6 +335,22 @@ class Bridge
         inputs = {slot.depth, slot.motion, slot.frame};
         ++telemetry.matched;
         telemetry.status = "Matched Native guides bound; model success not yet confirmed";
+        return true;
+    }
+    bool MatchMetadata(const Selection& selection, ID3D12CommandQueue* queue,
+                       IUnknown* swapchain, UINT backbuffer, UINT width, UINT height)
+    {
+        std::lock_guard lock(mutex);
+        if (!telemetry.enabled || !selection.enabled || selection.generation != telemetry.generation)
+        { Reject("Native metadata belongs to an inactive/stale route or resolution"); return false; }
+        if (!selection.captureError.empty()) { Reject(selection.captureError); return false; }
+        if (selection.count != 1 || !selection.producer)
+        { Reject("No fresh unique Native render metadata in this Present interval"); return false; }
+        if (selection.swapchain.Get() != swapchain || selection.backbuffer != backbuffer ||
+            selection.width != width || selection.height != height)
+        { Reject("Native metadata frame/swapchain/output-size mismatch"); return false; }
+        if (!GpuSafety::OrderedOn(selection.producer, queue))
+        { Reject("Native metadata not uniquely submitted on Present queue"); return false; }
         return true;
     }
     void Evaluated()

@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "Config.h"
+#include "dlssnr/DlssNr_PresentResolution.h"
 
 #include "Util.h"
 
@@ -348,10 +349,8 @@ bool Config::Reload(std::filesystem::path iniPath)
                 DlssNrRoute.set_from_config(std::min(route.value(), 2u));
             else
                 DlssNrRoute.reset();
-            if (auto workload = readUInt("DlssNr", "PresentWorkload"))
-                DlssNrPresentWorkload.set_from_config(std::min(workload.value(), 5u));
-            else
-                DlssNrPresentWorkload.reset();
+            DlssNr::PresentResolution::LoadConfig(*this,
+                [&](const char* key) { return readUInt("DlssNr", key); });
             // PerformanceMode is the user-facing name. Keep accepting the older experimental
             // key so profiles created before Alpha 0.4 retain their selected render path.
             auto performanceMode = readBool("DlssNr", "PerformanceMode");
@@ -1420,8 +1419,7 @@ bool Config::SaveIni()
         ini.SetValue(section.c_str(), "ApplyModel", GetBoolValue(layer.applyModel.value_for_config()).c_str());
     }
     ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
-    ini.SetValue("DlssNr", "PresentWorkload",
-                 GetIntValue(Instance()->DlssNrPresentWorkload.value_for_config()).c_str());
+    DlssNr::PresentResolution::SaveConfig(ini, *Instance());
     // Persist the user-facing key and retain the legacy spelling for prior Alpha builds.
     const int renderingMode = std::clamp(Instance()->DlssNrRenderingMode.value_or_default(), 0, 1);
     ini.SetLongValue("DlssNr", "RenderingMode", static_cast<long>(renderingMode));

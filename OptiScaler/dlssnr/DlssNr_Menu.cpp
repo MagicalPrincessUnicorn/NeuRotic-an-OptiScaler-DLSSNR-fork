@@ -185,28 +185,33 @@ void RenderMenu(Config* config, float menuResScale)
         if (presentRoute)
         {
             const auto guides = PresentGuides::Instance().Inspect();
-            HelpMarker("Present Enhanced uses captured Native depth and motion. Both Present routes retain the game HUD. "
-                "Enhanced requires DX12 SDR, 100%, NR Multipass OFF and frame generation OFF. "
-                "Enhanced copies Native guides and their motion scale, jitter and reset metadata. "
-                "No fresh matching pair means original-image fallback, NOT constant-guide NR. "
-                "This does not test a pre-HUD hook or prove HDR/tone-mapping causality.");
+            HelpMarker("Present Enhanced uses captured Native depth, motion, jitter and reset at Present, with game HUD included. "
+                "DX12 SDR only; disable frame generation and NR Multipass. RR is unsupported. "
+                "Missing or ambiguous guides keep the original image.");
             ImGui::TextWrapped("%s", guides.status.c_str());
             ImGui::Text("Native capture calls %llu", guides.captureAttempts);
             if (!guides.inputDescription.empty()) ImGui::TextWrapped("%s", guides.inputDescription.c_str());
             if (!guides.captureError.empty()) ImGui::TextWrapped("Capture failure: %s", guides.captureError.c_str());
             ImGui::Text("Guide copies %llu | matched %llu | evaluated %llu | rejected %llu",
                 guides.captures, guides.matched, guides.evaluated, guides.rejected);
-            static const char* presentWorkNames[] = {
-                "Full / Native (100%)", "Ultra Quality (77%)", "Quality (67%)",
-                "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
-            };
-            int workload = std::clamp((int) config->DlssNrPresentWorkload.value_or_default(), 0, 5);
-            if (ImGui::Combo("Present workload", &workload, presentWorkNames,
-                             IM_ARRAYSIZE(presentWorkNames)))
-                config->DlssNrPresentWorkload = (uint32_t) workload;
-            HelpMarker("A fixed, auditable Present workload. The full-resolution frame is always preserved;"
-                       " only the private model input is reduced. The model answer is spatially enlarged"
-                       " and conservatively composed over that untouched source.");
+            auto& resolutionOption = route == 2 ? config->DlssNrEnhancedResolution : config->DlssNrPresentResolution;
+            auto& scaleOption = route == 2 ? config->DlssNrEnhancedCustomScale : config->DlssNrPresentCustomScale;
+            int resolution = std::clamp((int) resolutionOption.value_or_default(), 0, 2);
+            if (ImGui::Combo("NR resolution", &resolution, PresentResolution::Names, 3))
+                resolutionOption = (uint32_t) resolution;
+            HelpMarker("Follow native reads fresh game render-subrect metadata. Private NR sizes align down to eight pixels. "
+                "Full output uses exact output dimensions. Custom scale reduces private NR work. "
+                "Each Present route saves its own choices.");
+            if (resolution == PresentResolution::Custom)
+            {
+                static const char* scales[] = { "100%", "77%", "67%", "58%", "50%", "33%" };
+                int scale = std::clamp((int) scaleOption.value_or_default(), 0, 5);
+                if (ImGui::Combo("Custom scale", &scale, scales, IM_ARRAYSIZE(scales)))
+                    scaleOption = (uint32_t) scale;
+            }
+            const auto actual = PresentTelemetry();
+            ImGui::Text("Actual NR %ux%u | output %ux%u", actual.workWidth, actual.workHeight,
+                        actual.backbufferWidth, actual.backbufferHeight);
         }
 
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
@@ -330,7 +335,7 @@ void RenderMenu(Config* config, float menuResScale)
             ImGui::TextDisabled("Use Native Temporal when it is available.");
             if (presentTelemetry.active)
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
-                    "Present Image-Only is active. NR is processing the final image before it reaches the display.");
+                    "%s is active. NR is processing the final image before it reaches the display.", routeNames[route]);
             else
                 ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
                     "Present NR was bypassed. Your image is unchanged; see the reason below.");
@@ -346,8 +351,8 @@ void RenderMenu(Config* config, float menuResScale)
                         (unsigned int) presentTelemetry.colorSpace);
             if (!presentTelemetry.compatibilityPath.empty())
                 ImGui::Text("Compatibility path: %s", presentTelemetry.compatibilityPath.c_str());
-            ImGui::Text("%s | actual model work %ux%u",
-                        PresentWorkloadName(presentTelemetry.workload), presentTelemetry.workWidth,
+            ImGui::Text("%s | actual NR %ux%u",
+                        PresentResolution::Names[std::min(presentTelemetry.resolution, 2u)], presentTelemetry.workWidth,
                         presentTelemetry.workHeight);
             ImGui::Text("Model evaluations %llu | spatial upscale/composites %llu | skipped %llu",
                         presentTelemetry.modelEvaluations, presentTelemetry.compositeEvaluations,
@@ -374,7 +379,8 @@ void RenderMenu(Config* config, float menuResScale)
             if (presentTelemetry.hasPacingSummary)
             {
                 const auto& summary = presentTelemetry.pacingSummary;
-                const char* summaryRoute = summary.route == PresentPacing::Route::PresentImageOnly
+                const char* summaryRoute = summary.route == PresentPacing::Route::PresentEnhanced ? "Present Enhanced" :
+                    summary.route == PresentPacing::Route::PresentImageOnly
                                                ? "Present Image-Only" : "Native Temporal";
                 ImGui::TextDisabled("Completed pacing window %llu: %s | %llu samples; warm-up discarded %llu",
                                     summary.serial, summaryRoute,
@@ -387,7 +393,7 @@ void RenderMenu(Config* config, float menuResScale)
                             summary.adapterCpu.p95, summary.adapterCpu.maximum, summary.hookCpu.p95,
                             summary.hookCpu.maximum, summary.originalPresentCpu.p95,
                             summary.originalPresentCpu.maximum);
-                if (summary.route == PresentPacing::Route::PresentImageOnly)
+                if (summary.route != PresentPacing::Route::NativeTemporal)
                 {
                     ImGui::Text("Present GPU %llu/%llu: median %.2f | p95 %.2f | max %.2f ms",
                                 static_cast<unsigned long long>(summary.presentGpu.samples),

@@ -26,7 +26,10 @@
     X(DlssNrSecondLayerApplyModel) \
     X(DlssNrExtraLayers) \
     X(DlssNrRoute) \
-    X(DlssNrPresentWorkload) \
+    X(DlssNrPresentResolution) \
+    X(DlssNrPresentCustomScale) \
+    X(DlssNrEnhancedResolution) \
+    X(DlssNrEnhancedCustomScale) \
     X(DlssNrRunBeforeSr) \
     X(DlssNrRenderingMode) \
     X(DlssNrPreDlaa) \

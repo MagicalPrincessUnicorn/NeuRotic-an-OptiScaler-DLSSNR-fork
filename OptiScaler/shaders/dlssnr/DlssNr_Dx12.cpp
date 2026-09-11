@@ -163,6 +163,10 @@ using PFN_NrEvaluate = int(__cdecl*) (ID3D12GraphicsCommandList*, void*, void*, 
                                       unsigned int, unsigned int, unsigned int, int, int, float, int,
                                       float, float, float, int, float, float, float, float);
 using PFN_NrRelease = void(__cdecl*) (void*);
+using PFN_NrEvaluateGuided = int(__cdecl*) (ID3D12GraphicsCommandList*, void*, void*, ID3D12Resource*,
+    ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, unsigned int, unsigned int, unsigned int,
+    unsigned int, int, int, float, int, float, float, float, int, float, float, float, float,
+    const unsigned int*);
 using PFN_NrSetExtras = void(__cdecl*) (void*, float, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*,
                                         unsigned int, unsigned int, unsigned int, unsigned int);
 using PFN_NrSetFloatSlot = void(__cdecl*) (int);
@@ -274,6 +278,7 @@ struct NrState
     HMODULE forwarder = nullptr;
     PFN_NrCreate create = nullptr;
     PFN_NrEvaluate evaluate = nullptr;
+    PFN_NrEvaluateGuided evaluateGuided = nullptr;
     PFN_NrRelease release = nullptr;
     int (*shutdown)() = nullptr;
     PFN_NrSetExtras setExtras = nullptr;
@@ -732,6 +737,7 @@ bool EnsureForwarder()
 
     g_nr.create = (PFN_NrCreate) GetProcAddress(g_nr.forwarder, "dlssnr_call_create");
     g_nr.evaluate = (PFN_NrEvaluate) GetProcAddress(g_nr.forwarder, "dlssnr_call_evaluate");
+    g_nr.evaluateGuided = (PFN_NrEvaluateGuided) GetProcAddress(g_nr.forwarder, "dlssnr_call_evaluate_guided");
     g_nr.release = (PFN_NrRelease) GetProcAddress(g_nr.forwarder, "dlssnr_call_release");
     g_nr.shutdown = (int (*)()) GetProcAddress(g_nr.forwarder, "dlssnr_call_shutdown");
     // Optional: an older forwarder simply lacks it, and the model runs as before.
@@ -3311,7 +3317,18 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // feature-creation hang, and the colour core is not settled enough to build on. One evaluate.
     // Both providers write g_nr.output. Both must pass through the same resolve before an
     // evaluation advances display readiness; proxy success alone previously exited too early.
-    const int result = useProxy ? static_cast<int>(DlssNr::Proxy::Run(
+    const unsigned int guideOrigins[] = {frame.DepthSubrectX, frame.DepthSubrectY,
+                                         frame.MotionSubrectX, frame.MotionSubrectY};
+    const bool enhanced = privateCommandList && cfg.DlssNrRoute.value_or_default() == 2;
+    const int result = enhanced ? (g_nr.evaluateGuided ? g_nr.evaluateGuided(
+        cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
+        workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
+        g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+        (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+        cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
+        g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY, guideOrigins) : 0) :
+        useProxy ? static_cast<int>(DlssNr::Proxy::Run(
         cmdList, device, modelInput, depthIn, motionIn, g_nr.output, workWidth, workHeight,
         guideWidth, guideHeight, g_nr.guideDepthInverted, g_nr.reset,
         g_nr.guideMvScaleX * mvToWork.x, g_nr.guideMvScaleY * mvToWork.y,
@@ -4359,8 +4376,6 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                                    : std::optional<NrConfigSnapshot<Config>>{};
     if (settings == nullptr && !localSettings) return nullptr;
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
-    PresentGuides::Instance().Enable(cfg.GetDlssNrRuntimeSnapshot().enabled &&
-                                    cfg.DlssNrRoute.value_or_default() == 2);
 
     if (cfg.DlssNrRoute.value_or_default() != 0 || !cfg.GetDlssNrRuntimeSnapshot().enabled ||
         !cfg.DlssNrRunBeforeSr.value_or_default() ||
@@ -4911,8 +4926,11 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                                                    : std::optional<NrConfigSnapshot<Config>>{};
     if (settings == nullptr && !localSettings) return;
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
-    PresentGuides::Instance().Enable(cfg.GetDlssNrRuntimeSnapshot().enabled &&
-                                    cfg.DlssNrRoute.value_or_default() == 2);
+    const bool enhanced = cfg.DlssNrRoute.value_or_default() == 2;
+    const bool observeNative = enhanced || (cfg.DlssNrRoute.value_or_default() == 1 &&
+        PresentResolution::Selected(cfg).mode == PresentResolution::FollowNative);
+    PresentGuides::Instance().Enable(cfg.GetDlssNrRuntimeSnapshot().enabled && observeNative,
+                                    PresentResolution::CaptureKey(cfg));
     if (cfg.DlssNrRoute.value_or_default() != 0)
     {
         if (cfg.GetDlssNrRuntimeSnapshot().enabled && cmdList && params &&
@@ -4938,6 +4956,23 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
             params->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &frame.MvScaleY);
             params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &frame.JitterX);
             params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &frame.JitterY);
+            // Guide copies retain complete base planes, including independent valid origins.
+            unsigned int depthX = 0, depthY = 0, motionX = 0, motionY = 0, outputX = 0, outputY = 0;
+            params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, &depthX);
+            params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, &depthY);
+            params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, &motionX);
+            params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, &motionY);
+            params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X, &outputX);
+            params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y, &outputY);
+            frame.DepthSubrectX = depthX; frame.DepthSubrectY = depthY;
+            frame.MotionSubrectX = motionX; frame.MotionSubrectY = motionY;
+            const bool haveTemporal =
+                params->Get(NVSDK_NGX_Parameter_Reset, &reset) == NVSDK_NGX_Result_Success &&
+                params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &frame.JitterX) == NVSDK_NGX_Result_Success &&
+                params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &frame.JitterY) == NVSDK_NGX_Result_Success;
+            const char* metadataError = forceAfterUpscale ? "Present Enhanced / Follow native: RR is not supported" :
+                outputX || outputY ? "Native capture: partial output subrect cannot match final Present" :
+                enhanced && !haveTemporal ? "Native capture: reset or jitter metadata missing" : nullptr;
             const auto desc = target ? target->GetDesc() : D3D12_RESOURCE_DESC{};
             const auto* config = Config::Instance();
             PresentGuides::Instance().Capture(cmdList, depth, motion, frame, identity.Get(),
@@ -4946,7 +4981,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                 static_cast<D3D12_RESOURCE_STATES>(config->DepthResourceBarrier.value_or(
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)),
                 static_cast<D3D12_RESOURCE_STATES>(config->MVResourceBarrier.value_or(
-                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)));
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)), enhanced, metadataError);
         }
         return;
     }
@@ -5263,6 +5298,7 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
 
     auto settings = TryNrConfigSnapshot(*Config::Instance());
     if (!settings || settings->DlssNrRoute.value_or_default() == 0 ||
+        (settings->DlssNrRoute.value_or_default() == 2) != (nativeGuideFrame != nullptr) ||
         !settings->GetDlssNrRuntimeSnapshot().enabled)
         return false;
 
@@ -5318,6 +5354,12 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
         frame.ColourIsLinearHdr = false;
         frame.ExposureTexture = nullptr;
         frame.PreExposure = 1.0f;
+        // Preserve the proven 100% temporal convention. Motion already scales by work/output
+        // inside Dispatch; scale jitter once here by that same actual, per-axis ratio.
+        const auto scale = DlssNrWorkingMotionScale(static_cast<UINT>(frameDesc.Width), frameDesc.Height,
+                                                    workWidth, workHeight);
+        frame.JitterX *= scale.x;
+        frame.JitterY *= scale.y;
     }
 
     unsigned long long before = 0;

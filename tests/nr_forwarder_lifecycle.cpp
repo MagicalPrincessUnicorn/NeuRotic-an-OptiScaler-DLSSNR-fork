@@ -2,6 +2,8 @@
 #include "../OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp"
 #include <cassert>
 #include <cstdio>
+#include <map>
+#include <string>
 
 namespace {
 int initCalls = 0;
@@ -27,8 +29,11 @@ int __cdecl FakeCreate(ID3D12GraphicsCommandList*, int, const void*, void** hand
 int __cdecl FakeVkCreate(void*, int, const void*, void**) { return 1; }
 int __cdecl FakeEval(ID3D12GraphicsCommandList*, const void*, const void*, void*) { return 1; }
 int __cdecl FakeRelease(void*) { return 1; }
-void __thiscall SetTestUInt(void*, const char*, unsigned int) {}
-void __thiscall SetTestFloat(void*, const char*, float) {}
+std::map<std::string, unsigned int> uints;
+std::map<std::string, float> floats;
+void __thiscall SetTestUInt(void*, const char* name, unsigned int value) { uints[name] = value; }
+void __thiscall SetTestFloat(void*, const char* name, float value) { floats[name] = value; }
+void __thiscall SetTestResource(void*, const char*, unsigned long long) {}
 
 void* vtable[16] {};
 void** params = vtable;
@@ -43,6 +48,7 @@ void* Create(ID3D12Device* device) {
 
 int main() {
     vtable[VT_SET_UINT] = reinterpret_cast<void*>(SetTestUInt);
+    vtable[VT_SET_ULL] = reinterpret_cast<void*>(SetTestResource);
     vtable[1] = reinterpret_cast<void*>(SetTestFloat);
     g_snip.module = reinterpret_cast<HMODULE>(1); // suppress library loading
     g_snip.init = FakeInit;
@@ -50,6 +56,19 @@ int main() {
     g_snip.evaluate = FakeEval;
     g_snip.release = FakeRelease;
     g_snip.shutdown = FakeShutdown;
+
+    const unsigned int origins[] = {13, 7, 2, 5};
+    assert(dlssnr_call_evaluate_guided(nullptr, deviceA, &params, nullptr, nullptr, nullptr, nullptr,
+        1920, 1080, 1280, 720, 1, 1, 1.f, 0, 1.f, 1.f, -1.f, 1, 960.f, -540.f, .125f, -.25f, origins) == 1);
+    assert(uints["DLSSNR.DepthSubrectBaseX"] == 13 && uints["DLSSNR.MVecSubrectBaseY"] == 5);
+    assert(uints["DLSSNR.DepthSubrectWidth"] == 1280 && uints["DLSSNR.Width"] == 1920);
+    assert(uints["DLSSNR.Reset"] == 1 && uints["DLSSNR.DepthInverted"] == 1);
+    assert(floats["DLSSNR.MVecScaleY"] == -540.f && floats["Jitter.Offset.X"] == .125f);
+    assert(dlssnr_call_evaluate(nullptr, deviceA, &params, nullptr, nullptr, nullptr, nullptr,
+        3840, 2160, 1280, 720, 0, 0, 1.f, 0, 1.f, 1.f, -1.f, 1, 1920.f, -1080.f, .25f, -.5f) == 1);
+    assert(uints["DLSSNR.DepthSubrectBaseX"] == 0 && uints["DLSSNR.MVecSubrectBaseY"] == 0);
+    assert(floats["Jitter.Offset.X"] == .25f && floats["DLSSNR.MVecScaleY"] == -1080.f);
+    std::puts("PASS Enhanced parameter contract: subrect origins, sizes, motion, jitter, reset; legacy Native clears offsets.");
 
     // Cold/double shutdown must be a no-op; each reopened generation must really reinitialize.
     assert(dlssnr_call_shutdown() == 1 && shutdownCalls == 0);

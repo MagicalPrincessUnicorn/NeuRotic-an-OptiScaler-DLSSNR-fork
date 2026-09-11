@@ -12,7 +12,8 @@ namespace DlssNr::PresentPacing
 enum class Route : unsigned int
 {
     NativeTemporal,
-    PresentImageOnly
+    PresentImageOnly,
+    PresentEnhanced
 };
 
 struct MetricSummary
@@ -208,7 +209,7 @@ class Window
     bool expectGpu(const CallToken& token)
     {
         if (!token.eligible || !_active || token.serial != _serial ||
-            token.route != Route::PresentImageOnly || token.route != _route)
+            token.route == Route::NativeTemporal || token.route != _route)
             return false;
         ++_expectedGpuSamples;
         return true;
@@ -218,7 +219,7 @@ class Window
                    std::uint64_t fenceAge)
     {
         if (!token.eligible || !_active || token.serial != _serial ||
-            token.route != Route::PresentImageOnly || token.route != _route)
+            token.route == Route::NativeTemporal || token.route != _route)
             return false;
         if (!std::isfinite(gpuMs) || gpuMs < 0.0 ||
             !std::isfinite(completionObservationMs) || completionObservationMs < 0.0)

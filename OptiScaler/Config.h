@@ -224,10 +224,13 @@ class Config
     // Capture once per evaluation and reuse for creation, tuning checks, and built-tuning records.
     // Returned option copies require no locks. No NR lock survives this call.
     NrConfigSnapshot<Config> GetDlssNrConfigSnapshot() const;
-    // 0 = the existing upscaler-attached temporal path; 1 = the isolated image-only Present path.
+    // 0 = Native Temporal; 1 = Present Image-Only; 2 = Present Enhanced.
     NrOptional<uint32_t> DlssNrRoute { 0 };
-    // Fixed Present workload: Full, Ultra Quality, Quality, Balanced, Performance, Ultra Performance.
-    NrOptional<uint32_t> DlssNrPresentWorkload { 0 };
+    // Independent Present policies: 0 follow native, 1 full output, 2 custom.
+    NrOptional<uint32_t> DlssNrPresentResolution { 1 };
+    NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
+    NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     // 0 = Quality (post-SR), 1 = Performance (pre-SR).
     // Keep the legacy boolean as the routing compatibility surface for existing callers/configurations.
