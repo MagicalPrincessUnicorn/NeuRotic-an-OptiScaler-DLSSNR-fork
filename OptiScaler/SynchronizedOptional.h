@@ -2,11 +2,17 @@
 
 #include "CustomOptional.h"
 #include <mutex>
+#include <atomic>
+#include <cstdint>
 
 // Only NR opts into this domain. Transactions must cover config copies/updates only;
 // never retain one across GPU, scanner, UI, or other external calls.
 struct NrConfigSynchronization
 {
+    // Reload invalidates UI previews even when the loaded values happen to be identical.
+    inline static std::atomic<uint64_t> profileGeneration { 0 };
+    static uint64_t ProfileGeneration() { return profileGeneration.load(); }
+    static void InvalidateProfileEdits() { ++profileGeneration; }
     static std::recursive_mutex& Mutex()
     {
         // Config and pinned hooks have no coordinated teardown. Retain this mutex for process

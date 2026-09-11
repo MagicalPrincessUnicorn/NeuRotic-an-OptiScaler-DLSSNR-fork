@@ -1,0 +1,45 @@
+NEUROTIC - CUSTOMER CANDIDATE
+
+INSTALL
+1. Extract the complete ZIP to a folder outside the game folder.
+2. Close the game and double-click NeuRotic-Setup.cmd.
+3. Select the game's actual executable, rather than its launcher.
+4. For a new installation, choose DirectX or Vulkan (Indiana Jones uses Vulkan).
+5. Review the destination and settings, then type INSTALL.
+6. Wait for "full installation verified", then launch your game.
+
+Press Insert to open NeuRotic, unless you have saved another shortcut.
+Enable Neural Rendering there. Start with one pass; try two for Multi-Pass.
+Model Resolution, Model Strength and Detail Strength in Multi-Pass adjust all
+selected child passes together. Release a slider to apply. Pass 1 stays independent.
+
+SETTINGS AND MODEL
+Existing settings and your nvngx_dlssnr.dll model are preserved.
+New installations start with NR, Multi-Pass and file logging OFF.
+The default DLSS Performance and Ultra Performance presets are L.
+
+The NVIDIA NR model is not included. Supply your own nvngx_dlssnr.dll beside the
+game executable before enabling NR. The included nvngx.dll_dlssnr.dll is a
+different file: it is the forwarder. Both are needed for NR.
+
+RESTORE YOUR PREVIOUS INSTALLATION
+Setup displays a recovery folder inside the game's NeuRotic-test-backups folder.
+Close the game and run Restore.cmd in that recovery folder. Your current settings
+and model stay in place. Keep the recovery folder until testing is complete.
+If you install several versions, restore them in reverse order.
+
+NEED HELP?
+Keep the extracted package together. The support folder contains internal setup
+files, build information and a testing guide; you only need to launch Setup.
+If access is denied, run NeuRotic-Setup.cmd as administrator.
+If another mod occupies the loader filename, Setup stops so it is not overwritten.
+For troubleshooting, enable file logging at Info in Diagnostics, restart, reproduce
+the problem and retain OptiScaler.log. Switch logging off again afterwards.
+
+This candidate is for testing before release. The preceding version passed the
+author's smoke tests in MHWilds, Dragon's Dogma 2 and Crimson Desert; the shared
+strength controls in this version need your confirmation in game. Known DD2
+first-menu/shop performance drops remain under investigation.
+
+Use only in games that permit modifications; avoid protected online sessions.
+These files are unsigned. No model downloads are performed by Setup.

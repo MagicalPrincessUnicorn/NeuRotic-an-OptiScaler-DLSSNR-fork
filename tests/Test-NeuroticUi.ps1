@@ -43,16 +43,17 @@ Assert-Ui ($multipass.Contains('Button("Reset All")') -and
            $multipass.Contains('Button("Confirm")') -and $multipass.Contains('Button("Cancel")')) 'Reset All requires confirm or cancel'
 Assert-Ui ($multipass.Contains('for (unsigned int pass = 1; pass < 10; ++pass)') -and
            -not $multipass.Contains('DlssNrPasses = 1u') -and
-           $multipass.Contains('pendingAdditionalPassScale = -1;') -and
-           $multipass.Contains('pendingScales.clear();')) 'Reset All restores all additional profiles, cancels pending resolution edits, and preserves baseline Pass 1 and the shared pass count'
+           $multipass.Contains('CancelNrEdits();')) 'Reset All restores all additional profiles, cancels pending edits, and preserves baseline Pass 1 and the shared pass count'
 Assert-Ui ($multipass.Contains('Button("Reset this pass")') -and
            $multipass.Contains('Reset Pass %u profile?##pass%u') -and
-           $multipass -match '(?s)ResetPassOptions\(pass\);\s*pendingScales\.erase\(scaleId\);') 'each selected pass has a confirmed profile reset that cancels its pending resolution edit'
+           $multipass -match '(?s)ResetPassOptions\(pass\);\s*CancelNrEdits\(\);') 'each selected pass has a confirmed profile reset that cancels pending edits'
 Assert-Ui ($multipass.Contains('Copy Pass %u settings') -and
-           $multipass -match '(?s)CopyPassOptions\(PassOptions\(config, index - 1\), pass\);\s*pendingScales\.erase\(scaleId\);') 'later passes can copy the preceding profile without a stale pending resolution edit overwriting it'
-Assert-Ui ($multipass.Contains('SliderInt("Additional pass model resolution"') -and
+           $multipass -match '(?s)CopyPassOptions\(PassOptions\(config, index - 1\), pass\);\s*CancelNrEdits\(\);') 'later passes can copy the preceding profile without a stale pending edit overwriting it'
+Assert-Ui ($multipass.Contains('sharedSlider("Model Resolution##AdditionalPassModelResolution"') -and
            $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)') -and
-           $multipass.Contains('Reset##AdditionalPassModelResolution')) 'additional passes share an optional model-resolution slider without changing pass 1'
+           $nr.Contains('const std::string resetId = std::string("Reset##") + label;')) 'additional passes share an optional model-resolution slider without changing pass 1'
+Assert-Ui ($multipass -match '(?s)sharedSlider\("Model Resolution##.*?sharedSlider\("Model Strength##.*?sharedSlider\("Detail Strength##.*?BeginTabBar\("NrMultipassLayers"') 'shared resolution, model strength and detail strength precede child tabs'
+Assert-Ui ($multipass.Contains('&PassOptionRefs::intensity, 0.0f, 2.0f') -and $multipass.Contains('&PassOptionRefs::transferStrength, 0.0f, 2.0f')) 'shared strengths target independent existing options at zero to two'
 Assert-Ui ($multipass.Contains('Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass.') -and
            $multipass.Contains('releasing commits that percentage to all additional passes and rebuilds them once.')) 'shared model-resolution tooltip clearly describes its all-additional-pass scope and release behavior'
 Assert-Ui ($multipass.Contains('if (passCount == 1)') -and
@@ -60,13 +61,13 @@ Assert-Ui ($multipass.Contains('if (passCount == 1)') -and
            $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)')) 'baseline Pass 1 has one home and Multipass exposes only additional passes'
 foreach ($label in @('Model resolution##pass%u', 'Downscaler##pass%u', 'Model preset##pass%u',
     'Style##pass%u', 'Enlargement##pass%u', 'Detail strength##pass%u',
-    'Colour strength##pass%u', 'Highlight guard##pass%u', 'Intensity##pass%u',
+    'Colour strength##pass%u', 'Highlight guard##pass%u', 'Model Strength##pass%u',
     'Local structure##pass%u', 'Local tone##pass%u', 'Skin structure##pass%u',
     'Auto skin mask##pass%u', 'Proxy composition##pass%u', 'Apply the model##pass%u')) {
     Assert-Ui ($multipass.Contains($label)) "$label is rendered for every pass tab"
 }
 Assert-Ui (([regex]::Matches($multipass, 'HelpMarker\(')).Count -ge 18) 'every Multipass setting carries a hover hint'
-Assert-Ui ($multipass.Contains('Reset##pass%u-resolution') -and
+Assert-Ui ($multipass.Contains('DeferredNrSlider(scaleLabel') -and
            $multipass.Contains('Reset##pass%u-auto-mask') -and
            $multipass.Contains('Reset##pass%u-apply')) 'every Multipass setting family exposes an individual reset'
 Assert-Ui (-not $nr.Contains('renderSecondLayerControls') -and

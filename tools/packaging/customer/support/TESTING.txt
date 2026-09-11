@@ -1,0 +1,48 @@
+NEUROTIC CANDIDATE - TESTING AND SUPPORT
+
+The source commit and every package file hash are recorded in PACKAGE-MANIFEST.json.
+BUILD-MANIFEST.json identifies the verified Release/x64 build.
+
+Record your game, GPU/driver, API, NR route, settings and pass count. Keep the
+installation record from the recovery folder. File logging is off for new installs;
+enable it at Info in Diagnostics only when collecting a troubleshooting log.
+
+Start with one NR pass. Confirm visible output, then motion, game menus, loading,
+cutscenes and transitions. A running timer or lack of crashes alone is insufficient.
+The predecessor was smoke-tested by the user in MHWilds, Dragon's Dogma 2 and
+Crimson Desert with no showstopper crashes observed. This revised build still needs
+runtime confirmation. DD2 first-menu/shop VRAM/stall concerns and Present face
+artifacts remain unresolved.
+
+MULTI-PASS (DIRECTX 12)
+Choose two passes, then enable Multi-Pass. Pass 1 is configured in the main section.
+Shared Model Resolution, Model Strength and Detail Strength apply to Pass 2 through
+the selected final pass, including while Multi-Pass is off. Values beyond that
+selected count remain saved independently. Mixed values are indicated.
+Dragging previews; release applies. Internal Model Strength changes may pause
+briefly while affected models rebuild. Detail Strength changes do not rebuild them.
+Reset next to a shared slider returns that setting to 100% for selected children.
+Zero Model Strength still runs the model. Zero Detail Strength hides its detail edit
+but does not independently reset Colour Strength. Per-pass tuning remains available.
+Reset All resets all nine child profiles and disables Multi-Pass after confirmation;
+it preserves the pass count and Pass 1. High pass counts increase cost and memory.
+Individual model timings currently cover only Passes 1 and 2.
+
+VULKAN
+Use Native Temporal single-pass. Multi-Pass, Vulkan Present and Frame Hold remain
+unavailable. Existing model configuration limits and restart requirements still apply.
+Resolution changes may require a restart. Indiana Jones needs separate runtime
+acceptance for this combined candidate.
+
+PERFORMANCE COMPARISONS
+For DD2, compare the same first-time menu/shop transition across separate fresh
+game sessions with NR on and off, keeping logging and other settings the same.
+Do not change NR and logging together and attribute the difference to NR alone.
+Keep a log before starting another session if file logging is enabled.
+Report Better / Worse / Equivalent / Inconclusive with reproduction steps.
+
+RECOVERY
+Close the game and use Restore.cmd from the exact recovery folder Setup created.
+Recovery works independently of the downloaded package. Current INI and private
+model are preserved. Removed candidate runtime files are retained in that folder.
+Restore refuses files changed by a later update; reverse later installations first.

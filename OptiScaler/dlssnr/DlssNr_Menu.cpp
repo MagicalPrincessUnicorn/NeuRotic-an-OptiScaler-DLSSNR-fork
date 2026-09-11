@@ -7,6 +7,7 @@
 #include "DlssNr_Present.h"
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
+#include "NrPendingEdit.h"
 
 
 #include <Config.h>
@@ -92,41 +93,46 @@ static void HelpMarker(const char* tip)
 // live under the cursor; only the commit that triggers the rebuild waits for release. Cheap controls
 // that are just shader constants (detail, colour, paper white) do not use this -- they can afford to
 // apply live.
-static bool DeferredSlider(const char* label, NrOptional<float>* opt, float mn, float mx,
-                           float def, const char* fmt = "%.2f")
+static std::unordered_map<std::string, NrPendingEdit> pendingNrEdits;
+
+static void CancelNrEdits()
 {
-    static std::unordered_map<std::string, float> pending;
+    for (auto& [id, edit] : pendingNrEdits) edit.Cancel();
+}
 
-    auto it = pending.find(label);
-    float value = it != pending.end() ? it->second : opt->value_or_default();
+static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<float>*>& targets,
+                             float mn, float mx, float def, const char* fmt, bool percent = false)
+{
+    auto& edit = pendingNrEdits[label];
+    edit.Prepare(targets, ImGui::GetFrameCount());
+    float value = edit.Value();
     bool changed = false;
-
-    if (ImGui::SliderFloat(label, &value, mn, mx, fmt))
-        pending[label] = value;
-
-    if (ImGui::IsItemDeactivatedAfterEdit())
+    if (percent)
     {
-        auto committed = pending.find(label);
-
-        if (committed != pending.end())
-        {
-            *opt = std::clamp(committed->second, mn, mx);
-            pending.erase(committed);
-            changed = true;
-        }
+        int percentage = (int) lroundf(value * 100.0f);
+        if (ImGui::SliderInt(label, &percentage, (int) lroundf(mn * 100),
+                             (int) lroundf(mx * 100), "%d%%", ImGuiSliderFlags_AlwaysClamp))
+            edit.Preview(percentage / 100.0f);
     }
-
+    else if (ImGui::SliderFloat(label, &value, mn, mx, fmt, ImGuiSliderFlags_AlwaysClamp))
+        edit.Preview(value);
+    if (ImGui::IsItemDeactivatedAfterEdit()) changed = edit.Commit(mn, mx);
+    edit.Finish(ImGui::IsItemActive());
     ImGui::SameLine();
-
     const std::string resetId = std::string("Reset##") + label;
     if (ImGui::SmallButton(resetId.c_str()))
     {
-        *opt = def;
-        pending.erase(std::string(label));   // drop any in-flight drag so the reset actually sticks
+        edit.Reset(def);
+        CancelNrEdits();
         changed = true;
     }
-
     return changed;
+}
+
+static bool DeferredSlider(const char* label, NrOptional<float>* opt, float mn, float mx,
+                           float def, const char* fmt = "%.2f")
+{
+    return DeferredNrSlider(label, { opt }, mn, mx, def, fmt);
 }
 
 static unsigned int RenderPassCountSelector(Config* config)
@@ -1436,6 +1442,7 @@ static PassOptionRefs PassOptions(Config* config, unsigned int pass)
 
 static void ResetPassOptions(const PassOptionRefs& pass)
 {
+    NrConfigSynchronization::Transaction transaction;
     *pass.workingScale = 1.0f;
     *pass.scalingDownscaler = Scaler::Lanczos3;
     *pass.transfer = 1u;
@@ -1455,6 +1462,7 @@ static void ResetPassOptions(const PassOptionRefs& pass)
 
 static void CopyPassOptions(const PassOptionRefs& source, const PassOptionRefs& destination)
 {
+    NrConfigSynchronization::Transaction transaction;
     *destination.workingScale = source.workingScale->value_or_default();
     *destination.scalingDownscaler = source.scalingDownscaler->value_or_default();
     *destination.transfer = source.transfer->value_or_default();
@@ -1487,8 +1495,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
         const bool d3d12 = !IsVulkanInput() && State::Instance().api == API::DX12;
-        static int pendingAdditionalPassScale = -1;
-        static std::unordered_map<std::string, int> pendingScales;
+        static unsigned int previousPassCount = 0;
 
         bool enabled = config->DlssNrMultipassEnabled.value_or_default();
         if (!d3d12) ImGui::BeginDisabled();
@@ -1501,6 +1508,8 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
 
         const unsigned int passCount = RenderPassCountSelector(config);
+        if (previousPassCount != passCount) CancelNrEdits();
+        previousPassCount = passCount;
 
         if (ImGui::Button("Reset All")) ImGui::OpenPopup("Reset all multipass settings?");
         HelpMarker("Restores the Multipass switch and every setting in all nine saved additional pass profiles to "
@@ -1512,13 +1521,15 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
             ImGui::TextUnformatted("Reset every additional Neural Rendering pass profile to default?");
             if (ImGui::Button("Confirm"))
             {
-                enabled = false;
-                config->DlssNrMultipassEnabled = false;
-                config->DlssNrSecondLayer = false;
-                for (unsigned int pass = 1; pass < 10; ++pass)
-                    ResetPassOptions(PassOptions(config, pass));
-                pendingAdditionalPassScale = -1;
-                pendingScales.clear();
+                {
+                    NrConfigSynchronization::Transaction transaction;
+                    enabled = false;
+                    config->DlssNrMultipassEnabled = false;
+                    config->DlssNrSecondLayer = false;
+                    for (unsigned int pass = 1; pass < 10; ++pass)
+                        ResetPassOptions(PassOptions(config, pass));
+                }
+                CancelNrEdits();
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -1544,41 +1555,29 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
 
         if (passCount > 1)
         {
-            int sharedScale =
-                (int) lroundf(PassOptions(config, 1).workingScale->value_or_default() * 100.0f);
-            bool mixedScale = false;
-            for (unsigned int index = 2; index < passCount; ++index)
+            const auto sharedSlider = [&](const char* label, NrOptional<float>* PassOptionRefs::* member,
+                                          float minimum, float maximum, const char* hint, const char* mixedHint)
             {
-                const int current =
-                    (int) lroundf(PassOptions(config, index).workingScale->value_or_default() * 100.0f);
-                mixedScale = mixedScale || current != sharedScale;
-            }
-
-            if (pendingAdditionalPassScale >= 0) sharedScale = pendingAdditionalPassScale;
-            if (ImGui::SliderInt("Additional pass model resolution", &sharedScale, 25, 200, "%d%%"))
-                pendingAdditionalPassScale = sharedScale;
-            if (ImGui::IsItemDeactivatedAfterEdit() && pendingAdditionalPassScale >= 0)
-            {
-                const float committed = std::clamp(pendingAdditionalPassScale, 25, 200) / 100.0f;
+                std::vector<NrOptional<float>*> targets;
                 for (unsigned int index = 1; index < passCount; ++index)
-                    *PassOptions(config, index).workingScale = committed;
-                pendingAdditionalPassScale = -1;
-                mixedScale = false;
-            }
-            ResetButton("Reset##AdditionalPassModelResolution", [&]
-            {
-                for (unsigned int index = 1; index < passCount; ++index)
-                    *PassOptions(config, index).workingScale = 1.0f;
-                pendingAdditionalPassScale = -1;
-            });
-            HelpMarker("Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once.");
-            if (mixedScale)
-                ImGui::TextDisabled("Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
+                    targets.push_back(PassOptions(config, index).*member);
+                DeferredNrSlider(label, targets, minimum, maximum, 1.0f, "%d%%", true);
+                HelpMarker(hint);
+                if (pendingNrEdits[label].Mixed()) ImGui::TextDisabled("%s", mixedHint);
+            };
+            sharedSlider("Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
+                "Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once.",
+                "Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
+            sharedSlider("Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
+                "Sets internal model intensity for Pass 2 through the selected final pass. Release to apply and rebuild only changed child models. 100% is default; 0% does not disable model execution. Pass 1 is unchanged.",
+                "Additional pass model strengths are mixed; adjusting this slider applies one value to all of them.");
+            sharedSlider("Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
+                "Sets detail blending for Pass 2 through the selected final pass. Release to apply without rebuilding models. 100% is default; 0% hides the detail edit. Pass 1 and colour strength are unchanged.",
+                "Additional pass detail strengths are mixed; adjusting this slider applies one value to all of them.");
         }
         else
         {
-            pendingAdditionalPassScale = -1;
-            ImGui::TextDisabled("Select two or more passes above to use the shared additional-pass resolution slider.");
+            ImGui::TextDisabled("Select two or more passes to adjust shared Model Resolution, Model Strength and Detail Strength.");
         }
 
         if (passCount == 1)
@@ -1596,7 +1595,6 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 const auto pass = PassOptions(config, index);
                 char scaleLabel[96] {};
                 snprintf(scaleLabel, sizeof(scaleLabel), "Model resolution##pass%u", index + 1);
-                const std::string scaleId = scaleLabel;
 
                 char resetPopup[64] {};
                 snprintf(resetPopup, sizeof(resetPopup), "Reset Pass %u profile?##pass%u", index + 1, index + 1);
@@ -1609,7 +1607,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                     if (ImGui::Button("Confirm"))
                     {
                         ResetPassOptions(pass);
-                        pendingScales.erase(scaleId);
+                        CancelNrEdits();
                         ImGui::CloseCurrentPopup();
                     }
                     ImGui::SameLine();
@@ -1625,30 +1623,15 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                     if (ImGui::SmallButton(copyLabel))
                     {
                         CopyPassOptions(PassOptions(config, index - 1), pass);
-                        pendingScales.erase(scaleId);
+                        CancelNrEdits();
                     }
                     HelpMarker("Copies every saved setting from the preceding pass into this pass. It does not change the shared pass count or enable Multipass.");
                 }
 
                 ImGui::PushItemWidth(220.0f * menuResScale);
                 char id[96] {};
-                const auto pendingScale = pendingScales.find(scaleId);
-                int scale = pendingScale != pendingScales.end()
-                    ? pendingScale->second
-                    : (int) lroundf(pass.workingScale->value_or_default() * 100.0f);
-                if (ImGui::SliderInt(scaleLabel, &scale, 25, 200, "%d%%"))
-                    pendingScales[scaleId] = scale;
-                if (ImGui::IsItemDeactivatedAfterEdit())
-                {
-                    const auto commit = pendingScales.find(scaleId);
-                    if (commit != pendingScales.end())
-                    {
-                        *pass.workingScale = std::clamp(commit->second, 25, 200) / 100.0f;
-                        pendingScales.erase(commit);
-                    }
-                }
-                snprintf(id, sizeof(id), "Reset##pass%u-resolution", index + 1);
-                ResetButton(id, [&] { *pass.workingScale = 1.0f; pendingScales.erase(scaleId); scale = 100; });
+                DeferredNrSlider(scaleLabel, { pass.workingScale }, 0.25f, 2.0f, 1.0f, "%d%%", true);
+                const int scale = (int) lroundf(pendingNrEdits[scaleLabel].Value() * 100.0f);
                 HelpMarker("Sets this pass's model raster from 25 to 200 percent. The composed frame remains full resolution; cost changes roughly with the square of this value.");
 
                 static const char* downscalers[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
@@ -1698,9 +1681,9 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 snprintf(id, sizeof(id), "Highlight guard##pass%u", index + 1);
                 DeferredSlider(id, pass.maxRatio, 1.0f, 8.0f, 2.0f, "%.1fx");
                 HelpMarker("Limits the brightness multiplication or division this pass may apply. The 2x default protects moving highlights.");
-                snprintf(id, sizeof(id), "Intensity##pass%u", index + 1);
+                snprintf(id, sizeof(id), "Model Strength##pass%u", index + 1);
                 DeferredSlider(id, pass.intensity, 0.0f, 2.0f, 1.0f);
-                HelpMarker("Sets this pass's internal model strength. It commits when the slider is released and rebuilds only this pass's feature.");
+                HelpMarker("Sets this pass's internal model strength. It commits when the slider is released and rebuilds only this pass's feature. Zero does not disable model execution.");
                 snprintf(id, sizeof(id), "Local structure##pass%u", index + 1);
                 DeferredSlider(id, pass.localStructure, 0.0f, 2.0f, 1.0f);
                 HelpMarker("Sets the local-structure strength for this pass's independent model session.");

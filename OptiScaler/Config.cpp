@@ -339,6 +339,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             {
             // Config-only transaction: no GPU or scanner calls while holding this mutex.
             NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
+            NrConfigSynchronization::InvalidateProfileEdits();
             _dlssNrState.LoadEnabled(DlssNrEnabled, readBool("DlssNr", "Enabled"));
             const auto multipassEnabled = readBool("DlssNr", "MultipassEnabled");
             DlssNrMultipassEnabled.set_from_config(multipassEnabled);
