@@ -4,6 +4,7 @@
 #include <Logger.h>
 #include <resource.h>
 #include <Util.h>
+#include <dlssnr/DlssNrFeature_Dx12.h>
 
 #include "menu_common.h"
 #include "menu_dx_base.h"
@@ -18,7 +19,9 @@ bool MenuDxBase::RenderMenu()
     if (MenuCommon::RenderMenu())
     {
         ImGui::Render();
-        return true;
+        // This optional path bakes the menu into the upscaled image. Process its
+        // button/keybind normally, but omit the draw while a screenshot is pending.
+        return !DlssNr::ComparisonScreenshotBusy();
     }
 
     return false;
