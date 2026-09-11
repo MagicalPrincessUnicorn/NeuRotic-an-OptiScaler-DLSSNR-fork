@@ -1198,11 +1198,11 @@ static void ApplyThemeStyle()
 
     c[ImGuiCol_Tab] = AccentSoft();
     c[ImGuiCol_TabHovered] = AccentMed();
-    c[ImGuiCol_TabSelected] = AccentSoft();
+    c[ImGuiCol_TabSelected] = AccentStrong();
     c[ImGuiCol_TabSelectedOverline] = AccentStrong();
     c[ImGuiCol_TabDimmed] = BgTint(bgDark, 0.60f);
-    c[ImGuiCol_TabDimmedSelected] = AccentSoft(0.75f);
-    c[ImGuiCol_TabDimmedSelectedOverline] = borderCol;
+    c[ImGuiCol_TabDimmedSelected] = AccentMed(0.90f);
+    c[ImGuiCol_TabDimmedSelectedOverline] = AccentStrong();
 
     c[ImGuiCol_DockingPreview] = AccentStrong(0.70f);
 
@@ -7141,10 +7141,6 @@ void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
 
 void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
 {
-    // Layer-specific UI will stay contained in this page when the existing optional
-    // second layer evolves into independently configurable layers. This experiment
-    // deliberately keeps its current single shared settings panel and Feature 18
-    // lifecycle unchanged.
     DlssNr::RenderMenu(ctx.config, ctx.menuResScale);
 }
 

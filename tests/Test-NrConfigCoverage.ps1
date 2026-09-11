@@ -10,6 +10,8 @@ if ($nrFields.Count -eq 0) { throw 'No NR config declarations found; update the 
 $nrFieldNames = @($nrFields | ForEach-Object { $_.Groups['name'].Value })
 $nrCaptureNames = @([regex]::Matches($nrSnapshotText, 'X\((DlssNr\w+)\)') |
     ForEach-Object { $_.Groups[1].Value })
+$nrStructuredCaptures = @('DlssNrExtraLayers')
+$nrCaptureNamesForOptions = @($nrCaptureNames | Where-Object { $_ -notin $nrStructuredCaptures })
 
 foreach ($nrField in $nrFields) {
     if ($nrField.Groups['type'].Value -ne 'NrOptional') {
@@ -18,9 +20,14 @@ foreach ($nrField in $nrFields) {
 }
 $nrDuplicateCaptures = @($nrCaptureNames | Group-Object | Where-Object { $_.Count -ne 1 })
 if ($nrDuplicateCaptures.Count -ne 0) { throw "Duplicate NR snapshot fields: $($nrDuplicateCaptures.Name -join ', ')" }
-$nrCoverageDiff = @(Compare-Object $nrFieldNames $nrCaptureNames)
+$nrCoverageDiff = @(Compare-Object $nrFieldNames $nrCaptureNamesForOptions)
 if ($nrCoverageDiff.Count -ne 0) {
     throw "NR snapshot field mismatch: $($nrCoverageDiff | Out-String)"
+}
+if (-not $nrConfigText.Contains('DlssNrExtraLayerOptions DlssNrExtraLayers;') -or
+    -not $nrSnapshotText.Contains('X(DlssNrExtraLayers)') -or
+    -not $nrFixtureText.Contains('ExtraLayers DlssNrExtraLayers;')) {
+    throw 'Structured extra-pass options are not covered by the production and standalone snapshots.'
 }
 
 # The standalone source exercises the production template without loading Config's Windows/NGX

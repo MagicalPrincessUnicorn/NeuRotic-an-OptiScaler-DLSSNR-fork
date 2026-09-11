@@ -50,7 +50,7 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
 
   public:
     // Caller holds the lifecycle lock. Reserves before Pre-SR copies or composition transitions.
-    bool Prepare(ID3D12GraphicsCommandList* list, bool preSr, bool secondLayer = false);
+    bool Prepare(ID3D12GraphicsCommandList* list, bool preSr, unsigned int passCount = 1);
     // Caller holds the same locks as shutdown; report even when drain later fails.
     void ReportFinalPool() { ReportPool(_lastAdmission, _lastPoolPreSr, true); }
     DlssNr_Dx12(std::string InName, ID3D12Device* InDevice);

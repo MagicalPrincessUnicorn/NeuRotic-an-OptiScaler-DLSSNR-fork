@@ -188,7 +188,7 @@ struct PreSrSignature
     float localTone = 0.0f;
     float skinStructure = 0.0f;
     bool autoMask = false;
-    bool secondLayer = false;
+    unsigned int passCount = 1;
     uint32_t secondWorkWidth = 0;
     uint32_t secondWorkHeight = 0;
     unsigned int secondPreset = 0;
@@ -198,6 +198,7 @@ struct PreSrSignature
     float secondLocalTone = 0.0f;
     float secondSkinStructure = 0.0f;
     bool secondAutoMask = false;
+    size_t additionalPassSignature = 0;
 
     bool operator==(const PreSrSignature& other) const
     {
@@ -209,12 +210,13 @@ struct PreSrSignature
                preset == other.preset && intensity == other.intensity && style == other.style &&
                localStructure == other.localStructure && localTone == other.localTone &&
                skinStructure == other.skinStructure && autoMask == other.autoMask &&
-               secondLayer == other.secondLayer && secondWorkWidth == other.secondWorkWidth &&
+               passCount == other.passCount && secondWorkWidth == other.secondWorkWidth &&
                secondWorkHeight == other.secondWorkHeight && secondPreset == other.secondPreset &&
                secondIntensity == other.secondIntensity && secondStyle == other.secondStyle &&
                secondLocalStructure == other.secondLocalStructure &&
                secondLocalTone == other.secondLocalTone &&
-               secondSkinStructure == other.secondSkinStructure && secondAutoMask == other.secondAutoMask;
+               secondSkinStructure == other.secondSkinStructure && secondAutoMask == other.secondAutoMask &&
+               additionalPassSignature == other.additionalPassSignature;
     }
 };
 
@@ -297,6 +299,7 @@ struct NrState
     HANDLE privateCreateEvent = nullptr;
 
     NrSecondLayerState layer2;
+    std::array<NrSecondLayerState, 8> layers3to10;
 
     // The model cannot read and write one resource, so the frame is staged through these.
     ID3D12Resource* colorCopy = nullptr;
@@ -866,6 +869,76 @@ static NrFeatureTuning SecondLayerTuning(const NrConfigSnapshot<Config>& cfg)
              cfg.DlssNrSecondLayerAutoMask.value_or_default() };
 }
 
+struct NrPassSettings
+{
+    NrFeatureTuning tuning;
+    float workingScale;
+    Scaler scalingDownscaler;
+    uint32_t transfer;
+    float transferStrength;
+    float colourStrength;
+    float maxRatio;
+    uint32_t reversibleMode;
+    bool applyModel;
+};
+
+static unsigned int RequestedPassCount(const NrConfigSnapshot<Config>& cfg)
+{
+    if (!cfg.DlssNrMultipassEnabled.value_or_default()) return 1;
+    return std::clamp(cfg.DlssNrPasses.value_or_default(), 1u, 10u);
+}
+
+static NrPassSettings PassSettings(const NrConfigSnapshot<Config>& cfg, unsigned int pass)
+{
+    if (pass == 0)
+        return { FirstLayerTuning(cfg), cfg.DlssNrWorkingScale.value_or_default(),
+                 cfg.DlssNrScalingDownscaler.value_or_default(), cfg.DlssNrTransfer.value_or_default(),
+                 cfg.DlssNrTransferStrength.value_or_default(), cfg.DlssNrColourStrength.value_or_default(),
+                 cfg.DlssNrMaxRatio.value_or_default(), cfg.DlssNrReversibleMode.value_or_default(),
+                 cfg.DlssNrApplyModel.value_or_default() };
+    if (pass == 1)
+        return { SecondLayerTuning(cfg), cfg.DlssNrSecondLayerWorkingScale.value_or_default(),
+                 cfg.DlssNrSecondLayerScalingDownscaler.value_or_default(),
+                 cfg.DlssNrSecondLayerTransfer.value_or_default(),
+                 cfg.DlssNrSecondLayerTransferStrength.value_or_default(),
+                 cfg.DlssNrSecondLayerColourStrength.value_or_default(),
+                 cfg.DlssNrSecondLayerMaxRatio.value_or_default(),
+                 cfg.DlssNrSecondLayerReversibleMode.value_or_default(),
+                 cfg.DlssNrSecondLayerApplyModel.value_or_default() };
+
+    const auto& layer = cfg.DlssNrExtraLayers[pass - 2];
+    return { { layer.preset.value_or_default(), layer.intensity.value_or_default(),
+               layer.style.value_or_default(), layer.localStructure.value_or_default(),
+               layer.localTone.value_or_default(), layer.skinStructure.value_or_default(),
+               layer.autoMask.value_or_default() },
+             layer.workingScale.value_or_default(), layer.scalingDownscaler.value_or_default(),
+             layer.transfer.value_or_default(), layer.transferStrength.value_or_default(),
+             layer.colourStrength.value_or_default(), layer.maxRatio.value_or_default(),
+             layer.reversibleMode.value_or_default(), layer.applyModel.value_or_default() };
+}
+
+static size_t AdditionalPassSignature(const NrConfigSnapshot<Config>& cfg)
+{
+    size_t signature = RequestedPassCount(cfg);
+    const auto mix = [&](size_t value)
+    {
+        signature ^= value + size_t { 0x9e3779b9 } + (signature << 6) + (signature >> 2);
+    };
+    for (unsigned int pass = 2; pass < RequestedPassCount(cfg); ++pass)
+    {
+        const auto settings = PassSettings(cfg, pass);
+        mix(std::hash<float> {}(settings.workingScale));
+        mix(settings.tuning.preset);
+        mix(std::hash<float> {}(settings.tuning.intensity));
+        mix(settings.tuning.style);
+        mix(std::hash<float> {}(settings.tuning.localStructure));
+        mix(std::hash<float> {}(settings.tuning.localTone));
+        mix(std::hash<float> {}(settings.tuning.skinStructure));
+        mix(settings.tuning.autoMask ? 1u : 0u);
+    }
+    return signature;
+}
+
 static void* CreateNrFeature(const NrFeatureTuning& tuning, ID3D12Device* device,
                              ID3D12GraphicsCommandList* gameList,
                              const std::filesystem::path& snippet, unsigned int workWidth,
@@ -1016,7 +1089,7 @@ struct NrRetired
     void* feature = nullptr;
     ID3D12Resource* resource = nullptr;
     OS_Dx12* scaler = nullptr;
-    bool layer2Feature = false;
+    int additionalLayer = -1;
     DlssNr::GpuSafety::CompletionSet completion = DlssNr::GpuSafety::Pending();
 };
 
@@ -1044,26 +1117,40 @@ void ParkNrResource(ID3D12Resource*& res)
     g_nrRetired.push_back(r);
 }
 
-void ParkSecondLayerFeature(const char* reason)
+NrSecondLayerState& AdditionalLayer(size_t index)
 {
-    if (g_nr.layer2.feature == nullptr)
+    return index == 0 ? g_nr.layer2 : g_nr.layers3to10[index - 1];
+}
+
+void ParkAdditionalLayerFeature(size_t index, const char* reason)
+{
+    auto& layer = AdditionalLayer(index);
+    if (layer.feature == nullptr)
         return;
 
     // One layer-2 generation may retire at a time. Creation is blocked on this exact handle until
     // TickNrRetired releases it after the completion snapshot drains.
-    if (g_nr.layer2.featureAwaitingRelease != nullptr)
+    if (layer.featureAwaitingRelease != nullptr)
         return;
 
     NrRetired retired;
-    retired.feature = g_nr.layer2.feature;
-    retired.layer2Feature = true;
-    g_nr.layer2.featureAwaitingRelease = g_nr.layer2.feature;
-    g_nr.layer2.feature = nullptr;
-    g_nr.layer2.ready = false;
-    g_nr.layer2.reset = true;
+    retired.feature = layer.feature;
+    retired.additionalLayer = static_cast<int>(index);
+    layer.featureAwaitingRelease = layer.feature;
+    layer.feature = nullptr;
+    layer.ready = false;
+    layer.reset = true;
     ++g_layer2FeatureRetires;
     g_nrRetired.push_back(retired);
-    LOG_INFO("DLSS-NR layer 2: retiring generation {} ({})", g_layer2FeatureRetires, reason);
+    LOG_INFO("DLSS-NR pass {}: retiring generation {} ({})", index + 2, g_layer2FeatureRetires, reason);
+}
+
+void ParkSecondLayerFeature(const char* reason) { ParkAdditionalLayerFeature(0, reason); }
+
+void ParkAllAdditionalLayerFeatures(const char* reason)
+{
+    for (size_t index = 0; index < 9; ++index)
+        ParkAdditionalLayerFeature(index, reason);
 }
 
 // Layer-2 entries are deliberately collected only by Dispatch's lifecycle-only gate. Other callers
@@ -1074,7 +1161,7 @@ bool TickNrRetired(bool collectLayer2 = false)
     bool releasedLayer2 = false;
     for (size_t i = 0; i < g_nrRetired.size();)
     {
-        if (g_nrRetired[i].layer2Feature && !collectLayer2)
+        if (g_nrRetired[i].additionalLayer >= 0 && !collectLayer2)
         {
             ++i;
             continue;
@@ -1092,12 +1179,15 @@ bool TickNrRetired(bool collectLayer2 = false)
         if (g_nrRetired[i].feature == g_nr.resumeFeatureAwaitingRelease)
             g_nr.resumeFeatureAwaitingRelease = nullptr;
 
-        if (g_nrRetired[i].layer2Feature)
+        if (g_nrRetired[i].additionalLayer >= 0)
         {
-            if (g_nrRetired[i].feature == g_nr.layer2.featureAwaitingRelease)
-                g_nr.layer2.featureAwaitingRelease = nullptr;
+            const size_t index = static_cast<size_t>(g_nrRetired[i].additionalLayer);
+            auto& layer = AdditionalLayer(index);
+            if (g_nrRetired[i].feature == layer.featureAwaitingRelease)
+                layer.featureAwaitingRelease = nullptr;
             releasedLayer2 = true;
-            LOG_INFO("DLSS-NR layer 2: retired generation released; creation is allowed next frame");
+            LOG_INFO("DLSS-NR pass {}: retired generation released; creation is allowed next frame",
+                     index + 2);
         }
 
         if (g_nrRetired[i].resource != nullptr)
@@ -1139,7 +1229,7 @@ void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, ID3D12Resource* activeTa
 
     // Layer 2 is independently completion-gated. It will not be released or recreated on an
     // evaluation command list.
-    ParkSecondLayerFeature("frame format changed");
+    ParkAllAdditionalLayerFeatures("frame format changed");
 
     // Surface replacement is committed by ScratchTransaction after the complete bundle exists.
 
@@ -1805,7 +1895,18 @@ void RecordBuiltTuning(const NrConfigSnapshot<Config>& cfg)
 bool SecondLayerTuningMatches(const NrConfigSnapshot<Config>& cfg)
 {
     const auto& layer = g_nr.layer2;
-    const auto tuning = SecondLayerTuning(cfg);
+    const auto tuning = PassSettings(cfg, 1).tuning;
+    return layer.builtPreset == tuning.preset && layer.builtIntensity == tuning.intensity &&
+           layer.builtStyle == tuning.style && layer.builtLocalStructure == tuning.localStructure &&
+           layer.builtLocalTone == tuning.localTone && layer.builtSkinStructure == tuning.skinStructure &&
+           layer.builtAutoMask == tuning.autoMask;
+}
+
+
+bool AdditionalLayerTuningMatches(const NrConfigSnapshot<Config>& cfg, size_t index)
+{
+    const auto& layer = AdditionalLayer(index);
+    const auto tuning = PassSettings(cfg, static_cast<unsigned int>(index + 1)).tuning;
     return layer.builtPreset == tuning.preset && layer.builtIntensity == tuning.intensity &&
            layer.builtStyle == tuning.style && layer.builtLocalStructure == tuning.localStructure &&
            layer.builtLocalTone == tuning.localTone && layer.builtSkinStructure == tuning.skinStructure &&
@@ -1816,6 +1917,20 @@ void RecordSecondLayerTuning(const NrConfigSnapshot<Config>& cfg)
 {
     auto& layer = g_nr.layer2;
     const auto tuning = SecondLayerTuning(cfg);
+    layer.builtPreset = tuning.preset;
+    layer.builtIntensity = tuning.intensity;
+    layer.builtStyle = tuning.style;
+    layer.builtLocalStructure = tuning.localStructure;
+    layer.builtLocalTone = tuning.localTone;
+    layer.builtSkinStructure = tuning.skinStructure;
+    layer.builtAutoMask = tuning.autoMask;
+}
+
+
+void RecordAdditionalLayerTuning(const NrConfigSnapshot<Config>& cfg, size_t index)
+{
+    auto& layer = AdditionalLayer(index);
+    const auto tuning = PassSettings(cfg, static_cast<unsigned int>(index + 1)).tuning;
     layer.builtPreset = tuning.preset;
     layer.builtIntensity = tuning.intensity;
     layer.builtStyle = tuning.style;
@@ -1969,14 +2084,13 @@ void DlssNr_Dx12::ReportPool(DlssNr::CompositionPool::Admission admission, bool 
              c.rejectRun, c.maxRejectRun, c.consumed, c.growthMs, c.worstGrowthMs);
 }
 
-bool DlssNr_Dx12::Prepare(ID3D12GraphicsCommandList* list, bool preSr, bool secondLayer)
+bool DlssNr_Dx12::Prepare(ID3D12GraphicsCommandList* list, bool preSr, unsigned int passCount)
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     if (!_init) { ReportSkipOnce("composition pipeline unavailable"); return false; }
     const auto admission = _pool.Begin(_device, DlssNr::GpuSafety::Record(list),
         &DlssNr::CompositionPool::CreateSlot,
-        secondLayer && !g_nr.layer2.failed ? DlssNr::CompositionPool::TwoLayerAdmissionSlots
-                                         : DlssNr::CompositionPool::AdmissionSlots);
+        DlssNr::CompositionPool::RequiredSlots(passCount));
     ReportPool(admission, preSr);
     if (admission == DlssNr::CompositionPool::Admission::Accepted) return true;
     g_nr.reset = true;
@@ -2063,7 +2177,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
-    const bool secondLayerRequested = cfg.DlssNrSecondLayer.value_or_default();
+    const unsigned int requestedPassCount = RequestedPassCount(cfg);
+    const bool secondLayerRequested = requestedPassCount > 1;
 
     if (!runtime.enabled || g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr ||
         motion == nullptr || output == nullptr)
@@ -2095,36 +2210,55 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                      runtime.resumeGeneration);
         }
 
-        ParkSecondLayerFeature("Neural Rendering re-enabled");
-        g_nr.layer2.reset = true;
-        g_nr.layer2.ready = false;
+        ParkAllAdditionalLayerFeatures("Neural Rendering re-enabled");
+        for (size_t index = 0; index < 9; ++index)
+        {
+            AdditionalLayer(index).reset = true;
+            AdditionalLayer(index).ready = false;
+        }
     }
 
-    if (g_nr.layer2.requestObserved != secondLayerRequested)
+    bool passRequestChanged = false;
+    for (size_t index = 0; index < 9; ++index)
     {
-        g_nr.layer2.requestObserved = secondLayerRequested;
-        g_nr.layer2.reset = true;
-        g_nr.layer2.ready = false;
+        auto& layer = AdditionalLayer(index);
+        const bool requested = index + 1 < requestedPassCount;
+        if (layer.requestObserved == requested) continue;
+        layer.requestObserved = requested;
+        layer.reset = true;
+        layer.ready = false;
+        passRequestChanged = true;
 
-        if (!secondLayerRequested)
+        if (!requested)
         {
-            ParkSecondLayerFeature("setting disabled");
-            g_nr.layer2.failed = false;
-            g_nr.layer2.reason = "";
-            LOG_INFO("DLSS-NR layer count requested: 1; layer 2 evaluation paused for lifecycle retirement");
-            // No layer is evaluated on a command list that begins a layer-2 retirement.
-            return;
+            ParkAdditionalLayerFeature(index, "pass count reduced or multipass disabled");
+            layer.failed = false;
+            layer.reason = "";
         }
-
-        g_nr.layer2.failed = false;
-        g_nr.layer2.reason = "";
-        LOG_INFO("DLSS-NR layer count requested: 2; waiting for a lifecycle-only creation frame");
+        else
+        {
+            layer.failed = false;
+            layer.reason = "";
+        }
+    }
+    if (passRequestChanged)
+    {
+        LOG_INFO("DLSS-NR pass count requested: {}; lifecycle change is isolated from evaluation",
+                 requestedPassCount);
+        // No pass is evaluated on a command list that begins any later-pass retirement/creation.
+        return;
     }
 
     // Enough for meter/encode/downsample/resolve and the optional Pre-SR re-jitter. If the
     // bounded pool is busy, bypass before transitions. Keep the flagship's 12-slot two-layer
     // preflight and the approved adaptive pool's eight-slot single-layer preflight.
-    bool secondLayerHealthy = secondLayerRequested && !g_nr.layer2.failed;
+    unsigned int healthyPassCount = 1;
+    for (size_t index = 0; index + 1 < requestedPassCount; ++index)
+    {
+        if (AdditionalLayer(index).failed) break;
+        ++healthyPassCount;
+    }
+    bool secondLayerHealthy = healthyPassCount > 1;
     auto use = DlssNr::GpuSafety::Record(cmdList);
     // Pre-SR reserved before touching its scratch/output path; Post-SR admits here.
     const bool preSr = output == g_nr.preSrScratch;
@@ -2132,8 +2266,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ? (_pool.ReservedFor(use) ? DlssNr::CompositionPool::Admission::Accepted
                                  : DlssNr::CompositionPool::Admission::Tracking)
         : _pool.Begin(_device, use, &DlssNr::CompositionPool::CreateSlot,
-                      secondLayerHealthy ? DlssNr::CompositionPool::TwoLayerAdmissionSlots
-                                         : DlssNr::CompositionPool::AdmissionSlots);
+                      DlssNr::CompositionPool::RequiredSlots(healthyPassCount));
     if (!preSr) ReportPool(admission, false);
     if (admission != DlssNr::CompositionPool::Admission::Accepted || !_init)
     {
@@ -2157,7 +2290,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             g_nr.resumeFeatureAwaitingRelease = g_nr.feature;
             ParkNrFeature(g_nr.feature);
         }
-        ParkSecondLayerFeature("NR route domain changed");
+        ParkAllAdditionalLayerFeatures("NR route domain changed");
         LOG_INFO("DLSS-NR route domain changed to {}", privateCommandList ? "Present Image-Only" : "Native Temporal");
     }
 
@@ -2172,10 +2305,14 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // command list, even though the old GPU work has now completed.
         return;
     }
-    if (g_nr.layer2.featureAwaitingRelease != nullptr && !g_nr.layer2.failed)
+    for (size_t index = 0; index < 9; ++index)
     {
-        ReportSkipOnce("layer 2 is waiting for completion-gated retirement");
-        return;
+        const auto& layer = AdditionalLayer(index);
+        if (layer.featureAwaitingRelease != nullptr && !layer.failed)
+        {
+            ReportSkipOnce("an additional pass is waiting for completion-gated retirement");
+            return;
+        }
     }
     if (g_nr.resumeFeatureAwaitingRelease != nullptr)
     {
@@ -2186,13 +2323,17 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     ID3D12Resource* target = output;
     const bool currentRouteIsPreSr = target == g_nr.preSrScratch;
 
-    if (secondLayerHealthy && g_nr.layer2.feature != nullptr && g_nr.layer2.routeKnown &&
-        g_nr.layer2.routeWasPreSr != currentRouteIsPreSr)
+    for (size_t index = 0; index + 1 < requestedPassCount; ++index)
     {
-        ParkSecondLayerFeature("Pre-SR/Post-SR route changed");
-        g_nr.layer2.routeKnown = false;
-        // Keep the route transition off both evaluation command lists.
-        return;
+        auto& layer = AdditionalLayer(index);
+        if (!layer.failed && layer.feature != nullptr && layer.routeKnown &&
+            layer.routeWasPreSr != currentRouteIsPreSr)
+        {
+            ParkAdditionalLayerFeature(index, "Pre-SR/Post-SR route changed");
+            layer.routeKnown = false;
+            // Keep route transitions off every model evaluation command list.
+            return;
+        }
     }
 
     // The state the upscaler left the output in. Every upscaler in this tree ends Evaluate by moving
@@ -2297,8 +2438,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (frame.Reset)
     {
         g_nr.reset = true;
-        g_nr.layer2.reset = true;
-        g_nr.layer2.ready = false;
+        for (size_t index = 0; index < 9; ++index)
+        {
+            AdditionalLayer(index).reset = true;
+            AdditionalLayer(index).ready = false;
+        }
         ++g_gameResetEvents;
 
         if (g_gameResetEvents <= 3 || g_gameResetEvents % 100 == 0)
@@ -2398,6 +2542,22 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const unsigned int layer2WorkWidth = std::max(8u, (unsigned int) (width * layer2WorkScale + 0.5f) & ~7u);
     const unsigned int layer2WorkHeight = std::max(8u, (unsigned int) (height * layer2WorkScale + 0.5f) & ~7u);
     const bool layer2Reduced = layer2WorkWidth != width || layer2WorkHeight != height;
+    std::array<float, 9> additionalWorkScale {};
+    std::array<unsigned int, 9> additionalWorkWidth {};
+    std::array<unsigned int, 9> additionalWorkHeight {};
+    std::array<bool, 9> additionalReduced {};
+    for (size_t index = 0; index + 1 < healthyPassCount; ++index)
+    {
+        float scale = PassSettings(cfg, static_cast<unsigned int>(index + 1)).workingScale;
+        scale = std::clamp(scale, 0.25f, 2.0f);
+        additionalWorkScale[index] = scale;
+        additionalWorkWidth[index] =
+            std::max(8u, (unsigned int) (width * scale + 0.5f) & ~7u);
+        additionalWorkHeight[index] =
+            std::max(8u, (unsigned int) (height * scale + 0.5f) & ~7u);
+        additionalReduced[index] =
+            additionalWorkWidth[index] != width || additionalWorkHeight[index] != height;
+    }
 
     // Prepare every size-dependent surface before publishing any replacement or retiring a feature.
     // A failed allocation leaves the old bundle intact, including its retirement tickets.
@@ -2444,6 +2604,36 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ParkSecondLayerFeature(g_nr.layer2.reason);
         // No retry storm or reset of healthy layer 1. Layer-2 off/on explicitly retries.
         LOG_WARN("DLSS-NR layer 2 unavailable: {}; continuing with layer 1", g_nr.layer2.reason);
+        healthyPassCount = 1;
+        secondLayerHealthy = false;
+    }
+
+    std::array<std::unique_ptr<DlssNr::Detail::ScratchTransaction>, 8> laterScratch;
+    for (size_t index = 1; index + 1 < healthyPassCount; ++index)
+    {
+        auto& layer = AdditionalLayer(index);
+        laterScratch[index - 1] = std::make_unique<DlssNr::Detail::ScratchTransaction>(
+            std::array<DlssNr::Detail::ScratchTransaction::Request,
+                       DlssNr::Detail::ScratchTransaction::Count> {{
+                { &layer.output, desc.Format, additionalWorkWidth[index], additionalWorkHeight[index], true },
+                { &layer.colorCopy, desc.Format, width, height, true },
+                { &layer.hdrCopy, desc.Format, width, height, true },
+                { &layer.colorSmall, desc.Format, additionalWorkWidth[index], additionalWorkHeight[index],
+                  additionalReduced[index] },
+                { &layer.outputNative, desc.Format, width, height, additionalWorkScale[index] > 1.0f },
+            }});
+        if (!laterScratch[index - 1]->Prepare(allocateScratch))
+        {
+            laterScratch[index - 1].reset();
+            layer.failed = true;
+            layer.ready = false;
+            layer.reason = "the pass scratch resource bundle could not be allocated";
+            ParkAdditionalLayerFeature(index, layer.reason);
+            healthyPassCount = static_cast<unsigned int>(index + 1);
+            LOG_WARN("DLSS-NR pass {} unavailable: {}; keeping passes 1 through {}",
+                     index + 2, layer.reason, index + 1);
+            break;
+        }
     }
 
     ReleaseSurfacesIfFormatChanged(desc.Format, target);
@@ -2468,7 +2658,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Layer 2 owns its working resolution and model signature. A first-layer-only slider must
         // never retire it; only a changed composed-frame size invalidates its resources.
         if (frameDimensionsChanged)
-            ParkSecondLayerFeature("composed frame dimensions changed");
+            ParkAllAdditionalLayerFeatures("composed frame dimensions changed");
 
         // Only a resolution change invalidates the scratch textures. Tuning does not, and throwing
         // them away for it would mean a reallocation every time a slider moves.
@@ -2490,6 +2680,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     scratch.Commit(ParkNrResource);
     if (layer2Scratch != nullptr)
         layer2Scratch->Commit(ParkNrResource);
+    for (auto& transaction : laterScratch)
+        if (transaction != nullptr) transaction->Commit(ParkNrResource);
     g_nr.workWidth = workWidth;
     g_nr.workHeight = workHeight;
 
@@ -2648,6 +2840,66 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                  layer2WorkWidth, layer2WorkHeight, g_layer2FeatureBuilds);
 
         // This command list contains layer-2 creation and therefore evaluates neither NR layer.
+        device->Release();
+        return;
+    }
+
+    // Later features are created one per lifecycle-only command list. This preserves the proven
+    // no-create-and-evaluate rule and prevents a ten-pass request from creating nine opaque model
+    // sessions in one burst. Evaluation starts only after every healthy requested feature exists.
+    for (size_t index = 1; index + 1 < healthyPassCount; ++index)
+    {
+        auto& layer = AdditionalLayer(index);
+        if (layer.feature != nullptr &&
+            (layer.width != width || layer.height != height ||
+             layer.workWidth != additionalWorkWidth[index] ||
+             layer.workHeight != additionalWorkHeight[index] ||
+             !AdditionalLayerTuningMatches(cfg, index)))
+        {
+            ParkAdditionalLayerFeature(index, "pass creation signature changed");
+            device->Release();
+            return;
+        }
+
+        if (layer.feature != nullptr) continue;
+        auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
+        if (!snippet.has_value())
+            snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+        if (!snippet.has_value())
+        {
+            layer.failed = true;
+            layer.reason = "nvngx_dlssnr.dll was not found";
+            healthyPassCount = static_cast<unsigned int>(index + 1);
+            LOG_ERROR("DLSS-NR pass {} unavailable: {}; keeping earlier passes", index + 2, layer.reason);
+            break;
+        }
+
+        SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
+        layer.feature = CreateNrFeature(PassSettings(cfg, static_cast<unsigned int>(index + 1)).tuning,
+                                        device, cmdList, snippet.value(),
+                                        additionalWorkWidth[index], additionalWorkHeight[index]);
+        if (layer.feature == nullptr)
+        {
+            layer.failed = true;
+            layer.reason = "the model session would not initialise";
+            healthyPassCount = static_cast<unsigned int>(index + 1);
+            LOG_ERROR("DLSS-NR pass {} create failed; keeping earlier passes", index + 2);
+            break;
+        }
+
+        ++g_layer2FeatureBuilds;
+        layer.width = width;
+        layer.height = height;
+        layer.workWidth = additionalWorkWidth[index];
+        layer.workHeight = additionalWorkHeight[index];
+        layer.reset = true;
+        layer.ready = false;
+        layer.routeKnown = true;
+        layer.routeWasPreSr = currentRouteIsPreSr;
+        RecordAdditionalLayerTuning(cfg, index);
+        LOG_INFO("DLSS-NR pass {}: independent Feature 18 session created at {}x{}; "
+                 "the pass chain waits for the next command list",
+                 index + 2, layer.workWidth, layer.workHeight);
         device->Release();
         return;
     }
@@ -3484,7 +3736,186 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
         }
 
-        if (secondLayerActive && presentationParams.DebugView != 0)
+        if (secondLayerActive && g_lastLayerCount == 2)
+        {
+            for (size_t index = 1; index + 1 < healthyPassCount; ++index)
+            {
+                auto& layer = AdditionalLayer(index);
+                if (layer.feature == nullptr || layer.failed) break;
+                const auto settings = PassSettings(cfg, static_cast<unsigned int>(index + 1));
+                const float passScale = additionalWorkScale[index];
+                const unsigned int passWorkWidth = additionalWorkWidth[index];
+                const unsigned int passWorkHeight = additionalWorkHeight[index];
+                const auto mvToPassWork =
+                    DlssNrWorkingMotionScale(width, height, passWorkWidth, passWorkHeight);
+
+                DlssNrConstants passEncode = encodeParams;
+                passEncode.ReversibleMode = settings.reversibleMode;
+                resourceStates.Transition(target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                if (!DispatchPass(cmdList, passEncode, target, nullptr, nullptr, nullptr,
+                                  exposureTex, layer.colorCopy, layer.hdrCopy))
+                {
+                    resourceStates.Transition(target, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                              D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    layer.failed = true;
+                    layer.reason = "the pass encode dispatch failed";
+                    ParkAdditionalLayerFeature(index, layer.reason);
+                    LOG_ERROR("DLSS-NR pass {} unavailable: {}; keeping {} completed passes",
+                              index + 2, layer.reason, index + 1);
+                    break;
+                }
+
+                resourceStates.Transition(target, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                          D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                resourceStates.Transition(layer.colorCopy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                resourceStates.Transition(layer.hdrCopy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+                ID3D12Resource* passModelInput = layer.colorCopy;
+                bool preparationOk = true;
+                if (additionalReduced[index] && layer.colorSmall != nullptr)
+                {
+                    bool built = false;
+                    if (passScale > 1.0f)
+                    {
+                        if (layer.scaler != settings.scalingDownscaler)
+                        {
+                            for (auto** scaler : { &layer.superUp, &layer.superDown })
+                            {
+                                if (*scaler == nullptr) continue;
+                                NrRetired retired;
+                                retired.scaler = *scaler;
+                                g_nrRetired.push_back(std::move(retired));
+                                *scaler = nullptr;
+                            }
+                            layer.scaler = settings.scalingDownscaler;
+                        }
+                        if (layer.superUp == nullptr)
+                        {
+                            const std::string name = "DLSS-NR pass " + std::to_string(index + 2) + " supersample up";
+                            layer.superUp = new OS_Dx12(name, device, true, settings.scalingDownscaler);
+                        }
+                        if (layer.superDown == nullptr)
+                        {
+                            const std::string name = "DLSS-NR pass " + std::to_string(index + 2) + " supersample down";
+                            layer.superDown = new OS_Dx12(name, device, false, settings.scalingDownscaler);
+                        }
+                        if (layer.superUp != nullptr &&
+                            layer.superUp->Dispatch(cmdList, layer.colorCopy, layer.colorSmall))
+                        {
+                            resourceStates.Transition(layer.colorSmall,
+                                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                                      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                            built = true;
+                        }
+                    }
+                    if (!built)
+                    {
+                        DlssNrConstants down {};
+                        down.Mode = DlssNrMode_Downsample;
+                        down.Width = passWorkWidth;
+                        down.Height = passWorkHeight;
+                        preparationOk = DispatchPass(cmdList, down, passModelInput, nullptr, nullptr,
+                                                     nullptr, nullptr, layer.colorSmall, nullptr);
+                        if (preparationOk)
+                            resourceStates.Transition(layer.colorSmall,
+                                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                                      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    }
+                    if (preparationOk) passModelInput = layer.colorSmall;
+                }
+
+                if (!preparationOk)
+                {
+                    layer.failed = true;
+                    layer.reason = "the pass resample dispatch failed";
+                    ParkAdditionalLayerFeature(index, layer.reason);
+                    LOG_ERROR("DLSS-NR pass {} unavailable: {}; keeping {} completed passes",
+                              index + 2, layer.reason, index + 1);
+                    break;
+                }
+
+                SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
+                const int passResult = g_nr.evaluate(
+                    cmdList, layer.feature, g_nr.capabilityParams, passModelInput, depthIn, motionIn,
+                    layer.output, passWorkWidth, passWorkHeight, guideWidth, guideHeight,
+                    g_nr.guideDepthInverted ? 1 : 0, layer.reset ? 1 : 0,
+                    settings.tuning.intensity, (int) settings.tuning.style,
+                    settings.tuning.localStructure, settings.tuning.localTone,
+                    settings.tuning.skinStructure, settings.tuning.autoMask ? 1 : 0,
+                    g_nr.guideMvScaleX * mvToPassWork.x,
+                    g_nr.guideMvScaleY * mvToPassWork.y, frame.JitterX, frame.JitterY);
+                if (passResult != NVSDK_NGX_Result_Success)
+                {
+                    ++g_layer2EvaluateFailures;
+                    layer.failed = true;
+                    layer.reason = "the model session refused to run";
+                    ParkAdditionalLayerFeature(index, layer.reason);
+                    LOG_ERROR("DLSS-NR pass {} evaluate returned 0x{:X} ({}); keeping {} completed passes",
+                              index + 2, (uint32_t) passResult,
+                              NgxResultName((unsigned int) passResult), index + 1);
+                    break;
+                }
+
+                layer.reset = false;
+                resourceStates.Transition(layer.output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                bool superDownOk = false;
+                if (passScale > 1.0f && layer.superDown != nullptr && layer.outputNative != nullptr &&
+                    layer.superDown->Dispatch(cmdList, layer.output, layer.outputNative))
+                {
+                    resourceStates.Transition(layer.outputNative,
+                                              D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                              D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    superDownOk = true;
+                }
+                ID3D12Resource* passResolveProxy = superDownOk ? layer.colorCopy : passModelInput;
+                ID3D12Resource* passResolveAnswer = superDownOk ? layer.outputNative : layer.output;
+                DlssNrConstants passResolve = resolveParams;
+                passResolve.TransferStrength = settings.transferStrength;
+                passResolve.ColourStrength = settings.colourStrength;
+                passResolve.MaxRatio = settings.maxRatio;
+                passResolve.Transfer = settings.transfer;
+                passResolve.ReversibleMode = settings.reversibleMode;
+                passResolve.ApplyModel = settings.applyModel ? 1u : 0u;
+                if (!DispatchPass(cmdList, passResolve, passResolveProxy, passResolveAnswer,
+                                  layer.hdrCopy, motionIn, exposureTex, target, nullptr))
+                {
+                    layer.failed = true;
+                    layer.reason = "the pass resolve dispatch failed";
+                    ParkAdditionalLayerFeature(index, layer.reason);
+                    LOG_ERROR("DLSS-NR pass {} unavailable: {}; keeping {} completed passes",
+                              index + 2, layer.reason, index + 1);
+                }
+                else
+                {
+                    ++layer.successfulEvaluations;
+                    layer.ready = true;
+                    layer.routeKnown = true;
+                    layer.routeWasPreSr = currentRouteIsPreSr;
+                    g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
+                    g_lastLayerCount = static_cast<unsigned int>(index + 2);
+                    diagnosticParams = passResolve;
+                    diagnosticProxy = passResolveProxy;
+                    diagnosticAnswer = passResolveAnswer;
+                    diagnosticOriginal = layer.hdrCopy;
+                }
+                resourceStates.Transition(layer.output, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                          D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                if (superDownOk)
+                    resourceStates.Transition(layer.outputNative,
+                                              D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                              D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                if (layer.failed) break;
+            }
+        }
+
+        // Layer 1 suppressed presentation when a later chain was ready to run. Even if a later pass
+        // fails this frame, apply the requested diagnostic/comparison once to the last completed pass.
+        const bool presentationDeferred = secondLayerActive;
+        if (presentationDeferred && presentationParams.DebugView != 0)
         {
             diagnosticParams.DebugView = presentationParams.DebugView;
             diagnosticParams.CompareMode = 0;
@@ -3507,7 +3938,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                              D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
 
-        if (secondLayerActive && presentationParams.CompareMode != 0)
+        if (presentationDeferred && presentationParams.CompareMode != 0)
         {
             // Both model evaluations and capture have finished reading the first proxy.
             // Reuse it for a display copy, avoiding a read/write alias of target.
@@ -3610,10 +4041,14 @@ void RetryAfterFailure()
     g_nr.failed = false;
     g_nr.reason = "";
     g_nr.reset = true;
-    g_nr.layer2.failed = false;
-    g_nr.layer2.reason = "";
-    g_nr.layer2.reset = true;
-    g_nr.layer2.ready = false;
+    for (size_t index = 0; index < 9; ++index)
+    {
+        auto& layer = AdditionalLayer(index);
+        layer.failed = false;
+        layer.reason = "";
+        layer.reset = true;
+        layer.ready = false;
+    }
     g_nr.preSrAwaitingEvaluation = true;
     ClearTransitionFailure(g_nr.preSrFailureCircuit);
     ClearTransitionFailure(g_nr.preDlaaFailureCircuit);
@@ -3638,8 +4073,11 @@ void NotifyUpscalerRelease()
     g_nr.preSrAwaitingEvaluation = true;
     g_nr.preSrResetWasRequested = false;
     g_nr.reset = true;
-    g_nr.layer2.reset = true;
-    g_nr.layer2.ready = false;
+    for (size_t index = 0; index < 9; ++index)
+    {
+        AdditionalLayer(index).reset = true;
+        AdditionalLayer(index).ready = false;
+    }
     ClearTransitionFailure(g_nr.preSrFailureCircuit);
     ClearTransitionFailure(g_nr.preDlaaFailureCircuit);
 
@@ -4005,12 +4443,12 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                      cfg.DlssNrLocalTone.value_or_default(),
                                      cfg.DlssNrSkinStructure.value_or_default(),
                                      cfg.DlssNrAutoMask.value_or_default(),
-                                     cfg.DlssNrSecondLayer.value_or_default(),
+                                     RequestedPassCount(cfg),
                                      expectedSecondWorkW, expectedSecondWorkH,
                                      expectedSecondTuning.preset, expectedSecondTuning.intensity,
                                      expectedSecondTuning.style, expectedSecondTuning.localStructure,
                                      expectedSecondTuning.localTone, expectedSecondTuning.skinStructure,
-                                     expectedSecondTuning.autoMask };
+                                     expectedSecondTuning.autoMask, AdditionalPassSignature(cfg) };
 
     int resetValue = 0;
     const bool resetRequested =
@@ -4030,8 +4468,11 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     if (resetRequested || resetEnded)
     {
         g_nr.reset = true;
-        g_nr.layer2.reset = true;
-        g_nr.layer2.ready = false;
+        for (size_t index = 0; index < 9; ++index)
+        {
+            AdditionalLayer(index).reset = true;
+            AdditionalLayer(index).ready = false;
+        }
     }
 
     const bool inputChanged =
@@ -4072,8 +4513,11 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         // Carry the transition into the NR feature itself so its first post-transition evaluation
         // cannot reuse the old scene's temporal history.
         g_nr.reset = true;
-        g_nr.layer2.reset = true;
-        g_nr.layer2.ready = false;
+        for (size_t index = 0; index < 9; ++index)
+        {
+            AdditionalLayer(index).reset = true;
+            AdditionalLayer(index).ready = false;
+        }
         g_nr.preSrAwaitingEvaluation = true;
         ParkNrResource(g_nr.preSrScratch);
         ParkNrResource(g_nr.preSrRejitter);
@@ -4111,7 +4555,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     // reservation through Dispatch and optional re-jitter under the lifecycle serialization.
     if (g_compose == nullptr)
         g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering", device);
-    if (!g_compose->Prepare(cmdList, true, cfg.DlssNrSecondLayer.value_or_default()))
+    if (!g_compose->Prepare(cmdList, true, RequestedPassCount(cfg)))
     {
         g_nr.preSrScratchPrimed = false;
         g_nr.preSrAwaitingEvaluation = true;
@@ -4188,18 +4632,30 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     Barrier(cmdList, g_nr.preSrScratch, D3D12_RESOURCE_STATE_COPY_DEST,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+    bool additionalPassesReady = true;
+    const unsigned int expectedPassCount = RequestedPassCount(cfg);
+    for (size_t index = 0; index + 1 < expectedPassCount; ++index)
+    {
+        const auto settings = PassSettings(cfg, static_cast<unsigned int>(index + 1));
+        const float passScale = std::clamp(settings.workingScale, 0.25f, 2.0f);
+        const unsigned int passWorkW =
+            std::max(8u, (unsigned int) (observedWidth * passScale + 0.5f) & ~7u);
+        const unsigned int passWorkH =
+            std::max(8u, (unsigned int) (observedHeight * passScale + 0.5f) & ~7u);
+        const auto& layer = AdditionalLayer(index);
+        additionalPassesReady = additionalPassesReady &&
+            (layer.failed || (layer.feature != nullptr && layer.width == observedWidth &&
+             layer.height == observedHeight && layer.workWidth == passWorkW &&
+             layer.workHeight == passWorkH && AdditionalLayerTuningMatches(cfg, index)));
+    }
+
     const bool featureReadyBefore =
         g_nr.feature != nullptr &&
         g_nr.width == observedWidth &&
         g_nr.height == observedHeight &&
         g_nr.workWidth == expectedWorkW &&
         g_nr.workHeight == expectedWorkH &&
-        TuningMatchesFeature(cfg) &&
-        (!cfg.DlssNrSecondLayer.value_or_default() || g_nr.layer2.failed ||
-         (g_nr.layer2.feature != nullptr &&
-          g_nr.layer2.width == observedWidth && g_nr.layer2.height == observedHeight &&
-          g_nr.layer2.workWidth == expectedSecondWorkW && g_nr.layer2.workHeight == expectedSecondWorkH &&
-          SecondLayerTuningMatches(cfg)));
+        TuningMatchesFeature(cfg) && additionalPassesReady;
 
     const unsigned long long successfulEvaluationsBefore = g_nr.completedPipelineEvaluations;
 
@@ -5024,7 +5480,8 @@ TelemetrySnapshot Telemetry()
     t.guideWidth = g_nr.guideWidth;
     t.guideHeight = g_nr.guideHeight;
     t.runBeforeSr = Config::Instance()->DlssNrRunBeforeSr.value_or_default();
-    t.layer2Requested = Config::Instance()->DlssNrSecondLayer.value_or_default();
+    t.layer2Requested = Config::Instance()->DlssNrMultipassEnabled.value_or_default() &&
+                        Config::Instance()->DlssNrPasses.value_or_default() > 1;
     t.layer2Loaded = g_nr.layer2.feature != nullptr;
     t.layer2Ready = g_nr.layer2.ready && t.layer2Loaded && !g_nr.layer2.failed;
     t.layer2Retiring = g_nr.layer2.featureAwaitingRelease != nullptr;
@@ -5152,10 +5609,28 @@ bool Shutdown()
 
     g_nr.feature = nullptr;
 
-    if (g_nr.layer2.feature != nullptr && g_nr.release != nullptr)
-        g_nr.release(g_nr.layer2.feature);
-    g_nr.layer2.feature = nullptr;
-    g_nr.layer2.featureAwaitingRelease = nullptr;
+    for (size_t index = 0; index < 9; ++index)
+    {
+        auto& layer = AdditionalLayer(index);
+        if (layer.feature != nullptr && g_nr.release != nullptr)
+            g_nr.release(layer.feature);
+        layer.feature = nullptr;
+        layer.featureAwaitingRelease = nullptr;
+
+        for (ID3D12Resource** resource : { &layer.output, &layer.colorCopy, &layer.hdrCopy,
+                                          &layer.colorSmall, &layer.outputNative })
+        {
+            if (*resource != nullptr)
+            {
+                (*resource)->Release();
+                *resource = nullptr;
+            }
+        }
+        delete layer.superUp;
+        delete layer.superDown;
+        layer.superUp = nullptr;
+        layer.superDown = nullptr;
+    }
 
     if (g_nr.output != nullptr)
     {
@@ -5168,22 +5643,6 @@ bool Shutdown()
         g_nr.colorCopy->Release();
         g_nr.colorCopy = nullptr;
     }
-
-    for (ID3D12Resource** resource : { &g_nr.layer2.output, &g_nr.layer2.colorCopy,
-                                      &g_nr.layer2.hdrCopy, &g_nr.layer2.colorSmall,
-                                      &g_nr.layer2.outputNative })
-    {
-        if (*resource != nullptr)
-        {
-            (*resource)->Release();
-            *resource = nullptr;
-        }
-    }
-
-    delete g_nr.layer2.superUp;
-    delete g_nr.layer2.superDown;
-    g_nr.layer2.superUp = nullptr;
-    g_nr.layer2.superDown = nullptr;
 
     if (g_nr.preSrScratch != nullptr)
     {
@@ -5356,6 +5815,7 @@ bool Shutdown()
     g_nr.reset = true;
     g_nr.width = g_nr.height = g_nr.workWidth = g_nr.workHeight = 0;
     g_nr.layer2 = {};
+    g_nr.layers3to10 = {};
     if (g_generationDevice != nullptr)
     {
         g_generationDevice->Release();

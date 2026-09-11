@@ -4,6 +4,7 @@
 #include "State.h"
 
 #include <atomic>
+#include <array>
 #include <optional>
 #include <filesystem>
 
@@ -46,6 +47,73 @@ enum class Scaler : uint32_t
     Kaiser3 = 6,
     Magic = 7,
     Count
+};
+
+// Passes after the first keep the same independent tuning surface.  The first pass retains the
+// long-standing DlssNr* keys so single-pass profiles and the main NR page remain compatible.
+struct DlssNrLayerOptionsSnapshot
+{
+    CustomOptional<float> workingScale;
+    CustomOptional<Scaler> scalingDownscaler;
+    CustomOptional<uint32_t> transfer;
+    CustomOptional<uint32_t> preset;
+    CustomOptional<float> intensity;
+    CustomOptional<uint32_t> style;
+    CustomOptional<float> localStructure;
+    CustomOptional<float> localTone;
+    CustomOptional<float> skinStructure;
+    CustomOptional<bool> autoMask;
+    CustomOptional<float> transferStrength;
+    CustomOptional<float> colourStrength;
+    CustomOptional<float> maxRatio;
+    CustomOptional<uint32_t> reversibleMode;
+    CustomOptional<bool> applyModel;
+};
+
+struct DlssNrLayerOptions
+{
+    NrOptional<float> workingScale { 1.0f };
+    NrOptional<Scaler> scalingDownscaler { Scaler::Lanczos3 };
+    NrOptional<uint32_t> transfer { 1 };
+    NrOptional<uint32_t> preset { 0 };
+    NrOptional<float> intensity { 1.0f };
+    NrOptional<uint32_t> style { 0 };
+    NrOptional<float> localStructure { 1.0f };
+    NrOptional<float> localTone { 1.0f };
+    NrOptional<float> skinStructure { -1.0f };
+    NrOptional<bool> autoMask { true };
+    NrOptional<float> transferStrength { 1.0f };
+    NrOptional<float> colourStrength { 1.0f };
+    NrOptional<float> maxRatio { 2.0f };
+    NrOptional<uint32_t> reversibleMode { 0 };
+    NrOptional<bool> applyModel { true };
+
+    DlssNrLayerOptionsSnapshot CopyForSnapshot(const NrConfigSynchronization::Transaction& transaction) const
+    {
+        return { workingScale.CopyForSnapshot(transaction), scalingDownscaler.CopyForSnapshot(transaction),
+                 transfer.CopyForSnapshot(transaction), preset.CopyForSnapshot(transaction),
+                 intensity.CopyForSnapshot(transaction), style.CopyForSnapshot(transaction),
+                 localStructure.CopyForSnapshot(transaction), localTone.CopyForSnapshot(transaction),
+                 skinStructure.CopyForSnapshot(transaction), autoMask.CopyForSnapshot(transaction),
+                 transferStrength.CopyForSnapshot(transaction), colourStrength.CopyForSnapshot(transaction),
+                 maxRatio.CopyForSnapshot(transaction), reversibleMode.CopyForSnapshot(transaction),
+                 applyModel.CopyForSnapshot(transaction) };
+    }
+};
+
+struct DlssNrExtraLayerOptions
+{
+    static constexpr size_t Count = 8; // passes 3 through 10; pass 2 retains its existing keys
+    std::array<DlssNrLayerOptions, Count> values;
+
+    std::array<DlssNrLayerOptionsSnapshot, Count>
+    CopyForSnapshot(const NrConfigSynchronization::Transaction& transaction) const
+    {
+        return { values[0].CopyForSnapshot(transaction), values[1].CopyForSnapshot(transaction),
+                 values[2].CopyForSnapshot(transaction), values[3].CopyForSnapshot(transaction),
+                 values[4].CopyForSnapshot(transaction), values[5].CopyForSnapshot(transaction),
+                 values[6].CopyForSnapshot(transaction), values[7].CopyForSnapshot(transaction) };
+    }
 };
 
 enum class ForceReflex : uint32_t
@@ -124,6 +192,9 @@ class Config
     // DLSS Neural Rendering: a detail-synthesis pass over the upscaler's output. Off by default -- it is
     // an undocumented feature driven directly through its snippet, not something NVIDIA exposes.
     NrOptional<bool> DlssNrEnabled { false };
+    // Multipass is a separate opt-in. A count of one is deliberately valid and behaves exactly like
+    // the established single-pass route; up to nine later passes own independent sessions/history.
+    NrOptional<bool> DlssNrMultipassEnabled { false };
     // Experimental D3D12-only second composed NR layer. Off preserves the established single-pass
     // route exactly. Profiles created before these keys existed are seeded once from layer 1 during
     // load, then remain independent.
@@ -143,6 +214,7 @@ class Config
     NrOptional<float> DlssNrSecondLayerMaxRatio { 2.0f };
     NrOptional<uint32_t> DlssNrSecondLayerReversibleMode { 0 };
     NrOptional<bool> DlssNrSecondLayerApplyModel { true };
+    DlssNrExtraLayerOptions DlssNrExtraLayers;
     // Runtime readers execute on rendering and hook threads. Publish the enable bit together with
     // an off->on generation so a resumed model cannot reuse temporal history across skipped frames.
     void SetDlssNrEnabled(bool enabled);
@@ -373,10 +445,10 @@ class Config
     // 1 is what the model was trained for and what every published number describes. Above that it
     // is being asked to enhance its own output, which is outside its training distribution: detail
     // compounds, and so does anything it got wrong. Two often looks richer. Four usually looks
-    // synthetic. Eight is there because somebody will want to see it.
+    // synthetic. Ten is a bounded stress-test ceiling rather than a quality recommendation.
     //
     // The cost is exactly linear -- the model is 98% of the frame's expense and every pass pays it
-    // again -- so 8 costs eight times, near enough. There is no shortcut and no amortisation: the
+    // again -- so 10 costs ten times, near enough. There is no shortcut and no amortisation: the
     // passes are sequential and each one needs the last one's output.
     NrOptional<uint32_t> DlssNrPasses { 1 };
 

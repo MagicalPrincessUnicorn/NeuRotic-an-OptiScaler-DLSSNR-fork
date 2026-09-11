@@ -7,6 +7,7 @@
 // The explicit list also keeps unrelated config out of the render snapshot.
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
+    X(DlssNrMultipassEnabled) \
     X(DlssNrSecondLayer) \
     X(DlssNrSecondLayerWorkingScale) \
     X(DlssNrSecondLayerScalingDownscaler) \
@@ -23,6 +24,7 @@
     X(DlssNrSecondLayerMaxRatio) \
     X(DlssNrSecondLayerReversibleMode) \
     X(DlssNrSecondLayerApplyModel) \
+    X(DlssNrExtraLayers) \
     X(DlssNrRoute) \
     X(DlssNrPresentWorkload) \
     X(DlssNrRunBeforeSr) \

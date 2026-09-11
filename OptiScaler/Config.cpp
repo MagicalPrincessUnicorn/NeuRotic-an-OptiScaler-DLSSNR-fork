@@ -340,6 +340,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             // Config-only transaction: no GPU or scanner calls while holding this mutex.
             NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
             _dlssNrState.LoadEnabled(DlssNrEnabled, readBool("DlssNr", "Enabled"));
+            const auto multipassEnabled = readBool("DlssNr", "MultipassEnabled");
+            DlssNrMultipassEnabled.set_from_config(multipassEnabled);
             DlssNrSecondLayer.set_from_config(readBool("DlssNr", "SecondLayer"));
             if (auto route = readUInt("DlssNr", "Route"))
                 DlssNrRoute.set_from_config(std::min(route.value(), 1u));
@@ -400,6 +402,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrScanMeter.set_from_config(readBool("DlssNr", "ScanMeter"));
             DlssNrScanTrim.set_from_config(readFloat("DlssNr", "ScanTrim"));
             DlssNrPasses.set_from_config(readUInt("DlssNr", "Passes"));
+            if (DlssNrPasses.value_or_default() < 1 || DlssNrPasses.value_or_default() > 10)
+                DlssNrPasses = std::clamp(DlssNrPasses.value_or_default(), 1u, 10u);
             DlssNrScanAnchorValue.set_from_config(readFloat("DlssNr", "ScanAnchorValue"));
             DlssNrScanAnchorWhitePoint.set_from_config(readFloat("DlssNr", "ScanAnchorWhitePoint"));
             DlssNrScanAnchors.set_from_config(readString("DlssNr", "ScanAnchors"));
@@ -454,6 +458,90 @@ bool Config::Reload(std::filesystem::path iniPath)
             if (!DlssNrSecondLayerMaxRatio.has_value()) DlssNrSecondLayerMaxRatio = DlssNrMaxRatio.value_or_default();
             if (!DlssNrSecondLayerReversibleMode.has_value()) DlssNrSecondLayerReversibleMode = DlssNrReversibleMode.value_or_default();
             if (!DlssNrSecondLayerApplyModel.has_value()) DlssNrSecondLayerApplyModel = DlssNrApplyModel.value_or_default();
+
+            // Profiles from the original two-layer experiment used SecondLayer without a separate
+            // multipass switch. Preserve that exact request. New profiles use MultipassEnabled and
+            // Passes; SecondLayer continues to be written as a compatibility alias for pass count >= 2.
+            if (!multipassEnabled.has_value() && DlssNrSecondLayer.value_or_default())
+            {
+                DlssNrMultipassEnabled = true;
+                DlssNrPasses = std::max(2u, DlssNrPasses.value_or_default());
+            }
+
+            DlssNrLayerOptions* previous = nullptr;
+            for (size_t index = 0; index < DlssNrExtraLayerOptions::Count; ++index)
+            {
+                auto& layer = DlssNrExtraLayers.values[index];
+                const std::string section = "DlssNrLayer" + std::to_string(index + 3);
+                layer.workingScale.set_from_config(readFloat(section.c_str(), "WorkingScale"));
+                if (auto value = readEnum<Scaler>(section.c_str(), "ScalingDownscaler"))
+                    layer.scalingDownscaler.set_from_config(*value);
+                layer.transfer.set_from_config(readUInt(section.c_str(), "Transfer"));
+                layer.preset.set_from_config(readUInt(section.c_str(), "Preset"));
+                layer.intensity.set_from_config(readFloat(section.c_str(), "Intensity"));
+                layer.style.set_from_config(readUInt(section.c_str(), "Style"));
+                layer.localStructure.set_from_config(readFloat(section.c_str(), "LocalStructure"));
+                layer.localTone.set_from_config(readFloat(section.c_str(), "LocalTone"));
+                layer.skinStructure.set_from_config(readFloat(section.c_str(), "SkinStructure"));
+                layer.autoMask.set_from_config(readBool(section.c_str(), "AutoMask"));
+                layer.transferStrength.set_from_config(readFloat(section.c_str(), "TransferStrength"));
+                layer.colourStrength.set_from_config(readFloat(section.c_str(), "ColourStrength"));
+                layer.maxRatio.set_from_config(readFloat(section.c_str(), "MaxRatio"));
+                layer.reversibleMode.set_from_config(readUInt(section.c_str(), "ReversibleMode"));
+                layer.applyModel.set_from_config(readBool(section.c_str(), "ApplyModel"));
+
+                // An unconfigured newly exposed pass inherits its predecessor once, then owns the
+                // stored values independently. Pass 3 follows the existing pass-2 compatibility set.
+                const float previousWorkingScale = previous != nullptr
+                    ? previous->workingScale.value_or_default()
+                    : DlssNrSecondLayerWorkingScale.value_or_default();
+                const Scaler previousDownscaler = previous != nullptr
+                    ? previous->scalingDownscaler.value_or_default()
+                    : DlssNrSecondLayerScalingDownscaler.value_or_default();
+                const uint32_t previousTransfer = previous != nullptr
+                    ? previous->transfer.value_or_default() : DlssNrSecondLayerTransfer.value_or_default();
+                const uint32_t previousPreset = previous != nullptr
+                    ? previous->preset.value_or_default() : DlssNrSecondLayerPreset.value_or_default();
+                const float previousIntensity = previous != nullptr
+                    ? previous->intensity.value_or_default() : DlssNrSecondLayerIntensity.value_or_default();
+                const uint32_t previousStyle = previous != nullptr
+                    ? previous->style.value_or_default() : DlssNrSecondLayerStyle.value_or_default();
+                const float previousLocalStructure = previous != nullptr
+                    ? previous->localStructure.value_or_default() : DlssNrSecondLayerLocalStructure.value_or_default();
+                const float previousLocalTone = previous != nullptr
+                    ? previous->localTone.value_or_default() : DlssNrSecondLayerLocalTone.value_or_default();
+                const float previousSkinStructure = previous != nullptr
+                    ? previous->skinStructure.value_or_default() : DlssNrSecondLayerSkinStructure.value_or_default();
+                const bool previousAutoMask = previous != nullptr
+                    ? previous->autoMask.value_or_default() : DlssNrSecondLayerAutoMask.value_or_default();
+                const float previousTransferStrength = previous != nullptr
+                    ? previous->transferStrength.value_or_default() : DlssNrSecondLayerTransferStrength.value_or_default();
+                const float previousColourStrength = previous != nullptr
+                    ? previous->colourStrength.value_or_default() : DlssNrSecondLayerColourStrength.value_or_default();
+                const float previousMaxRatio = previous != nullptr
+                    ? previous->maxRatio.value_or_default() : DlssNrSecondLayerMaxRatio.value_or_default();
+                const uint32_t previousReversibleMode = previous != nullptr
+                    ? previous->reversibleMode.value_or_default() : DlssNrSecondLayerReversibleMode.value_or_default();
+                const bool previousApplyModel = previous != nullptr
+                    ? previous->applyModel.value_or_default() : DlssNrSecondLayerApplyModel.value_or_default();
+
+                if (!layer.workingScale.has_value()) layer.workingScale = previousWorkingScale;
+                if (!layer.scalingDownscaler.has_value()) layer.scalingDownscaler = previousDownscaler;
+                if (!layer.transfer.has_value()) layer.transfer = previousTransfer;
+                if (!layer.preset.has_value()) layer.preset = previousPreset;
+                if (!layer.intensity.has_value()) layer.intensity = previousIntensity;
+                if (!layer.style.has_value()) layer.style = previousStyle;
+                if (!layer.localStructure.has_value()) layer.localStructure = previousLocalStructure;
+                if (!layer.localTone.has_value()) layer.localTone = previousLocalTone;
+                if (!layer.skinStructure.has_value()) layer.skinStructure = previousSkinStructure;
+                if (!layer.autoMask.has_value()) layer.autoMask = previousAutoMask;
+                if (!layer.transferStrength.has_value()) layer.transferStrength = previousTransferStrength;
+                if (!layer.colourStrength.has_value()) layer.colourStrength = previousColourStrength;
+                if (!layer.maxRatio.has_value()) layer.maxRatio = previousMaxRatio;
+                if (!layer.reversibleMode.has_value()) layer.reversibleMode = previousReversibleMode;
+                if (!layer.applyModel.has_value()) layer.applyModel = previousApplyModel;
+                previous = &layer;
+            }
             }
             UseGenericAppIdWithDlss.set_from_config(readBool("DLSS", "UseGenericAppIdWithDlss"));
 
@@ -1290,8 +1378,11 @@ bool Config::SaveIni()
     // inside this transaction: scanner code may read NR config while holding its own mutex.
     NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "MultipassEnabled",
+                 GetBoolValue(Instance()->DlssNrMultipassEnabled.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SecondLayer",
-                 GetBoolValue(Instance()->DlssNrSecondLayer.value_for_config()).c_str());
+                 GetBoolValue(Instance()->DlssNrMultipassEnabled.value_or_default() &&
+                              Instance()->DlssNrPasses.value_or_default() >= 2).c_str());
     ini.SetValue("DlssNrLayer2", "WorkingScale", GetFloatValue(Instance()->DlssNrSecondLayerWorkingScale.value_for_config()).c_str());
     ini.SetValue("DlssNrLayer2", "ScalingDownscaler", GetIntValue(Instance()->DlssNrSecondLayerScalingDownscaler.snapshot()).c_str());
     ini.SetValue("DlssNrLayer2", "Transfer", GetIntValue(Instance()->DlssNrSecondLayerTransfer.value_for_config()).c_str());
@@ -1307,6 +1398,26 @@ bool Config::SaveIni()
     ini.SetValue("DlssNrLayer2", "MaxRatio", GetFloatValue(Instance()->DlssNrSecondLayerMaxRatio.value_for_config()).c_str());
     ini.SetValue("DlssNrLayer2", "ReversibleMode", GetIntValue(Instance()->DlssNrSecondLayerReversibleMode.value_for_config()).c_str());
     ini.SetValue("DlssNrLayer2", "ApplyModel", GetBoolValue(Instance()->DlssNrSecondLayerApplyModel.value_for_config()).c_str());
+    for (size_t index = 0; index < DlssNrExtraLayerOptions::Count; ++index)
+    {
+        auto& layer = Instance()->DlssNrExtraLayers.values[index];
+        const std::string section = "DlssNrLayer" + std::to_string(index + 3);
+        ini.SetValue(section.c_str(), "WorkingScale", GetFloatValue(layer.workingScale.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "ScalingDownscaler", GetIntValue(layer.scalingDownscaler.snapshot()).c_str());
+        ini.SetValue(section.c_str(), "Transfer", GetIntValue(layer.transfer.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "Preset", GetIntValue(layer.preset.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "Intensity", GetFloatValue(layer.intensity.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "Style", GetIntValue(layer.style.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "LocalStructure", GetFloatValue(layer.localStructure.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "LocalTone", GetFloatValue(layer.localTone.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "SkinStructure", GetFloatValue(layer.skinStructure.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "AutoMask", GetBoolValue(layer.autoMask.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "TransferStrength", GetFloatValue(layer.transferStrength.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "ColourStrength", GetFloatValue(layer.colourStrength.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "MaxRatio", GetFloatValue(layer.maxRatio.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "ReversibleMode", GetIntValue(layer.reversibleMode.value_for_config()).c_str());
+        ini.SetValue(section.c_str(), "ApplyModel", GetBoolValue(layer.applyModel.value_for_config()).c_str());
+    }
     ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
     ini.SetValue("DlssNr", "PresentWorkload",
                  GetIntValue(Instance()->DlssNrPresentWorkload.value_for_config()).c_str());

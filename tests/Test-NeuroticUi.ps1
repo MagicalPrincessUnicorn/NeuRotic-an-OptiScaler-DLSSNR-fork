@@ -22,54 +22,63 @@ foreach ($label in @('Advanced Settings', 'Logging')) {
 Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded and remains collapsible'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
 Assert-Ui ($nr -match '(?s)SmallButton\("Reset##NrModelResolution"\).*?DlssNrWorkingScale = 1.0f;\s*pendingScale = -1;\s*scalePercent = 100;') 'model resolution reset restores 100 percent and cancels pending change'
-Assert-Ui ($nr -match '(?s)renderSecondLayerControls\(\);\s*ImGui::PopItemWidth\(\);\s*ImGui::PopTextWrapPos\(\);') 'second-layer controls last in NR section'
-$layer2Match = [regex]::Match($nr, '(?s)const auto renderSecondLayerControls = \[&\]\(\)\s*\{(.*?)\n\s*\};')
-Assert-Ui ($layer2Match.Success) 'second-layer control block is present'
-$layer2 = $layer2Match.Groups[1].Value
-Assert-Ui (([regex]::Matches($nr, 'ScopedCollapsingHeader\("Multipass##DlssNrMultipassSection"\)')).Count -eq 1) 'one default-collapsed Multipass parent is present'
-Assert-Ui (-not $nr.Contains('Second-pass settings (experimental)')) 'obsolete nested second-pass panel is absent'
-Assert-Ui ($layer2 -match '(?s)^\s*if \(auto panel = ScopedCollapsingHeader\("Multipass##DlssNrMultipassSection"\).*?Checkbox\("Enable second neural-rendering layer".*?Independent layer-2 tuning\..*?Model resolution##layer2.*?Apply the model##layer2') 'Multipass contains the toggle, warning, and every second-pass control'
-Assert-Ui ($layer2 -match '(?s)const bool disableSettings = !secondLayer \|\| !d3d12;\s*if \(disableSettings\)\s*ImGui::BeginDisabled\(\);.*?if \(disableSettings\)\s*ImGui::EndDisabled\(\);') 'subordinate Multipass settings are disabled while off or unsupported'
-Assert-Ui ($layer2.IndexOf('Checkbox("Enable second neural-rendering layer"') -lt $layer2.IndexOf('const bool disableSettings')) 'D3D12 toggle remains outside subordinate disabled state'
-Assert-Ui ($layer2 -match '(?s)SliderInt\("Model resolution##layer2".*?\)\s*pendingLayer2Scale = scale;\s*if \(ImGui::IsItemDeactivatedAfterEdit\(\) && pendingLayer2Scale >= 0\)\s*\{\s*config->DlssNrSecondLayerWorkingScale =\s*std::clamp\(pendingLayer2Scale, 25, 200\) / 100\.0f;\s*pendingLayer2Scale = -1;') 'layer-2 model resolution commits only after slider deactivation'
-Assert-Ui (([regex]::Matches($layer2, 'config->DlssNrSecondLayerWorkingScale\s*=')).Count -eq 2) 'layer-2 model resolution has only release and Reset writes'
-Assert-Ui ($layer2 -match '(?s)SmallButton\("Reset##NrLayer2ModelResolution"\).*?DlssNrSecondLayerWorkingScale = 1\.0f;\s*pendingLayer2Scale = -1;\s*scale = 100;') 'layer-2 model resolution reset restores 100 percent and clears pending state'
-foreach ($reset in @(
-    @{ Id = 'Reset##layer2-detail'; Field = 'DlssNrSecondLayerTransferStrength'; Value = '1.0f' },
-    @{ Id = 'Reset##layer2-colour'; Field = 'DlssNrSecondLayerColourStrength'; Value = '1.0f' },
-    @{ Id = 'Reset##layer2-guard'; Field = 'DlssNrSecondLayerMaxRatio'; Value = '2.0f' }
-)) {
-    $pattern = 'SmallButton\("' + [regex]::Escape($reset.Id) + '"\)\)\s*config->' + $reset.Field + ' = ' + [regex]::Escape($reset.Value) + ';'
-    Assert-Ui ($layer2 -match $pattern) "$($reset.Id) restores $($reset.Value)"
+Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
+           -not $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is contained within Neural Rendering'
+$multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
+Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
+           $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
+Assert-Ui ($multipass.Contains('Checkbox("Enable NR Multipass"')) 'Multipass page uses the requested enable label'
+Assert-Ui ($nr.Contains('static unsigned int RenderPassCountSelector(Config* config)') -and
+           ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 2 -and
+           $nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and
+           $nr.Contains('"10 passes"')) 'one shared pass selector exposes the complete one-to-ten range in both Neural Rendering sections'
+Assert-Ui ($nr.Contains('More than one pass selected. Enable NR Multipass for multiple passes to be applied.') -and
+           $nr.Contains('BeginChild("##DlssNrMultipassInactiveWarning"') -and
+           $nr.Contains('ImGuiCol_ChildBg') -and $nr.Contains('ImGuiCol_Border') -and
+           $multipass -notmatch 'BeginDisabled\(\);\s*if \(ImGui::BeginTabBar\("NrMultipassLayers"') 'pass profiles remain configurable before Multipass is enabled'
+Assert-Ui ($multipass.Contains('BeginTabBar("NrMultipassLayers"') -and
+           $multipass.Contains('"Pass %u"')) 'pass count drives numbered pass tabs'
+Assert-Ui ($multipass.Contains('Button("Reset All")') -and
+           $multipass.Contains('BeginPopupModal("Reset all multipass settings?"') -and
+           $multipass.Contains('Button("Confirm")') -and $multipass.Contains('Button("Cancel")')) 'Reset All requires confirm or cancel'
+Assert-Ui ($multipass.Contains('for (unsigned int pass = 1; pass < 10; ++pass)') -and
+           -not $multipass.Contains('DlssNrPasses = 1u') -and
+           $multipass.Contains('pendingAdditionalPassScale = -1;') -and
+           $multipass.Contains('pendingScales.clear();')) 'Reset All restores all additional profiles, cancels pending resolution edits, and preserves baseline Pass 1 and the shared pass count'
+Assert-Ui ($multipass.Contains('Button("Reset this pass")') -and
+           $multipass.Contains('Reset Pass %u profile?##pass%u') -and
+           $multipass -match '(?s)ResetPassOptions\(pass\);\s*pendingScales\.erase\(scaleId\);') 'each selected pass has a confirmed profile reset that cancels its pending resolution edit'
+Assert-Ui ($multipass.Contains('Copy Pass %u settings') -and
+           $multipass -match '(?s)CopyPassOptions\(PassOptions\(config, index - 1\), pass\);\s*pendingScales\.erase\(scaleId\);') 'later passes can copy the preceding profile without a stale pending resolution edit overwriting it'
+Assert-Ui ($multipass.Contains('SliderInt("Additional pass model resolution"') -and
+           $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)') -and
+           $multipass.Contains('Reset##AdditionalPassModelResolution')) 'additional passes share an optional model-resolution slider without changing pass 1'
+Assert-Ui ($multipass.Contains('Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass.') -and
+           $multipass.Contains('releasing commits that percentage to all additional passes and rebuilds them once.')) 'shared model-resolution tooltip clearly describes its all-additional-pass scope and release behavior'
+Assert-Ui ($multipass.Contains('if (passCount == 1)') -and
+           $multipass.Contains('Pass 1 is configured in the main Neural Rendering section.') -and
+           $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)')) 'baseline Pass 1 has one home and Multipass exposes only additional passes'
+foreach ($label in @('Model resolution##pass%u', 'Downscaler##pass%u', 'Model preset##pass%u',
+    'Style##pass%u', 'Enlargement##pass%u', 'Detail strength##pass%u',
+    'Colour strength##pass%u', 'Highlight guard##pass%u', 'Intensity##pass%u',
+    'Local structure##pass%u', 'Local tone##pass%u', 'Skin structure##pass%u',
+    'Auto skin mask##pass%u', 'Proxy composition##pass%u', 'Apply the model##pass%u')) {
+    Assert-Ui ($multipass.Contains($label)) "$label is rendered for every pass tab"
 }
-$layer2Labels = @('Model resolution##layer2', 'Downscaler##layer2', 'Enlargement##layer2', 'Model preset##layer2', 'Style##layer2', 'Detail strength##layer2', 'Colour strength##layer2', 'Highlight guard##layer2', 'Intensity##layer2', 'Local structure##layer2', 'Local tone##layer2', 'Skin structure##layer2', 'Auto skin mask##layer2', 'Apply the model##layer2')
-foreach ($label in $layer2Labels) {
-    Assert-Ui ($layer2.Contains($label)) "$label is inside Multipass"
-}
-$layer2Tooltips = @(
-    'The working resolution of layer 2 only.',
-    "The filter that averages only layer 2's above-native model answer",
-    "The second model session's preset.",
-    'The processing profile used by layer 2 only.',
-    "How layer 2's edit returns to full size",
-    "How far the composed frame moves toward layer 2's picture.",
-    "How much of layer 2's colour accompanies its lighting edit.",
-    'The maximum brightness change layer 2 may apply',
-    "Layer 2's internal model strength.",
-    "Layer 2's internal local-structure strength.",
-    "Layer 2's internal local-tone strength.",
-    "Layer 2's skin-structure strength.",
-    'Lets the second model session identify skin',
-    'Off keeps layer 2 evaluating but hides only its edit'
-)
-foreach ($tooltip in $layer2Tooltips) {
-    Assert-Ui ($layer2.Contains($tooltip)) "layer-2 tooltip is present: $tooltip"
-}
-$firstPassFields = @('DlssNrWorkingScale', 'DlssNrScalingDownscaler', 'DlssNrPreset', 'DlssNrStyle', 'DlssNrTransfer', 'DlssNrTransferStrength', 'DlssNrColourStrength', 'DlssNrMaxRatio', 'DlssNrIntensity', 'DlssNrLocalStructure', 'DlssNrLocalTone', 'DlssNrSkinStructure', 'DlssNrAutoMask', 'DlssNrApplyModel')
-foreach ($field in $firstPassFields) {
-    Assert-Ui (-not $layer2.Contains('config->' + $field)) "Multipass never accesses first-pass field $field"
-}
+Assert-Ui (([regex]::Matches($multipass, 'HelpMarker\(')).Count -ge 18) 'every Multipass setting carries a hover hint'
+Assert-Ui ($multipass.Contains('Reset##pass%u-resolution') -and
+           $multipass.Contains('Reset##pass%u-auto-mask') -and
+           $multipass.Contains('Reset##pass%u-apply')) 'every Multipass setting family exposes an individual reset'
+Assert-Ui (-not $nr.Contains('renderSecondLayerControls') -and
+           -not $nr.Contains('Enable second neural-rendering layer') -and
+           ([regex]::Matches($nr, 'DlssNrMultipassSection')).Count -eq 1) 'legacy two-layer editor is removed and the Multipass header has one stable ImGui ID'
+Assert-Ui ($nr -match '(?s)DlssNrSecondLayer\s*=\s*config->DlssNrMultipassEnabled\.value_or_default\(\)\s*&&\s*passCountIndex >= 1;' -and
+           $multipass -match '(?s)DlssNrSecondLayer\s*=\s*enabled\s*&&\s*config->DlssNrPasses\.value_or_default\(\) > 1;') 'legacy second-layer compatibility state follows both the Multipass switch and selected pass count'
 Assert-Ui ($menu.Contains('https://ko-fi.com/espiownage')) 'approved Ko-fi destination'
+Assert-Ui ($menu.Contains('c[ImGuiCol_TabSelected] = AccentStrong();') -and
+           $menu.Contains('c[ImGuiCol_TabDimmedSelected] = AccentMed(0.90f);') -and
+           $menu.Contains('BeginTabBar("MainMenuPages"') -and
+           $multipass.Contains('BeginTabBar("NrMultipassLayers"')) 'selected parent and Multipass tabs use the brighter shared active-tab palette'
 Assert-Ui ($menu -match '(?s)Button\("Open Wiki"\).*?ShowHelpMarker\(.*?BeginCombo\("Language"') 'language control follows Wiki button'
 Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apology removed from UI'
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
