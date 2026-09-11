@@ -4,9 +4,14 @@ INSTALL
 1. Extract the complete ZIP to a folder outside the game folder.
 2. Close the game and double-click NeuRotic-Setup.cmd.
 3. Select the game's actual executable, rather than its launcher.
-4. For a new installation, choose DirectX or Vulkan (Indiana Jones uses Vulkan).
-5. Review the destination and settings, then type INSTALL.
+4. If no dxgi.dll exists, Setup installs immediately as dxgi.dll.
+5. If dxgi.dll exists, choose whether to keep it as ReShade64.dll, delete it,
+   or cancel. Setup never guesses whether the file belongs to ReShade.
 6. Wait for "full installation verified", then launch your game.
+
+You never need to type INSTALL. If you keep an existing dxgi.dll as ReShade64.dll,
+Setup also enables LoadReshade in OptiScaler.ini without changing its encoding.
+If ReShade64.dll already exists, Setup stops instead of overwriting it.
 
 Press Insert to open NeuRotic, unless you have saved another shortcut.
 Enable Neural Rendering there. Start with one pass; try two for Multi-Pass.
@@ -14,7 +19,8 @@ Model Resolution, Model Strength and Detail Strength in Multi-Pass adjust all
 selected child passes together. Release a slider to apply. Pass 1 stays independent.
 
 SETTINGS AND MODEL
-Existing settings and your nvngx_dlssnr.dll model are preserved.
+Existing settings and your nvngx_dlssnr.dll model are preserved during installation,
+except that choosing the ReShade option sets LoadReshade to true.
 New installations start with NR, Multi-Pass and file logging OFF.
 The default DLSS Performance and Ultra Performance presets are L.
 
@@ -24,15 +30,17 @@ different file: it is the forwarder. Both are needed for NR.
 
 RESTORE YOUR PREVIOUS INSTALLATION
 Setup displays a recovery folder inside the game's NeuRotic-test-backups folder.
-Close the game and run Restore.cmd in that recovery folder. Your current settings
-and model stay in place. Keep the recovery folder until testing is complete.
+Close the game and run Restore.cmd in that recovery folder. It runs immediately,
+restores the original dxgi.dll name and the exact pre-install OptiScaler.ini, and
+removes a ReShade64.dll created by Setup. Your NR model stays in place. Any later
+INI is retained in the recovery folder before it is replaced. Keep that folder.
 If you install several versions, restore them in reverse order.
 
 NEED HELP?
 Keep the extracted package together. The support folder contains internal setup
 files, build information and a testing guide; you only need to launch Setup.
 If access is denied, run NeuRotic-Setup.cmd as administrator.
-If another mod occupies the loader filename, Setup stops so it is not overwritten.
+If dxgi.dll exists, identify it yourself with the three-choice Setup prompt.
 For troubleshooting, enable file logging at Info in Diagnostics, restart, reproduce
 the problem and retain OptiScaler.log. Switch logging off again afterwards.
 
@@ -43,3 +51,6 @@ first-menu/shop performance drops remain under investigation.
 
 Use only in games that permit modifications; avoid protected online sessions.
 These files are unsigned. No model downloads are performed by Setup.
+
+Linux/Proton runtime compatibility has been reported by users, but this package's
+Setup and Restore launchers are for Windows. No Linux installer is included here.

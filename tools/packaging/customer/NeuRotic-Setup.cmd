@@ -2,7 +2,7 @@
 setlocal
 title NeuRotic Setup
 echo NeuRotic Setup
-echo Select your game. Setup will show the destination and settings before installing.
+echo Select your game. Setup installs as dxgi.dll, or asks what to do if that file already exists.
 echo.
 set "PSModulePath="
 "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0support\NeuRotic-Setup-Engine.ps1" %*
