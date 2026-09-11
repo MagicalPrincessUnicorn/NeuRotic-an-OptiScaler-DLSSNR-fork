@@ -84,6 +84,7 @@ struct PresentState
     PresentPacing::Window<> pacing;
     PresentHistory::Continuity history;
     bool presentWasRequested = false;
+    unsigned int experimentalFlags = 0;
     UINT64 resumeGeneration = 0;
     bool guidesNeedUpload = true;
     // Set when submitted work can no longer be paired with a trustworthy completion value, or when
@@ -665,16 +666,20 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     g_present.presentWasRequested = true;
     g_present.resumeGeneration = runtime.resumeGeneration;
 
-    if (enhanced && (config->DlssNrMultipassEnabled.value_or_default() || config->FGEnabled.value_or_default() ||
-        State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive))
+    // Experimental combinations are attempted. Actual guide/resource admission below still applies.
+    const unsigned int experimentalFlags = enhanced ?
+        (settings.DlssNrMultipassEnabled.value_or_default() ? 1u : 0u) |
+        ((config->FGEnabled.value_or_default() || State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff ||
+          State::Instance().fsrfgInputActive) ? 2u : 0u) |
+        (Telemetry().nativeRayReconstructionActive ? 4u : 0u) : 0u;
+    if (experimentalFlags != g_present.experimentalFlags)
     {
-        SetFallback(PresentApi::Unknown, "Present Enhanced requires NR Multipass off and frame generation off");
-        return identity;
-    }
-    if (enhanced && Telemetry().nativeRayReconstructionActive)
-    {
-        SetFallback(PresentApi::Unknown, "Present Enhanced does not support Ray Reconstruction");
-        return identity;
+        InvalidateHistory("Experimental compatibility settings changed");
+        g_present.experimentalFlags = experimentalFlags;
+        LOG_INFO("DLSS-NR Present Enhanced: Experimental combination changed: Multipass={} FG={} RR={}. "
+                 "Processing is allowed; fresh guide matching and resource checks still apply. "
+                 "Runtime validation remains pending for future releases.",
+                 (experimentalFlags & 1u) != 0, (experimentalFlags & 2u) != 0, (experimentalFlags & 4u) != 0);
     }
 
     if (swapChain == nullptr || presentDevice == nullptr)
@@ -869,11 +874,11 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (observeNative)
     {
         auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
-        if (api != PresentApi::D3D12 || !PresentGuides::Instance().MatchMetadata(guideSelection,
+        if (!PresentGuides::Instance().MatchMetadata(guideSelection,
                 queue.Get(), swapchainIdentity.Get(), bufferIndex, width, height))
         {
             const auto status = PresentGuides::Instance().Inspect();
-            SetFallback(api, api != PresentApi::D3D12 ? "Captured Native metadata requires DX12" : status.status.c_str());
+            SetFallback(api, status.status.c_str());
             return identity;
         }
         if (g_present.nativeWidth != guideSelection.frame.RenderSubrectWidth ||
@@ -985,14 +990,13 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (enhanced)
     {
         auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
-        if (api != PresentApi::D3D12 || !PresentGuides::Instance().Bind(guideSelection,
+        if (!PresentGuides::Instance().Bind(guideSelection,
             g_present.list.Get(), queue.Get(), swapchainIdentity.Get(), bufferIndex,
             static_cast<UINT>(backDesc.Width), backDesc.Height, nativeGuides))
         {
             g_present.list->Close();
             const auto guideStatus = PresentGuides::Instance().Inspect();
-            SetFallback(api, api != PresentApi::D3D12 ? "Captured Native metadata requires DX12" :
-                guideStatus.status.c_str());
+            SetFallback(api, guideStatus.status.c_str());
             return identity;
         }
     }

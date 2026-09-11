@@ -8,14 +8,14 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $build = Get-Content -Raw -LiteralPath $BuildManifest | ConvertFrom-Json
 if ($build.status -ne 'built' -or $build.dirty -or $build.build.exit_code -ne 0 -or
     -not $build.build.source_unchanged -or $build.worktree -ne $root -or
-    $build.branch -ne 'exp/present-enhanced-ui-polish' -or $build.allowed_terminal_phase -ne 'build') {
+    $build.branch -ne 'exp/present-enhanced-experimental-unlock' -or $build.allowed_terminal_phase -ne 'build') {
     throw 'A clean verified build of this experiment is required.'
 }
 $head = & git --no-optional-locks -c "safe.directory=$root" -C $root rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $head -ne $build.commit) { throw 'Build differs from current source.' }
 $status = & git --no-optional-locks -c "safe.directory=$root" -C $root status --porcelain
 if ($LASTEXITCODE -ne 0 -or $status) { throw 'Source must be clean.' }
-$package = Join-Path $OutputRoot ('NeuRotic-Present-Enhanced-UI-Polish-EXPERIMENT-' + $head.Substring(0,8))
+$package = Join-Path $OutputRoot ('NeuRotic-Present-Enhanced-Unlocked-EXPERIMENT-' + $head.Substring(0,8))
 if (Test-Path -LiteralPath $package) { throw 'Existing handoff preserved; choose a new output root.' }
 New-Item -ItemType Directory -Path $package | Out-Null
 # The exact e7d46b89 customer installer/restore implementation is reused unchanged.
@@ -23,7 +23,7 @@ foreach ($file in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'customer'
     Copy-Item -LiteralPath $file.FullName -Destination $package -Recurse
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'present-enhanced\READ ME.txt') -Destination $package -Force
-Copy-Item -LiteralPath (Join-Path $root 'docs\PRESENT-ENHANCED-UI-POLISH.md') -Destination (Join-Path $package 'support\EXPERIMENT.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs\PRESENT-ENHANCED-EXPERIMENTAL-UNLOCK.md') -Destination (Join-Path $package 'support\EXPERIMENT.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs\PRESENT-ENHANCED-RESOLUTION.md') -Destination (Join-Path $package 'support\RENDERING-CONTRACT-HISTORY.md')
 $payload = Join-Path $package 'payload'
 New-Item -ItemType Directory -Path $payload | Out-Null
@@ -53,7 +53,7 @@ $inventory = @(Get-ChildItem -LiteralPath $package -Recurse -File | Sort-Object 
 $manifest = [ordered]@{
     kind='neurotic-customer-candidate' # Existing installer schema; lifecycle below is authoritative.
     lifecycle='experiment'; name=(Split-Path $package -Leaf); commit=$head; branch=$build.branch
-    parents=$build.parent_commits; source_control='6bc9fd6add0fbc53308e84c1636f392eed331acb'
+    parents=$build.parent_commits; source_control='41274da7b86dd1cc1fd88908d8b149ee7fb06495'
     candidate_ancestor='e7d46b899740ed25c78f11ae484366a2ba049b75'
     guide_source='885901ecd2ca3b2c99b813211c297a963971b8bd'
     runtime_result='Inconclusive'; decision='keep experimental'; public_release=$false; deployed=$false

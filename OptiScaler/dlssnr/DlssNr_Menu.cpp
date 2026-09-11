@@ -290,7 +290,10 @@ void RenderMenu(Config* config, float menuResScale)
         if (enabled && !config->DlssNrApplyModel.value_or_default())
             ImGui::TextColored(yellow, "Model effect hidden. Enable Apply the model to show it.");
         if (route == 2)
-            ImGui::TextColored(yellow, "Present Enhanced requires DX12 SDR with frame generation, Ray Reconstruction and NR Multipass off.");
+        {
+            ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
+            HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
+        }
         if (presentRoute)
         {
             if (enabled && presentActive && presentTelemetry.workWidth && presentTelemetry.workHeight)
@@ -1543,16 +1546,17 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
         const bool d3d12 = !IsVulkanInput() && State::Instance().api == API::DX12;
+        const bool presentRoute = config->DlssNrRoute.value_or_default() != 0;
         static unsigned int previousPassCount = 0;
 
         bool enabled = config->DlssNrMultipassEnabled.value_or_default();
-        if (!d3d12) ImGui::BeginDisabled();
+        if (!d3d12 && !presentRoute) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Enable NR Multipass", &enabled))
         {
             config->DlssNrMultipassEnabled = enabled;
             config->DlssNrSecondLayer = enabled && config->DlssNrPasses.value_or_default() > 1;
         }
-        if (!d3d12) ImGui::EndDisabled();
+        if (!d3d12 && !presentRoute) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
 
         const unsigned int passCount = RenderPassCountSelector(config);
@@ -1585,7 +1589,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
             ImGui::EndPopup();
         }
 
-        if (!d3d12)
+        if (!d3d12 && !presentRoute)
             ImGui::TextDisabled("Neural Rendering Multipass requires D3D12; Vulkan remains single-pass.");
 
         const auto telemetry = DlssNr::Telemetry();

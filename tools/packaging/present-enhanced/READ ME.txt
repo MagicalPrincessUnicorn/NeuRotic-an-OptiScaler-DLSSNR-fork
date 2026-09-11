@@ -1,7 +1,8 @@
-NEUROTIC - PRESENT ENHANCED UI POLISH EXPERIMENT
+NEUROTIC - PRESENT ENHANCED UNLOCKED EXPERIMENT
 
-UI/default polish from exact parent 6bc9fd6a. Rendering and installer behavior are
-preserved. This does not replace the selected customer candidate or stable.
+Experimental compatibility unlock from exact parent 41274da7. FG, RR and NR
+Multipass no longer block Enhanced. The existing DX11 bridge may also attempt it.
+This does not replace the selected customer candidate or stable.
 Keep the entire folder together. No live installation has been performed.
 
 WHEN YOU CHOOSE TO TEST
@@ -16,15 +17,16 @@ preserve saved route and logging choices; existing logging is not switched off.
 The backup folder's Restore.cmd restores the original installation.
 
 PRESENT ENHANCED ACCEPTANCE
-Use DX12 SDR, frame generation OFF, NR Multipass OFF, RR OFF. Supply your existing
-private NVIDIA nvngx_dlssnr.dll; it is not distributed in this package.
+Frame Generation, Ray Reconstruction, NR Multipass and DX11 are Experimental and
+unlocked. Supply your existing private NVIDIA nvngx_dlssnr.dll; it is not distributed
+in this package. SDR output and fresh matching guides are required.
 Enable Neural Rendering is the first control. Choose Native Temporal, Present
 Image Only, or Present Enhanced. Present routes remember their own NR resolution:
 Follow Native Render Resolution, Always Follow Output Resolution, or Custom Scale.
 Custom Scale reveals 100%, 77%, 67%, 58%, 50%, and 33%. Quality/Performance and
 model-resolution controls belong to Native Temporal and retain their behavior.
 Extra passes require Enable NR Multipass on a compatible route. Saved pass profiles
-remain editable before activation. Present Enhanced requires NR Multipass OFF.
+remain editable before activation. Enhanced can now attempt multiple passes.
 
 First test Always Follow Output Resolution (100%). Then test Follow Native Render
 Resolution, Custom Scale 67%, and Custom Scale 50%. Follow Native requires fresh matched game
@@ -45,15 +47,18 @@ Record longer-session results and reset/rebuild recovery, not just a brief launc
 
 Scene guides do not describe HUD pixels. The final game HUD remains included in
 the processed Present image; unchanged HUD pixels are not guaranteed.
-DX11, Vulkan, HDR, RR, frame generation and NR Multipass are not supported for
-Enhanced. Partial output subrects, unsupported guide formats, multiple Native
+Vulkan Present still has no adapter; HDR conversion is not implemented. DX11 needs
+matching guides through its existing bridge. Partial output subrects, unsupported guide formats, multiple Native
 evaluations, stale guides, or different producer/Present queues refuse processing.
 Read support\EXPERIMENT.md for the full contract and offline evidence boundaries.
 RENDERING-CONTRACT-HISTORY.md records the inherited implementation; its old UI
-defaults are historical. File logging can be deliberately enabled for runtime
+defaults and compatibility restrictions are historical. File logging can be deliberately enabled for runtime
 diagnostic evidence and turned off again afterwards.
 The inherited general TESTING.txt does not expand this experiment's support scope.
-This folder supersedes the 6bc9fd6a UI handoff for this experiment. Older source
+Use FG/RR/Multipass off as a comparison control, then test each enabled separately
+and together. Record actual pass counts and generated-frame behavior. Experimental
+selection alone does not establish successful Enhanced processing.
+This folder supersedes the 41274da7 UI handoff for this experiment. Older source
 and packages remain preserved as controls.
 
 Runtime result: INCONCLUSIVE. Decision: KEEP EXPERIMENTAL pending the gates above.

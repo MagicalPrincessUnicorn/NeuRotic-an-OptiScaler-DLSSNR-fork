@@ -66,6 +66,22 @@ require(not missing, 'all imported visible UI strings and fallback reasons local
 menu = source('OptiScaler/menu/menu_common.cpp')
 nr = source('OptiScaler/dlssnr/DlssNr_Menu.cpp')
 dx = source('OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp')
+require('Present Enhanced requires NR Multipass off' not in present and
+        'Present Enhanced does not support Ray Reconstruction' not in present and
+        'RR is not supported' not in dx,
+        'Enhanced FG/RR/Multipass blanket rejections removed, including RR capture')
+require('api != PresentApi::D3D12 || !PresentGuides' not in present and
+        'PresentGuides::Instance().MatchMetadata(guideSelection' in present and
+        'PresentGuides::Instance().Bind(guideSelection' in present,
+        'DX11 can reach actual guide matching and binding without an API-name rejection')
+require('Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.' in nr and
+        'if (!d3d12 && !presentRoute) ImGui::BeginDisabled();' in nr and
+        'Present Enhanced requires DX12 SDR' not in nr,
+        'Experimental guidance replaces compatibility locks; Present Multipass is selectable')
+require('InvalidateHistory("Experimental compatibility settings changed")' in present and
+        'experimentalFlags != g_present.experimentalFlags' in present and
+        'LogToFile =' not in present,
+        'feature transitions reset history and do not enable file logging')
 require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCommon::RenderGeneralPage'), 'Updates remain in General')
 require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 0 and
         nr.count('RenderMultipassMenu(config, menuResScale);') == 1,
@@ -88,8 +104,9 @@ require('##DlssNrMultipassInactiveWarning' not in nr and
         'inactive pass reminder removed; requirement stays in the tooltip')
 require('one to ten Neural Rendering passes' in nr and 'independent model session and temporal history' in nr,
         'independent pass-chain behavior and cost are disclosed')
-require('!IsVulkanInput() && State::Instance().api == API::DX12' in nr,
-        'multipass enable requires D3D12')
+require('!IsVulkanInput() && State::Instance().api == API::DX12' in nr and
+        'if (!d3d12 && !presentRoute) ImGui::BeginDisabled();' in nr,
+        'Native Multipass API restriction retained; Present routes allow experimental attempts')
 require('CompositionPool' not in nr and 'HardCap' not in nr, 'adaptive capacity has no menu control')
 require('Automatic installation will' not in menu, 'no automatic installer promise')
 require('ParkAllAdditionalLayerFeatures("NR route domain changed")' in dx and

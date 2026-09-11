@@ -3313,8 +3313,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (g_ngxTime != nullptr)
         g_ngxTime->Start(cmdList);
 
-    // Multi-pass was removed: re-feeding the model its own output re-opened the same-command-list
-    // feature-creation hang, and the colour core is not settled enough to build on. One evaluate.
+    // Evaluate the first pass; the existing independent additional-pass chain follows composition.
     // Both providers write g_nr.output. Both must pass through the same resolve before an
     // evaluation advances display readiness; proxy success alone previously exited too early.
     const unsigned int guideOrigins[] = {frame.DepthSubrectX, frame.DepthSubrectY,
@@ -4970,8 +4969,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                 params->Get(NVSDK_NGX_Parameter_Reset, &reset) == NVSDK_NGX_Result_Success &&
                 params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &frame.JitterX) == NVSDK_NGX_Result_Success &&
                 params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &frame.JitterY) == NVSDK_NGX_Result_Success;
-            const char* metadataError = forceAfterUpscale ? "Present Enhanced / Follow native: RR is not supported" :
-                outputX || outputY ? "Native capture: partial output subrect cannot match final Present" :
+            const char* metadataError = outputX || outputY ? "Native capture: partial output subrect cannot match final Present" :
                 enhanced && !haveTemporal ? "Native capture: reset or jitter metadata missing" : nullptr;
             const auto desc = target ? target->GetDesc() : D3D12_RESOURCE_DESC{};
             const auto* config = Config::Instance();
@@ -5311,7 +5309,7 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
         return false;
     }
     if (g_compose == nullptr)
-        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering - Present Image-Only", device);
+        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering - Present", device);
     device->Release();
     if (g_compose == nullptr)
         return false;
