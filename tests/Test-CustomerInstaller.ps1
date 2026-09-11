@@ -98,6 +98,13 @@ Check (-not (Test-Path -LiteralPath (Join-Path $fresh 'dxgi.dll')) -and -not (Te
 $undo=@(Get-ChildItem -LiteralPath $backup -Directory | Where-Object Name -Like 'restore-*')[0].FullName
 Check ((HashFile (Join-Path $undo 'OptiScaler.ini')) -eq $changedIni) 'Restore retains the replaced test-session INI in its undo folder'
 
+$freshMissingIni=Fixture 'fresh-ini-already-absent' $false
+RunEngine 'fresh-missing-ini-install' @('-GameExecutable',(Join-Path $freshMissingIni 'FixtureGame.exe')) | Out-Null
+$backup=Backup $freshMissingIni
+Remove-Item -LiteralPath (Join-Path $freshMissingIni 'OptiScaler.ini') -Force
+RunCmd 'fresh-missing-ini-restore' (Join-Path $backup 'Restore.cmd') @() | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $freshMissingIni 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $freshMissingIni 'OptiScaler.ini'))) 'Restore accepts an already-absent fresh INI and returns exact absent state'
+
 # Existing dxgi.dll delete: exact backup, no INI edit, changed runtime refusal, exact restore.
 $delete=Fixture 'delete-existing'
 [IO.File]::WriteAllText((Join-Path $delete 'dxgi.dll'),'original non-ReShade dxgi')

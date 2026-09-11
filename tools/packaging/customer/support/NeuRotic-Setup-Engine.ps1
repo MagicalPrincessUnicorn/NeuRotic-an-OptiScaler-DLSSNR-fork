@@ -150,7 +150,11 @@ if ($Restore) {
             $touched.Add($file)
             if ($file.existed) {
                 CopyVerified (SafePath (Join-Path $PSScriptRoot 'previous') $file.path) $target $file.previous_hash
-            } else { Remove-Item -LiteralPath $target -Force }
+            } elseif (Test-Path -LiteralPath $target -PathType Leaf) {
+                Remove-Item -LiteralPath $target -Force
+            } elseif (Test-Path -LiteralPath $target) {
+                throw "A directory occupies a restore target: $target"
+            }
         }
     } catch {
         foreach ($file in $touched) {
