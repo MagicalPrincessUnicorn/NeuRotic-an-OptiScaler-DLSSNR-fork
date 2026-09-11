@@ -1,51 +1,57 @@
-# NeuRotic — OptiScaler DLSS-NR fork
+# What NeuRotic Adds
 
-NeuRotic is a personal experimental fork of OptiScaler focused on DLSS Neural Rendering work.
+NeuRotic is an experimental OptiScaler DLSS Neural Rendering fork focused on stronger visuals, practical performance control, and safer behavior during real gameplay.
 
-This repository is not the official OptiScaler project and is not affiliated with the upstream OptiScaler maintainers. The fork's changes are experimental and may be game-, driver-, GPU-, or API-specific.
+It builds on the excellent work in [official OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR). Those projects provide the foundation; NeuRotic explores additional Neural Rendering routes, workload controls, Multipass rendering, diagnostics, compatibility work, and installation tooling.
 
-## Alpha 0.4
+## Latest release: Alpha 0.9.5
 
-[Alpha 0.4](ALPHA-0.4.md) adds:
+[NeuRotic Alpha 0.9.5](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.5) is a large community-shaped update built from implementation commit `a57e4456`.
 
-- NR telemetry for model time, total NR time, composition/copy time, dimensions, resets, rebuilds, and evaluation failures.
-- Jitter-aware Pre-SR Neural Rendering while preserving native temporal inputs and mode-dependent resolutions.
-- Explicit per-mode DLSS preset routing.
-- Readiness and reset hardening across resource, mode, dimension, format, and lifecycle transitions.
-- Optional NR Performance Mode and clearer Neural Rendering keybind guidance.
+The practical goal is a visibly worthwhile NR result on the hardware people actually play games with—not treating maximum resolution, maximum pass count, or an RTX 5090-class GPU as the starting assumption.
 
-See the [Alpha 0.4 release](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.4) for the downloadable Windows package when published.
+- **Three NR routes:** Native Temporal, Present Image-Only, and experimental Present Enhanced.
+- **Present Enhanced:** processes the final presented image, including the game HUD, while using fresh matched Native depth, motion, jitter, reset, and render-area information when available.
+- **Real workload control:** follow the game's current native render area, use full output resolution, or select 100%, 77%, 67%, 58%, 50%, or 33% custom scale.
+- **Visible dimensions:** the overlay shows the actual NR and output dimensions instead of hiding the cost behind a preset name.
+- **Up to ten NR passes:** independent child-pass controls and shared strength tuning provide room to experiment without making every added layer all-or-nothing.
+- **Stronger safety:** submission-aware GPU resource lifetime, transactional configuration and allocation, transition resets, guide matching, and original-image fallback when a safe result cannot be proven.
+- **Vulkan NR improvements:** tighter RR ownership, resource validation, typed parameters, cached tuning configurations, history handling, and checked teardown.
+- **Clearer interface:** reorganized NR controls, compact status, expandable diagnostics, and English, Spanish, French, German, and Portuguese localization.
+- **Rebuilt installer and restore:** nine supported proxy names, explicit ReShade coexistence, verified payloads, rollback, and refusal to overwrite unrelated later changes.
+
+Read the [full Alpha 0.9.5 patch notes](ALPHA-0.9.5.md) or the [complete enhancement inventory](docs/WHAT-NEUROTIC-ADDS.md).
 
 ## Installation
 
-1. Install OptiScaler using its normal installation instructions.
-2. Download the Windows package from the [Alpha 0.4 release page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.4).
-3. Back up your current OptiScaler files.
-4. Extract the package into the OptiScaler/game installation directory and overwrite the matching files.
-5. Start the game and open the OptiScaler overlay.
+1. Download `NeuRotic-Alpha-0.9.5.zip` from the [Alpha 0.9.5 release](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.5). GitHub's automatic source archives are not install packages.
+2. Extract the complete NeuRotic folder somewhere outside the game directory.
+3. Fully close the game and run `NeuRotic-Setup.cmd`.
+4. Select the game's real executable and an appropriate proxy filename.
+5. Supply your own licensed NVIDIA `nvngx_dlssnr.dll` model in the game folder. NeuRotic does not redistribute it.
+6. Enable Neural Rendering in the overlay and confirm that the active status and evaluation counters advance.
 
-There are no Dagger or Bows prerequisites. Those names were included in an earlier documentation mistake and are not part of this fork's installation requirements.
+The included `nvngx.dll_dlssnr.dll` is NeuRotic's forwarder; it is not the proprietary NVIDIA model despite the similar filename. Existing configuration and model files are preserved during an ordinary update. Setup creates a verified backup with its own `Restore.cmd`.
 
-If you download the repository source instead of the release package, it must be built first; the source tree is not a drop-in binary installation.
+## Experimental boundaries
 
-### Source archive versus install package
+NeuRotic remains experimental rendering middleware. Results vary by game, GPU, driver, rendering API, DLSS files, output mode, and other injectors.
 
-GitHub also provides automatic `Source code (zip)` and `Source code (tar.gz)` downloads. Those archives contain the development source and generic OptiScaler setup scripts; they are not the NeuRotic install package. Do not run `setup_windows.bat` from the source archive.
+Present Enhanced can now attempt Frame Generation, Ray Reconstruction, NR Multipass, and DX11 combinations. That is experimental access, not a compatibility guarantee. Every frame must still pass the real guide, resource, device, queue, identity, and subrect checks. D3D12 SDR with those additional features off remains the comparison control.
 
-The setup script is generic rather than Monster Hunter Wilds-specific: it works in the folder where you extracted a compiled OptiScaler package, asks which proxy filename to use, and supports different game layouts. The Alpha release package is the intended download for normal users.
+Vulkan Present routes and HDR Present Enhanced are not implemented in Alpha 0.9.5. The private NVIDIA Feature 18 model is not included. Avoid anti-cheat-protected multiplayer and keep game-folder changes reversible.
 
-## Links
+## Thanks
 
-- [NeuRotic Alpha 0.4 branch](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/tree/alpha-0.4)
+Special thanks to **Tommy Creo** for testing the Vulkan issues and helping turn a difficult report into a concrete fix path. Thanks as well to everyone sharing screenshots, compatibility results, bug reports, and feature ideas—this release is full of things that began with community feedback.
+
+If NeuRotic has improved a game for you and you ever feel like buying me a coffee while I keep tinkering with it, [Ko-fi is available](https://ko-fi.com/espiownage). There is no expectation whatsoever; testing and useful reports already make a real difference.
+
+## Source, credits, and licensing
+
+- [Alpha 0.9.5 source branch](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/tree/alpha-0.9.5)
 - [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases)
-- [Official OptiScaler project](https://github.com/optiscaler/OptiScaler)
+- [Official OptiScaler](https://github.com/optiscaler/OptiScaler)
 - [Parent OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR)
-- [Parent no-rendering branch](https://github.com/Dagherbou/OptiScaler_DLSSNR/tree/dlss-neural-rendering)
 
-## Support the fork
-
-If NeuRotic is useful to you, you can support development on [Ko-fi](https://ko-fi.com/espiownage).
-
-## Credits and licensing
-
-NeuRotic builds on OptiScaler and the upstream project's dependencies. Please review the repository [LICENSE](LICENSE), the `Licenses` directory, and the upstream project for original authorship, attribution, and licensing information.
+Review [LICENSE](LICENSE), the source branch's `Licenses` directory, and the parent projects for original authorship, attribution, and licensing.
