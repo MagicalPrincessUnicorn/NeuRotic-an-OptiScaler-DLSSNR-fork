@@ -1,0 +1,46 @@
+NEUROTIC - PRESENT ENHANCED RESOLUTION EXPERIMENT
+
+Experimental build from exact candidate e7d46b89, with captured Native guides ported
+from 885901ec. This does not replace the selected customer candidate or stable.
+Keep the entire folder together. No live installation has been performed.
+
+WHEN YOU CHOOSE TO TEST
+Close the game and run NeuRotic-Setup.cmd from this folder. The exact candidate
+installer is retained: select the actual game executable and a supported proxy
+filename. A free name installs immediately. Occupied names offer backed-up
+replacement, another name or cancel. DXGI also offers the explicit ReShade rename.
+Existing INI/model are preserved except the explicit ReShade choice sets
+LoadReshade=true. Fresh installs use the unchanged candidate NR-off profile.
+The backup folder's Restore.cmd restores the original installation.
+
+PRESENT ENHANCED ACCEPTANCE
+Use DX12 SDR, frame generation OFF, NR Multipass OFF, RR OFF. Supply your existing
+private NVIDIA nvngx_dlssnr.dll; it is not distributed in this package.
+Open Neural Rendering and select Native Temporal, Present Image-Only, or Present
+Enhanced. Present routes have independent NR resolution and Custom scale choices.
+Custom percentages appear only after choosing Custom scale. Native Quality and
+Performance controls retain their prior behavior.
+
+First test Always full output resolution (100%). Then test Follow native render
+resolution, Custom 67%, and Custom 50%. Follow native requires fresh matched game
+render-subrect metadata and aligns private work down to multiples of eight pixels.
+Actual NR and output dimensions are shown. No DLSS preset-name inference is used.
+
+For EACH setting compare Image-Only / Enhanced / Image-Only (A/B/A) in the same
+scene with the same model and tuning. Let history settle after each switch.
+Enhanced must show sustained increasing capture/match/evaluation counts, active
+Present Enhanced placement, and successful output. An unchanged fallback is not
+successful Enhanced NR. Record any visible refusal and the actual dimensions.
+Compare faces, cloth, highlights, motion, disocclusions and game HUD. Test menus,
+loading, camera cuts, route changes, NR toggles, dynamic resolution and resizing.
+Record longer-session results and reset/rebuild recovery, not just a brief launch.
+
+Scene guides do not describe HUD pixels. The final game HUD remains included in
+the processed Present image; unchanged HUD pixels are not guaranteed.
+DX11, Vulkan, HDR, RR, frame generation and NR Multipass are not supported for
+Enhanced. Partial output subrects, unsupported guide formats, multiple Native
+evaluations, stale guides, or different producer/Present queues refuse processing.
+Read support\EXPERIMENT.md for the full contract and offline evidence boundaries.
+The inherited general TESTING.txt does not expand this experiment's support scope.
+
+Runtime result: INCONCLUSIVE. Decision: KEEP EXPERIMENTAL pending the gates above.
