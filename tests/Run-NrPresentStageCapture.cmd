@@ -7,9 +7,9 @@ if not exist "%testOut%" mkdir "%testOut%"
 pushd "%~dp0.."
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++20 /EHsc /W4 /I OptiScaler /I OptiScaler\include tests\nr_present_stage_capture.cpp /Fe:"%testOut%\nr_present_stage_capture.exe" /Fo:"%testOut%\nr_present_stage_capture.obj" /link d3d12.lib dxgi.lib OptiScaler\library\detours\detours.lib >"%testOut%\build.txt" 2>&1
-if errorlevel 1 goto failed
+if not "%ERRORLEVEL%"=="0" goto failed
 "%testOut%\nr_present_stage_capture.exe" "%testOut%\captures" >"%testOut%\test.txt" 2>&1
-if errorlevel 1 goto failed
+if not "%ERRORLEVEL%"=="0" goto failed
 type "%testOut%\test.txt"
 popd
 exit /b 0
