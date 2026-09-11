@@ -3541,8 +3541,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 // readbacks. Present pixels are already display encoded.
                 const float screenshotWhite = !privateCommandList && isHdrBuffer ? whitePoint : 0.0f;
                 std::vector<DlssNr::StageCapture::StageInput> images;
+                // Encode writes the preserved scene to hdrCopy; colorCopy is its
+                // display-encoded model proxy. Only the scene is comparable to
+                // the composed target under the same PNG colour conversion.
                 if (g_screenshotSelection & Before)
-                    images.push_back({"NR-Off", g_nr.colorCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, screenshotWhite});
+                    images.push_back({"NR-Off", g_nr.hdrCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, screenshotWhite});
                 if (saveAfter)
                     images.push_back({privateCommandList ? "Present-NR-On" : "Native-NR-On", target,
                                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, screenshotWhite});
