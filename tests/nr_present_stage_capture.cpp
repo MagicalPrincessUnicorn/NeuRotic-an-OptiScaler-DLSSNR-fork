@@ -2,6 +2,7 @@
 #define NR_GPU_SAFETY_TEST
 #include "../OptiScaler/dlssnr/NrGpuSafety.cpp"
 #include "../OptiScaler/dlssnr/NrPresentStageCapture.h"
+#include "../OptiScaler/dlssnr/NrFinalOutputCapture.h"
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
 #include <array>
@@ -183,14 +184,17 @@ int main(int argc, char** argv)
     // Checkbox selection never silently requests the other route or additional images.
     for (unsigned int mask = 0; mask < 8; ++mask)
     {
-        assert(DlssNr::Screenshots::AvailableSelection(mask, false) == (mask & 3u));
+        assert(DlssNr::Screenshots::AvailableSelection(mask, false) == (mask & 2u));
         assert(DlssNr::Screenshots::AvailableSelection(mask, true) == (mask & 5u));
+        assert(DlssNr::Screenshots::AvailableSelection(mask, false, false) == (mask & 1u));
+        assert(DlssNr::Screenshots::AvailableSelection(mask, true, false) == (mask & 1u));
     }
     // A screenshot request records exactly one frame's selected pair and writes actual PNGs.
     std::vector<DlssNr::StageCapture::StageInput> screenshotInputs {inputs[0], inputs[2]};
     screenshotInputs[0].name = "NR-Off";
     screenshotInputs[1].name = "Present-NR-On";
     capture.request(GetTickCount64(), 0, 1, true);
+    assert(capture.wantsFrame(GetTickCount64()));
     assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 600, false, "same_evaluation true"));
     assert(capture.count() == 1 && capture.wanted() == 1);
     assert(!capture.record(lists[0].Get(), device.Get(), screenshotInputs, 601, false, "same_evaluation true"));
@@ -244,6 +248,60 @@ int main(int argc, char** argv)
         assert(DlssNr::Screenshots::WritePng(pngDir / "float.png", reinterpret_cast<const unsigned char*>(floatPixel),
             1, 1, 16, DXGI_FORMAT_R32G32B32A32_FLOAT));
         verifyPng(pngDir / "float.png", 1, 1, {64, 255, 0});
+
+        // Full-output capture precedes an overlay-like write on the SAME queue.
+        // Gate the queue to prove no premature freeing/saving while its GPU work is pending.
+        DlssNr::Screenshots::FinalOutputSubmission finalOutput;
+        assert(Safety::Record(lists[0].Get()));
+        D3D12_RESOURCE_BARRIER barrier {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition = {textures[0].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                              inputs[0].state, D3D12_RESOURCE_STATE_PRESENT};
+        lists[0]->ResourceBarrier(1, &barrier);
+        Check(lists[0]->Close());
+        queue->ExecuteCommandLists(1, submitted);
+        assert(Safety::Drain(10000));
+        Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        Check(queue->Wait(gate.Get(), 2));
+        assert(Safety::Record(lists[0].Get()));
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 700, "pre-overlay full output"));
+        finalOutput.poll(); capture.poll(root / "full-output");
+        assert(finalOutput.active() && capture.active() && !std::filesystem::exists(root / "full-output"));
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+        lists[0]->ResourceBarrier(1, &barrier);
+        D3D12_TEXTURE_COPY_LOCATION overlayFrom {}, overlayTo {};
+        overlayFrom.pResource = uploads[0].Get(); // value 16, unlike the frame's original 72
+        overlayFrom.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        overlayFrom.PlacedFootprint = layouts[0];
+        overlayTo.pResource = textures[0].Get();
+        overlayTo.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        lists[0]->CopyTextureRegion(&overlayTo, 0, 0, 0, &overlayFrom, nullptr);
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+        lists[0]->ResourceBarrier(1, &barrier);
+        Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+        Check(gate->Signal(2));
+        assert(Safety::Drain(10000));
+        finalOutput.poll(); capture.poll(root / "full-output");
+        assert(!finalOutput.active() && !capture.active());
+        const auto fullDir = std::filesystem::directory_iterator(root / "full-output")->path();
+        verifyPng(fullDir / "Current-output_0.png", 7, 5, {72, 72, 72});
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 701, "next output"));
+        assert(Safety::Drain(10000)); finalOutput.poll(); capture.poll(root / "next-output");
+        const auto nextDir = std::filesystem::directory_iterator(root / "next-output")->path();
+        verifyPng(nextDir / "Current-output_0.png", 7, 5, {16, 16, 16});
+        Check(queue->Wait(gate.Get(), 3));
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 702, "cancelled output"));
+        capture.cancel(); finalOutput.poll(); capture.poll(root / "cancelled-output");
+        assert(finalOutput.active() && capture.active());
+        Check(gate->Signal(3)); assert(Safety::Drain(10000));
+        finalOutput.poll(); capture.poll(root / "cancelled-output");
+        assert(!finalOutput.active() && !capture.active());
+        assert(!std::filesystem::exists(root / "cancelled-output"));
+        Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
         assert(DlssNr::Screenshots::HalfToFloat(0x0001) == std::ldexp(1.0f, -24));
         assert(DlssNr::Screenshots::HalfToFloat(0x7bff) == 65504.0f);
         assert(DlssNr::Screenshots::HalfToFloat(0xbc00) == -1.0f);
@@ -251,15 +309,52 @@ int main(int argc, char** argv)
         assert(std::isnan(DlssNr::Screenshots::HalfToFloat(0x7e00)));
     }
     CoUninitialize();
+
+    // A real pair just above 512 MiB: rejected by the old raw-diagnostic budget,
+    // accepted as one PNG frame under the new 2 GiB budget. Cancel before submission
+    // to avoid writing huge test images; no frame contents are needed for this check.
+    {
+        D3D12_RESOURCE_DESC large {};
+        large.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        large.Width = 8192; large.Height = 8193;
+        large.DepthOrArraySize = large.MipLevels = 1; large.SampleDesc.Count = 1;
+        large.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        D3D12_HEAP_PROPERTIES heap {}; heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        ComPtr<ID3D12Resource> largeImage;
+        Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &large,
+            D3D12_RESOURCE_STATE_PRESENT, nullptr, IID_PPV_ARGS(&largeImage)));
+        UINT64 bytes = 0; device->GetCopyableFootprints(&large, 0, 1, 0, nullptr, nullptr, nullptr, &bytes);
+        assert(bytes * 2 > Capture::MaxBytes && bytes * 2 < Capture::MaxScreenshotBytes);
+        std::vector<DlssNr::StageCapture::StageInput> pair {
+            {"NR-Off", largeImage.Get(), D3D12_RESOURCE_STATE_PRESENT},
+            {"Present-NR-On", largeImage.Get(), D3D12_RESOURCE_STATE_PRESENT}};
+        capture.request(GetTickCount64(), 0);
+        assert(!capture.record(lists[0].Get(), device.Get(), pair, 800, false, "large raw"));
+        assert(!capture.active() && capture.status().find("512 MiB") != std::string::npos);
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(capture.record(lists[0].Get(), device.Get(), pair, 800, false, "large PNG"));
+        assert(capture.wanted() == 1 && capture.count() == 1);
+        capture.cancel();
+        Check(lists[0]->Close()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        capture.poll(root); assert(!capture.active());
+        pair[0].image = nullptr;
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(!capture.record(lists[0].Get(), device.Get(), pair, 801, false, "missing"));
+        assert(capture.status().find("missing") != std::string::npos);
+        assert(capture.status().find("MiB") == std::string::npos);
+    }
     ComPtr<ID3D12InfoQueue> info; Check(device.As(&info));
     for (UINT64 i = 0; i < info->GetNumStoredMessages(); ++i)
     {
         SIZE_T size = 0; Check(info->GetMessage(i, nullptr, &size));
         std::vector<unsigned char> data(size); auto* message = reinterpret_cast<D3D12_MESSAGE*>(data.data());
         Check(info->GetMessage(i, message, &size));
+        if (message->Severity == D3D12_MESSAGE_SEVERITY_ERROR || message->Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION)
+            std::cerr << message->pDescription << '\n';
         assert(message->Severity != D3D12_MESSAGE_SEVERITY_ERROR && message->Severity != D3D12_MESSAGE_SEVERITY_CORRUPTION);
     }
     std::cout << "PASS: matched stage pixels/formats/pitches across 8 delayed submissions; completion and replay gates; cancellation, layer/settings/reset changes; six-stage output and write failure; no debug-layer errors.\n";
     std::cout << "Evidence: " << root.string() << '\n';
     std::cout << "PASS screenshots: every selection mask, exactly one matched GPU frame, PNG decode/pixel/dimension checks, RGBA/BGRA/R10, opaque alpha and invalid-format/stride rejection.\n";
+    std::cout << "PASS full output: immediate request, completion-owned private submission, pre-overlay pixels, repeat capture, real readback pair above 512 MiB and distinct missing-buffer failure.\n";
 }

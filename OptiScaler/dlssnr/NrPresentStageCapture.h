@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <sstream>
+#include <iomanip>
 
 namespace DlssNr::StageCapture
 {
@@ -25,6 +27,7 @@ class PresentStages
   public:
     static constexpr unsigned int MaxFrames = 8;
     static constexpr UINT64 MaxBytes = 512ull * 1024 * 1024;
+    static constexpr UINT64 MaxScreenshotBytes = 2ull * 1024 * 1024 * 1024;
 
     bool active() const { return armed_ || ready_; }
     const std::string& status() const { return status_; }
@@ -40,7 +43,8 @@ class PresentStages
         limit_ = (std::max)(1u, (std::min)(frames, MaxFrames));
         png_ = png;
         armed_ = true;
-        status_ = delayMs ? "Capture starts in 5 seconds. Close the menu." : "Waiting for the next complete NR frame.";
+        status_ = delayMs ? "Capture starts in 5 seconds. Close the menu." :
+                  png_ ? "Waiting for the next complete output frame." : "Waiting for the next complete NR frame.";
     }
 
     void cancel()
@@ -61,7 +65,6 @@ class PresentStages
         if (stages_.empty() && !allocate(device, inputs))
         {
             release();
-            status_ = "Capture could not allocate within its 512 MiB limit. Try a lower workload.";
             return false;
         }
         if (inputs.size() != stages_.size()) { cancel(); return false; }
@@ -170,7 +173,7 @@ class PresentStages
     ULONGLONG start_ = 0;
     bool armed_ = false, ready_ = false, discarded_ = false;
     std::string settings_;
-    std::string status_ = "Ready to capture the model inputs, raw answers and blended image.";
+    std::string status_ = "Ready to capture.";
 
     static bool supported(const D3D12_RESOURCE_DESC& d)
     {
@@ -186,19 +189,44 @@ class PresentStages
     }
     bool allocate(ID3D12Device* device, const std::vector<StageInput>& inputs)
     {
+        const UINT64 budget = png_ ? MaxScreenshotBytes : MaxBytes;
         UINT64 bytesPerFrame = 0;
         for (const auto& input : inputs)
         {
-            if (!input.image || !supported(input.image->GetDesc())) return false;
+            if (!input.image)
+            {
+                status_ = "Capture failed: an image buffer is missing.";
+                return false;
+            }
+            if (!supported(input.image->GetDesc()))
+            {
+                const auto d = input.image->GetDesc();
+                std::ostringstream reason;
+                reason << "Capture failed: unsupported image " << input.name << " (format " << int(d.Format)
+                       << ", " << d.Width << "x" << d.Height << ", mips " << d.MipLevels
+                       << ", samples " << d.SampleDesc.Count << ").";
+                status_ = reason.str();
+                return false;
+            }
             Stage stage;
             stage.name = input.name;
             stage.desc = input.image->GetDesc();
             device->GetCopyableFootprints(&stage.desc, 0, 1, 0, &stage.layout, nullptr, nullptr, &stage.bytes);
-            if (!stage.bytes || stage.bytes > MaxBytes - bytesPerFrame) return false;
+            if (!stage.bytes || stage.bytes == UINT64_MAX)
+            {
+                status_ = "Capture failed: DirectX could not describe the image's readback layout.";
+                return false;
+            }
+            if (stage.bytes > budget - bytesPerFrame)
+            {
+                status_ = "Capture needs more than its " + std::to_string(budget / (1024 * 1024)) +
+                          " MiB readback limit for one frame.";
+                return false;
+            }
             bytesPerFrame += stage.bytes;
             stages_.push_back(std::move(stage));
         }
-        wanted_ = static_cast<unsigned int>((std::min)(UINT64(limit_), MaxBytes / bytesPerFrame));
+        wanted_ = static_cast<unsigned int>((std::min)(UINT64(limit_), budget / bytesPerFrame));
         frames_.reserve(wanted_);
         D3D12_HEAP_PROPERTIES heap {};
         heap.Type = D3D12_HEAP_TYPE_READBACK;
@@ -212,8 +240,19 @@ class PresentStages
             buffer.SampleDesc.Count = 1;
             buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
             for (auto& shot : stage.shots)
-                if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
-                    D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&shot)))) return false;
+            {
+                const HRESULT result = device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
+                    D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&shot));
+                if (FAILED(result))
+                {
+                    std::ostringstream reason;
+                    reason << "Capture failed: DirectX readback allocation for " << stage.name << " ("
+                           << stage.bytes / (1024 * 1024) << " MiB, error 0x" << std::hex
+                           << std::uppercase << static_cast<unsigned long>(result) << ").";
+                    status_ = reason.str();
+                    return false;
+                }
+            }
         }
         return true;
     }

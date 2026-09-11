@@ -8,6 +8,7 @@
 
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/NrPresentStageCapture.h>
+#include <dlssnr/NrFinalOutputCapture.h>
 #include <sstream>
 #include <dlssnr/DlssNr_Proxy.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
@@ -549,8 +550,10 @@ std::optional<double> g_lastGpuTime;
 capture::FrameCapture g_capture;
 DlssNr::StageCapture::PresentStages g_presentStages;
 DlssNr::StageCapture::PresentStages g_screenshots;
+DlssNr::Screenshots::FinalOutputSubmission g_screenshotSubmission;
 unsigned int g_screenshotSelection = 0;
 bool g_screenshotPresent = false;
+bool g_screenshotEnabled = false;
 ULONGLONG g_screenshotDeadline = 0;
 
 // One capture happens on its own each session, so there is always a fresh sample without anyone having
@@ -2072,13 +2075,6 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
     const bool secondLayerRequested = cfg.DlssNrSecondLayer.value_or_default();
 
-    if (g_screenshots.active())
-    {
-        if (privateCommandList != g_screenshotPresent || !runtime.enabled)
-            g_screenshots.cancel();
-        g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
-    }
-
     if (g_presentStages.active())
     {
         if (!privateCommandList) g_presentStages.cancel();
@@ -3519,10 +3515,13 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
 
-        if (g_screenshots.wantsFrame(GetTickCount64()))
+        // Present already operates on the full upscaled image. Native screenshots
+        // are copied at the actual Present boundary, never from these NR-stage buffers.
+        if (privateCommandList && g_screenshotPresent && g_screenshotEnabled &&
+            g_screenshots.wantsFrame(GetTickCount64()))
         {
             using namespace DlssNr::Screenshots;
-            const bool saveAfter = (g_screenshotSelection & (Native | DlssNr::Screenshots::Present)) != 0;
+            const bool saveAfter = (g_screenshotSelection & DlssNr::Screenshots::Present) != 0;
             const bool applied = cfg.DlssNrApplyModel.value_or_default() ||
                 (g_lastLayerCount == 2 && cfg.DlssNrSecondLayerApplyModel.value_or_default());
             if (cfg.DlssNrDebugView.value_or_default() != 0 || cfg.DlssNrCompare.value_or_default() != 0 ||
@@ -3530,54 +3529,18 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 g_screenshots.cancel();
             else
             {
-                ID3D12Resource* encodedAfter = nullptr;
-                ID3D12Resource* keptAfter = nullptr;
-                ID3D12Resource* after = target;
-                bool prepared = true;
-                // Native may run on a linear HDR raster. Use the exact same encoding/exposure
-                // as the before image so the PNG pair is comparable. This is an NR-stage view,
-                // not a claim to reproduce the game's later tonemapper or upscaler.
-                if (saveAfter && isHdrBuffer)
-                {
-                    encodedAfter = CreateScratch(device, DXGI_FORMAT_R8G8B8A8_UNORM, width, height);
-                    keptAfter = CreateScratch(device, desc.Format, width, height);
-                    prepared = encodedAfter != nullptr && keptAfter != nullptr;
-                    if (prepared)
-                    {
-                        resourceStates.Transition(target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                                                  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                        prepared = DispatchPass(cmdList, encodeParams, target, nullptr, nullptr, nullptr,
-                                                exposureTex, encodedAfter, keptAfter);
-                        resourceStates.Transition(target, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                                                  D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                        after = encodedAfter;
-                    }
-                }
-                if (prepared)
-                {
-                    std::vector<DlssNr::StageCapture::StageInput> images;
-                    if (g_screenshotSelection & Before)
-                        images.push_back({"NR-Off", g_nr.colorCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
-                    if (saveAfter)
-                        images.push_back({privateCommandList ? "Present-NR-On" : "Native-NR-On", after,
-                                          D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
-                    std::ostringstream settings;
-                    settings << "same_evaluation true; mode_switching false; selection " << g_screenshotSelection
-                             << "\nroute " << (privateCommandList ? "Present" : "Native")
-                             << " placement " << (privateCommandList ? "final image" :
-                                                   currentRouteIsPreSr ? "before SR" : "after SR")
-                             << "\nlayers " << g_lastLayerCount << " encoding "
-                             << (isHdrBuffer ? "shared NR proxy encoding (not final game tonemapping)" : "display encoded")
-                             << " whitePoint " << encodeParams.WhitePoint << " liveExposure " << encodeParams.UseGameExposure
-                             << " reversibleMode " << encodeParams.ReversibleMode
-                             << "\nNR-Off is the input before both NR layers, not a second render with NR disabled."
-                             << "\nOnly the active route is available in this same-frame set.";
-                    g_screenshots.record(cmdList, device, images, g_nr.successfulEvaluations, frame.Reset, settings.str());
-                }
-                else g_screenshots.cancel();
-                // Includes the newly recorded encode/copy ticket; never release submitted scratch early.
-                ParkNrResource(encodedAfter);
-                ParkNrResource(keptAfter);
+                std::vector<DlssNr::StageCapture::StageInput> images;
+                if (g_screenshotSelection & Before)
+                    images.push_back({"NR-Off", g_nr.colorCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
+                if (saveAfter)
+                    images.push_back({"Present-NR-On", target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
+                std::ostringstream settings;
+                settings << "same_evaluation true; mode_switching false; selection " << g_screenshotSelection
+                         << "\nroute Present; placement full upscaled image; NeuRotic_menu excluded"
+                         << "\nlayers " << g_lastLayerCount
+                         << "\nNR-Off is the full input before both Present NR layers, not a second render.";
+                if (!g_screenshots.record(cmdList, device, images, g_nr.successfulEvaluations, frame.Reset, settings.str()))
+                    LOG_WARN("Screenshot: {}", g_screenshots.status());
             }
         }
 
@@ -5215,7 +5178,7 @@ void RequestPresentStageCapture()
     if (!g_sessionClosed && !g_shutdownFailed && !g_screenshots.active()) g_presentStages.request(GetTickCount64());
 }
 
-void RequestComparisonScreenshot(bool menuDelay)
+void RequestComparisonScreenshot()
 {
     auto* config = Config::Instance();
     unsigned int selected;
@@ -5231,9 +5194,9 @@ void RequestComparisonScreenshot(bool menuDelay)
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     if (g_screenshots.active()) return;
-    if (g_sessionClosed || g_shutdownFailed || !enabled)
+    if (g_sessionClosed || g_shutdownFailed)
     {
-        g_screenshots.setIdleStatus("Enable NR to capture its same-frame before/after images.");
+        g_screenshots.setIdleStatus("Screenshot unavailable while the renderer is shut down.");
         return;
     }
     if (g_presentStages.active())
@@ -5241,15 +5204,69 @@ void RequestComparisonScreenshot(bool menuDelay)
         g_screenshots.setIdleStatus("Wait for the diagnostic capture to finish.");
         return;
     }
-    g_screenshotSelection = Screenshots::AvailableSelection(selected, present);
+    g_screenshotSelection = Screenshots::AvailableSelection(selected, present, enabled);
     if (!g_screenshotSelection)
     {
         g_screenshots.setIdleStatus("Select at least one screenshot available for the active route.");
         return;
     }
     g_screenshotPresent = present;
-    g_screenshotDeadline = GetTickCount64() + (menuDelay ? 20000 : 15000);
-    g_screenshots.request(GetTickCount64(), menuDelay ? 5000 : 0, 1, true);
+    g_screenshotEnabled = enabled;
+    g_screenshotDeadline = GetTickCount64() + 15000;
+    g_screenshots.request(GetTickCount64(), 0, 1, true);
+}
+
+void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags)
+{
+    auto* config = Config::Instance();
+    bool present, enabled;
+    {
+        NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
+        present = config->DlssNrRoute.value_or_default() == 1;
+        enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+    }
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    g_screenshotSubmission.poll();
+    if (!g_screenshots.active()) return;
+    if (g_screenshots.wantsFrame(GetTickCount64()) &&
+        (present != g_screenshotPresent || enabled != g_screenshotEnabled ||
+         GetTickCount64() > g_screenshotDeadline))
+        g_screenshots.cancel();
+    g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
+    if (!g_screenshots.wantsFrame(GetTickCount64()) || (present && enabled)) return;
+    if (!swapChain || !presentDevice || (presentFlags & DXGI_PRESENT_TEST)) return;
+    auto unavailable = [&](const char* reason)
+    {
+        g_screenshots.cancel();
+        g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
+        g_screenshots.setIdleStatus(reason);
+        LOG_WARN("Screenshot: {}", reason);
+    };
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain3;
+    Microsoft::WRL::ComPtr<ID3D12Resource> output;
+    if (FAILED(presentDevice->QueryInterface(IID_PPV_ARGS(&queue))) ||
+        queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT ||
+        FAILED(swapChain->QueryInterface(IID_PPV_ARGS(&swapChain3))) ||
+        FAILED(swapChain3->GetBuffer(swapChain3->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&output))))
+    {
+        unavailable("Full-output screenshots require an available DirectX 12 swapchain.");
+        return;
+    }
+    if (State::Instance().isHdrActive)
+    {
+        unavailable("Full-output HDR screenshot conversion is not available yet.");
+        return;
+    }
+    std::ostringstream settings;
+    settings << "placement full upscaled swapchain output; NeuRotic_menu excluded; mode_switching false"
+             << "\nNR_enabled " << enabled << "; route " << (present ? "Present" : "Native")
+             << "; last_NR_evaluation " << g_nr.successfulEvaluations
+             << "\nCurrent output only; unavailable NR-off comparison was not rendered.";
+    if (!g_screenshotSubmission.submit(queue.Get(), output.Get(), g_screenshots,
+        enabled ? "Current-output" : "NR-Off", g_nr.successfulEvaluations, settings.str()))
+        LOG_WARN("Screenshot: {}", g_screenshots.status());
 }
 
 void CancelComparisonScreenshot()
@@ -5263,6 +5280,7 @@ std::string ComparisonScreenshotStatus()
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    g_screenshotSubmission.poll();
     const bool timedOut = g_screenshots.active() && g_screenshots.count() == 0 && GetTickCount64() > g_screenshotDeadline;
     if (timedOut) g_screenshots.cancel();
     if (g_screenshots.active()) g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
@@ -5312,6 +5330,7 @@ bool Shutdown()
         g_gpuTime.release();
         g_ngxTime.release();
         g_ngxTimeLayer2.release();
+        g_screenshotSubmission.retainUntilExit();
         LOG_ERROR("DLSS-NR shutdown: GPU work is unsubmitted, incomplete, or lost; retaining the generation and blocking native NGX teardown/restart");
         return false;
     }
@@ -5523,6 +5542,7 @@ bool Shutdown()
 
     g_capture.release();
     g_presentStages.release();
+    g_screenshotSubmission.releaseAfterDrain();
     g_screenshots.release();
 
     g_frames = 0;

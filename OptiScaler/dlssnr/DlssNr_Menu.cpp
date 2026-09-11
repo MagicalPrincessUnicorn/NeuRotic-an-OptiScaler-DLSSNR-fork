@@ -1496,27 +1496,34 @@ void RenderScreenshotMenu(Config* config)
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
         const bool present = config->DlssNrRoute.value_or_default() == 1;
+        const bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         const bool busy = ComparisonScreenshotBusy();
-        ImGui::TextWrapped("Save selected images from the same NR frame. Files go into NeuroticScreenshots beside the game.");
+        ImGui::TextWrapped("Save the full upscaled image without the NeuRotic menu. Files go into NeuroticScreenshots beside the game.");
         ImGui::BeginDisabled(busy);
         bool before = config->ScreenshotNrOff.value_or_default();
-        if (ImGui::Checkbox("NR off (before NR)", &before)) config->ScreenshotNrOff = before;
+        ImGui::BeginDisabled(enabled && !present);
+        if (ImGui::Checkbox("NR off", &before)) config->ScreenshotNrOff = before;
+        ImGui::EndDisabled();
         bool native = config->ScreenshotNativeNr.value_or_default();
-        ImGui::BeginDisabled(present);
-        if (ImGui::Checkbox("Native NR on", &native)) config->ScreenshotNativeNr = native;
+        ImGui::BeginDisabled(present || !enabled);
+        if (ImGui::Checkbox("Current full output", &native)) config->ScreenshotNativeNr = native;
         ImGui::EndDisabled();
         bool imageOnly = config->ScreenshotPresentNr.value_or_default();
-        ImGui::BeginDisabled(!present);
+        ImGui::BeginDisabled(!present || !enabled);
         if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
         ImGui::EndDisabled();
-        ImGui::TextWrapped("Only the active NR route is available. Capturing never switches routes or changes NR history.");
-        if (!present)
-            ImGui::TextWrapped("Native images are captured at NR's processing stage, before the game's later effects. Performance mode captures before upscaling. HDR images use matching NR preview encoding.");
-        if (ImGui::Button("Take screenshots (5-second delay)")) RequestComparisonScreenshot(true);
+        if (enabled && !present)
+            ImGui::TextWrapped("NR is active before presentation: only the current full output is available. A matching NR-off output would require another render.");
+        else if (enabled)
+            ImGui::TextWrapped("Present NR saves the selected before/after images from the same full-resolution frame.");
+        else
+            ImGui::TextWrapped("NR is off: its current full output is available. Unavailable comparisons are disabled.");
+        ImGui::TextWrapped("Capture starts on the next ready frame. You can leave this menu open; it is excluded automatically. In-game HUD and other overlays already in the image remain.");
+        if (ImGui::Button("Take screenshots")) RequestComparisonScreenshot();
         ImGui::EndDisabled();
         if (busy && ImGui::Button("Cancel screenshots")) CancelComparisonScreenshot();
         ImGui::TextWrapped("%s", ComparisonScreenshotStatus().c_str());
-        ImGui::TextWrapped("For immediate capture, bind Comparison screenshots in Keybinds. Keep Apply Model on and Debug view / Compare off for an NR-on image.");
+        ImGui::TextWrapped("Bind Comparison screenshots in Keybinds for the same action. Present NR-on comparisons need Apply Model on and Debug view / Compare off.");
     }
 }
 

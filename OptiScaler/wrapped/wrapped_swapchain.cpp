@@ -4,6 +4,7 @@
 #include <Util.h>
 #include <Config.h>
 #include <dlssnr/DlssNr_Present.h>
+#include <dlssnr/DlssNrFeature_Dx12.h>
 
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
@@ -376,6 +377,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         nrPresentIdentity =
             DlssNr::EvaluatePresentImageOnly(pSwapChain, pDevice, Flags, pPresentParameters);
         nrAdapterCpuMs = Util::MillisecondsNow() - presentHookStartMs;
+
+        DlssNr::CaptureComparisonOutput(pSwapChain, pDevice, Flags);
 
         // Draw overlay
         MenuOverlayDx::Present(pSwapChain, SyncInterval, Flags, pPresentParameters, pDevice, hWnd, isUWP);

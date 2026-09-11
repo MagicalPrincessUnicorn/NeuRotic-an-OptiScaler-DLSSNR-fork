@@ -107,8 +107,9 @@ inline bool WritePng(const std::filesystem::path& path, const unsigned char* pix
 }
 
 constexpr unsigned int Before = 1, Native = 2, Present = 4;
-inline unsigned int AvailableSelection(unsigned int selected, bool present)
+inline unsigned int AvailableSelection(unsigned int selected, bool present, bool enabled = true)
 {
-    return selected & (Before | (present ? Present : Native));
+    if (!enabled) return selected & Before;
+    return selected & (present ? (Before | Present) : Native);
 }
 } // namespace DlssNr::Screenshots

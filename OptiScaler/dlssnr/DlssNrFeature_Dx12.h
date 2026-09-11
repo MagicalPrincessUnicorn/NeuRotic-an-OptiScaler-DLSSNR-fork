@@ -1,6 +1,7 @@
 #pragma once
 
 #include <d3d12.h>
+#include <dxgi.h>
 
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <nvsdk_ngx.h>
@@ -209,7 +210,9 @@ bool CaptureInProgress();
 // Experimental Present-only matched stage capture; UI request never changes saved settings.
 void RequestPresentStageCapture();
 std::string PresentStageCaptureStatus();
-void RequestComparisonScreenshot(bool menuDelay = false);
+void RequestComparisonScreenshot();
+// Called at the real Present boundary, before the NeuRotic overlay.
+void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags);
 void CancelComparisonScreenshot();
 std::string ComparisonScreenshotStatus();
 bool ComparisonScreenshotBusy();
