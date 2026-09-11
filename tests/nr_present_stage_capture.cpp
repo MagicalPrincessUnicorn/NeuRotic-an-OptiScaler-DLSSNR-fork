@@ -15,6 +15,24 @@ namespace Safety = DlssNr::GpuSafety;
 using Capture = DlssNr::StageCapture::PresentStages;
 static void Check(HRESULT value) { assert(SUCCEEDED(value)); }
 
+static std::filesystem::path FindScreenshot(const std::filesystem::path& root, const std::string& tag,
+                                          const std::filesystem::path& exclude = {})
+{
+    std::filesystem::path result;
+    for (const auto& entry : std::filesystem::directory_iterator(root))
+    {
+        assert(entry.is_regular_file()); // Every capture is flat, including its manifest.
+        assert(entry.path().extension() != ".pending");
+        if (entry.path() != exclude && entry.path().filename().string().ends_with("_" + tag + ".png"))
+        {
+            assert(result.empty());
+            result = entry.path();
+        }
+    }
+    assert(!result.empty());
+    return result;
+}
+
 int main(int argc, char** argv)
 {
     assert(argc == 2);
@@ -204,8 +222,14 @@ int main(int argc, char** argv)
     Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
     capture.poll(root / "screenshots");
     assert(!capture.active() && capture.status().find("Saved:") == 0);
-    const auto pngDir = std::filesystem::directory_iterator(root / "screenshots")->path();
+    const auto pngDir = root / "screenshots";
     assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 3);
+    const auto offPng = FindScreenshot(pngDir, "NROFF");
+    const auto presentPng = FindScreenshot(pngDir, "NRONPRESENT");
+    const auto offName = offPng.filename().string();
+    const auto batchPrefix = offName.substr(0, offName.size() - std::string("_NROFF.png").size());
+    assert(presentPng.filename() == batchPrefix + "_NRONPRESENT.png");
+    assert(std::filesystem::exists(pngDir / (batchPrefix + "_CAPTURE.txt")));
     Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
     {
         ComPtr<IWICImagingFactory> imaging;
@@ -228,9 +252,9 @@ int main(int argc, char** argv)
             for (size_t i = 0; i < rgba.size(); i += 4)
                 assert(rgba[i] == expected[0] && rgba[i+1] == expected[1] && rgba[i+2] == expected[2] && rgba[i+3] == 255);
         };
-        verifyPng(pngDir / "NR-Off_0.png", 7, 5, {72, 72, 72});
+        verifyPng(offPng, 7, 5, {72, 72, 72});
         constexpr UINT packed = 0x4a4a4a4a;
-        verifyPng(pngDir / "Present-NR-On_0.png", 11, 7,
+        verifyPng(presentPng, 11, 7,
             {static_cast<unsigned char>(((packed & 1023) * 255 + 511) / 1023),
              static_cast<unsigned char>((((packed >> 10) & 1023) * 255 + 511) / 1023),
              static_cast<unsigned char>((((packed >> 20) & 1023) * 255 + 511) / 1023)});
@@ -285,13 +309,16 @@ int main(int argc, char** argv)
         assert(Safety::Drain(10000));
         finalOutput.poll(); capture.poll(root / "full-output");
         assert(!finalOutput.active() && !capture.active());
-        const auto fullDir = std::filesystem::directory_iterator(root / "full-output")->path();
-        verifyPng(fullDir / "Current-output_0.png", 7, 5, {72, 72, 72});
+        const auto fullDir = root / "full-output";
+        const auto firstOutput = FindScreenshot(fullDir, "NRON");
+        verifyPng(firstOutput, 7, 5, {72, 72, 72});
         capture.request(GetTickCount64(), 0, 1, true);
         assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 701, "next output"));
-        assert(Safety::Drain(10000)); finalOutput.poll(); capture.poll(root / "next-output");
-        const auto nextDir = std::filesystem::directory_iterator(root / "next-output")->path();
-        verifyPng(nextDir / "Current-output_0.png", 7, 5, {16, 16, 16});
+        assert(Safety::Drain(10000)); finalOutput.poll(); capture.poll(fullDir);
+        const auto secondOutput = FindScreenshot(fullDir, "NRON", firstOutput);
+        verifyPng(secondOutput, 7, 5, {16, 16, 16});
+        verifyPng(firstOutput, 7, 5, {72, 72, 72}); // Never overwrite the previous capture.
+        assert(std::distance(std::filesystem::directory_iterator(fullDir), std::filesystem::directory_iterator()) == 4);
         Check(queue->Wait(gate.Get(), 3));
         capture.request(GetTickCount64(), 0, 1, true);
         assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 702, "cancelled output"));
@@ -357,4 +384,5 @@ int main(int argc, char** argv)
     std::cout << "Evidence: " << root.string() << '\n';
     std::cout << "PASS screenshots: every selection mask, exactly one matched GPU frame, PNG decode/pixel/dimension checks, RGBA/BGRA/R10, opaque alpha and invalid-format/stride rejection.\n";
     std::cout << "PASS full output: immediate request, completion-owned private submission, pre-overlay pixels, repeat capture, real readback pair above 512 MiB and distinct missing-buffer failure.\n";
+    std::cout << "PASS flat naming: no per-capture folders or leftover claims, shared pair prefix, final NR tags, completion manifest and repeated capture preserves earlier pixels.\n";
 }

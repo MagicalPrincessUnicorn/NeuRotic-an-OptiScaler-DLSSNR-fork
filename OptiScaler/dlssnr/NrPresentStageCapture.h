@@ -108,20 +108,57 @@ class PresentStages
         std::error_code ec;
         std::filesystem::create_directories(root, ec);
         std::filesystem::path directory;
+        std::string prefix;
+        HANDLE reservation = INVALID_HANDLE_VALUE;
         bool created = false;
         for (unsigned int attempt = 0; !ec && attempt < 32 && !created; ++attempt)
         {
-            directory = root / ((png_ ? "comparison-" : "capture-") + std::to_string(GetTickCount64()) + "-" + std::to_string(attempt));
-            created = std::filesystem::create_directory(directory, ec);
+            if (!png_)
+            {
+                directory = root / ("capture-" + std::to_string(GetTickCount64()) + "-" + std::to_string(attempt));
+                created = std::filesystem::create_directory(directory, ec);
+                continue;
+            }
+            directory = root;
+            SYSTEMTIME now {};
+            GetLocalTime(&now);
+            char stamp[64] {};
+            std::snprintf(stamp, sizeof(stamp), "Neurotic_%04u-%02u-%02u_%02u-%02u-%02u-%03u_",
+                unsigned(now.wYear), unsigned(now.wMonth), unsigned(now.wDay), unsigned(now.wHour),
+                unsigned(now.wMinute), unsigned(now.wSecond), unsigned(now.wMilliseconds));
+            prefix = stamp + std::to_string(GetCurrentProcessId()) + "_" +
+                     std::to_string(GetTickCount64()) + "_" + std::to_string(attempt);
+            // Hold an exclusive claim until all files are closed. Concurrent captures
+            // cannot select this prefix; the temporary claim disappears even on exit.
+            const auto claim = directory / (prefix + "_CAPTURE.pending");
+            reservation = CreateFileW(claim.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+            if (reservation == INVALID_HANDLE_VALUE)
+            {
+                const auto error = GetLastError();
+                if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS) break;
+                continue;
+            }
+            created = !std::filesystem::exists(directory / (prefix + "_CAPTURE.txt"), ec);
+            for (const auto& stage : stages_)
+                for (unsigned int i = 0; i < captured_; ++i)
+                    if (std::filesystem::exists(directory / screenshotName(prefix, stage.name, i), ec))
+                        created = false;
+            if (!created || ec)
+            {
+                CloseHandle(reservation);
+                reservation = INVALID_HANDLE_VALUE;
+            }
         }
         bool ok = created && !ec;
         for (const auto& stage : stages_)
             for (unsigned int i = 0; ok && i < captured_; ++i)
-                ok = dump(directory / (stage.name + "_" + std::to_string(i) + (png_ ? ".png" : ".raw")), stage, i, png_);
-        // The complete manifest is written last; a partial directory never claims success.
+                ok = dump(directory / (png_ ? screenshotName(prefix, stage.name, i) :
+                    stage.name + "_" + std::to_string(i) + ".raw"), stage, i, png_);
+        // The complete manifest is written last; a partial batch never claims success.
         if (ok)
         {
-            const auto path = directory / "manifest.txt";
+            const auto path = directory / (png_ ? prefix + "_CAPTURE.txt" : "manifest.txt");
             if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
             {
                 bool manifestOk = std::fprintf(file, "%s\nframes %u\n%s\n",
@@ -134,13 +171,20 @@ class PresentStages
                 for (unsigned int i = 0; i < captured_; ++i)
                     manifestOk = (std::fprintf(file, "frame %u evaluation %llu reset %u\n", i,
                         frames_[i].id, frames_[i].reset ? 1u : 0u) >= 0) && manifestOk;
+                if (png_)
+                    for (const auto& stage : stages_)
+                        for (unsigned int i = 0; i < captured_; ++i)
+                            manifestOk = (std::fprintf(file, "file %s stage %s frame %u\n",
+                                screenshotName(prefix, stage.name, i).c_str(), stage.name.c_str(), i) >= 0) && manifestOk;
                 ok = (std::fclose(file) == 0) && manifestOk;
                 if (!ok) std::filesystem::remove(path, ec);
             }
             else ok = false;
         }
+        if (reservation != INVALID_HANDLE_VALUE) CloseHandle(reservation);
         release();
-        status_ = ok ? "Saved: " + directory.string() : "Capture could not be saved completely. Check disk space and permissions.";
+        status_ = ok ? "Saved: " + (png_ ? directory / prefix : directory).string() :
+                      "Capture could not be saved completely. Check disk space and permissions.";
     }
 
     // Only after no copies were recorded, Reusable(), or the host's successful shutdown drain.
@@ -174,6 +218,12 @@ class PresentStages
     bool armed_ = false, ready_ = false, discarded_ = false;
     std::string settings_;
     std::string status_ = "Ready to capture.";
+
+    std::string screenshotName(const std::string& prefix, const std::string& stage, unsigned int frame) const
+    {
+        const char* tag = stage == "NR-Off" ? "NROFF" : stage == "Present-NR-On" ? "NRONPRESENT" : "NRON";
+        return prefix + (captured_ > 1 ? "_F" + std::to_string(frame) : "") + "_" + tag + ".png";
+    }
 
     static bool supported(const D3D12_RESOURCE_DESC& d)
     {
