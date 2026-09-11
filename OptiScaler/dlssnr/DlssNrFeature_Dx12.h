@@ -216,6 +216,7 @@ void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice,
 void CancelComparisonScreenshot();
 std::string ComparisonScreenshotStatus();
 bool ComparisonScreenshotBusy();
+bool NativeComparisonScreenshotAvailable();
 void RenderScreenshotMenu(::Config* config);
 
 bool Shutdown();

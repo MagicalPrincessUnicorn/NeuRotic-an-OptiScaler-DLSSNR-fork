@@ -18,6 +18,7 @@ struct StageInput
     const char* name;
     ID3D12Resource* image;
     D3D12_RESOURCE_STATES state;
+    float whitePoint = 0.0f;
 };
 
 // Diagnostic only: no source texture or model history is changed. All stages of a
@@ -71,7 +72,8 @@ class PresentStages
         for (size_t i = 0; i < inputs.size(); ++i)
         {
             if (!inputs[i].image || stages_[i].name != inputs[i].name ||
-                !sameShape(inputs[i].image->GetDesc(), stages_[i].desc))
+                !sameShape(inputs[i].image->GetDesc(), stages_[i].desc) ||
+                inputs[i].whitePoint != stages_[i].whitePoint)
             { cancel(); return false; }
         }
         // Do not silently mix configuration or history discontinuities into a motion sample.
@@ -139,9 +141,9 @@ class PresentStages
                 if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS) break;
                 continue;
             }
-            created = !std::filesystem::exists(directory / (prefix + "_CAPTURE.txt"), ec);
+            created = true;
             for (const auto& stage : stages_)
-                for (unsigned int i = 0; i < captured_; ++i)
+                for (unsigned int i = 0; !ec && i < captured_; ++i)
                     if (std::filesystem::exists(directory / screenshotName(prefix, stage.name, i), ec))
                         created = false;
             if (!created || ec)
@@ -155,14 +157,15 @@ class PresentStages
             for (unsigned int i = 0; ok && i < captured_; ++i)
                 ok = dump(directory / (png_ ? screenshotName(prefix, stage.name, i) :
                     stage.name + "_" + std::to_string(i) + ".raw"), stage, i, png_);
-        // The complete manifest is written last; a partial batch never claims success.
-        if (ok)
+        // PNG screenshots contain images only. Raw developer diagnostics retain
+        // their manifest; partial diagnostic batches never claim success.
+        if (ok && !png_)
         {
-            const auto path = directory / (png_ ? prefix + "_CAPTURE.txt" : "manifest.txt");
+            const auto path = directory / "manifest.txt";
             if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
             {
                 bool manifestOk = std::fprintf(file, "%s\nframes %u\n%s\n",
-                    png_ ? "NeuRotic same-frame screenshots v1" : "Present NR matched stages v1",
+                    "Present NR matched stages v1",
                     captured_, settings_.c_str()) >= 0;
                 for (const auto& stage : stages_)
                     manifestOk = (std::fprintf(file, "%s width %llu height %u format %d rowPitch %u bytes %llu\n",
@@ -171,11 +174,6 @@ class PresentStages
                 for (unsigned int i = 0; i < captured_; ++i)
                     manifestOk = (std::fprintf(file, "frame %u evaluation %llu reset %u\n", i,
                         frames_[i].id, frames_[i].reset ? 1u : 0u) >= 0) && manifestOk;
-                if (png_)
-                    for (const auto& stage : stages_)
-                        for (unsigned int i = 0; i < captured_; ++i)
-                            manifestOk = (std::fprintf(file, "file %s stage %s frame %u\n",
-                                screenshotName(prefix, stage.name, i).c_str(), stage.name.c_str(), i) >= 0) && manifestOk;
                 ok = (std::fclose(file) == 0) && manifestOk;
                 if (!ok) std::filesystem::remove(path, ec);
             }
@@ -203,6 +201,7 @@ class PresentStages
     struct Stage
     {
         std::string name;
+        float whitePoint = 0.0f;
         D3D12_RESOURCE_DESC desc {};
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout {};
         UINT64 bytes = 0;
@@ -229,9 +228,7 @@ class PresentStages
     {
         return d.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && d.Width && d.Height &&
                d.DepthOrArraySize == 1 && d.MipLevels == 1 && d.SampleDesc.Count == 1 &&
-               (d.Format == DXGI_FORMAT_R8G8B8A8_UNORM || d.Format == DXGI_FORMAT_R16G16B16A16_FLOAT ||
-                d.Format == DXGI_FORMAT_R32G32B32A32_FLOAT ||
-                d.Format == DXGI_FORMAT_R10G10B10A2_UNORM || d.Format == DXGI_FORMAT_B8G8R8A8_UNORM);
+               Screenshots::PixelBytes(d.Format) != 0;
     }
     static bool sameShape(const D3D12_RESOURCE_DESC& a, const D3D12_RESOURCE_DESC& b)
     {
@@ -260,6 +257,7 @@ class PresentStages
             }
             Stage stage;
             stage.name = input.name;
+            stage.whitePoint = input.whitePoint;
             stage.desc = input.image->GetDesc();
             device->GetCopyableFootprints(&stage.desc, 0, 1, 0, &stage.layout, nullptr, nullptr, &stage.bytes);
             if (!stage.bytes || stage.bytes == UINT64_MAX)
@@ -334,7 +332,8 @@ class PresentStages
         bool ok = false;
         if (png)
             ok = Screenshots::WritePng(path, static_cast<const unsigned char*>(mapped),
-                static_cast<UINT>(stage.desc.Width), stage.desc.Height, stage.layout.Footprint.RowPitch, stage.desc.Format);
+                static_cast<UINT>(stage.desc.Width), stage.desc.Height, stage.layout.Footprint.RowPitch, stage.desc.Format,
+                stage.whitePoint);
         else if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
         {
             const auto written = std::fwrite(mapped, 1, static_cast<size_t>(stage.bytes), file);

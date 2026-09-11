@@ -1498,22 +1498,25 @@ void RenderScreenshotMenu(Config* config)
         const bool present = config->DlssNrRoute.value_or_default() == 1;
         const bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         const bool busy = ComparisonScreenshotBusy();
-        ImGui::TextWrapped("Save the full upscaled image without the NeuRotic menu. Files go into NeuroticScreenshots beside the game.");
+        const bool nativePair = NativeComparisonScreenshotAvailable();
+        ImGui::TextWrapped("Save full-resolution PNG images in NeuroticScreenshots beside the game. No extra text files.");
         ImGui::BeginDisabled(busy);
         bool before = config->ScreenshotNrOff.value_or_default();
-        ImGui::BeginDisabled(enabled && !present);
+        ImGui::BeginDisabled(enabled && !present && !nativePair);
         if (ImGui::Checkbox("NR off", &before)) config->ScreenshotNrOff = before;
         ImGui::EndDisabled();
         bool native = config->ScreenshotNativeNr.value_or_default();
         ImGui::BeginDisabled(present || !enabled);
-        if (ImGui::Checkbox("Current full output", &native)) config->ScreenshotNativeNr = native;
+        if (ImGui::Checkbox(nativePair ? "Native NR on" : "Current full output", &native)) config->ScreenshotNativeNr = native;
         ImGui::EndDisabled();
         bool imageOnly = config->ScreenshotPresentNr.value_or_default();
         ImGui::BeginDisabled(!present || !enabled);
         if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
         ImGui::EndDisabled();
-        if (enabled && !present)
-            ImGui::TextWrapped("NR is active before presentation: only the current full output is available. A matching NR-off output would require another render.");
+        if (nativePair)
+            ImGui::TextWrapped("Native comparisons capture the same upscaled frame before and after NR, ahead of later game effects and HUD. Linear scenes use matching colour conversion for both images.");
+        else if (enabled && !present)
+            ImGui::TextWrapped("Performance runs NR before upscaling: only the current full output is available. Same-frame comparisons are available in Quality or after Ray Reconstruction.");
         else if (enabled)
             ImGui::TextWrapped("Present NR saves the selected before/after images from the same full-resolution frame.");
         else
@@ -1523,7 +1526,11 @@ void RenderScreenshotMenu(Config* config)
         ImGui::EndDisabled();
         if (busy && ImGui::Button("Cancel screenshots")) CancelComparisonScreenshot();
         ImGui::TextWrapped("%s", ComparisonScreenshotStatus().c_str());
-        ImGui::TextWrapped("Bind Comparison screenshots in Keybinds for the same action. Present NR-on comparisons need Apply Model on and Debug view / Compare off.");
+        ImGui::TextWrapped("NR-on comparisons need Apply Model on and Debug view / Compare off.");
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Screenshot keybind");
+        MenuCommon::RenderScreenshotKeybind(config);
+        ImGui::TextDisabled("Escape cancels; Backspace clears the binding. Also shown in Keybinds.");
     }
 }
 

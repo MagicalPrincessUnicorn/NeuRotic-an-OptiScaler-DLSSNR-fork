@@ -554,6 +554,8 @@ DlssNr::Screenshots::FinalOutputSubmission g_screenshotSubmission;
 unsigned int g_screenshotSelection = 0;
 bool g_screenshotPresent = false;
 bool g_screenshotEnabled = false;
+bool g_screenshotNativePair = false;
+bool g_screenshotRunBeforeSr = false;
 ULONGLONG g_screenshotDeadline = 0;
 
 // One capture happens on its own each session, so there is always a fresh sample without anyone having
@@ -3515,32 +3517,45 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
 
-        // Present already operates on the full upscaled image. Native screenshots
-        // are copied at the actual Present boundary, never from these NR-stage buffers.
-        if (privateCommandList && g_screenshotPresent && g_screenshotEnabled &&
+        // Post-upscale Native and Present both retain the full composition source
+        // and final result. Copy these, never reduced model inputs or answers.
+        const bool screenshotRouteMatches = privateCommandList ? g_screenshotPresent :
+            (g_screenshotNativePair && !currentRouteIsPreSr && cfg.DlssNrRoute.value_or_default() == 0 &&
+             cfg.DlssNrRunBeforeSr.value_or_default() == g_screenshotRunBeforeSr);
+        if (screenshotRouteMatches && g_screenshotEnabled &&
             g_screenshots.wantsFrame(GetTickCount64()))
         {
             using namespace DlssNr::Screenshots;
-            const bool saveAfter = (g_screenshotSelection & DlssNr::Screenshots::Present) != 0;
+            const bool saveAfter = (g_screenshotSelection & (privateCommandList ? DlssNr::Screenshots::Present : Native)) != 0;
             const bool applied = cfg.DlssNrApplyModel.value_or_default() ||
                 (g_lastLayerCount == 2 && cfg.DlssNrSecondLayerApplyModel.value_or_default());
+            auto* feature = State::Instance().currentFeature;
+            const bool fullSize = privateCommandList || !feature ||
+                (width == feature->TargetWidth() && height == feature->TargetHeight());
             if (cfg.DlssNrDebugView.value_or_default() != 0 || cfg.DlssNrCompare.value_or_default() != 0 ||
-                (saveAfter && !applied))
+                (saveAfter && !applied) || !fullSize || (secondLayerActive && g_lastLayerCount != 2))
                 g_screenshots.cancel();
             else
             {
+                // Scene PNGs use one explicit exposure for both full-resolution
+                // readbacks. Present pixels are already display encoded.
+                const float screenshotWhite = !privateCommandList && isHdrBuffer ? whitePoint : 0.0f;
                 std::vector<DlssNr::StageCapture::StageInput> images;
                 if (g_screenshotSelection & Before)
-                    images.push_back({"NR-Off", g_nr.colorCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
+                    images.push_back({"NR-Off", g_nr.colorCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, screenshotWhite});
                 if (saveAfter)
-                    images.push_back({"Present-NR-On", target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
+                    images.push_back({privateCommandList ? "Present-NR-On" : "Native-NR-On", target,
+                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS, screenshotWhite});
                 std::ostringstream settings;
                 settings << "same_evaluation true; mode_switching false; selection " << g_screenshotSelection
-                         << "\nroute Present; placement full upscaled image; NeuRotic_menu excluded"
+                         << "\nroute " << (privateCommandList ? "Present" : "Native post-upscale")
+                         << "; placement full upscaled NR composition; NeuRotic_menu excluded"
                          << "\nlayers " << g_lastLayerCount
-                         << "\nNR-Off is the full input before both Present NR layers, not a second render.";
+                         << "; PNG scene white point " << screenshotWhite;
                 if (!g_screenshots.record(cmdList, device, images, g_nr.successfulEvaluations, frame.Reset, settings.str()))
                     LOG_WARN("Screenshot: {}", g_screenshots.status());
+                else LOG_INFO("Screenshot recorded: {}x{}, evaluation {}, {}", width, height,
+                              g_nr.successfulEvaluations, settings.str());
             }
         }
 
@@ -5182,7 +5197,7 @@ void RequestComparisonScreenshot()
 {
     auto* config = Config::Instance();
     unsigned int selected;
-    bool present, enabled;
+    bool present, enabled, runBeforeSr;
     {
         NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
         selected = (config->ScreenshotNrOff.value_or_default() ? Screenshots::Before : 0u) |
@@ -5190,6 +5205,7 @@ void RequestComparisonScreenshot()
                    (config->ScreenshotPresentNr.value_or_default() ? Screenshots::Present : 0u);
         present = config->DlssNrRoute.value_or_default() == 1;
         enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+        runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
     }
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
@@ -5204,7 +5220,8 @@ void RequestComparisonScreenshot()
         g_screenshots.setIdleStatus("Wait for the diagnostic capture to finish.");
         return;
     }
-    g_screenshotSelection = Screenshots::AvailableSelection(selected, present, enabled);
+    const bool nativePair = !present && enabled && (!runBeforeSr || g_nr.nativeRayReconstructionActive);
+    g_screenshotSelection = Screenshots::AvailableSelection(selected, present, enabled, nativePair);
     if (!g_screenshotSelection)
     {
         g_screenshots.setIdleStatus("Select at least one screenshot available for the active route.");
@@ -5212,6 +5229,8 @@ void RequestComparisonScreenshot()
     }
     g_screenshotPresent = present;
     g_screenshotEnabled = enabled;
+    g_screenshotNativePair = nativePair;
+    g_screenshotRunBeforeSr = runBeforeSr;
     g_screenshotDeadline = GetTickCount64() + 15000;
     g_screenshots.request(GetTickCount64(), 0, 1, true);
 }
@@ -5219,11 +5238,12 @@ void RequestComparisonScreenshot()
 void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags)
 {
     auto* config = Config::Instance();
-    bool present, enabled;
+    bool present, enabled, runBeforeSr;
     {
         NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
         present = config->DlssNrRoute.value_or_default() == 1;
         enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+        runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
     }
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
@@ -5231,10 +5251,12 @@ void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice,
     if (!g_screenshots.active()) return;
     if (g_screenshots.wantsFrame(GetTickCount64()) &&
         (present != g_screenshotPresent || enabled != g_screenshotEnabled ||
+         runBeforeSr != g_screenshotRunBeforeSr ||
+         ((!present && enabled && (!runBeforeSr || g_nr.nativeRayReconstructionActive)) != g_screenshotNativePair) ||
          GetTickCount64() > g_screenshotDeadline))
         g_screenshots.cancel();
     g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
-    if (!g_screenshots.wantsFrame(GetTickCount64()) || (present && enabled)) return;
+    if (!g_screenshots.wantsFrame(GetTickCount64()) || (present && enabled) || g_screenshotNativePair) return;
     if (!swapChain || !presentDevice || (presentFlags & DXGI_PRESENT_TEST)) return;
     auto unavailable = [&](const char* reason)
     {
@@ -5293,6 +5315,20 @@ bool ComparisonScreenshotBusy()
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     return g_screenshots.active();
+}
+
+bool NativeComparisonScreenshotAvailable()
+{
+    auto* config = Config::Instance();
+    bool eligible, runBeforeSr;
+    {
+        NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
+        eligible = config->DlssNrRoute.value_or_default() == 0 && config->GetDlssNrRuntimeSnapshot().enabled;
+        runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
+    }
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return eligible && (!runBeforeSr || g_nr.nativeRayReconstructionActive);
 }
 
 std::string PresentStageCaptureStatus()

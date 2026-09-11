@@ -7083,6 +7083,13 @@ void MenuCommon::RenderAnisotropicFilteringSettings(RenderMenuContext& ctx)
     }
 }
 
+void MenuCommon::RenderScreenshotKeybind(Config* config)
+{
+    // One binding and one key-listening state, shown in both locations.
+    static auto screenshot = Keybind("Comparison screenshots", 15);
+    screenshot.Render(config->ScreenshotKey);
+}
+
 void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
 {
     auto config = ctx.config;
@@ -7102,20 +7109,18 @@ void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
         static auto fpsOverlayCycle = Keybind("FPS Overlay Cycle", 12);
         static auto fgEnable = Keybind("Frame Generation", 13);
         static auto dlssNrToggle = Keybind("Neural Rendering", 14);
-        static auto screenshot = Keybind("Comparison screenshots", 15);
 
         menu.Render(config->ShortcutKey);
         fpsOverlay.Render(config->FpsShortcutKey);
         fpsOverlayCycle.Render(config->FpsCycleShortcutKey);
         fgEnable.Render(config->FGShortcutKey);
         dlssNrToggle.Render(config->DlssNrToggleKey);
-        screenshot.Render(config->ScreenshotKey);
+        RenderScreenshotKeybind(config);
     }
 }
 
 void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
 {
-    DlssNr::RenderScreenshotMenu(ctx.config);
     if (auto ch = ScopedCollapsingHeader("Updates", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
     {
         constexpr const char* repositoryUrl = "https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork";
@@ -7137,6 +7142,7 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
         else
             ImGui::TextUnformatted("NeuRotic is up to date.");
     }
+    DlssNr::RenderScreenshotMenu(ctx.config);
     RenderKeybindSettings(ctx);
     RenderThemeSettings(ctx);
     RenderVsyncSettings(ctx);

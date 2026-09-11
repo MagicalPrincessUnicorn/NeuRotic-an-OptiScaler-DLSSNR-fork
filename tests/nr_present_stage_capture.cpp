@@ -21,8 +21,8 @@ static std::filesystem::path FindScreenshot(const std::filesystem::path& root, c
     std::filesystem::path result;
     for (const auto& entry : std::filesystem::directory_iterator(root))
     {
-        assert(entry.is_regular_file()); // Every capture is flat, including its manifest.
-        assert(entry.path().extension() != ".pending");
+        assert(entry.is_regular_file());
+        assert(entry.path().extension() == ".png"); // No sidecars, folders or leftover claims.
         if (entry.path() != exclude && entry.path().filename().string().ends_with("_" + tag + ".png"))
         {
             assert(result.empty());
@@ -206,6 +206,8 @@ int main(int argc, char** argv)
         assert(DlssNr::Screenshots::AvailableSelection(mask, true) == (mask & 5u));
         assert(DlssNr::Screenshots::AvailableSelection(mask, false, false) == (mask & 1u));
         assert(DlssNr::Screenshots::AvailableSelection(mask, true, false) == (mask & 1u));
+        assert(DlssNr::Screenshots::AvailableSelection(mask, false, true, true) == (mask & 3u));
+        assert(DlssNr::Screenshots::AvailableSelection(mask, true, true, true) == (mask & 5u));
     }
     // A screenshot request records exactly one frame's selected pair and writes actual PNGs.
     std::vector<DlssNr::StageCapture::StageInput> screenshotInputs {inputs[0], inputs[2]};
@@ -223,13 +225,13 @@ int main(int argc, char** argv)
     capture.poll(root / "screenshots");
     assert(!capture.active() && capture.status().find("Saved:") == 0);
     const auto pngDir = root / "screenshots";
-    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 3);
+    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 2);
     const auto offPng = FindScreenshot(pngDir, "NROFF");
     const auto presentPng = FindScreenshot(pngDir, "NRONPRESENT");
     const auto offName = offPng.filename().string();
     const auto batchPrefix = offName.substr(0, offName.size() - std::string("_NROFF.png").size());
     assert(presentPng.filename() == batchPrefix + "_NRONPRESENT.png");
-    assert(std::filesystem::exists(pngDir / (batchPrefix + "_CAPTURE.txt")));
+    assert(!std::filesystem::exists(pngDir / (batchPrefix + "_CAPTURE.txt")));
     Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
     {
         ComPtr<IWICImagingFactory> imaging;
@@ -272,6 +274,62 @@ int main(int argc, char** argv)
         assert(DlssNr::Screenshots::WritePng(pngDir / "float.png", reinterpret_cast<const unsigned char*>(floatPixel),
             1, 1, 16, DXGI_FORMAT_R32G32B32A32_FLOAT));
         verifyPng(pngDir / "float.png", 1, 1, {64, 255, 0});
+
+        // A full-resolution Native pair with linear scene data, independent from
+        // the model's work resolution. Retain pre/post pixels in one recording.
+        std::array<ComPtr<ID3D12Resource>, 2> nativeImages;
+        std::vector<DlssNr::StageCapture::StageInput> nativeInputs;
+        for (unsigned int i = 0; i < 2; ++i)
+        {
+            D3D12_RESOURCE_DESC desc {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width = 7; desc.Height = 5; desc.DepthOrArraySize = desc.MipLevels = 1;
+            desc.SampleDesc.Count = 1; desc.Format = DXGI_FORMAT_R32G32B32A32_TYPELESS;
+            D3D12_HEAP_PROPERTIES heap {}; heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+            Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&nativeImages[i])));
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout {}; UINT64 bytes = 0;
+            device->GetCopyableFootprints(&desc, 0, 1, 0, &layout, nullptr, nullptr, &bytes);
+            heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+            D3D12_RESOURCE_DESC buffer {}; buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            buffer.Width = bytes; buffer.Height = buffer.DepthOrArraySize = buffer.MipLevels = 1;
+            buffer.SampleDesc.Count = 1; buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            ComPtr<ID3D12Resource> upload;
+            Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload)));
+            void* data = nullptr; Check(upload->Map(0, nullptr, &data));
+            for (UINT y = 0; y < 5; ++y)
+                for (UINT x = 0; x < 7; ++x)
+                {
+                    const float pixel[] {i ? 64.0f : 16.0f, i ? 64.0f : 16.0f, i ? 64.0f : 16.0f, 0};
+                    std::memcpy(static_cast<unsigned char*>(data) + y * layout.Footprint.RowPitch + x * 16,
+                                pixel, sizeof(pixel));
+                }
+            upload->Unmap(0, nullptr);
+            D3D12_TEXTURE_COPY_LOCATION from {}, to {};
+            from.pResource = upload.Get(); from.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            from.PlacedFootprint = layout;
+            to.pResource = nativeImages[i].Get(); to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            lists[0]->CopyTextureRegion(&to, 0, 0, 0, &from, nullptr);
+            uploads.push_back(upload);
+            nativeInputs.push_back({i ? "Native-NR-On" : "NR-Off", nativeImages[i].Get(),
+                                    D3D12_RESOURCE_STATE_COPY_DEST, 16.0f});
+        }
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(capture.record(lists[0].Get(), device.Get(), nativeInputs, 650, false, "Native matched linear pair"));
+        Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+        assert(Safety::Drain(10000));
+        capture.poll(root / "native-pair"); assert(capture.active()); // Still replayable.
+        Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        capture.poll(root / "native-pair"); assert(!capture.active());
+        verifyPng(FindScreenshot(root / "native-pair", "NROFF"), 7, 5, {219, 219, 219});
+        verifyPng(FindScreenshot(root / "native-pair", "NRON"), 7, 5, {252, 252, 252});
+        const UINT r11White = 960u | (960u << 11) | (480u << 22);
+        assert(DlssNr::Screenshots::WritePng(pngDir / "r11.png", reinterpret_cast<const unsigned char*>(&r11White),
+            1, 1, 4, DXGI_FORMAT_R11G11B10_FLOAT, 1.0f));
+        verifyPng(pngDir / "r11.png", 1, 1, {219, 219, 219});
+        assert(!DlssNr::Screenshots::WritePng(pngDir / "bad-white.png", bgra, 1, 1, 8,
+            DXGI_FORMAT_B8G8R8A8_UNORM, 1.0f));
 
         // Full-output capture precedes an overlay-like write on the SAME queue.
         // Gate the queue to prove no premature freeing/saving while its GPU work is pending.
@@ -318,7 +376,7 @@ int main(int argc, char** argv)
         const auto secondOutput = FindScreenshot(fullDir, "NRON", firstOutput);
         verifyPng(secondOutput, 7, 5, {16, 16, 16});
         verifyPng(firstOutput, 7, 5, {72, 72, 72}); // Never overwrite the previous capture.
-        assert(std::distance(std::filesystem::directory_iterator(fullDir), std::filesystem::directory_iterator()) == 4);
+        assert(std::distance(std::filesystem::directory_iterator(fullDir), std::filesystem::directory_iterator()) == 2);
         Check(queue->Wait(gate.Get(), 3));
         capture.request(GetTickCount64(), 0, 1, true);
         assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 702, "cancelled output"));
@@ -384,5 +442,6 @@ int main(int argc, char** argv)
     std::cout << "Evidence: " << root.string() << '\n';
     std::cout << "PASS screenshots: every selection mask, exactly one matched GPU frame, PNG decode/pixel/dimension checks, RGBA/BGRA/R10, opaque alpha and invalid-format/stride rejection.\n";
     std::cout << "PASS full output: immediate request, completion-owned private submission, pre-overlay pixels, repeat capture, real readback pair above 512 MiB and distinct missing-buffer failure.\n";
-    std::cout << "PASS flat naming: no per-capture folders or leftover claims, shared pair prefix, final NR tags, completion manifest and repeated capture preserves earlier pixels.\n";
+    std::cout << "PASS Native: one full-resolution linear pair, fixed exposure, typeless float and R11 PNG pixels, exact completion/recording-seal gate.\n";
+    std::cout << "PASS flat naming: PNG files only, shared pair prefix, final NR tags and repeated capture preserves earlier pixels.\n";
 }
