@@ -1,6 +1,14 @@
 #pragma once
 #include "SysUtils.h"
 
+struct VulkanPresentedExtent
+{
+    uint32_t width = 0;
+    uint32_t height = 0;
+};
+
+VulkanPresentedExtent GetVulkanPresentedExtent();
+
 class VulkanHooks
 {
   public:

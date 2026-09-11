@@ -1,4 +1,7 @@
 # Additional English keys, Spanish, French, German, Portuguese.
+Vulkan model: %s	Modelo Vulkan: %s	Modèle Vulkan : %s	Vulkan-Modell: %s	Modelo Vulkan: %s
+Model sliders request settings on release; composition controls remain live.	Los deslizadores del modelo solicitan los ajustes al soltarlos; los controles de composición siguen activos.	Les curseurs du modèle demandent les réglages au relâchement ; les contrôles de composition restent actifs.	Modellregler fordern Einstellungen beim Loslassen an; die Kompositionsregler bleiben aktiv.	Os controles deslizantes do modelo solicitam as configurações ao serem soltos; os controles de composição permanecem ativos.
+Hold frame is not implemented on native Vulkan. It has no effect here.	La congelación de fotograma no está implementada en Vulkan nativo. Aquí no tiene efecto.	Le gel d'image n'est pas implémenté sur Vulkan natif. Il n'a aucun effet ici.	Das Einfrieren des Bildes ist unter nativem Vulkan nicht implementiert. Es hat hier keine Wirkung.	O congelamento de quadro não está implementado no Vulkan nativo. Não tem efeito aqui.
 FrameTime	Tiempo por fotograma	Temps par image	Bildzeit	Tempo por quadro
 Enjoying NeuRotic?	¿Disfrutas de NeuRotic?	Vous aimez NeuRotic ?	Gefällt dir NeuRotic?	Gostando do NeuRotic?
 GPU: %s	GPU: %s	GPU : %s	GPU: %s	GPU: %s

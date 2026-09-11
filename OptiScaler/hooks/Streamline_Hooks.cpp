@@ -2,6 +2,16 @@
 
 #include "Streamline_Hooks.h"
 
+namespace
+{
+thread_local StreamlineVkDiagnosticContext g_streamlineVkDiagnosticContext {};
+}
+
+StreamlineVkDiagnosticContext& GetStreamlineVkDiagnosticContext()
+{
+    return g_streamlineVkDiagnosticContext;
+}
+
 #include <Util.h>
 #include <Config.h>
 
@@ -516,6 +526,24 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
 {
     LOG_DEBUG("frameIndex: {}", static_cast<uint32_t>(frame));
 
+    auto& diagnostic = GetStreamlineVkDiagnosticContext();
+    const auto saved = diagnostic;
+    diagnostic.feature = static_cast<uint32_t>(feature);
+    diagnostic.frame = static_cast<uint32_t>(frame);
+    diagnostic.commandBuffer = reinterpret_cast<uintptr_t>(cmdBuffer);
+    diagnostic.viewport = UINT32_MAX;
+    diagnostic.active = feature == sl::kFeatureDLSS_RR;
+    if (diagnostic.active && inputs != nullptr)
+    {
+        for (uint32_t i = 0; i < numInputs; ++i)
+        {
+            if (inputs[i] != nullptr && inputs[i]->structType == sl::ViewportHandle::s_structType)
+            {
+                diagnostic.viewport = static_cast<uint32_t>(*static_cast<const sl::ViewportHandle*>(inputs[i]));
+                break;
+            }
+        }
+    }
     if (State::Instance().activeFgInput == FGInput::DLSSG && numInputs > 0 && inputs != nullptr)
     {
         for (uint32_t i = 0; i < numInputs; i++)
@@ -540,6 +568,7 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
     }
 
     auto result = o_slEvaluateFeature(feature, frame, inputs, numInputs, cmdBuffer);
+    diagnostic = saved;
     return result;
 }
 

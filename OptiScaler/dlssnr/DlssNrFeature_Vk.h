@@ -5,6 +5,7 @@
 #include <shaders/dlssnr/DlssNr_Common.h>
 
 #include <optional>
+#include <string>
 #include <nvsdk_ngx.h>
 #include <nvsdk_ngx_vk.h>
 #include <nvsdk_ngx_helpers_vk.h>
@@ -48,6 +49,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 // Whether the native Vulkan path is up, and why not if it is not.
 bool IsRunningVk();
 const char* FailureReasonVk();
+void RequestHistoryResetVk();
 
 // How many frames it has actually composed. The menu needs this to tell "up but nothing has come
 // through yet" apart from "running", and the D3D12 counters say nothing about this path.
@@ -56,6 +58,7 @@ unsigned long long FramesVk();
 // What the pass last cost on the GPU, in milliseconds, or nothing if it has not been measured yet.
 // A timestamp pair either side of the whole pass, read three frames later so the query is retired.
 std::optional<double> LastGpuTimeVk();
+std::string TuningStatusVk();
 
 // Whether the game offers an exposure texture on this path. Observed only: it is not read, because
 // binding the game's image means naming a layout this side cannot know. For the menu, and to settle

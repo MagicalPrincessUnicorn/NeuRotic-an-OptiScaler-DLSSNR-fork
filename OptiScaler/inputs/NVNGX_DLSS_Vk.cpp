@@ -3,8 +3,12 @@
 #include "Util.h"
 #include "Config.h"
 #include "resource.h"
+#include <hooks/Streamline_Hooks.h>
+#include <hooks/Vulkan_Hooks.h>
 
 #include "NVNGX_DLSS.h"
+#include "VulkanRrRouting.h"
+#include "VulkanNativeFeatures.h"
 #include <framegen/nvngx/Nvngx_FG.h>
 #include "NVNGX_Parameter.h"
 #include "proxies/NVNGX_Proxy.h"
@@ -29,6 +33,36 @@ static int evalCounter = 0;
 static bool shutdown = false;
 static bool _skipInit = false;
 static wchar_t const** paths;
+static VulkanRrRouting::Registry rrRoutes;
+static std::mutex rrRoutesMutex;
+static VulkanNativeFeatures::Registry nativeFeatures;
+static std::mutex nativeFeaturesMutex;
+
+static void RegisterNativeFeature(NVSDK_NGX_Result result, NVSDK_NGX_Handle** handle,
+                                  NVSDK_NGX_Feature type, VkDevice device)
+{
+    if (result != NVSDK_NGX_Result_Success || !handle || !*handle) return;
+    std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+    nativeFeatures.Register((*handle)->Id, static_cast<uint32_t>(type), reinterpret_cast<uintptr_t>(device));
+}
+
+static uint32_t ReadUIntParameter(NVSDK_NGX_Parameter* params, const char* name)
+{
+    uint32_t value = 0;
+    if (params == nullptr || params->Get(name, &value) != NVSDK_NGX_Result_Success)
+        return 0;
+    return value;
+}
+
+static VulkanRrRouting::Extent ObservedOutputExtent(NVSDK_NGX_Parameter* params)
+{
+    NVSDK_NGX_Resource_VK* output = nullptr;
+    if (params == nullptr || params->Get(NVSDK_NGX_Parameter_Output, reinterpret_cast<void**>(&output)) !=
+                                 NVSDK_NGX_Result_Success ||
+        output == nullptr)
+        return {};
+    return { output->Resource.ImageViewInfo.Width, output->Resource.ImageViewInfo.Height };
+}
 
 class ScopedInitVk
 {
@@ -834,6 +868,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
             auto result =
                 NVNGXProxy::VULKAN_CreateFeature1()(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature1 result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            RegisterNativeFeature(result, OutHandle, InFeatureID, InDevice);
             return result;
         }
         else
@@ -846,6 +881,15 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
     // Create feature
     auto handleId = IFeature::GetNextHandleId();
     LOG_INFO("HandleId: {0}", handleId);
+    const auto& slDiagnostic = GetStreamlineVkDiagnosticContext();
+    VulkanRrRouting::Extent rrDeclared {};
+    uint32_t rrViewport = VulkanRrRouting::UnknownViewport;
+    if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
+    {
+        rrDeclared = { ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutWidth),
+                       ReadUIntParameter(InParameters, NVSDK_NGX_Parameter_OutHeight) };
+        rrViewport = slDiagnostic.active ? slDiagnostic.viewport : VulkanRrRouting::UnknownViewport;
+    }
 
     if (InFeatureID == NVSDK_NGX_Feature_SuperSampling)
     {
@@ -895,6 +939,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
         if (deviceContext->Init(vkInstance, vkPD, InDevice, InCmdList, vkGIPA, vkGDPA, InParameters))
         {
+            if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
+            {
+                std::lock_guard<std::mutex> lock(rrRoutesMutex);
+                rrRoutes.Register(handleId, reinterpret_cast<uintptr_t>(InDevice), rrViewport, rrDeclared);
+            }
             State::Instance().currentFeature = deviceContext;
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             evalCounter = 0;
@@ -928,6 +977,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
         {
             auto result = NVNGXProxy::VULKAN_CreateFeature()(InCmdBuffer, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            RegisterNativeFeature(result, OutHandle, InFeatureID, vkDevice);
             return result;
         }
     }
@@ -941,11 +991,19 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
         return NVSDK_NGX_Result_Success;
 
     auto handleId = InHandle->Id;
+    {
+        std::lock_guard<std::mutex> lock(rrRoutesMutex);
+        rrRoutes.Release(handleId);
+    }
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_ReleaseFeature() != nullptr)
         {
             auto result = NVNGXProxy::VULKAN_ReleaseFeature()(InHandle);
+            {
+                std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+                nativeFeatures.Release(handleId, result == NVSDK_NGX_Result_Success);
+            }
 
             if (!shutdown)
                 LOG_INFO("VULKAN_ReleaseFeature result for ({0}): {1:X}", handleId, (UINT) result);
@@ -1028,12 +1086,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
             auto result = NVNGXProxy::VULKAN_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
             LOG_INFO("VULKAN_EvaluateFeature result for ({0}): {1:X}", handleId, (UINT) result);
 
-            // Neural Rendering over what the upscaler just wrote, on the same command buffer -- the
-            // same placement as the D3D12 path, so frame generation interpolates from enhanced frames
-            // and the model still costs one run per rendered frame.
-            if (result == NVSDK_NGX_Result_Success)
-                DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
-
+            // SR/RR are owned contexts below. Native pass-through features (including FG)
+            // must never acquire NR state, even when their parameter block happens to contain images.
             return result;
         }
         else
@@ -1107,7 +1161,40 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                          backend == Upscaler::FSR22_on12 || backend == Upscaler::FFX_on12;
 
     if (upscaleResult && !bridged)
-        DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+    {
+        bool isRrRoute = false;
+        {
+            std::lock_guard<std::mutex> lock(rrRoutesMutex);
+            isRrRoute = rrRoutes.Contains(handleId);
+        }
+
+        if (!isRrRoute)
+        {
+            DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+        }
+        else
+        {
+            const auto& slContext = GetStreamlineVkDiagnosticContext();
+            const uint32_t viewport = slContext.active ? slContext.viewport : VulkanRrRouting::UnknownViewport;
+            const VulkanRrRouting::Extent observed = ObservedOutputExtent(InParameters);
+            const auto presented = GetVulkanPresentedExtent();
+            const VulkanRrRouting::Extent presentation { presented.width, presented.height };
+            VulkanRrRouting::Decision decision {};
+            {
+                std::lock_guard<std::mutex> lock(rrRoutesMutex);
+                rrRoutes.Observe(handleId, viewport, observed);
+                decision = rrRoutes.Select(handleId, reinterpret_cast<uintptr_t>(vkDevice), viewport, slContext.frame,
+                                           presentation);
+            }
+
+            if (decision.execute)
+            {
+                if (decision.resetHistory)
+                    DlssNr::RequestHistoryResetVk();
+                DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+            }
+        }
+    }
 
     return upscaleResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 }
@@ -1115,6 +1202,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
 {
     shutdown = true;
+    {
+        std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+        nativeFeatures.Clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(rrRoutesMutex);
+        rrRoutes.ResetLifecycle();
+    }
     DlssNr::ShutdownVk();
 
     // for (auto const& [key, val] : VkContexts) {

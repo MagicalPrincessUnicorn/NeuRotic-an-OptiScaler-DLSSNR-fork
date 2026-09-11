@@ -240,6 +240,12 @@ void RenderMenu(Config* config, float menuResScale)
         const auto bridgeTelemetry = DlssNr::BridgeTelemetry().Snapshot();
         const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
 
+        if (State::Instance().api == API::Vulkan)
+        {
+            const auto tuningStatus = DlssNr::TuningStatusVk();
+            ImGui::TextWrapped("Vulkan model: %s", tuningStatus.c_str());
+            ImGui::TextDisabled("Model sliders request settings on release; composition controls remain live.");
+        }
         if (!enabled)
         {
             ImGui::TextDisabled("Rendering mode selected: %s.", renderModeNames[renderMode]);
@@ -1272,10 +1278,15 @@ void RenderMenu(Config* config, float menuResScale)
         // clean way to A/B our own settings (a moving scene confounds every other comparison). See
         // design/frame-hold.md.
         bool held = config->DlssNrHoldFrame.value_or_default();
+        const bool unsupportedHold = State::Instance().api == API::Vulkan;
+        ImGui::BeginDisabled(unsupportedHold);
+        if (unsupportedHold) held = false;
         if (ImGui::Checkbox("Hold frame", &held))
             config->DlssNrHoldFrame = held;
+        ImGui::EndDisabled();
 
-        HelpMarker("Freezes the frame the model works on. While held, change paper white, the"
+        HelpMarker(unsupportedHold ? "Hold frame is not implemented on native Vulkan. It has no effect here."
+                                  : "Freezes the frame the model works on. While held, change paper white, the"
                        "\nstrengths, the reversible mode, the model preset -- anything below the"
                        "\nupscaler -- and only that setting moves; the scene does not."
                        "\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream"

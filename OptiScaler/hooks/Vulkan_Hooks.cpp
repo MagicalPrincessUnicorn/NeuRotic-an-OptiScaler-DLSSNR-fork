@@ -47,6 +47,19 @@ PFN_vkCreateSemaphore VulkanHooks::o_vkCreateSemaphore = nullptr;
 PFN_vkSignalSemaphore VulkanHooks::o_vkSignalSemaphore = nullptr;
 PFN_vkAntiLagUpdateAMD VulkanHooks::o_vkAntiLagUpdateAMD = nullptr;
 
+namespace
+{
+std::mutex g_swapchainExtentMutex;
+std::unordered_map<uintptr_t, VulkanPresentedExtent> g_swapchainExtents;
+std::atomic<uint64_t> g_presentedExtent {};
+}
+
+VulkanPresentedExtent GetVulkanPresentedExtent()
+{
+    const uint64_t packed = g_presentedExtent.load(std::memory_order_acquire);
+    return { static_cast<uint32_t>(packed >> 32), static_cast<uint32_t>(packed) };
+}
+
 // Forward declaration
 static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo);
 static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo,
@@ -305,7 +318,6 @@ VALIDATE_HOOK(hkvkQueuePresentKHR, PFN_vkQueuePresentKHR)
 static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo)
 {
     LOG_FUNC();
-
     // get upscaler time
     UpscalerTimeVk::ReadUpscalingTime(_device);
 
@@ -330,6 +342,27 @@ static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPres
         LOG_ERROR("QueuePresent: false!");
         return VK_ERROR_OUT_OF_DATE_KHR;
     }
+
+    VulkanPresentedExtent presented {};
+    bool extentKnown = localPresentInfo.swapchainCount != 0 && localPresentInfo.pSwapchains != nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_swapchainExtentMutex);
+        for (uint32_t i = 0; extentKnown && i < localPresentInfo.swapchainCount; ++i)
+        {
+            const auto it = g_swapchainExtents.find(reinterpret_cast<uintptr_t>(localPresentInfo.pSwapchains[i]));
+            if (it == g_swapchainExtents.end())
+            {
+                extentKnown = false;
+                break;
+            }
+            if (i == 0)
+                presented = it->second;
+            else if (presented.width != it->second.width || presented.height != it->second.height)
+                extentKnown = false;
+        }
+    }
+    const uint64_t packedExtent = extentKnown ? (static_cast<uint64_t>(presented.width) << 32) | presented.height : 0;
+    g_presentedExtent.store(packedExtent, std::memory_order_release);
 
     ReflexHooks::update(false, true);
 
@@ -363,6 +396,11 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
     {
         State::Instance().screenWidth = static_cast<float>(pCreateInfo->imageExtent.width);
         State::Instance().screenHeight = static_cast<float>(pCreateInfo->imageExtent.height);
+        {
+            std::lock_guard<std::mutex> lock(g_swapchainExtentMutex);
+            g_swapchainExtents[reinterpret_cast<uintptr_t>(*pSwapchain)] =
+                { pCreateInfo->imageExtent.width, pCreateInfo->imageExtent.height };
+        }
 
         // The same question the DXGI side asks: what does one unit of this buffer mean?
         //

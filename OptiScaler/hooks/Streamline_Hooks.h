@@ -12,6 +12,20 @@
 
 #include "Hook_Utils.h"
 
+// Diagnostic-only context copied across the Streamline -> NGX call boundary.
+// The Vulkan diagnostic build uses this to determine whether the two APIs are
+// actually nested on the same thread; it does not affect routing or rendering.
+struct StreamlineVkDiagnosticContext
+{
+    uint32_t feature = 0;
+    uint32_t viewport = UINT32_MAX;
+    uint64_t frame = 0;
+    uintptr_t commandBuffer = 0;
+    bool active = false;
+};
+
+StreamlineVkDiagnosticContext& GetStreamlineVkDiagnosticContext();
+
 struct Adapter
 {
     LUID id {};
