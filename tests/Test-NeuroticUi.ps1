@@ -32,9 +32,8 @@ Assert-Ui ($nr.Contains('static unsigned int RenderPassCountSelector(Config* con
            ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 2 -and
            $nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and
            $nr.Contains('"10 passes"')) 'one shared pass selector exposes the complete one-to-ten range in both Neural Rendering sections'
-Assert-Ui ($nr.Contains('More than one pass selected. Enable NR Multipass for multiple passes to be applied.') -and
-           $nr.Contains('BeginChild("##DlssNrMultipassInactiveWarning"') -and
-           $nr.Contains('ImGuiCol_ChildBg') -and $nr.Contains('ImGuiCol_Border') -and
+Assert-Ui (-not $nr.Contains('##DlssNrMultipassInactiveWarning') -and
+           $nr.Contains('Additional passes require Enable NR Multipass on a compatible route.') -and
            $multipass -notmatch 'BeginDisabled\(\);\s*if \(ImGui::BeginTabBar\("NrMultipassLayers"') 'pass profiles remain configurable before Multipass is enabled'
 Assert-Ui ($multipass.Contains('BeginTabBar("NrMultipassLayers"') -and
            $multipass.Contains('"Pass %u"')) 'pass count drives numbered pass tabs'
@@ -91,9 +90,24 @@ Assert-Ui (($nr | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Mat
 Assert-Ui (($menu | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 1) 'hotkey is the only shared-tracker call outside the NR menu'
 $burst = [regex]::Match($notes, '(?s)ToggleBurstMessages\s*=\s*\{(.*?)\};').Groups[1].Value
 Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 41 -and $burst.Contains('ZZZZZZZzzzzzzzzzzzz')) 'all 41 approved burst notes are present'
-Assert-Ui ($nr.Contains('%s is active. NR is processing the final image before it reaches the display.') -and $nr.Contains('Present NR was bypassed. Your image is unchanged; see the reason below.') -and $nr.Contains('Use Native Temporal when it is available.')) 'Present active, safe-fallback, and recommendation messages are visible'
+Assert-Ui ($nr.Contains('"%s is active."') -and $nr.Contains('"Image unchanged. %s"') -and -not $nr.Contains('Use Native Temporal when it is available.')) 'Present active and actionable safe-fallback guidance without stale recommendation'
 Assert-Ui ($nr.IndexOf('ImGui::Combo("NR resolution"') -gt $nr.IndexOf('ImGui::Combo("NR route"') -and $nr.IndexOf('ImGui::Combo("NR resolution"') -lt $nr.IndexOf('ImGui::Combo("Rendering mode"') -and -not $nr.Contains('ImGui::Combo("Present workload"')) 'NR resolution replaces workload below route selection'
 Assert-Ui ($nr.Contains('if (resolution == PresentResolution::Custom)') -and $nr.Contains('"Present Enhanced"') -and $nr.Contains('DlssNrEnhancedCustomScale')) 'three routes and conditional independent custom scale are present'
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
+Assert-Ui ($nr.IndexOf('Checkbox("Enable Neural Rendering"') -lt $nr.IndexOf('Combo("NR route"')) 'enable is the first NR control'
+Assert-Ui ($nr -match '(?s)if \(!presentRoute\)\s*\{\s*if \(ImGui::Combo\("Rendering mode".*?HelpMarker\("Quality keeps NR.*?\n\s*\}') 'Native rendering mode and help hidden on both Present routes'
+$diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics")')
+Assert-Ui ($diagnostics -gt $nr.IndexOf('"Image unchanged. %s"') -and
+           $diagnostics -lt $nr.IndexOf('"Native capture calls %llu"') -and
+           $diagnostics -lt $nr.IndexOf('"Present history:')) 'useful status before collapsed diagnostics; counters and history inside'
+Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $nr.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
+Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 0 }') -and
+           $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'Enhanced Follow defaults do not enable NR or file logging'
+Assert-Ui ($menu.Contains('bool toFile = config->LogToFile.value_or_default(); ImGui::Checkbox("To File", &toFile)') -and
+           $menu.Contains('config->LogToFile = toFile;') -and $config.Contains('LogToFile.set_from_config(readBool("Log", "LogToFile"))')) 'existing file logging checkbox uses effective config and keeps deliberate changes'
+foreach ($iniPath in @('OptiScaler.ini', 'integration/OptiScaler.ini')) {
+    $ini = Get-Content -Raw -LiteralPath (Join-Path $root $iniPath)
+    Assert-Ui ($ini -match '(?m)^LogToFile\s*=\s*false\s*$') "$iniPath explicitly disables file logging"
+}
 Assert-Ui ($header.Contains('MenuLanguage { "en" }')) 'English default'
 Assert-Ui ($config.Contains('readString("Menu", "Language", true)') -and $config.Contains('ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());')) 'language loads and saves in Menu section'

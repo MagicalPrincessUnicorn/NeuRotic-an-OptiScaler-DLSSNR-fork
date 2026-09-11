@@ -50,10 +50,10 @@ struct TestConfig
     NrOptional<uint32_t> DlssNrSecondLayerReversibleMode { 0 };
     NrOptional<bool> DlssNrSecondLayerApplyModel { true };
     ExtraLayers DlssNrExtraLayers;
-    NrOptional<uint32_t> DlssNrRoute { 0 };
+    NrOptional<uint32_t> DlssNrRoute { 2 };
     NrOptional<uint32_t> DlssNrPresentResolution { 1 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
     NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };

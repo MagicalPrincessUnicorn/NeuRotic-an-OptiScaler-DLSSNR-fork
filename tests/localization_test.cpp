@@ -84,10 +84,13 @@ int main()
         for (int language = 0; language < Neurotic::LanguageCount; ++language)
         {
             Neurotic::SetLanguage(Neurotic::Languages[language].code);
+            for (bool lightTheme : {false, true})
             for (int scaleStep = 5; scaleStep <= 20; ++scaleStep)
             {
                 const float scale = scaleStep / 10.0f;
                 ImGui::GetStyle() = baseStyle;
+                if (lightTheme) ImGui::StyleColorsLight();
+                else ImGui::StyleColorsDark();
                 ImGui::GetStyle().ScaleAllSizes(scale);
                 ImGui::NewFrame();
                 ImGui::PushFont(nullptr, 16.0f * scale);
@@ -207,7 +210,7 @@ int main()
         ImGui::DestroyContext();
         const auto ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-        std::printf("PASS: %d checks; catalogs, dynamic values, IDs, five languages at all 16 scales, UTF-8 glyphs; UI "
+        std::printf("PASS: %d checks; catalogs, dynamic values, IDs, five languages at all 16 scales, light/dark themes, UTF-8 glyphs; UI "
                     "test %lld ms\n",
                     checks, ms);
         return 0;

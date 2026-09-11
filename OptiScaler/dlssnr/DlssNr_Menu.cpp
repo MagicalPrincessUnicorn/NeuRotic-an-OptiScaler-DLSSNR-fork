@@ -6,6 +6,7 @@
 #include "DlssNr_BridgeTelemetry.h"
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentGuides.h"
+#include "DlssNr_MenuStatus.h"
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
@@ -150,10 +151,8 @@ static unsigned int RenderPassCountSelector(Config* config)
         config->DlssNrSecondLayer =
             config->DlssNrMultipassEnabled.value_or_default() && passCountIndex >= 1;
     }
-    HelpMarker("Selects the total number of passes. Standard uses only the baseline Pass 1 settings above. "
-               "Selecting more passes exposes independent Pass 2 and later profiles in Neural Rendering "
-               "Multipass, even before it is enabled. The renderer uses only Pass 1 until Enable NR Multipass "
-               "is turned on.");
+    HelpMarker("Standard uses one pass. Additional passes require Enable NR Multipass on a compatible route. "
+               "Their settings can be edited in Neural Rendering Multipass before enabling it.");
     return (unsigned int) (passCountIndex + 1);
 }
 
@@ -170,92 +169,72 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
 
-        static const char* routeNames[] = { "Native Temporal", "Present Image-Only", "Present Enhanced" };
+        bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+        const auto padding = ImGui::GetStyle().FramePadding;
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding.x, padding.y + 2.0f * menuResScale));
+        if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
+        {
+            config->SetDlssNrEnabled(enabled);
+            NoteNrUserToggle();
+        }
+        ImGui::PopStyleVar();
+        HelpMarker("Enables Neural Rendering on the selected route. Requires NVIDIA's nvngx_dlssnr.dll model "
+                   "and the nvngx.dll_dlssnr.dll forwarder supplied with this package.");
+        ImGui::Spacing();
+
+        static const char* routeNames[] = { "Native Temporal", "Present Image Only", "Present Enhanced" };
         int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 2);
         if (ImGui::Combo("NR route", &route, routeNames, IM_ARRAYSIZE(routeNames)))
         {
             config->DlssNrRoute = (uint32_t) route;
             LOG_INFO("DLSS-NR route requested: {}", routeNames[route]);
         }
-        HelpMarker("Use it when Native Temporal is unavailable or cannot receive a usable game image; "
-                   "supported graphics setups expand over time.\n\nUnsupported targets keep the original "
-                   "image unchanged and perform no model work.");
+        HelpMarker("Native Temporal runs with the game's upscaler. Present Image Only processes the final image. "
+                   "Present Enhanced also uses captured game depth and motion. Both Present routes include the HUD.");
         const bool presentRoute = route != 0;
 
         if (presentRoute)
         {
-            const auto guides = PresentGuides::Instance().Inspect();
-            HelpMarker("Present Enhanced uses captured Native depth, motion, jitter and reset at Present, with game HUD included. "
-                "DX12 SDR only; disable frame generation and NR Multipass. RR is unsupported. "
-                "Missing or ambiguous guides keep the original image.");
-            ImGui::TextWrapped("%s", guides.status.c_str());
-            ImGui::Text("Native capture calls %llu", guides.captureAttempts);
-            if (!guides.inputDescription.empty()) ImGui::TextWrapped("%s", guides.inputDescription.c_str());
-            if (!guides.captureError.empty()) ImGui::TextWrapped("Capture failure: %s", guides.captureError.c_str());
-            ImGui::Text("Guide copies %llu | matched %llu | evaluated %llu | rejected %llu",
-                guides.captures, guides.matched, guides.evaluated, guides.rejected);
             auto& resolutionOption = route == 2 ? config->DlssNrEnhancedResolution : config->DlssNrPresentResolution;
             auto& scaleOption = route == 2 ? config->DlssNrEnhancedCustomScale : config->DlssNrPresentCustomScale;
             int resolution = std::clamp((int) resolutionOption.value_or_default(), 0, 2);
+            float resolutionWidth = 0.0f;
+            for (const char* name : PresentResolution::Names)
+                resolutionWidth = std::max(resolutionWidth, ImGui::CalcTextSize(name).x);
+            const float labelWidth = ImGui::CalcTextSize("NR resolution").x + ImGui::GetStyle().ItemInnerSpacing.x;
+            ImGui::SetNextItemWidth(std::min(resolutionWidth + ImGui::GetFrameHeight() + padding.x * 2.0f,
+                std::max(120.0f * menuResScale, ImGui::GetContentRegionAvail().x - labelWidth)));
             if (ImGui::Combo("NR resolution", &resolution, PresentResolution::Names, 3))
                 resolutionOption = (uint32_t) resolution;
-            HelpMarker("Follow native reads fresh game render-subrect metadata. Private NR sizes align down to eight pixels. "
-                "Full output uses exact output dimensions. Custom scale reduces private NR work. "
-                "Each Present route saves its own choices.");
+            HelpMarker("Follow Native Render Resolution uses the game's current render dimensions. "
+                "Always Follow Output Resolution uses the full output size. Custom Scale uses a percentage of output size. "
+                "Each Present route remembers its own settings.");
             if (resolution == PresentResolution::Custom)
             {
                 static const char* scales[] = { "100%", "77%", "67%", "58%", "50%", "33%" };
                 int scale = std::clamp((int) scaleOption.value_or_default(), 0, 5);
-                if (ImGui::Combo("Custom scale", &scale, scales, IM_ARRAYSIZE(scales)))
+                if (ImGui::Combo("Custom Scale", &scale, scales, IM_ARRAYSIZE(scales)))
                     scaleOption = (uint32_t) scale;
             }
-            const auto actual = PresentTelemetry();
-            ImGui::Text("Actual NR %ux%u | output %ux%u", actual.workWidth, actual.workHeight,
-                        actual.backbufferWidth, actual.backbufferHeight);
         }
 
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
         int renderMode = std::clamp(config->DlssNrRenderingMode.value_or_default(), 0, 1);
-        if (presentRoute) ImGui::BeginDisabled();
-        if (ImGui::Combo("Rendering mode", &renderMode, renderModeNames, IM_ARRAYSIZE(renderModeNames)))
+        if (!presentRoute)
         {
-            config->SetDlssNrRenderingMode(renderMode);
-            LOG_INFO("DLSS-NR rendering mode applied: {} (Super Resolution placement only; native RR remains RR -> NR)",
-                     renderModeNames[renderMode]);
-        }
-        if (presentRoute) ImGui::EndDisabled();
+            if (ImGui::Combo("Rendering mode", &renderMode, renderModeNames, IM_ARRAYSIZE(renderModeNames)))
+            {
+                config->SetDlssNrRenderingMode(renderMode);
+                LOG_INFO("DLSS-NR rendering mode applied: {} (Super Resolution placement only; native RR remains RR -> NR)",
+                         renderModeNames[renderMode]);
+            }
 
-        HelpMarker("Quality keeps NR after native DLSS Super Resolution. Performance runs NR before "
-                   "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
-                   "to the final output in one mode-aware pass, so NR remains after RR in both modes.");
-
-        const unsigned int passCount = RenderPassCountSelector(config);
-
-        if (passCount > 1 && !config->DlssNrMultipassEnabled.value_or_default())
-        {
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 0.72f, 0.25f, 0.14f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.72f, 0.25f, 0.80f));
-            if (ImGui::BeginChild("##DlssNrMultipassInactiveWarning", ImVec2(0.0f, 0.0f),
-                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
-                                      ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AlwaysAutoResize))
-                ImGui::TextWrapped(
-                    "More than one pass selected. Enable NR Multipass for multiple passes to be applied.");
-            ImGui::EndChild();
-            ImGui::PopStyleColor(2);
+            HelpMarker("Quality keeps NR after native DLSS Super Resolution. Performance runs NR before "
+                       "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
+                       "to the final output in one mode-aware pass, so NR remains after RR in both modes.");
         }
 
-        bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
-        if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
-        {
-            config->SetDlssNrEnabled(enabled);
-            NoteNrUserToggle();
-        }
-
-        HelpMarker("Synthesises detail in the upscaler's output, before frame generation sees it."
-                       "\n\nNeeds two similarly named files beside OptiScaler, one character apart:"
-                       "\n  nvngx_dlssnr.dll       NVIDIA's model (~165 MB) -- you supply it"
-                       "\n  nvngx.dll_dlssnr.dll   the forwarder (~13 KB) -- ships in this package"
-                       "\nUndocumented and driven directly, so none of this is officially supported.");
+        RenderPassCountSelector(config);
 
         // The setting requests Pre-SR. It is deliberately not described as active until the
         // replacement-resource, reset, seed, and display-ready checks have all passed.
@@ -264,6 +243,78 @@ void RenderMenu(Config* config, float menuResScale)
         const auto bridgeTelemetry = DlssNr::BridgeTelemetry().Snapshot();
         const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
 
+        const ImVec4 green(0.4f, 0.9f, 0.5f, 1.0f);
+        const ImVec4 yellow(1.0f, 0.72f, 0.25f, 1.0f);
+        const ImVec4 red(1.0f, 0.4f, 0.35f, 1.0f);
+        static MenuStatus::SelectionObservation observation;
+        const auto selection = (PresentResolution::CaptureKey(*config) << 1) | (enabled ? 1ull : 0ull);
+        const bool fresh = observation.Fresh(selection, presentTelemetry.presentAttempts + presentTelemetry.skippedFrames);
+        const auto policy = PresentResolution::Selected(*config);
+        const bool presentMatches = fresh && presentTelemetry.requested &&
+            presentTelemetry.requestedPlacement == (route == 2 ? "Present Enhanced" : "Present Image-Only");
+        const bool presentActive = presentMatches && presentTelemetry.active &&
+            presentTelemetry.resolution == policy.mode &&
+            (policy.mode != PresentResolution::Custom || presentTelemetry.workload == policy.scale);
+
+        if (!enabled)
+            ImGui::TextColored(yellow, "Neural Rendering is off.");
+        else if (presentRoute)
+        {
+            if (presentActive)
+                ImGui::TextColored(green, "%s is active.", routeNames[route]);
+            else if (presentMatches && !presentTelemetry.failure.empty())
+                ImGui::TextColored(red, "Image unchanged. %s", presentTelemetry.failure.c_str());
+            else if (presentMatches && !presentTelemetry.fallbackReason.empty())
+                ImGui::TextColored(yellow, "Image unchanged. %s", presentTelemetry.fallbackReason.c_str());
+            else
+                ImGui::TextColored(yellow, "Waiting for the selected route. Image unchanged.");
+        }
+        else
+        {
+            const char* vkReason = DlssNr::FailureReasonVk();
+            const char* reason = vulkan ? vkReason : nrTelemetry.failureReason;
+            const bool nativeActive = vulkan ? DlssNr::IsRunningVk() :
+                nrTelemetry.running && !nrTelemetry.outputQuarantined &&
+                (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+            if (reason[0])
+            {
+                ImGui::TextColored(red, "Neural Rendering unavailable: %s", reason);
+                if (nrTelemetry.retryAllowed && !vkReason[0] && ImGui::SmallButton("Retry"))
+                    DlssNr::RetryAfterFailure();
+            }
+            else if (nativeActive)
+                ImGui::TextColored(green, "Native Temporal is active.");
+            else
+                ImGui::TextColored(yellow, "Waiting for Native Temporal. Image unchanged.");
+        }
+        if (enabled && !config->DlssNrApplyModel.value_or_default())
+            ImGui::TextColored(yellow, "Model effect hidden. Enable Apply the model to show it.");
+        if (route == 2)
+            ImGui::TextColored(yellow, "Present Enhanced requires DX12 SDR with frame generation, Ray Reconstruction and NR Multipass off.");
+        if (presentRoute)
+        {
+            if (enabled && presentActive && presentTelemetry.workWidth && presentTelemetry.workHeight)
+                ImGui::Text("NR: %u x %u | Output: %u x %u", presentTelemetry.workWidth, presentTelemetry.workHeight,
+                            presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight);
+            else if (enabled && presentMatches && presentTelemetry.backbufferWidth && presentTelemetry.backbufferHeight)
+                ImGui::Text("NR: unavailable | Output: %u x %u", presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight);
+            else
+                ImGui::TextUnformatted("NR: unavailable | Output: unavailable");
+        }
+
+        if (auto diagnostics = ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics"); diagnostics.IsHeaderOpen())
+        {
+        ScopedIndent diagnosticIndent {};
+        const auto guides = PresentGuides::Instance().Inspect();
+        if (presentRoute)
+        {
+            ImGui::TextWrapped("%s", guides.status.c_str());
+            ImGui::Text("Native capture calls %llu", guides.captureAttempts);
+            if (!guides.inputDescription.empty()) ImGui::TextWrapped("%s", guides.inputDescription.c_str());
+            if (!guides.captureError.empty()) ImGui::TextWrapped("Capture failure: %s", guides.captureError.c_str());
+            ImGui::Text("Guide copies %llu | matched %llu | evaluated %llu | rejected %llu",
+                guides.captures, guides.matched, guides.evaluated, guides.rejected);
+        }
         if (State::Instance().api == API::Vulkan)
         {
             const auto tuningStatus = DlssNr::TuningStatusVk();
@@ -272,7 +323,7 @@ void RenderMenu(Config* config, float menuResScale)
         }
         if (!enabled)
         {
-            ImGui::TextDisabled("Rendering mode selected: %s.", renderModeNames[renderMode]);
+            if (!presentRoute) ImGui::TextDisabled("Rendering mode selected: %s.", renderModeNames[renderMode]);
         }
         else if (presentRoute)
         {
@@ -312,18 +363,6 @@ void RenderMenu(Config* config, float menuResScale)
                                                   : "Quality requested: waiting for a successful Post-SR evaluation.");
         }
 
-        const auto renderApplyModelControl = [&]()
-        {
-            bool applyModel = config->DlssNrApplyModel.value_or_default();
-            if (ImGui::Checkbox("Apply the model", &applyModel))
-                config->DlssNrApplyModel = applyModel;
-
-            HelpMarker("Whether the model's edit is applied. Off shows the clean upscaler frame while the"
-                       "\npass keeps running -- so with Hold frame (under Compare) you can freeze a"
-                       "\nframe and toggle this to see the same frozen frame with and without Neural"
-                       "\nRendering. Leave it on for normal use.");
-        };
-
         // Report the same locked D3D12 observation used above. A loaded model can be retained
         // while NR is disabled; its previous frame's cost must not imply current activity.
         if (!enabled)
@@ -332,13 +371,6 @@ void RenderMenu(Config* config, float menuResScale)
         }
         else if (presentRoute)
         {
-            ImGui::TextDisabled("Use Native Temporal when it is available.");
-            if (presentTelemetry.active)
-                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
-                    "%s is active. NR is processing the final image before it reaches the display.", routeNames[route]);
-            else
-                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
-                    "Present NR was bypassed. Your image is unchanged; see the reason below.");
             const char* api = presentTelemetry.api == PresentApi::D3D12 ? "DX12"
                               : presentTelemetry.api == PresentApi::D3D11 ? "DX11"
                               : presentTelemetry.api == PresentApi::Vulkan ? "Vulkan" : "Unknown";
@@ -351,9 +383,6 @@ void RenderMenu(Config* config, float menuResScale)
                         (unsigned int) presentTelemetry.colorSpace);
             if (!presentTelemetry.compatibilityPath.empty())
                 ImGui::Text("Compatibility path: %s", presentTelemetry.compatibilityPath.c_str());
-            ImGui::Text("%s | actual NR %ux%u",
-                        PresentResolution::Names[std::min(presentTelemetry.resolution, 2u)], presentTelemetry.workWidth,
-                        presentTelemetry.workHeight);
             ImGui::Text("Model evaluations %llu | spatial upscale/composites %llu | skipped %llu",
                         presentTelemetry.modelEvaluations, presentTelemetry.compositeEvaluations,
                         presentTelemetry.skippedFrames);
@@ -381,7 +410,7 @@ void RenderMenu(Config* config, float menuResScale)
                 const auto& summary = presentTelemetry.pacingSummary;
                 const char* summaryRoute = summary.route == PresentPacing::Route::PresentEnhanced ? "Present Enhanced" :
                     summary.route == PresentPacing::Route::PresentImageOnly
-                                               ? "Present Image-Only" : "Native Temporal";
+                                               ? "Present Image Only" : "Native Temporal";
                 ImGui::TextDisabled("Completed pacing window %llu: %s | %llu samples; warm-up discarded %llu",
                                     summary.serial, summaryRoute,
                                     static_cast<unsigned long long>(summary.frameInterval.samples),
@@ -427,12 +456,6 @@ void RenderMenu(Config* config, float menuResScale)
             if (reason[0] != 0)
             {
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Off for this session: %s.", reason);
-                if (nrTelemetry.retryAllowed && vkReason[0] == 0)
-                {
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("Retry"))
-                        DlssNr::RetryAfterFailure();
-                }
             }
             else if (enabled)
                 ImGui::TextUnformatted("Waiting for a successful NR evaluation on the requested path.");
@@ -484,7 +507,13 @@ void RenderMenu(Config* config, float menuResScale)
                         bridgeTelemetry.copyBacks);
         }
 
-        renderApplyModelControl();
+        }
+
+        bool applyModel = config->DlssNrApplyModel.value_or_default();
+        if (ImGui::Checkbox("Apply the model", &applyModel))
+            config->DlssNrApplyModel = applyModel;
+        HelpMarker("Shows the model's effect. Turn off to compare with the original image while the model keeps running. "
+                   "Use Enable Neural Rendering to stop processing.");
         ImGui::Spacing();
         ImGui::PushItemWidth(220.0f * menuResScale);
 

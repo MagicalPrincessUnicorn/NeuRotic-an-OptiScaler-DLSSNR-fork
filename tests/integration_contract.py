@@ -83,9 +83,9 @@ require('renderSecondLayerControls' not in nr and
         'Enable second neural-rendering layer' not in nr and
         nr.count('DlssNrMultipassSection') == 1,
         'legacy two-layer editor removed and Multipass owns one stable section ID')
-require('BeginChild("##DlssNrMultipassInactiveWarning"' in nr and
-        'ImGuiCol_ChildBg' in nr and 'ImGuiCol_Border' in nr,
-        'inactive multi-pass selection uses a bordered yellow warning box')
+require('##DlssNrMultipassInactiveWarning' not in nr and
+        'Additional passes require Enable NR Multipass on a compatible route.' in nr,
+        'inactive pass reminder removed; requirement stays in the tooltip')
 require('one to ten Neural Rendering passes' in nr and 'independent model session and temporal history' in nr,
         'independent pass-chain behavior and cost are disclosed')
 require('!IsVulkanInput() && State::Instance().api == API::DX12' in nr,

@@ -9,7 +9,7 @@ namespace DlssNr::PresentResolution
 enum Mode : uint32_t { FollowNative = 0, FullOutput = 1, Custom = 2 };
 inline constexpr std::array<uint32_t, 6> Percent {100, 77, 67, 58, 50, 33};
 inline constexpr const char* Names[] = {
-    "Follow native render resolution", "Always full output resolution", "Custom scale"
+    "Follow Native Render Resolution", "Always Follow Output Resolution", "Custom Scale"
 };
 struct Policy { uint32_t mode = FullOutput, scale = 0; };
 inline Policy Load(std::optional<uint32_t> mode, std::optional<uint32_t> scale,
@@ -22,7 +22,7 @@ inline Policy Load(std::optional<uint32_t> mode, std::optional<uint32_t> scale,
 template<class C, class Reader> void LoadConfig(C& cfg, Reader read)
 {
     const auto image = Load(read("PresentResolution"), read("PresentCustomScale"), read("PresentWorkload"));
-    const auto enhanced = Load(read("EnhancedResolution"), read("EnhancedCustomScale"));
+    const auto enhanced = Load(read("EnhancedResolution").value_or(FollowNative), read("EnhancedCustomScale"));
     cfg.DlssNrPresentResolution.set_from_config(image.mode);
     cfg.DlssNrPresentCustomScale.set_from_config(image.scale);
     cfg.DlssNrEnhancedResolution.set_from_config(enhanced.mode);

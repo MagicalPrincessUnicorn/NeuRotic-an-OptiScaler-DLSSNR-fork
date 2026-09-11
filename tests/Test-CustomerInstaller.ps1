@@ -90,6 +90,7 @@ Check ((HashFile (Join-Path $fresh 'dxgi.dll')) -eq $candidateHash) 'Fresh Setup
 $backup=Backup $fresh;$record=Get-Content -Raw -LiteralPath (Join-Path $backup 'INSTALL-MANIFEST.json') | ConvertFrom-Json
 Check ($record.selected_proxy -eq 'dxgi.dll' -and $record.existing_proxy_action -eq 'None' -and -not $record.original_proxy.existed) 'Fresh manifest records selected proxy and no original file'
 Check (-not $record.original_ini.existed -and $null -eq $record.original_ini.bytes_base64) 'Fresh manifest records no original INI bytes'
+Check ((Get-Content -Raw -LiteralPath (Join-Path $fresh 'OptiScaler.ini')) -match '(?m)^LogToFile\s*=\s*false\s*$') 'Fresh installation explicitly disables the file logging checkbox'
 [IO.File]::AppendAllText((Join-Path $fresh 'OptiScaler.ini'),"`r`n; test-session change")
 $changedIni=HashFile (Join-Path $fresh 'OptiScaler.ini')
 $restoreOutput=RunCmd 'fresh-actual-restore' (Join-Path $backup 'Restore.cmd') @()

@@ -1,7 +1,7 @@
-NEUROTIC - PRESENT ENHANCED RESOLUTION EXPERIMENT
+NEUROTIC - PRESENT ENHANCED UI POLISH EXPERIMENT
 
-Experimental build from exact candidate e7d46b89, with captured Native guides ported
-from 885901ec. This does not replace the selected customer candidate or stable.
+UI/default polish from exact parent 6bc9fd6a. Rendering and installer behavior are
+preserved. This does not replace the selected customer candidate or stable.
 Keep the entire folder together. No live installation has been performed.
 
 WHEN YOU CHOOSE TO TEST
@@ -10,23 +10,31 @@ installer is retained: select the actual game executable and a supported proxy
 filename. A free name installs immediately. Occupied names offer backed-up
 replacement, another name or cancel. DXGI also offers the explicit ReShade rename.
 Existing INI/model are preserved except the explicit ReShade choice sets
-LoadReshade=true. Fresh installs use the unchanged candidate NR-off profile.
+LoadReshade=true. Fresh installs start with NR OFF, Present Enhanced selected,
+Follow Native Render Resolution selected, and Logging > To File OFF. Upgrades
+preserve saved route and logging choices; existing logging is not switched off.
 The backup folder's Restore.cmd restores the original installation.
 
 PRESENT ENHANCED ACCEPTANCE
 Use DX12 SDR, frame generation OFF, NR Multipass OFF, RR OFF. Supply your existing
 private NVIDIA nvngx_dlssnr.dll; it is not distributed in this package.
-Open Neural Rendering and select Native Temporal, Present Image-Only, or Present
-Enhanced. Present routes have independent NR resolution and Custom scale choices.
-Custom percentages appear only after choosing Custom scale. Native Quality and
-Performance controls retain their prior behavior.
+Enable Neural Rendering is the first control. Choose Native Temporal, Present
+Image Only, or Present Enhanced. Present routes remember their own NR resolution:
+Follow Native Render Resolution, Always Follow Output Resolution, or Custom Scale.
+Custom Scale reveals 100%, 77%, 67%, 58%, 50%, and 33%. Quality/Performance and
+model-resolution controls belong to Native Temporal and retain their behavior.
+Extra passes require Enable NR Multipass on a compatible route. Saved pass profiles
+remain editable before activation. Present Enhanced requires NR Multipass OFF.
 
-First test Always full output resolution (100%). Then test Follow native render
-resolution, Custom 67%, and Custom 50%. Follow native requires fresh matched game
+First test Always Follow Output Resolution (100%). Then test Follow Native Render
+Resolution, Custom Scale 67%, and Custom Scale 50%. Follow Native requires fresh matched game
 render-subrect metadata and aligns private work down to multiples of eight pixels.
 Actual NR and output dimensions are shown. No DLSS preset-name inference is used.
+Unavailable dimensions mean there is no current result. Open Advanced Data /
+Diagnostics for capture/match/evaluation counts, errors, history and timings.
+Opening Diagnostics does not enable file logging or change rendering.
 
-For EACH setting compare Image-Only / Enhanced / Image-Only (A/B/A) in the same
+For EACH setting compare Image Only / Enhanced / Image Only (A/B/A) in the same
 scene with the same model and tuning. Let history settle after each switch.
 Enhanced must show sustained increasing capture/match/evaluation counts, active
 Present Enhanced placement, and successful output. An unchanged fallback is not
@@ -41,6 +49,11 @@ DX11, Vulkan, HDR, RR, frame generation and NR Multipass are not supported for
 Enhanced. Partial output subrects, unsupported guide formats, multiple Native
 evaluations, stale guides, or different producer/Present queues refuse processing.
 Read support\EXPERIMENT.md for the full contract and offline evidence boundaries.
+RENDERING-CONTRACT-HISTORY.md records the inherited implementation; its old UI
+defaults are historical. File logging can be deliberately enabled for runtime
+diagnostic evidence and turned off again afterwards.
 The inherited general TESTING.txt does not expand this experiment's support scope.
+This folder supersedes the 6bc9fd6a UI handoff for this experiment. Older source
+and packages remain preserved as controls.
 
 Runtime result: INCONCLUSIVE. Decision: KEEP EXPERIMENTAL pending the gates above.
