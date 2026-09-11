@@ -79,16 +79,16 @@ function Encoded([string]$Text,[string]$Kind){
 foreach($file in $manifest.files){Check ((HashFile (Join-Path $PackageRoot $file.path)) -eq $file.sha256) ('Package hash: '+$file.path)}
 $candidateHash=HashFile (Join-Path $PackageRoot 'payload\OptiScaler.dll')
 
-# No dxgi.dll: the actual customer launcher installs immediately with no INSTALL text.
+# No occupied target: the actual customer launcher asks for the proxy name, then installs with no INSTALL text.
 $fresh=Fixture ('fresh unicode '+$unicode) $false
 $freshBefore=Inventory $fresh
-RunEngine 'fresh-preflight' @('-GameExecutable',(Join-Path $fresh 'FixtureGame.exe'),'-CheckOnly') | Out-Null
+RunEngine 'fresh-preflight' @('-GameExecutable',(Join-Path $fresh 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-CheckOnly') | Out-Null
 Check ((Inventory $fresh) -eq $freshBefore) 'Fresh check-only changes no game files'
-$output=RunCmd 'fresh-actual-setup' $launcher @('-GameExecutable',(Join-Path $fresh 'FixtureGame.exe'))
-Check ($output -notmatch 'Type INSTALL' -and $output -match 'No existing dxgi.dll: install immediately') 'Fresh Setup requires no typed INSTALL'
+$output=RunCmd 'fresh-actual-setup' $launcher @('-GameExecutable',(Join-Path $fresh 'FixtureGame.exe')) $true @('1')
+Check ($output -notmatch 'Type INSTALL' -and $output -match 'Choose the filename' -and $output -match 'No existing dxgi.dll: install immediately') 'Fresh Setup asks for proxy name and requires no typed INSTALL'
 Check ((HashFile (Join-Path $fresh 'dxgi.dll')) -eq $candidateHash) 'Fresh Setup installs NeuRotic as dxgi.dll'
 $backup=Backup $fresh;$record=Get-Content -Raw -LiteralPath (Join-Path $backup 'INSTALL-MANIFEST.json') | ConvertFrom-Json
-Check ($record.existing_dxgi_action -eq 'None' -and -not $record.original_dxgi.existed) 'Fresh manifest records no original dxgi.dll'
+Check ($record.selected_proxy -eq 'dxgi.dll' -and $record.existing_proxy_action -eq 'None' -and -not $record.original_proxy.existed) 'Fresh manifest records selected proxy and no original file'
 Check (-not $record.original_ini.existed -and $null -eq $record.original_ini.bytes_base64) 'Fresh manifest records no original INI bytes'
 [IO.File]::AppendAllText((Join-Path $fresh 'OptiScaler.ini'),"`r`n; test-session change")
 $changedIni=HashFile (Join-Path $fresh 'OptiScaler.ini')
@@ -99,11 +99,47 @@ $undo=@(Get-ChildItem -LiteralPath $backup -Directory | Where-Object Name -Like 
 Check ((HashFile (Join-Path $undo 'OptiScaler.ini')) -eq $changedIni) 'Restore retains the replaced test-session INI in its undo folder'
 
 $freshMissingIni=Fixture 'fresh-ini-already-absent' $false
-RunEngine 'fresh-missing-ini-install' @('-GameExecutable',(Join-Path $freshMissingIni 'FixtureGame.exe')) | Out-Null
+RunEngine 'fresh-missing-ini-install' @('-GameExecutable',(Join-Path $freshMissingIni 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
 $backup=Backup $freshMissingIni
 Remove-Item -LiteralPath (Join-Path $freshMissingIni 'OptiScaler.ini') -Force
 RunCmd 'fresh-missing-ini-restore' (Join-Path $backup 'Restore.cmd') @() | Out-Null
 Check (-not (Test-Path -LiteralPath (Join-Path $freshMissingIni 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $freshMissingIni 'OptiScaler.ini'))) 'Restore accepts an already-absent fresh INI and returns exact absent state'
+
+# Every loader-supported name can be selected, installed, recorded, and restored.
+$supported=@('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')
+foreach($proxy in $supported){
+    $folder=Fixture ('proxy-'+$proxy.Replace('.','-')) $false
+    RunEngine ('proxy-install-'+$proxy) @('-GameExecutable',(Join-Path $folder 'FixtureGame.exe'),'-ProxyName',$proxy) | Out-Null
+    Check ((HashFile (Join-Path $folder $proxy)) -eq $candidateHash) ("Supported proxy installs as $proxy")
+    $backup=Backup $folder;$record=Get-Content -Raw -LiteralPath (Join-Path $backup 'INSTALL-MANIFEST.json') | ConvertFrom-Json
+    Check ($record.selected_proxy -eq $proxy -and $record.original_proxy.name -eq $proxy) ("Manifest records selected proxy $proxy")
+    RunCmd ('proxy-restore-'+$proxy) (Join-Path $backup 'Restore.cmd') @() | Out-Null
+    Check (-not (Test-Path -LiteralPath (Join-Path $folder $proxy))) ("Restore removes fresh proxy $proxy")
+}
+
+# An occupied ordinary proxy offers replace / choose another / cancel. Choosing another loops to the full menu.
+$chooseAnother=Fixture 'choose-another-proxy' $false
+[IO.File]::WriteAllText((Join-Path $chooseAnother 'version.dll'),'occupied version proxy')
+$versionHash=HashFile (Join-Path $chooseAnother 'version.dll')
+$output=RunEngine 'choose-another-proxy' @('-GameExecutable',(Join-Path $chooseAnother 'FixtureGame.exe')) $true @('3','2','2')
+Check ($output -match 'A version.dll already exists' -and $output -match 'Choose a different filename') 'Occupied ordinary proxy displays replace, choose-another, and cancel choices'
+Check ((HashFile (Join-Path $chooseAnother 'version.dll')) -eq $versionHash -and (HashFile (Join-Path $chooseAnother 'winmm.dll')) -eq $candidateHash) 'Choose-another preserves occupied proxy and installs the new selection'
+$backup=Backup $chooseAnother;RunCmd 'choose-another-restore' (Join-Path $backup 'Restore.cmd') @() | Out-Null
+Check ((HashFile (Join-Path $chooseAnother 'version.dll')) -eq $versionHash -and -not (Test-Path -LiteralPath (Join-Path $chooseAnother 'winmm.dll'))) 'Choose-another restore returns exact pre-install state'
+
+$replaceOrdinary=Fixture 'replace-ordinary-proxy' $false
+[IO.File]::WriteAllText((Join-Path $replaceOrdinary 'winmm.dll'),'occupied Vulkan proxy')
+$oldOrdinary=HashFile (Join-Path $replaceOrdinary 'winmm.dll')
+RunEngine 'replace-ordinary-proxy' @('-GameExecutable',(Join-Path $replaceOrdinary 'FixtureGame.exe'),'-ProxyName','winmm.dll','-ExistingProxyAction','Replace') | Out-Null
+$backup=Backup $replaceOrdinary;$record=Get-Content -Raw -LiteralPath (Join-Path $backup 'INSTALL-MANIFEST.json') | ConvertFrom-Json
+Check ((HashFile (Join-Path $replaceOrdinary 'winmm.dll')) -eq $candidateHash -and $record.original_proxy.sha256 -eq $oldOrdinary) 'Ordinary occupied proxy is backed up and replaced'
+RunCmd 'replace-ordinary-restore' (Join-Path $backup 'Restore.cmd') @() | Out-Null
+Check ((HashFile (Join-Path $replaceOrdinary 'winmm.dll')) -eq $oldOrdinary) 'Ordinary proxy restore returns the exact original file'
+
+$legacy=Fixture 'legacy-dxgi-parameter' $false
+[IO.File]::WriteAllText((Join-Path $legacy 'dxgi.dll'),'legacy parameter target')
+RunEngine 'legacy-dxgi-parameter' @('-GameExecutable',(Join-Path $legacy 'FixtureGame.exe'),'-ExistingDxgiAction','Delete') | Out-Null
+Check ((HashFile (Join-Path $legacy 'dxgi.dll')) -eq $candidateHash) 'Legacy ExistingDxgiAction remains compatible'
 
 # Existing dxgi.dll delete: exact backup, no INI edit, changed runtime refusal, exact restore.
 $delete=Fixture 'delete-existing'
@@ -111,11 +147,11 @@ $delete=Fixture 'delete-existing'
 $deleteIni=Encoded ("[Plugins]`r`nLoadReshade = false`r`n; preserve me "+$unicode+"`r`n") 'utf8bom'
 [IO.File]::WriteAllBytes((Join-Path $delete 'OptiScaler.ini'),$deleteIni)
 $oldDxgi=HashFile (Join-Path $delete 'dxgi.dll');$oldIni=HashFile (Join-Path $delete 'OptiScaler.ini')
-RunEngine 'delete-install' @('-GameExecutable',(Join-Path $delete 'FixtureGame.exe'),'-ExistingDxgiAction','Delete') | Out-Null
+RunEngine 'delete-install' @('-GameExecutable',(Join-Path $delete 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','Replace') | Out-Null
 Check ((HashFile (Join-Path $delete 'dxgi.dll')) -eq $candidateHash) 'Delete choice installs candidate dxgi.dll'
 Check ((HashFile (Join-Path $delete 'OptiScaler.ini')) -eq $oldIni) 'Delete choice does not enable LoadReshade or alter INI bytes'
 $backup=Backup $delete;$record=Get-Content -Raw -LiteralPath (Join-Path $backup 'INSTALL-MANIFEST.json') | ConvertFrom-Json
-Check ($record.existing_dxgi_action -eq 'Delete' -and $record.original_dxgi.name -eq 'dxgi.dll' -and $record.original_dxgi.sha256 -eq $oldDxgi) 'Delete manifest records original dxgi.dll name and hash'
+Check ($record.existing_proxy_action -eq 'Replace' -and $record.original_proxy.name -eq 'dxgi.dll' -and $record.original_proxy.sha256 -eq $oldDxgi) 'Replace manifest records original dxgi.dll name and hash'
 Check ([Convert]::ToBase64String($deleteIni) -eq $record.original_ini.bytes_base64 -and $record.original_ini.sha256 -eq $oldIni) 'Delete manifest records exact original INI bytes and hash'
 [IO.File]::WriteAllText((Join-Path $delete 'dxgi.dll'),'later runtime')
 $before=Inventory $delete
@@ -134,7 +170,7 @@ foreach($kind in @('utf8','utf8bom','utf16le','utf16be')){
     $original=Encoded $text $kind;$expected=Encoded $expectedText $kind
     [IO.File]::WriteAllBytes((Join-Path $folder 'OptiScaler.ini'),$original)
     $oldDxgi=HashFile (Join-Path $folder 'dxgi.dll')
-    RunEngine ('rename-install-'+$kind) @('-GameExecutable',(Join-Path $folder 'FixtureGame.exe'),'-ExistingDxgiAction','Rename') | Out-Null
+    RunEngine ('rename-install-'+$kind) @('-GameExecutable',(Join-Path $folder 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','RenameReShade') | Out-Null
     Check ((HashFile (Join-Path $folder 'ReShade64.dll')) -eq $oldDxgi) ("$kind rename preserves existing dxgi.dll as ReShade64.dll")
     Check ((HashFile (Join-Path $folder 'dxgi.dll')) -eq $candidateHash) ("$kind rename installs new dxgi.dll")
     Check $(BytesEqual ([IO.File]::ReadAllBytes((Join-Path $folder 'OptiScaler.ini'))) $expected) ("$kind targeted LoadReshade edit preserves encoding and all other bytes")
@@ -152,7 +188,7 @@ $missing=Fixture 'rename-missing-key'
 [IO.File]::WriteAllText((Join-Path $missing 'dxgi.dll'),'ReShade missing-key fixture')
 $missingBytes=Encoded "[Plugins]`r`nOther = 3`r`n[Next]`r`nValue = 4`r`n" 'utf16le'
 [IO.File]::WriteAllBytes((Join-Path $missing 'OptiScaler.ini'),$missingBytes)
-RunEngine 'rename-inserts-key' @('-GameExecutable',(Join-Path $missing 'FixtureGame.exe'),'-ExistingDxgiAction','Rename') | Out-Null
+RunEngine 'rename-inserts-key' @('-GameExecutable',(Join-Path $missing 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','RenameReShade') | Out-Null
 $installed=[Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes((Join-Path $missing 'OptiScaler.ini')),2,((Get-Item (Join-Path $missing 'OptiScaler.ini')).Length-2))
 Check ($installed -match '(?m)^LoadReshade = true\r?$' -and $installed.IndexOf('LoadReshade') -lt $installed.IndexOf('[Next]')) 'Missing LoadReshade key is inserted into Plugins'
 $backup=Backup $missing;RunCmd 'missing-key-restore' (Join-Path $backup 'Restore.cmd') @() | Out-Null
@@ -162,33 +198,32 @@ Check $(BytesEqual ([IO.File]::ReadAllBytes((Join-Path $missing 'OptiScaler.ini'
 $cancel=Fixture 'interactive-cancel'
 [IO.File]::WriteAllText((Join-Path $cancel 'dxgi.dll'),'unknown owner')
 $before=Inventory $cancel
-$output=RunEngine 'interactive-choice-cancel' @('-GameExecutable',(Join-Path $cancel 'FixtureGame.exe')) $true @('3')
-Check ($output -match 'A dxgi.dll already exists in this game folder' -and $output -match 'Rename it to ReShade64.dll and keep it' -and $output -match 'Delete the existing dxgi.dll') 'Existing dxgi.dll displays the required explicit choice'
+$output=RunEngine 'interactive-choice-cancel' @('-GameExecutable',(Join-Path $cancel 'FixtureGame.exe')) $true @('1','4')
+Check ($output -match 'A dxgi.dll already exists in this game folder' -and $output -match 'Rename it to ReShade64.dll and keep it' -and $output -match 'Back it up, delete it' -and $output -match 'Choose a different filename') 'Existing dxgi.dll displays proxy selection and the required explicit choices'
 Check ((Inventory $cancel) -eq $before) 'Cancel changes no game files'
 
 $interactiveRename=Fixture 'interactive-rename'
 [IO.File]::WriteAllText((Join-Path $interactiveRename 'dxgi.dll'),'interactive ReShade')
 [IO.File]::WriteAllText((Join-Path $interactiveRename 'OptiScaler.ini'),"[Plugins]`r`nLoadReshade = false`r`n")
-RunEngine 'interactive-choice-rename' @('-GameExecutable',(Join-Path $interactiveRename 'FixtureGame.exe')) $true @('1') | Out-Null
+RunEngine 'interactive-choice-rename' @('-GameExecutable',(Join-Path $interactiveRename 'FixtureGame.exe')) $true @('1','1') | Out-Null
 Check ((HashFile (Join-Path $interactiveRename 'dxgi.dll')) -eq $candidateHash -and (Test-Path -LiteralPath (Join-Path $interactiveRename 'ReShade64.dll'))) 'Interactive choice 1 performs ReShade rename flow'
 
 $interactiveDelete=Fixture 'interactive-delete'
 [IO.File]::WriteAllText((Join-Path $interactiveDelete 'dxgi.dll'),'interactive delete')
-RunEngine 'interactive-choice-delete' @('-GameExecutable',(Join-Path $interactiveDelete 'FixtureGame.exe')) $true @('2') | Out-Null
+RunEngine 'interactive-choice-delete' @('-GameExecutable',(Join-Path $interactiveDelete 'FixtureGame.exe')) $true @('1','2') | Out-Null
 Check ((HashFile (Join-Path $interactiveDelete 'dxgi.dll')) -eq $candidateHash -and -not (Test-Path -LiteralPath (Join-Path $interactiveDelete 'ReShade64.dll'))) 'Interactive choice 2 performs delete flow'
 
 $conflict=Fixture 'reshade64-conflict'
 [IO.File]::WriteAllText((Join-Path $conflict 'dxgi.dll'),'existing dxgi')
 [IO.File]::WriteAllText((Join-Path $conflict 'ReShade64.dll'),'existing reshade64')
 $before=Inventory $conflict
-RunEngine 'reshade64-conflict' @('-GameExecutable',(Join-Path $conflict 'FixtureGame.exe'),'-ExistingDxgiAction','Rename') $false | Out-Null
+RunEngine 'reshade64-conflict' @('-GameExecutable',(Join-Path $conflict 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','RenameReShade') $false | Out-Null
 Check ((Inventory $conflict) -eq $before) 'Rename fails closed when ReShade64.dll exists'
 
-$wrongAction=Fixture 'action-without-dxgi'
+$wrongAction=Fixture 'action-without-target'
 $before=Inventory $wrongAction
-RunEngine 'action-without-dxgi' @('-GameExecutable',(Join-Path $wrongAction 'FixtureGame.exe'),'-ExistingDxgiAction','Delete') $false | Out-Null
-RunEngine 'non-dxgi-proxy-refused' @('-GameExecutable',(Join-Path $wrongAction 'FixtureGame.exe'),'-ProxyName','winmm.dll') $false | Out-Null
-Check ((Inventory $wrongAction) -eq $before) 'Invalid action and non-dxgi proxy fail before writes'
+RunEngine 'action-without-target' @('-GameExecutable',(Join-Path $wrongAction 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','Replace') $false | Out-Null
+Check ((Inventory $wrongAction) -eq $before) 'Existing-file action without an occupied target fails before writes'
 
 # Force a post-rename/post-INI copy failure and prove every changed file rolls back.
 $rollback=Fixture 'atomic-rollback'
@@ -200,7 +235,7 @@ $locked=Join-Path $rollback 'OptiScaler\amd_fidelityfx_framegeneration_dx12.dll'
 [IO.File]::WriteAllText($locked,'locked original support')
 $oldDxgi=HashFile (Join-Path $rollback 'dxgi.dll');$oldLocked=HashFile $locked
 $stream=[IO.File]::Open($locked,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
-try{RunEngine 'forced-copy-failure' @('-GameExecutable',(Join-Path $rollback 'FixtureGame.exe'),'-ExistingDxgiAction','Rename') $false | Out-Null}
+try{RunEngine 'forced-copy-failure' @('-GameExecutable',(Join-Path $rollback 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','RenameReShade') $false | Out-Null}
 finally{$stream.Dispose()}
 Check ((HashFile (Join-Path $rollback 'dxgi.dll')) -eq $oldDxgi -and -not (Test-Path -LiteralPath (Join-Path $rollback 'ReShade64.dll'))) 'Failure rolls ReShade rename and dxgi replacement back'
 Check $(BytesEqual ([IO.File]::ReadAllBytes((Join-Path $rollback 'OptiScaler.ini'))) $rollbackIni) 'Failure rolls targeted INI edit back exactly'
@@ -212,7 +247,7 @@ Check ($record.status -eq 'failed-rolled-back') 'Failure manifest records comple
 $other=Fixture 'other-optiscaler-proxy'
 Copy-Item -LiteralPath (Join-Path $PackageRoot 'payload\OptiScaler.dll') -Destination (Join-Path $other 'winmm.dll')
 $before=Inventory $other
-RunEngine 'other-optiscaler-proxy' @('-GameExecutable',(Join-Path $other 'FixtureGame.exe')) $false | Out-Null
+RunEngine 'other-optiscaler-proxy' @('-GameExecutable',(Join-Path $other 'FixtureGame.exe'),'-ProxyName','dxgi.dll') $false | Out-Null
 Check ((Inventory $other) -eq $before) 'Existing OptiScaler under another proxy fails before writes'
 
 $tampered=Join-Path $testRoot 'tampered-package'
@@ -221,7 +256,7 @@ Copy-Item -LiteralPath $PackageRoot -Destination $tampered -Recurse
 $tamperedEngine=Join-Path $tampered 'support\NeuRotic-Setup-Engine.ps1'
 $oldEngine=$engine;$engine=$tamperedEngine
 $before=Inventory $wrongAction
-RunEngine 'tampered-package' @('-GameExecutable',(Join-Path $wrongAction 'FixtureGame.exe')) $false | Out-Null
+RunEngine 'tampered-package' @('-GameExecutable',(Join-Path $wrongAction 'FixtureGame.exe'),'-ProxyName','dxgi.dll') $false | Out-Null
 $engine=$oldEngine
 Check ((Inventory $wrongAction) -eq $before) 'Tampered package fails before destination writes'
 

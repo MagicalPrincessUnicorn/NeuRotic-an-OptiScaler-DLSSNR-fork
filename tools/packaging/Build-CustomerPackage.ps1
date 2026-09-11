@@ -46,7 +46,7 @@ $manifest = [ordered]@{
     source_control='145ebdab4a983bba9c2d319c7bea98186d9a758a'; runtime_result='Inconclusive'
     predecessor_evidence='User reports MHWilds, Dragons Dogma 2 and Crimson Desert smoke tests with no showstopper crashes observed; DD2 performance concern unresolved.'
     ini_disposition='preserve existing except explicit ReShade choice sets LoadReshade=true; fresh install uses reviewed NR/Multipass-off profile with file logging off, Info when enabled'
-    installer_policy='always dxgi.dll; no typed INSTALL; explicit rename-to-ReShade64/delete/cancel choice for existing dxgi.dll; exact backup and restore'
+    installer_policy='select one of nine loader-supported proxy names; no typed INSTALL; occupied targets offer backed-up replacement/change-name/cancel; dxgi alone adds rename-to-ReShade64 compatibility; exact backup and restore'
     ini_sha256=(Get-FileHash -LiteralPath (Join-Path $payload 'OptiScaler.ini')).Hash
     private_model='not included; preserve existing'; public_release=$false
     build_manifest='support\BUILD-MANIFEST.json'; files=$inventory

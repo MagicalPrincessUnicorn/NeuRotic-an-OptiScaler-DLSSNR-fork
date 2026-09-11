@@ -3,6 +3,8 @@ param(
     [string]$GameExecutable,
     [ValidateSet('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')]
     [string]$ProxyName,
+    [ValidateSet('RenameReShade','Replace','ChooseAnother','Cancel')]
+    [string]$ExistingProxyAction,
     [ValidateSet('Rename','Delete','Cancel')]
     [string]$ExistingDxgiAction,
     [switch]$CheckOnly,
@@ -109,6 +111,47 @@ function PlanLoadReshadeEdit([byte[]]$Bytes) {
 }
 
 $allowedProxies = @('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')
+function SelectProxyName {
+    Write-Host ''
+    Write-Host 'Choose the filename the game should load NeuRotic as:'
+    Write-Host '1. dxgi.dll        (normal first choice for DirectX games)'
+    Write-Host '2. winmm.dll       (normal first choice for Vulkan games)'
+    Write-Host '3. version.dll'
+    Write-Host '4. dbghelp.dll'
+    Write-Host '5. d3d12.dll'
+    Write-Host '6. wininet.dll'
+    Write-Host '7. winhttp.dll'
+    Write-Host '8. OptiScaler.asi'
+    Write-Host '9. OptiScaler.dll'
+    Write-Host '0. Cancel'
+    $choice = (Read-Host 'Choose 0 through 9').Trim()
+    if ($choice -eq '0') { return $null }
+    $index = 0
+    if (-not [int]::TryParse($choice,[ref]$index) -or $index -lt 1 -or $index -gt $allowedProxies.Count) {
+        Write-Host 'That is not a valid choice.'
+        return SelectProxyName
+    }
+    return $allowedProxies[$index-1]
+}
+function SelectExistingAction([string]$Name) {
+    Write-Host ''
+    Write-Host "A $Name already exists in this game folder. What would you like to do?"
+    Write-Host ''
+    if ($Name -ieq 'dxgi.dll') {
+        Write-Host '1. Rename it to ReShade64.dll and keep it'
+        Write-Host '   Choose this if this dxgi.dll belongs to ReShade and you want to use ReShade with NeuRotic (OptiScaler).'
+        Write-Host '2. Back it up, delete it, and install NeuRotic as dxgi.dll'
+        Write-Host '3. Choose a different filename'
+        Write-Host '4. Cancel'
+        $choice = (Read-Host 'Choose 1, 2, 3, or 4').Trim()
+        return $(switch ($choice) { '1' {'RenameReShade'} '2' {'Replace'} '3' {'ChooseAnother'} default {'Cancel'} })
+    }
+    Write-Host "1. Back it up, delete it, and install NeuRotic as $Name"
+    Write-Host '2. Choose a different filename'
+    Write-Host '3. Cancel'
+    $choice = (Read-Host 'Choose 1, 2, or 3').Trim()
+    return $(switch ($choice) { '1' {'Replace'} '2' {'ChooseAnother'} default {'Cancel'} })
+}
 function AllowedTarget([string]$Relative) {
     return ($Relative -in $allowedProxies -or $Relative -in @('ReShade64.dll','nvngx.dll_dlssnr.dll','OptiScaler.ini','NeuRotic-LICENSE.txt') -or
         $Relative -match '^(OptiScaler|Licenses)\\[^:]+$')
@@ -169,7 +212,7 @@ if ($Restore) {
         throw
     }
     $record.status = 'restored'; $record.restored_utc = [DateTime]::UtcNow.ToString('o'); SaveRecord $recordPath $record
-    Write-Output "PASS: exact pre-install files restored, including dxgi.dll and OptiScaler.ini. Removed candidate files remain recoverable in: $undo"
+    Write-Output "PASS: exact pre-install files restored, including $($record.selected_proxy) and OptiScaler.ini. Removed candidate files remain recoverable in: $undo"
     return
 }
 
@@ -208,42 +251,52 @@ if ($gameDir -eq $packageRoot -or $gameDir.StartsWith($packageRoot + '\',[String
     throw 'Keep the complete installer folder outside the game folder.'
 }
 CheckGameClosed $GameExecutable
-if ($ProxyName -and $ProxyName -ine 'dxgi.dll') { throw 'This customer installer always installs NeuRotic as dxgi.dll.' }
+$action = 'None'
+$scriptedAction = $ExistingProxyAction
+$selectedProxy = $ProxyName
+if ($ExistingDxgiAction) {
+    if ($ExistingProxyAction) { throw 'Use ExistingProxyAction or the legacy ExistingDxgiAction, not both.' }
+    if (-not $selectedProxy) { $selectedProxy = 'dxgi.dll' }
+    if ($selectedProxy -ine 'dxgi.dll') { throw 'The legacy ExistingDxgiAction parameter applies only to dxgi.dll.' }
+    $scriptedAction = $(switch ($ExistingDxgiAction) { 'Rename' {'RenameReShade'} 'Delete' {'Replace'} default {'Cancel'} })
+}
+while ($true) {
+    if (-not $selectedProxy) {
+        $selectedProxy = SelectProxyName
+        if (-not $selectedProxy) { Write-Output 'Installation cancelled. No game files were changed.'; return }
+    }
+    $proxyPath = SafePath $gameDir $selectedProxy
+    $proxyExists = Test-Path -LiteralPath $proxyPath -PathType Leaf
+    if ((Test-Path -LiteralPath $proxyPath) -and -not $proxyExists) { throw "A directory named $selectedProxy occupies the installation target." }
+    if (-not $proxyExists) {
+        if ($scriptedAction) { throw "ExistingProxyAction was supplied, but no $selectedProxy exists in the selected game folder." }
+        break
+    }
+    $action = $(if ($scriptedAction) { $scriptedAction } else { SelectExistingAction $selectedProxy })
+    if ($action -eq 'Cancel') { Write-Output 'Installation cancelled. No game files were changed.'; return }
+    if ($action -eq 'ChooseAnother') {
+        if ($scriptedAction) { throw 'ChooseAnother requires interactive filename selection.' }
+        $selectedProxy = $null; $action = 'None'; continue
+    }
+    if ($action -eq 'RenameReShade' -and $selectedProxy -ine 'dxgi.dll') {
+        throw 'RenameReShade is available only when the selected filename is dxgi.dll.'
+    }
+    if ($action -eq 'RenameReShade') {
+        $reshadePath = SafePath $gameDir 'ReShade64.dll'
+        if (Test-Path -LiteralPath $reshadePath) { throw 'ReShade64.dll already exists. Setup will not overwrite it. No game files were changed.' }
+    }
+    break
+}
+$ProxyName = $selectedProxy
 
-# Preserve duplicate-install protection, but never infer what dxgi.dll itself is.
-$otherOptiScaler = @($allowedProxies | Where-Object { $_ -ine 'dxgi.dll' } | Where-Object {
+# Never infer the selected name from an existing DLL. Refuse a second active OptiScaler proxy.
+$otherOptiScaler = @($allowedProxies | Where-Object { $_ -ine $ProxyName } | Where-Object {
     $candidate = SafePath $gameDir $_
     (Test-Path -LiteralPath $candidate -PathType Leaf) -and
         (Get-Item -LiteralPath $candidate).VersionInfo.OriginalFilename -ieq 'OptiScaler.dll'
 })
 if ($otherOptiScaler.Count) {
-    throw "NeuRotic/OptiScaler is already installed under $($otherOptiScaler -join ', '). Restore that installation before installing as dxgi.dll."
-}
-
-$dxgiPath = SafePath $gameDir 'dxgi.dll'
-$dxgiExists = Test-Path -LiteralPath $dxgiPath -PathType Leaf
-if ((Test-Path -LiteralPath $dxgiPath) -and -not $dxgiExists) { throw 'A directory named dxgi.dll occupies the installation target.' }
-$action = 'None'
-if ($dxgiExists) {
-    if (-not $ExistingDxgiAction) {
-        Write-Output ''
-        Write-Output 'A dxgi.dll already exists in this game folder. What would you like to do?'
-        Write-Output ''
-        Write-Output '1. Rename it to ReShade64.dll and keep it'
-        Write-Output '   Choose this if this dxgi.dll belongs to ReShade and you want to use ReShade with NeuRotic (OptiFine).'
-        Write-Output '2. Delete the existing dxgi.dll'
-        Write-Output '3. Cancel'
-        $choice = (Read-Host 'Choose 1, 2, or 3').Trim()
-        $ExistingDxgiAction = switch ($choice) { '1' {'Rename'} '2' {'Delete'} '3' {'Cancel'} default {'Cancel'} }
-    }
-    if ($ExistingDxgiAction -eq 'Cancel') { Write-Output 'Installation cancelled. No game files were changed.'; return }
-    $action = $ExistingDxgiAction
-    if ($action -eq 'Rename') {
-        $reshadePath = SafePath $gameDir 'ReShade64.dll'
-        if (Test-Path -LiteralPath $reshadePath) { throw 'ReShade64.dll already exists. Setup will not overwrite it. No game files were changed.' }
-    }
-} elseif ($ExistingDxgiAction) {
-    throw 'ExistingDxgiAction was supplied, but no dxgi.dll exists in the selected game folder.'
+    throw "NeuRotic/OptiScaler is already installed under $($otherOptiScaler -join ', '). Restore that installation before installing another proxy."
 }
 
 $files = New-Object System.Collections.Generic.List[object]
@@ -252,7 +305,7 @@ $iniOriginalBytes = $null
 foreach ($file in $manifest.files) {
     if (-not $file.path.StartsWith('payload\',[StringComparison]::OrdinalIgnoreCase)) { continue }
     $relative = $file.path.Substring(8)
-    if ($relative -eq 'OptiScaler.dll') { $relative = 'dxgi.dll' }
+    if ($relative -eq 'OptiScaler.dll') { $relative = $ProxyName }
     if (-not (AllowedTarget $relative)) { throw "Unexpected payload target: $relative" }
     $target = SafePath $gameDir $relative
     $exists = Test-Path -LiteralPath $target -PathType Leaf
@@ -263,7 +316,7 @@ foreach ($file in $manifest.files) {
     if ($relative -eq 'OptiScaler.ini') {
         $baseBytes = $(if ($exists) { [IO.File]::ReadAllBytes($target) } else { [IO.File]::ReadAllBytes((SafePath $packageRoot $file.path)) })
         if ($exists) { $iniOriginalBytes = $baseBytes }
-        if ($action -eq 'Rename') {
+        if ($action -eq 'RenameReShade') {
             $iniPlan = PlanLoadReshadeEdit $baseBytes
             $installedHash = HashBytes $iniPlan.Bytes
             $operation = 'write-loadreshade-true'
@@ -277,9 +330,9 @@ foreach ($file in $manifest.files) {
     $files.Add([pscustomobject][ordered]@{path=$relative;source=$file.path;operation=$operation;existed=$exists;
         previous_hash=$previousHash;installed_hash=$installedHash})
 }
-if ($action -eq 'Rename') {
-    $files.Add([pscustomobject][ordered]@{path='ReShade64.dll';source=$null;operation='rename-existing-dxgi';existed=$false;
-        previous_hash=$null;installed_hash=(HashFile $dxgiPath)})
+if ($action -eq 'RenameReShade') {
+    $files.Add([pscustomobject][ordered]@{path='ReShade64.dll';source=$null;operation='rename-existing-proxy';existed=$false;
+        previous_hash=$null;installed_hash=(HashFile $proxyPath)})
 }
 $preserved = @()
 $modelPath = SafePath $gameDir 'nvngx_dlssnr.dll'
@@ -288,15 +341,15 @@ if (Test-Path -LiteralPath $modelPath -PathType Leaf) { $preserved += @{path='nv
 Write-Output ''
 Write-Output ('NeuRotic - Candidate ' + $manifest.commit.Substring(0,8))
 Write-Output "Game: $GameExecutable"
-Write-Output 'Install target: dxgi.dll'
-if ($action -eq 'Rename') {
+Write-Output "Install target: $ProxyName"
+if ($action -eq 'RenameReShade') {
     Write-Output 'Existing dxgi.dll: rename to ReShade64.dll and enable LoadReshade.'
-} elseif ($action -eq 'Delete') {
-    Write-Output 'Existing dxgi.dll: preserve in recovery backup, then delete and replace it.'
+} elseif ($action -eq 'Replace') {
+    Write-Output "Existing ${ProxyName}: preserve in recovery backup, then delete and replace it."
 } else {
-    Write-Output 'No existing dxgi.dll: install immediately.'
+    Write-Output "No existing ${ProxyName}: install immediately."
 }
-Write-Output 'Setup creates a recovery folder before changing files. Restore returns dxgi.dll and OptiScaler.ini to their exact original state.'
+Write-Output "Setup creates a recovery folder before changing files. Restore returns $ProxyName and OptiScaler.ini to their exact original state."
 if (-not (Test-Path -LiteralPath $modelPath -PathType Leaf)) {
     Write-Output 'NR model missing: supply your own nvngx_dlssnr.dll beside the game executable before using NR.'
 }
@@ -317,12 +370,12 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'NeuRotic-Setup-Engine.ps1') -De
 $iniEntry = @($files | Where-Object { $_.path -eq 'OptiScaler.ini' })[0]
 $record = [ordered]@{kind='neurotic-customer-candidate-install';status='backed-up';commit=$manifest.commit;
     package_manifest_sha256=(HashFile $manifestPath);game_executable=$GameExecutable;backup=$backup;
-    existing_dxgi_action=$action;files=$files;preserved=$preserved;
-    original_dxgi=[ordered]@{name='dxgi.dll';existed=$dxgiExists;sha256=$(if ($dxgiExists) { HashFile $dxgiPath } else {$null});backup_path=$(if ($dxgiExists) {'previous\dxgi.dll'} else {$null})};
+    selected_proxy=$ProxyName;existing_proxy_action=$action;files=$files;preserved=$preserved;
+    original_proxy=[ordered]@{name=$ProxyName;existed=$proxyExists;sha256=$(if ($proxyExists) { HashFile $proxyPath } else {$null});backup_path=$(if ($proxyExists) {"previous\$ProxyName"} else {$null})};
     original_ini=[ordered]@{name='OptiScaler.ini';existed=$iniEntry.existed;sha256=$iniEntry.previous_hash;
         bytes_base64=$(if ($iniEntry.existed) {[Convert]::ToBase64String($iniOriginalBytes)} else {$null});backup_path=$(if ($iniEntry.existed) {'previous\OptiScaler.ini'} else {$null})};
-    reshade_operation=$(if ($action -eq 'Rename') {[ordered]@{original_name='dxgi.dll';new_name='ReShade64.dll';sha256=(HashFile $dxgiPath);loadreshade=$true;encoding=$iniPlan.Encoding;bom_preserved=$iniPlan.HadBom}} else {$null});
-    ini_disposition=$(if ($action -eq 'Rename') {'LoadReshade=true targeted encoding-preserving edit'} elseif ($iniEntry.existed) {'preserve-live'} else {'reviewed-default'});
+    reshade_operation=$(if ($action -eq 'RenameReShade') {[ordered]@{original_name='dxgi.dll';new_name='ReShade64.dll';sha256=(HashFile $proxyPath);loadreshade=$true;encoding=$iniPlan.Encoding;bom_preserved=$iniPlan.HadBom}} else {$null});
+    ini_disposition=$(if ($action -eq 'RenameReShade') {'LoadReshade=true targeted encoding-preserving edit'} elseif ($iniEntry.existed) {'preserve-live'} else {'reviewed-default'});
     runtime='Inconclusive';started_utc=[DateTime]::UtcNow.ToString('o');completed_utc=$null;restored_utc=$null;
     error=$null;rollback_error=$null}
 $recordPath = Join-Path $backup 'INSTALL-MANIFEST.json'
@@ -331,29 +384,29 @@ $touched = New-Object System.Collections.Generic.List[string]
 function Touch([string]$Path) { if (-not $touched.Contains($Path)) { $touched.Add($Path) } }
 try {
     CheckGameClosed $GameExecutable
-    if ($dxgiExists -and (HashFile $dxgiPath) -ne $record.original_dxgi.sha256) { throw 'dxgi.dll changed before installation.' }
-    if ($action -eq 'Rename') {
+    if ($proxyExists -and (HashFile $proxyPath) -ne $record.original_proxy.sha256) { throw "$ProxyName changed before installation." }
+    if ($action -eq 'RenameReShade') {
         $reshadePath = SafePath $gameDir 'ReShade64.dll'
         if (Test-Path -LiteralPath $reshadePath) { throw 'ReShade64.dll appeared before installation.' }
-        Touch 'dxgi.dll'; Touch 'ReShade64.dll'
-        Move-Item -LiteralPath $dxgiPath -Destination $reshadePath
-        if ((Test-Path -LiteralPath $dxgiPath) -or (HashFile $reshadePath) -ne $record.original_dxgi.sha256) { throw 'Existing dxgi.dll rename verification failed.' }
-    } elseif ($action -eq 'Delete') {
-        Touch 'dxgi.dll'; Remove-Item -LiteralPath $dxgiPath -Force
-        if (Test-Path -LiteralPath $dxgiPath) { throw 'Existing dxgi.dll could not be removed.' }
+        Touch $ProxyName; Touch 'ReShade64.dll'
+        Move-Item -LiteralPath $proxyPath -Destination $reshadePath
+        if ((Test-Path -LiteralPath $proxyPath) -or (HashFile $reshadePath) -ne $record.original_proxy.sha256) { throw 'Existing dxgi.dll rename verification failed.' }
+    } elseif ($action -eq 'Replace') {
+        Touch $ProxyName; Remove-Item -LiteralPath $proxyPath -Force
+        if (Test-Path -LiteralPath $proxyPath) { throw "Existing $ProxyName could not be removed." }
     }
     foreach ($file in $files) {
-        if ($file.operation -eq 'rename-existing-dxgi') { continue }
+        if ($file.operation -eq 'rename-existing-proxy') { continue }
         $target = SafePath $gameDir $file.path
         if ($file.operation -eq 'preserve-existing') {
             if ((HashFile $target) -ne $file.previous_hash) { throw 'OptiScaler.ini changed before installation.' }
             continue
         }
-        if ($file.path -ne 'dxgi.dll') {
+        if ($file.path -ne $ProxyName) {
             if ($file.existed) {
                 if ((HashFile $target) -ne $file.previous_hash) { throw "Destination changed during installation: $($file.path)" }
             } elseif (Test-Path -LiteralPath $target) { throw "A new destination appeared during installation: $($file.path)" }
-        } elseif (Test-Path -LiteralPath $target) { throw 'dxgi.dll unexpectedly exists before candidate copy.' }
+        } elseif (Test-Path -LiteralPath $target) { throw "$ProxyName unexpectedly exists before candidate copy." }
         Touch $file.path
         if ($file.path -eq 'OptiScaler.ini') {
             WriteVerifiedBytes $iniPlan.Bytes $target $file.installed_hash
@@ -387,4 +440,4 @@ try {
 }
 Write-Output "PASS: full installation verified. Recovery folder: $backup"
 Write-Output 'Next: launch the game and press Insert to open NeuRotic, unless you saved a different shortcut. Keep the recovery folder until testing is complete.'
-Write-Output 'To revert, close the game and run Restore.cmd in that recovery folder. Restore runs immediately and returns dxgi.dll and OptiScaler.ini to their exact pre-install state.'
+Write-Output "To revert, close the game and run Restore.cmd in that recovery folder. Restore runs immediately and returns $ProxyName and OptiScaler.ini to their exact pre-install state."

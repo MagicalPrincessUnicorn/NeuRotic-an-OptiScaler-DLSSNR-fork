@@ -8,10 +8,11 @@ installation record from the recovery folder. File logging is off for new instal
 enable it at Info in Diagnostics only when collecting a troubleshooting log.
 
 INSTALLER
-Setup always targets dxgi.dll and never asks the user to type INSTALL. With no
-existing dxgi.dll it proceeds after EXE selection. With an existing dxgi.dll it
-offers Rename to ReShade64.dll / Delete / Cancel and performs no automatic ReShade
-detection. Rename also sets LoadReshade=true with the original INI encoding/BOM and
+Setup asks for one of all nine loader-supported proxy names and never asks the user
+to type INSTALL. With no file at the selected name it proceeds immediately. An
+occupied ordinary name offers Replace with backup / Choose another / Cancel. An
+occupied dxgi.dll additionally offers Rename to ReShade64.dll and performs no
+automatic ReShade detection. Rename also sets LoadReshade=true with the original INI encoding/BOM and
 all unrelated bytes/text retained. An existing ReShade64.dll is a fail-closed
 conflict. Delete leaves LoadReshade unchanged. The manifest records original names,
 hashes and Base64 original INI bytes. Any failure rolls back the entire transaction.
@@ -39,8 +40,8 @@ Individual model timings currently cover only Passes 1 and 2.
 
 VULKAN
 Use Native Temporal single-pass. Multi-Pass, Vulkan Present and Frame Hold remain
-unavailable. This simplified installer always uses dxgi.dll as explicitly selected
-for the customer flow; confirm that the target game loads that proxy. Existing model
+unavailable. Select winmm.dll unless the particular game requires another supported
+proxy name; confirm that the target game loads that proxy. Existing model
 configuration limits and restart requirements still apply. Resolution changes may
 require a restart. Indiana Jones needs separate runtime acceptance.
 
