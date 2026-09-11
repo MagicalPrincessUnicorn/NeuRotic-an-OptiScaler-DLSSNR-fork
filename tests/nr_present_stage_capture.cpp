@@ -3,6 +3,7 @@
 #include "../OptiScaler/dlssnr/NrGpuSafety.cpp"
 #include "../OptiScaler/dlssnr/NrPresentStageCapture.h"
 #include "../OptiScaler/dlssnr/NrFinalOutputCapture.h"
+#include "../OptiScaler/dlssnr/NrScreenshotSrPair.h"
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
 #include <array>
@@ -14,6 +15,72 @@ using Microsoft::WRL::ComPtr;
 namespace Safety = DlssNr::GpuSafety;
 using Capture = DlssNr::StageCapture::PresentStages;
 static void Check(HRESULT value) { assert(SUCCEEDED(value)); }
+
+template<class Resource> struct ScreenshotParams
+{
+    Resource* color;
+    Resource* output;
+    int reset;
+    const unsigned int frameGuide = 77;
+    bool missingReset = false;
+    int Get(const char* key, Resource** value)
+    {
+        if (std::strcmp(key, "Color") == 0) *value = color;
+        else if (std::strcmp(key, "Output") == 0) *value = output;
+        else return 0;
+        return 1;
+    }
+    int Get(const char* key, int* value)
+    {
+        if (std::strcmp(key, "Reset") || missingReset) return 0;
+        *value = reset; return 1;
+    }
+    void Set(const char* key, Resource* value)
+    {
+        if (std::strcmp(key, "Color") == 0) color = value;
+        else { assert(std::strcmp(key, "Output") == 0); output = value; }
+    }
+    void Set(const char* key, int value) { assert(std::strcmp(key, "Reset") == 0); reset = value; }
+};
+
+static void CheckFreshSrRestoration()
+{
+    int original = 1, edited = 2, liveOutput = 3, beforeOutput = 4, afterOutput = 5;
+    for (int originalReset : {0, 1, 7})
+    for (int failure : {0, 1, 2, 3, 4})
+    {
+        ScreenshotParams<int> params {&edited, &liveOutput, originalReset};
+        unsigned int calls = 0;
+        bool result = false, threw = false;
+        try
+        {
+            result = DlssNr::Screenshots::FreshSrPair(&params, &original, &edited, &beforeOutput, &afterOutput, [&]
+            {
+                ++calls;
+                assert(params.reset == 1 && params.frameGuide == 77);
+                assert(params.color == (calls == 1 ? &original : &edited));
+                assert(params.output == (calls == 1 ? &beforeOutput : &afterOutput));
+                params.reset = 0; // Provider writes are overwritten for the second reset evaluation.
+                if (failure == int(calls) + 2) throw 42;
+                return failure != int(calls);
+            });
+        }
+        catch (int) { threw = true; }
+        assert(params.color == &edited && params.output == &liveOutput && params.reset == originalReset);
+        assert(original == 1 && edited == 2 && liveOutput == 3 && params.frameGuide == 77);
+        assert(result == (failure == 0) && threw == (failure >= 3));
+        assert(calls == ((failure == 1 || failure == 3) ? 1u : 2u));
+    }
+    ScreenshotParams<int> missing {&edited, &liveOutput, 0};
+    missing.missingReset = true;
+    unsigned int calls = 0;
+    auto evaluate = [&] { ++calls; return true; };
+    assert(!DlssNr::Screenshots::FreshSrPair(&missing, &original, &edited, &beforeOutput, &afterOutput, evaluate));
+    missing.missingReset = false;
+    assert(!DlssNr::Screenshots::FreshSrPair(&missing, &original, &edited, &liveOutput, &afterOutput, evaluate));
+    assert(!DlssNr::Screenshots::FreshSrPair(&missing, &original, &edited, &beforeOutput, &beforeOutput, evaluate));
+    assert(calls == 0 && missing.color == &edited && missing.output == &liveOutput && missing.reset == 0);
+}
 
 static std::filesystem::path FindScreenshot(const std::filesystem::path& root, const std::string& tag,
                                           const std::filesystem::path& exclude = {})
@@ -35,6 +102,8 @@ static std::filesystem::path FindScreenshot(const std::filesystem::path& root, c
 
 int main(int argc, char** argv)
 {
+    CheckFreshSrRestoration();
+    std::cout << "PASS Performance parameter protocol: both reset evaluations use one frame's guides; live colour/output/reset restored on success, failure and exception; missing reset and live-output alias rejected.\n";
     assert(argc == 2);
     const std::filesystem::path root = std::filesystem::path(argv[1]) / std::to_string(GetTickCount64());
     ComPtr<ID3D12Debug> debug;
@@ -315,6 +384,38 @@ int main(int argc, char** argv)
             nativeInputs.push_back({i ? "Native-NR-On" : "NR-Off", nativeImages[i].Get(),
                                     D3D12_RESOURCE_STATE_COPY_DEST, 16.0f});
         }
+        // The burst helper routes the two same-frame sources into independent full
+        // outputs and restores live bindings. This fake SR backend records real
+        // GPU copies; proprietary DLSS image/history behavior requires runtime testing.
+        std::array<ComPtr<ID3D12Resource>, 2> burstOutputs;
+        for (auto& image : burstOutputs)
+        {
+            auto desc = nativeImages[0]->GetDesc();
+            D3D12_HEAP_PROPERTIES heap {}; heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+            Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&image)));
+        }
+        ScreenshotParams<ID3D12Resource> burstParams {nativeImages[1].Get(), textures[0].Get(), 0};
+        unsigned int evaluations = 0;
+        assert(DlssNr::Screenshots::FreshSrPair(&burstParams, nativeImages[0].Get(), nativeImages[1].Get(),
+            burstOutputs[0].Get(), burstOutputs[1].Get(), [&]
+            {
+                assert(burstParams.reset == 1 && burstParams.frameGuide == 77);
+                D3D12_RESOURCE_BARRIER barrier {}; barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barrier.Transition.pResource = burstParams.color;
+                barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+                barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+                barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+                lists[0]->ResourceBarrier(1, &barrier);
+                lists[0]->CopyResource(burstParams.output, burstParams.color);
+                std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+                lists[0]->ResourceBarrier(1, &barrier);
+                ++evaluations;
+                return true;
+            }));
+        assert(evaluations == 2 && burstParams.reset == 0 && burstParams.output == textures[0].Get());
+        assert(burstParams.color == nativeImages[1].Get());
+        for (unsigned int i = 0; i < 2; ++i) nativeInputs[i].image = burstOutputs[i].Get();
         capture.request(GetTickCount64(), 0, 1, true);
         assert(capture.record(lists[0].Get(), device.Get(), nativeInputs, 650, false, "Native matched linear pair"));
         Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);

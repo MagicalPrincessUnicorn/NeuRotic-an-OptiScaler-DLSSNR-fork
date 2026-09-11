@@ -1513,10 +1513,12 @@ void RenderScreenshotMenu(Config* config)
         ImGui::BeginDisabled(!present || !enabled);
         if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
         ImGui::EndDisabled();
-        if (nativePair)
+        if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
+            ImGui::TextWrapped("Performance with NR off selected: a screenshot request temporarily upscales both versions of one frame with fresh DLSS history, then stops. This can briefly pause rendering and use extra memory. The pair compares NR on that frame; it does not reproduce the live image's accumulated DLSS history. With NR off unchecked, Native NR on saves the current full output.");
+        else if (nativePair)
             ImGui::TextWrapped("Native comparisons capture the same upscaled frame before and after NR, ahead of later game effects and HUD. Linear scenes use matching colour conversion for both images.");
         else if (enabled && !present)
-            ImGui::TextWrapped("Performance runs NR before upscaling: only the current full output is available. Same-frame comparisons are available in Quality or after Ray Reconstruction.");
+            ImGui::TextWrapped("Performance comparisons currently require native DX12 DLSS at full display output. This upscaler can save its current full output; unavailable comparisons are disabled.");
         else if (enabled)
             ImGui::TextWrapped("Present NR saves the selected before/after images from the same full-resolution frame.");
         else

@@ -217,6 +217,9 @@ void CancelComparisonScreenshot();
 std::string ComparisonScreenshotStatus();
 bool ComparisonScreenshotBusy();
 bool NativeComparisonScreenshotAvailable();
+// Called by native DX12 DLSS after resolving its effective evaluation parameters.
+void EvaluatePerformanceScreenshot(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
+                                   const NVSDK_NGX_Handle* liveHandle);
 void RenderScreenshotMenu(::Config* config);
 
 bool Shutdown();
