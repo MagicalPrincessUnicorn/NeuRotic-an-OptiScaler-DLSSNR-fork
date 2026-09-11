@@ -16,6 +16,9 @@ automatic ReShade detection. Rename also sets LoadReshade=true with the original
 all unrelated bytes/text retained. An existing ReShade64.dll is a fail-closed
 conflict. Delete leaves LoadReshade unchanged. The manifest records original names,
 hashes and Base64 original INI bytes. Any failure rolls back the entire transaction.
+The dxgi.dll choices are ordered Replace / Rename to ReShade64.dll / Choose a
+different Filename / Cancel; automated tests bind option 1 to replacement and
+option 2 to the ReShade compatibility transaction.
 
 Start with one NR pass. Confirm visible output, then motion, game menus, loading,
 cutscenes and transitions. A running timer or lack of crashes alone is insufficient.

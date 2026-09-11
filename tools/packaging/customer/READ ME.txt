@@ -13,6 +13,12 @@ INSTALL
    ReShade compatibility. Setup never guesses who owns an existing file.
 6. Wait for "full installation verified", then launch your game.
 
+When dxgi.dll already exists, Setup displays these choices in this order:
+1. Replace the file (Backup of original will be created)
+2. Rename to ReShade64.dll - Choose this if you want to use NeuRotic and ReShade
+3. Choose a different Filename
+4. Cancel
+
 You never need to type INSTALL. If you keep an existing dxgi.dll as ReShade64.dll,
 Setup also enables LoadReshade in OptiScaler.ini without changing its encoding.
 If ReShade64.dll already exists, Setup stops instead of overwriting it.

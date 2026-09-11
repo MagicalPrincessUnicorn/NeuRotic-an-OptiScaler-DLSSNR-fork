@@ -199,19 +199,19 @@ $cancel=Fixture 'interactive-cancel'
 [IO.File]::WriteAllText((Join-Path $cancel 'dxgi.dll'),'unknown owner')
 $before=Inventory $cancel
 $output=RunEngine 'interactive-choice-cancel' @('-GameExecutable',(Join-Path $cancel 'FixtureGame.exe')) $true @('1','4')
-Check ($output -match 'A dxgi.dll already exists in this game folder' -and $output -match 'Rename it to ReShade64.dll and keep it' -and $output -match 'Back it up, delete it' -and $output -match 'Choose a different filename') 'Existing dxgi.dll displays proxy selection and the required explicit choices'
+Check ($output -match 'A dxgi.dll already exists in this game folder' -and $output -match '1\. Replace the file \(Backup of original will be created\)' -and $output -match '2\. Rename to ReShade64\.dll - Choose this if you want to use NeuRotic and ReShade' -and $output -match '3\. Choose a different Filename' -and $output -match '4\. Cancel') 'Existing dxgi.dll displays the exact required choice order and wording'
 Check ((Inventory $cancel) -eq $before) 'Cancel changes no game files'
 
 $interactiveRename=Fixture 'interactive-rename'
 [IO.File]::WriteAllText((Join-Path $interactiveRename 'dxgi.dll'),'interactive ReShade')
 [IO.File]::WriteAllText((Join-Path $interactiveRename 'OptiScaler.ini'),"[Plugins]`r`nLoadReshade = false`r`n")
-RunEngine 'interactive-choice-rename' @('-GameExecutable',(Join-Path $interactiveRename 'FixtureGame.exe')) $true @('1','1') | Out-Null
-Check ((HashFile (Join-Path $interactiveRename 'dxgi.dll')) -eq $candidateHash -and (Test-Path -LiteralPath (Join-Path $interactiveRename 'ReShade64.dll'))) 'Interactive choice 1 performs ReShade rename flow'
+RunEngine 'interactive-choice-rename' @('-GameExecutable',(Join-Path $interactiveRename 'FixtureGame.exe')) $true @('1','2') | Out-Null
+Check ((HashFile (Join-Path $interactiveRename 'dxgi.dll')) -eq $candidateHash -and (Test-Path -LiteralPath (Join-Path $interactiveRename 'ReShade64.dll'))) 'Interactive choice 2 performs ReShade rename flow'
 
 $interactiveDelete=Fixture 'interactive-delete'
 [IO.File]::WriteAllText((Join-Path $interactiveDelete 'dxgi.dll'),'interactive delete')
-RunEngine 'interactive-choice-delete' @('-GameExecutable',(Join-Path $interactiveDelete 'FixtureGame.exe')) $true @('1','2') | Out-Null
-Check ((HashFile (Join-Path $interactiveDelete 'dxgi.dll')) -eq $candidateHash -and -not (Test-Path -LiteralPath (Join-Path $interactiveDelete 'ReShade64.dll'))) 'Interactive choice 2 performs delete flow'
+RunEngine 'interactive-choice-delete' @('-GameExecutable',(Join-Path $interactiveDelete 'FixtureGame.exe')) $true @('1','1') | Out-Null
+Check ((HashFile (Join-Path $interactiveDelete 'dxgi.dll')) -eq $candidateHash -and -not (Test-Path -LiteralPath (Join-Path $interactiveDelete 'ReShade64.dll'))) 'Interactive choice 1 performs replacement flow'
 
 $conflict=Fixture 'reshade64-conflict'
 [IO.File]::WriteAllText((Join-Path $conflict 'dxgi.dll'),'existing dxgi')

@@ -138,13 +138,12 @@ function SelectExistingAction([string]$Name) {
     Write-Host "A $Name already exists in this game folder. What would you like to do?"
     Write-Host ''
     if ($Name -ieq 'dxgi.dll') {
-        Write-Host '1. Rename it to ReShade64.dll and keep it'
-        Write-Host '   Choose this if this dxgi.dll belongs to ReShade and you want to use ReShade with NeuRotic (OptiScaler).'
-        Write-Host '2. Back it up, delete it, and install NeuRotic as dxgi.dll'
-        Write-Host '3. Choose a different filename'
+        Write-Host '1. Replace the file (Backup of original will be created)'
+        Write-Host '2. Rename to ReShade64.dll - Choose this if you want to use NeuRotic and ReShade'
+        Write-Host '3. Choose a different Filename'
         Write-Host '4. Cancel'
         $choice = (Read-Host 'Choose 1, 2, 3, or 4').Trim()
-        return $(switch ($choice) { '1' {'RenameReShade'} '2' {'Replace'} '3' {'ChooseAnother'} default {'Cancel'} })
+        return $(switch ($choice) { '1' {'Replace'} '2' {'RenameReShade'} '3' {'ChooseAnother'} default {'Cancel'} })
     }
     Write-Host "1. Back it up, delete it, and install NeuRotic as $Name"
     Write-Host '2. Choose a different filename'
