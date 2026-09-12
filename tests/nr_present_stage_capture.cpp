@@ -277,6 +277,15 @@ int main(int argc, char** argv)
         }
     }
     // Checkbox selection never silently requests the other route or additional images.
+    for (unsigned int route = 0; route < 4; ++route)
+        for (bool enabled : {false, true})
+            for (bool before : {false, true})
+                for (bool rr : {false, true})
+                    for (bool backend : {false, true})
+                        assert(DlssNr::Screenshots::NativePairAvailable(route, enabled, before, rr, backend) ==
+                               (route == 0 && enabled && (!before || rr || backend)));
+    assert(!DlssNr::Screenshots::IsPresentRoute(0) && DlssNr::Screenshots::IsPresentRoute(1) &&
+           DlssNr::Screenshots::IsPresentRoute(2) && !DlssNr::Screenshots::IsPresentRoute(3));
     for (unsigned int mask = 0; mask < 8; ++mask)
     {
         assert(DlssNr::Screenshots::AvailableSelection(mask, false) == (mask & 2u));
@@ -516,7 +525,8 @@ int main(int argc, char** argv)
         const auto firstOutput = FindScreenshot(fullDir, "NRON");
         verifyPng(firstOutput, 7, 5, {72, 72, 72});
         capture.request(GetTickCount64(), 0, 1, true);
-        assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 701, "next output"));
+        assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 701, "next output",
+            DlssNr::Screenshots::Identity {2, 0, 0, 19, 3}));
         assert(Safety::Drain(10000)); finalOutput.poll(); capture.poll(fullDir);
         const auto secondOutput = FindScreenshot(fullDir, "NRON", firstOutput);
         verifyPng(secondOutput, 7, 5, {16, 16, 16});

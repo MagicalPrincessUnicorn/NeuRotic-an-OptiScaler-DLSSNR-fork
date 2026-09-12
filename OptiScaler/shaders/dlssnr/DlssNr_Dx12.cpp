@@ -6089,8 +6089,9 @@ void RequestComparisonScreenshot()
         return;
     }
     const bool performance = !present && enabled && runBeforeSr && !g_nr.nativeRayReconstructionActive &&
-                             (selected & Screenshots::Before) && PerformanceScreenshotBackendAvailable();
-    const bool nativePair = !present && enabled && (!runBeforeSr || g_nr.nativeRayReconstructionActive || performance);
+                             PerformanceScreenshotBackendAvailable();
+    const bool nativePair = Screenshots::NativePairAvailable(route, enabled, runBeforeSr,
+        g_nr.nativeRayReconstructionActive, PerformanceScreenshotBackendAvailable());
     g_screenshotSelection = Screenshots::AvailableSelection(selected, present, enabled, nativePair);
     if (!g_screenshotSelection)
     {
@@ -6178,8 +6179,8 @@ void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice,
          !currentSettings || !g_screenshotConfig || !g_screenshotConfig->SameConfiguration(*currentSettings) ||
          g_screenshotDevice != g_generationDevice || g_screenshotFeatureBuilds != g_featureBuilds ||
          runBeforeSr != g_screenshotRunBeforeSr ||
-         ((!present && enabled && (!runBeforeSr || g_nr.nativeRayReconstructionActive ||
-            ((g_screenshotSelection & Screenshots::Before) && PerformanceScreenshotBackendAvailable()))) != g_screenshotNativePair) ||
+         (Screenshots::NativePairAvailable(route, enabled, runBeforeSr, g_nr.nativeRayReconstructionActive,
+            PerformanceScreenshotBackendAvailable()) != g_screenshotNativePair) ||
          GetTickCount64() > g_screenshotDeadline))
     {
         ParkPerformanceScreenshot();
@@ -6215,9 +6216,11 @@ void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice,
     settings << "placement full upscaled swapchain output; NeuRotic_menu excluded; mode_switching false"
              << "\nNR_enabled " << enabled << "; route " << (present ? "Present" : "Native")
              << "; last_NR_evaluation " << g_nr.successfulEvaluations
-             << "\nCurrent output only; unavailable NR-off comparison was not rendered.";
+             << "\nCurrent output only; unavailable NR-off comparison was not rendered.\n"
+             << currentSettings->Describe();
     if (!g_screenshotSubmission.submit(queue.Get(), output.Get(), g_screenshots,
-        enabled ? "Current-output" : "NR-Off", g_nr.successfulEvaluations, settings.str()))
+        enabled ? "Current-output" : "NR-Off", g_nr.successfulEvaluations, settings.str(),
+        Screenshots::Identity {route, 0, 0, g_featureBuilds, swapChain3->GetCurrentBackBufferIndex()}))
         LOG_WARN("Screenshot: {}", g_screenshots.status());
 }
 
@@ -6264,7 +6267,8 @@ bool NativeComparisonScreenshotAvailable()
     }
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
-    return eligible && (!runBeforeSr || g_nr.nativeRayReconstructionActive || PerformanceScreenshotBackendAvailable());
+    return Screenshots::NativePairAvailable(0, eligible, runBeforeSr, g_nr.nativeRayReconstructionActive,
+        PerformanceScreenshotBackendAvailable());
 }
 
 std::string PresentStageCaptureStatus()

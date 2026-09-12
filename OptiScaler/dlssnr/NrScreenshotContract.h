@@ -6,6 +6,11 @@
 namespace DlssNr::Screenshots
 {
 inline bool IsPresentRoute(unsigned int route) { return route == 1 || route == 2; }
+inline bool NativePairAvailable(unsigned int route, bool enabled, bool beforeSr,
+                                bool rayReconstruction, bool performanceBackend)
+{
+    return route == 0 && enabled && (!beforeSr || rayReconstruction || performanceBackend);
+}
 inline const char* RouteName(unsigned int route)
 {
     return route == 0 ? "Native Temporal" : route == 1 ? "Present Image Only" :
