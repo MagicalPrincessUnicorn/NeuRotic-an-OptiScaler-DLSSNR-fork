@@ -63,6 +63,27 @@ int main()
         }
     assert(attempts == 523 && published == 421 && transitions == 1);
     Ledger ledger;
+    // Captured Wilds interleaving: N is complete and being presented when the
+    // producer publishes N+1 constants. Select N without consuming N+1.
+    ledger.Constants(14681, 0); ledger.Tags(14681, 0);
+    ledger.Constants(14682, 0);
+    auto snapshot = ledger.Inspect();
+    assert(snapshot.constants == 14683 && snapshot.tags == 14682 && snapshot.consumed == 0);
+    const auto presented = ledger.Claim(14682, true);
+    assert(presented.valid && presented.key == 14682);
+    ledger.Tags(14682, 0);
+    snapshot = ledger.Inspect();
+    assert(snapshot.constants == snapshot.tags && snapshot.consumed == 14682);
+    const auto next = ledger.Claim(14683, true);
+    assert(next.valid && next.key == 14683); // future frame was not consumed by N
+    assert(!ledger.Claim(14683, true).valid);
+    Ledger generationLedger;
+    generationLedger.Constants(7, 0, 1); generationLedger.Tags(7, 0, 1);
+    assert(!generationLedger.Current(2)); // same token from an old provider generation
+    generationLedger.Reset();
+    generationLedger.Constants(7, 0, 2); generationLedger.Tags(7, 0, 2);
+    assert(generationLedger.Claim(8, true, 2).valid);
+    ledger.Reset();
     assert(!ledger.Claim().valid);
     ledger.Constants(0, 0);
     assert(ledger.Current() == 1);
@@ -98,20 +119,42 @@ int main()
     ledger.LegacyTags(0); ledger.Constants(2, 0);
     assert(!ledger.Claim().valid); // legacy tags cannot be assigned to a future token
 
+    // Explicit Present identity fails closed and stays thread-local.
+    ledger.Reset();
+    ledger.Constants(30, 0); ledger.Tags(30, 0);
+    assert(!ledger.Claim(0, true).valid);
+    PresentStart(30);
+    assert(PresentFrame() == 31);
+    assert(ledger.Claim(PresentFrame(), true).valid);
+    std::thread markerThread([] { assert(!PresentFrame()); PresentStart(31); assert(PresentFrame() == 32); PresentEnd(31); });
+    markerThread.join();
+    assert(PresentFrame() == 31);
+    PresentStart(32); // overlapping marker on one thread is ambiguous
+    assert(!PresentFrame());
+    PresentEnd(32);
+    assert(!PresentFrame());
+    PresentStart(30); PresentMarkerFailed(); assert(!PresentFrame());
+
     State().swapchains = 1;
     ObserveConstants(23, 0); ObserveTags(23, 0);
+    PresentStart(23);
     std::atomic<int> successes {0};
     std::vector<std::thread> workers;
     for (int i = 0; i < 16; ++i)
-        workers.emplace_back([&] { if (Claim().valid) ++successes; });
+        workers.emplace_back([&] {
+            PresentStart(23);
+            if (Claim(true).valid) ++successes;
+            PresentEnd(23);
+        });
     for (auto& worker : workers) worker.join();
     assert(successes == 1);
+    PresentEnd(23);
     State().swapchains = 2;
     ObserveConstants(24, 0); ObserveTags(24, 0);
     assert(!CurrentFrame() && !Claim().valid);
     State().swapchains = 1;
     ObserveConstants(25, 0); ObserveTags(25, 0);
-    assert(Claim().valid);
+    PresentStart(25); assert(Claim(true).valid); PresentEnd(25);
     State().swapchains = 0;
     assert(!Provider().known);
     PublishProvider(true, true);

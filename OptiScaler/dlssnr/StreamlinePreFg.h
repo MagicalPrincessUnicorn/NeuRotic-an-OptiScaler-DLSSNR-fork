@@ -44,6 +44,16 @@ static decltype(&slSetTag) setLegacyTags = nullptr;
 static decltype(&slSetConstants) setConstants = nullptr;
 static thread_local bool forwardingPresent = false;
 
+inline void TraceLedger(const char* operation, uint32_t frame, uint32_t viewport,
+                        Ledger::Snapshot before, Ledger::Snapshot after) noexcept
+{
+    NR_FRAME_TRACE("nr-ledger", "operation={} frame={} viewport={} beforeConstants={} beforeTags={} "
+        "beforeConsumed={} constants={} tags={} consumed={} claims={} foreignConstants={} foreignTags={} legacy={}",
+        operation, frame, viewport, before.constants, before.tags, before.consumed,
+        after.constants, after.tags, after.consumed, after.sequence,
+        after.foreignConstants, after.foreignTags, after.legacy);
+}
+
 inline bool FromInterposer(void* function)
 {
     HMODULE owner = nullptr;
@@ -67,7 +77,11 @@ template<class F> bool Attach(F& original, void* target, F hook)
 inline sl::Result Tags(const sl::FrameToken& frame, const sl::ViewportHandle& viewport,
     const sl::ResourceTag* tags, uint32_t count, sl::CommandBuffer* list)
 {
+    NR_FRAME_TRACE("nr-api", "api=tags phase=enter frame={} viewport={} count={} list={:p}",
+        static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport), count, static_cast<void*>(list));
     const auto result = setTags(frame, viewport, tags, count, list);
+    NR_FRAME_TRACE("nr-api", "api=tags phase=return frame={} viewport={} result={}",
+        static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport), static_cast<unsigned int>(result));
     if (result == sl::Result::eOk && tags)
         for (uint32_t i = 0; i < count; ++i)
             if (tags[i].resource && tags[i].resource->native &&
@@ -79,14 +93,22 @@ inline sl::Result Tags(const sl::FrameToken& frame, const sl::ViewportHandle& vi
 inline sl::Result Constants(const sl::Constants& values, const sl::FrameToken& frame,
     const sl::ViewportHandle& viewport)
 {
+    NR_FRAME_TRACE("nr-api", "api=constants phase=enter frame={} viewport={}",
+        static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport));
     const auto result = setConstants(values, frame, viewport);
+    NR_FRAME_TRACE("nr-api", "api=constants phase=return frame={} viewport={} result={}",
+        static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport), static_cast<unsigned int>(result));
     if (result == sl::Result::eOk) ObserveConstants(static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport));
     return result;
 }
 inline sl::Result LegacyTags(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
                             uint32_t count, sl::CommandBuffer* list)
 {
+    NR_FRAME_TRACE("nr-api", "api=legacy-tags phase=enter viewport={} count={} list={:p}",
+        static_cast<uint32_t>(viewport), count, static_cast<void*>(list));
     const auto result = setLegacyTags(viewport, tags, count, list);
+    NR_FRAME_TRACE("nr-api", "api=legacy-tags phase=return viewport={} result={}",
+        static_cast<uint32_t>(viewport), static_cast<unsigned int>(result));
     if (result == sl::Result::eOk && tags)
         for (uint32_t i = 0; i < count; ++i)
             if (tags[i].resource && tags[i].resource->native &&
@@ -145,7 +167,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         owner->providerGeneration = provider.generation;
         owner->startup.Reset();
     }
-    auto frame = Claim();
+    auto frame = Claim(fg);
     frame.providerGeneration = provider.generation;
     frame.diagnosticClaim = FgLifecycle::Read();
     const auto nativeFg = NativeFg();
@@ -411,6 +433,7 @@ inline void Uninstall()
     detach(upgrade, &Upgrade); detach(setTags, &Tags); detach(setLegacyTags, &LegacyTags); detach(setConstants, &Constants);
     if (DetourTransactionCommit() == NO_ERROR)
     {
+        ledgerObserver.store(nullptr, std::memory_order_relaxed);
         factory0 = factory1 = nullptr; factory2 = nullptr;
         createChain = nullptr; createHwnd = nullptr;
         present = nullptr; present1 = nullptr; resize = nullptr; resize1 = nullptr;
@@ -426,6 +449,7 @@ inline void Install(HMODULE interposer)
     std::lock_guard lock(hookMutex);
     if (module) return;
     module = interposer;
+    if (FrameTrace::AssociationRequested()) ledgerObserver.store(&TraceLedger, std::memory_order_relaxed);
     getToken = reinterpret_cast<decltype(getToken)>(KernelBaseProxy::GetProcAddress_()(module, "slGetNewFrameToken"));
     auto address = [](const char* name) { return reinterpret_cast<void*>(KernelBaseProxy::GetProcAddress_()(module, name)); };
     // Attach after the existing OptiScaler hooks: each trampoline preserves them.

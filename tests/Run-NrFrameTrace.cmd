@@ -9,7 +9,7 @@ C:\OptiScaler-NR-Dev\logs\nr_frame_trace_test.exe
 if errorlevel 1 (popd & exit /b 1)
 cl /nologo /std:c++20 /utf-8 /EHsc /W4 /DSPDLOG_USE_STD_FORMAT /I OptiScaler /I external\spdlog\include tests\nr_frame_trace_runtime.cpp /Fe:C:\OptiScaler-NR-Dev\logs\nr_frame_trace_runtime_test.exe /Fo:C:\OptiScaler-NR-Dev\logs\nr_frame_trace_runtime_test.obj
 if errorlevel 1 (popd & exit /b 1)
-for %%m in (off invalid invalid-trigger on delayed) do (
+for %%m in (off invalid invalid-trigger invalid-profile on delayed association) do (
     C:\OptiScaler-NR-Dev\logs\nr_frame_trace_runtime_test.exe %%m
     if errorlevel 1 (popd & exit /b 1)
 )

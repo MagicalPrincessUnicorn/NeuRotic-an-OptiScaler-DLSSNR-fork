@@ -1604,6 +1604,9 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(const char* functionName)
 
 sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
 {
+    if (marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd)
+        NR_FRAME_TRACE("nr-pcl", "phase=enter marker={} frame={} path=existing-hook",
+            static_cast<unsigned int>(marker), static_cast<uint32_t>(frame));
     // if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
     //     Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
     //{
@@ -1660,7 +1663,21 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
         }
     }
 
-    return o_slPCLSetMarker(marker, frame);
+    const auto markerResult = o_slPCLSetMarker(marker, frame);
+    if (marker == sl::PCLMarker::ePresentStart)
+    {
+        if (markerResult == sl::Result::eOk) DlssNr::PreFg::PresentStart(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
+    else if (marker == sl::PCLMarker::ePresentEnd)
+    {
+        if (markerResult == sl::Result::eOk) DlssNr::PreFg::PresentEnd(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
+    if (marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd)
+        NR_FRAME_TRACE("nr-pcl", "phase=return marker={} frame={} result={} path=existing-hook",
+            static_cast<unsigned int>(marker), static_cast<uint32_t>(frame), static_cast<unsigned int>(markerResult));
+    return markerResult;
 }
 
 bool StreamlineHooks::hkpcl_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
@@ -1684,6 +1701,33 @@ bool StreamlineHooks::hkpcl_slOnPluginLoad(sl::param::IParameters* params, const
     return result;
 }
 
+namespace
+{
+std::atomic<decltype(&slPCLSetMarker)> associationPclMarker {nullptr};
+sl::Result AssociationPclMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
+{
+    const bool presentMarker = marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd;
+    if (presentMarker)
+        NR_FRAME_TRACE("nr-pcl", "phase=enter marker={} frame={} path=observer",
+            static_cast<unsigned int>(marker), static_cast<uint32_t>(frame));
+    const auto result = associationPclMarker.load(std::memory_order_acquire)(marker, frame);
+    if (marker == sl::PCLMarker::ePresentStart)
+    {
+        if (result == sl::Result::eOk) DlssNr::PreFg::PresentStart(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
+    else if (marker == sl::PCLMarker::ePresentEnd)
+    {
+        if (result == sl::Result::eOk) DlssNr::PreFg::PresentEnd(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
+    if (presentMarker)
+        NR_FRAME_TRACE("nr-pcl", "phase=return marker={} frame={} result={} path=observer",
+            static_cast<unsigned int>(marker), static_cast<uint32_t>(frame), static_cast<unsigned int>(result));
+    return result;
+}
+}
+
 void* StreamlineHooks::hkpcl_slGetPluginFunction(const char* functionName)
 {
     // LOG_DEBUG("{}", functionName);
@@ -1694,6 +1738,16 @@ void* StreamlineHooks::hkpcl_slGetPluginFunction(const char* functionName)
     {
         o_slPCLSetMarker = (decltype(&slPCLSetMarker)) o_pcl_slGetPluginFunction(functionName);
         return &hkslPCLSetMarker;
+    }
+
+    // The native provider's successful Present markers are the authoritative frame
+    // identity. Preserve the exact function/result; existing provider hooks above win.
+    if (strcmp(functionName, "slPCLSetMarker") == 0)
+    {
+        const auto original = reinterpret_cast<decltype(&slPCLSetMarker)>(o_pcl_slGetPluginFunction(functionName));
+        if (!original) return nullptr;
+        associationPclMarker.store(original, std::memory_order_release);
+        return reinterpret_cast<void*>(&AssociationPclMarker);
     }
 
     if (strcmp(functionName, "slOnPluginLoad") == 0)

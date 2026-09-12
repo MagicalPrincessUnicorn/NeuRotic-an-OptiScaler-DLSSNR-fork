@@ -1825,6 +1825,19 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             Config::Instance()->LogLevel.set_volatile_value(1);
 #endif
 
+        // An explicitly armed bounded frame trace must be self-recording. Keep these
+        // overrides volatile so diagnostics never rewrite the user's live INI.
+        char frameTraceSession[33] {};
+        if (GetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_SESSION", frameTraceSession,
+                                    static_cast<DWORD>(sizeof(frameTraceSession))) == 32)
+        {
+            Config::Instance()->LogToFile.set_volatile_value(true);
+            Config::Instance()->LogSingleFile.set_volatile_value(true);
+            Config::Instance()->LogFileName.set_volatile_value(
+                (Util::DllPath().parent_path() / L"OptiScaler.log").wstring());
+            Config::Instance()->LogLevel.set_volatile_value(1);
+        }
+
         PrepareLogger();
         NR_FG_EVENT("capture-start", "boundary=process-attach trigger=process-launch renderingChanges=false");
 

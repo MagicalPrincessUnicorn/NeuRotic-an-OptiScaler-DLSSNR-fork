@@ -26,9 +26,12 @@ int main(int argc, char** argv)
 {
     assert(argc == 2);
     const std::string_view mode(argv[1]);
-    const bool delayed = mode == "delayed";
+    const bool association = mode == "association";
+    const bool delayed = mode == "delayed" || association;
     const bool enabled = mode == "on" || delayed;
-    SetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_SESSION", enabled || mode == "invalid-trigger" ?
+    SetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_PROFILE", association ? "frame-association" :
+        mode == "invalid-profile" ? "unknown-profile" : nullptr);
+    SetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_SESSION", enabled || mode == "invalid-trigger" || mode == "invalid-profile" ?
         "0123456789abcdef0123456789abcdef" : mode == "invalid" ? "bad-session" : nullptr);
     SetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_TRIGGER", delayed ? "nr-enable" :
         mode == "invalid-trigger" ? "unknown-trigger" : nullptr);
@@ -61,6 +64,21 @@ int main(int argc, char** argv)
         assert(DlssNr::FrameTrace::Armed() && sink->starts == 1);
     }
     NR_FRAME_TRACE("probe", "value={}", ++evaluated);
+    if (association)
+    {
+        assert(evaluated == 0 && sink->count == 2); // filtered arguments are not evaluated
+        for (uint64_t i = 0; i < DlssNr::FrameTrace::Budget::Limit + 100; ++i)
+            assert(DlssNr::FrameTrace::Event("queue-execute-enter", "value={}", i) == 0);
+        assert(sink->count == 2); // high-volume events consume no association budget
+        NR_FRAME_TRACE("nr-ledger", "value={}", ++evaluated);
+        assert(evaluated == 1 && sink->last.find("seq=2 ") != std::string::npos);
+        for (uint64_t i = 0; i < DlssNr::FrameTrace::Budget::Limit + 100; ++i)
+            NR_FRAME_TRACE("nr-ledger", "value={}", i);
+        assert(sink->count == DlssNr::FrameTrace::Budget::Limit + 1);
+        assert(sink->last.find("kind=trace-ended") != std::string::npos);
+        std::cout << "Association profile: deferred start, filtering and bounded coverage PASS\n";
+        return 0;
+    }
     if (!enabled)
     {
         assert(evaluated == 0 && sink->count == 0);
