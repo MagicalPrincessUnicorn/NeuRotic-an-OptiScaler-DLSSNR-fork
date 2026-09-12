@@ -261,6 +261,41 @@ static bool MakeTex(ID3D11Device *dev, Tex *t, UINT w, UINT h, DXGI_FORMAT fmt,
     return true;
 }
 
+static bool PrintOutputHash(Host &h)
+{
+    D3D11_TEXTURE2D_DESC d = {};
+    h.output.tex->GetDesc(&d);
+    const UINT bytes = d.Format == DXGI_FORMAT_R16G16B16A16_FLOAT ? 8u : 4u;
+    d.Usage = D3D11_USAGE_STAGING; d.BindFlags = 0; d.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    d.MiscFlags = 0;
+    ID3D11Texture2D *staging = nullptr;
+    if (FAILED(h.dev->CreateTexture2D(&d, nullptr, &staging)) || staging == nullptr)
+        return false;
+    h.ctx->CopyResource(staging, h.output.tex);
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    if (FAILED(h.ctx->Map(staging, 0, D3D11_MAP_READ, 0, &mapped)))
+    { staging->Release(); return false; }
+    unsigned long long hash = 14695981039346656037ull;
+    for (UINT y = 0; y < h.out_h; ++y)
+    {
+        const auto *row = static_cast<const unsigned char *>(mapped.pData) + size_t(y) * mapped.RowPitch;
+        for (size_t x = 0; x < size_t(h.out_w) * bytes; ++x)
+            hash = (hash ^ row[x]) * 1099511628211ull;
+    }
+    h.ctx->Unmap(staging, 0);
+    staging->Release();
+    printf("OUTPUT frame=%d bytes=%zu hash=%016llx point=after-complete-before-game-copy\n",
+           h.frame, size_t(h.out_w) * h.out_h * bytes, hash);
+    return true;
+}
+
+static bool ParameterResourceUnchanged(NVSDK_NGX_Parameter *p, const char *name,
+                                       ID3D11Resource *expected)
+{
+    ID3D11Resource *observed = nullptr;
+    return p->Get(name, &observed) == NVSDK_NGX_Result_Success && observed == expected;
+}
+
 // One place, so the create block and the evaluate block cannot drift apart -- which
 // is a disagreement real games do have and this host should only produce on purpose.
 static unsigned int HostCreateFlags(const Host &h)
@@ -658,6 +693,13 @@ static bool RenderFrame(Host &h)
         if (NVSDK_NGX_SUCCEED(r)) ++h.delivered;
         else if (h.delivered == 0 || (h.evaluated % 600) == 0)
             printf("  EvaluateFeature frame %d -> 0x%08X\n", h.frame, r);
+        if (!ParameterResourceUnchanged(h.p, "Color", h.color.tex) ||
+            !ParameterResourceUnchanged(h.p, "Output", h.output.tex) ||
+            !ParameterResourceUnchanged(h.p, "Depth", h.depth.tex) ||
+            !ParameterResourceUnchanged(h.p, "MotionVectors", h.mv.tex))
+        { puts("FAIL: native evaluation resource parameter changed"); return false; }
+        if ((h.frame == 60 || h.frame == 120 || h.frame == 240) && !PrintOutputHash(h))
+        { puts("FAIL: native output hash unavailable"); return false; }
     }
 
 
