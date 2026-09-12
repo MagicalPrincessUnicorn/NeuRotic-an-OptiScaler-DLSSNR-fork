@@ -34,24 +34,55 @@ inline bool RenderRuntimeStatus(const std::optional<MenuStatus::RuntimeStatus>& 
         ImGui::Text("NR: %u x %u | Output: %u x %u", s.workWidth, s.workHeight, s.outputWidth, s.outputHeight);
     return true;
 }
+// Wrap at word boundaries when a sentence will not fit alongside its selector.
+inline bool SentenceCombo(const char* id, const char* prefix, const char* suffix, int* value,
+                          const char* const* items, int count)
+{
+    float widest = 0;
+    for (int i = 0; i < count; ++i) widest = (std::max)(widest, ImGui::CalcTextSize(items[i]).x);
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float width = widest + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2;
+    const bool fits = ImGui::GetContentRegionAvail().x >= width +
+        ImGui::CalcTextSize(prefix).x + ImGui::CalcTextSize(suffix).x + spacing * 3;
+    if (*prefix)
+    {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextWrapped("%s", prefix);
+        if (fits) ImGui::SameLine();
+    }
+    ImGui::SetNextItemWidth(fits ? width : -1.0f);
+    const bool changed = ImGui::Combo(id, value, items, count);
+    if (*suffix)
+    {
+        if (fits) ImGui::SameLine();
+        ImGui::TextWrapped("%s", suffix);
+    }
+    return changed;
+}
+
 // Shared by the production page and the headless ImGui navigation/layout fixture.
-// Stable IDs and full-width selectors accommodate translated preset names.
 template<class C> bool RenderControls(C& config)
 {
     bool changed = false;
     auto snapshot = config.GetDlssNrConfigSnapshot();
     int stage = Stage(snapshot);
-    ImGui::TextUnformatted("Processing stage");
-    ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::Combo("##NrStage", &stage, Stages, 2))
+    if (SentenceCombo("##NrStage", "Neural Rendering Injection", "Upscaling", &stage, Stages, 2))
     {
         SelectStage(config, stage);
         changed = true;
     }
     snapshot = config.GetDlssNrConfigSnapshot();
-    int method = int(snapshot.DlssNrRoute.value_or_default());
-    ImGui::TextUnformatted("Rendering method");
-    ImGui::SameLine();
+    const int route = int(snapshot.DlssNrRoute.value_or_default());
+    int method = route == 1 ? 2 : route == 2 ? 1 : 0;
+    static const char* orderedMethods[] = { "Native Temporal", "Present Enhanced", "Present Compatibility" };
+    ImGui::BeginDisabled(stage == 0);
+    if (SentenceCombo("##NrMethod", "Use", "Neural Rendering Mode", &method, orderedMethods, stage == 0 ? 1 : 3))
+    {
+        SelectMethod(config, method == 1 ? 2 : method == 2 ? 1 : 0);
+        changed = true;
+    }
+    ImGui::EndDisabled();
+    if (stage == 0) ImGui::TextWrapped("Present methods require After. Your After method is remembered.");
     ImGui::TextDisabled("(?)");
     if (ImGui::IsItemHovered())
     {
@@ -61,21 +92,11 @@ template<class C> bool RenderControls(C& config)
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::BeginDisabled(stage == 0);
-    if (ImGui::Combo("##NrMethod", &method, Methods, stage == 0 ? 1 : 3))
-    {
-        SelectMethod(config, method);
-        changed = true;
-    }
-    ImGui::EndDisabled();
     snapshot = config.GetDlssNrConfigSnapshot();
-    ImGui::TextUnformatted("Model resolution");
-    ImGui::SetNextItemWidth(-1.0f);
     if (method == 0)
     {
         int manual = Manual(snapshot) ? 1 : 0;
-        if (ImGui::Combo("##NrResolution", &manual, NativeResolutions, 2))
+        if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &manual, NativeResolutions, 2))
         {
             SelectManual(config, manual != 0);
             changed = true;
@@ -84,7 +105,7 @@ template<class C> bool RenderControls(C& config)
     else
     {
         int preset = Preset(PresentResolution::Selected(snapshot));
-        if (ImGui::Combo("##NrResolution", &preset, PresentPresets, 7))
+        if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &preset, PresentPresets, 7))
         {
             SelectPreset(config, preset);
             changed = true;

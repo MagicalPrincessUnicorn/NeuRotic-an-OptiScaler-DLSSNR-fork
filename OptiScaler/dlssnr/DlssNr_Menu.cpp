@@ -162,27 +162,24 @@ static void RenderMultipassMenu(Config* config, float menuResScale);
 
 void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status)
 {
-
+    Neurotic::EnglishPreview englishPreview;
     // DLSS Neural Rendering -----------------------------
     ImGui::Spacing();
-    if (auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
+    {
+    bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+    const bool wasEnabled = enabled;
+    auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen,
+                                    &enabled, "Enable Neural Rendering");
+    if (enabled != wasEnabled)
+    {
+        config->SetDlssNrEnabled(enabled);
+        NoteNrUserToggle();
+    }
+    if (ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
-
-        bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
-        const auto padding = ImGui::GetStyle().FramePadding;
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding.x, padding.y + 2.0f * menuResScale));
-        if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
-        {
-            config->SetDlssNrEnabled(enabled);
-            NoteNrUserToggle();
-        }
-        ImGui::PopStyleVar();
-        HelpMarker("Enables Neural Rendering on the selected route. Requires NVIDIA's nvngx_dlssnr.dll model "
-                   "and the nvngx.dll_dlssnr.dll forwarder supplied with this package.");
-        ImGui::Spacing();
 
         if (StageUi::RenderControls(*config)) CancelNrEdits();
         auto uiConfig = config->GetDlssNrConfigSnapshot();
@@ -205,8 +202,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         else
             ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
 
-        RenderPassCountSelector(config);
-
+        const auto renderReadouts = [&](bool detailed)
+        {
         // The setting requests Pre-SR. It is deliberately not described as active until the
         // replacement-resource, reset, seed, and display-ready checks have all passed.
         const auto nrTelemetry = DlssNr::Telemetry();
@@ -233,6 +230,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         const bool nativeOutput = enabled && !presentRoute && !vulkan && nativeFresh &&
             nrTelemetry.running && !nrTelemetry.outputQuarantined && !nrTelemetry.transitionPending &&
             (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+        if (!detailed)
+        {
         if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
             ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
         const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
@@ -306,7 +305,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
             HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
         }
-        if (auto diagnostics = ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics"); diagnostics.IsHeaderOpen())
+        }
+        if (detailed)
         {
         ScopedIndent diagnosticIndent {};
         const auto guides = PresentGuides::Instance().Inspect();
@@ -513,14 +513,11 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 
         }
 
-        bool applyModel = config->DlssNrApplyModel.value_or_default();
-        if (ImGui::Checkbox("Apply the model", &applyModel))
-            config->DlssNrApplyModel = applyModel;
-        HelpMarker("Shows the model's effect. Turn off to compare with the original image while the model keeps running. "
-                   "Use Enable Neural Rendering to stop processing.");
-        ImGui::Spacing();
+        };
         ImGui::PushItemWidth(220.0f * menuResScale);
 
+        const auto renderResampling = [&]
+        {
         if (auto resampling = ScopedCollapsingHeader("Advanced resampling##NrResampling"); resampling.IsHeaderOpen())
         {
         ScopedIndent resamplingIndent {};
@@ -593,6 +590,15 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         }
         ImGui::EndDisabled();
         }
+        };
+        // The ordinary downscaler sits directly below manual resolution.
+        if (!presentRoute && config->DlssNrWorkingScale.value_or_default() > 1.0f)
+        {
+            static const char* names[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+            int downscaler = std::clamp(int(config->DlssNrScalingDownscaler.value_or_default()), 0, 7);
+            if (ImGui::Combo("Downscaler##NrDownscaler", &downscaler, names, 8))
+                config->DlssNrScalingDownscaler = (Scaler) downscaler;
+        }
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
         int preset = (int) config->DlssNrPreset.value_or_default();
         if (ImGui::Combo("Model preset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
@@ -602,7 +608,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
                        "\nthe same number means something different here.");
 
-        static const char* nrStyleNames[] = { "Default (standard)", "Natural", "Cinematic" };
+        static const char* nrStyleNames[] = { "Standard", "Natural", "Cinematic" };
         int style = (int) config->DlssNrStyle.value_or_default();
 
         if (style > 2)
@@ -621,7 +627,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                    "\n\nRead when the model is built, so a change rebuilds it after a moment. The"
                    "\nnames come from community testing; NVIDIA ships no names in the binaries.");
 
-        ImGui::SeparatorText("How much of it lands");
+        DeferredSlider("Model Strength", &config->DlssNrIntensity, 0.0f, 2.0f, 1.0f);
 
         float transfer = config->DlssNrTransferStrength.value_or_default();
         if (ImGui::SliderFloat("Detail strength", &transfer, 0.0f, 2.0f, "%.2f"))
@@ -662,6 +668,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "\nand rolls off at the edge of what the display can show rather than clipping"
                        "\ninto a flat blown patch. 1 is the model's own colour; push past it for punch.");
 
+        const auto renderProxy = [&]
+        {
         // Experimental. 0 off (soft knee), 1 Neutwo + our composition, 2 Neutwo + pure-inverse replace,
         // 3 hybrid+composed, 4 hybrid+replace (identity midtones + unclipped highlights). Always shown.
         static const char* reversibleNames[] = { "Off (soft knee)", "Neutwo proxy + composed",
@@ -694,19 +702,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "\nstable. If you love the Replace look but the flicker bothers you, use this."
                        "\n\nOff is byte-identical to before.");
 
-        ImGui::Spacing();
-        if (auto ch = ScopedCollapsingHeader("Model##DlssNrModelSection"); ch.IsHeaderOpen())
-        {
-        ScopedIndent indent {};
-        ImGui::Spacing();
-        ScopedNestedTextWrap nestedWrap {};
-
-        ImGui::TextUnformatted("Read when the model is built, so a change rebuilds it after a moment.");
-
-        DeferredSlider("Intensity", &config->DlssNrIntensity, 0.0f, 2.0f, 1.0f);
-
-        HelpMarker("The model's own strength control, applied inside it. Distinct from detail"
-                       "\nstrength above, which scales the result afterwards.");
+        };
 
         DeferredSlider("Local structure", &config->DlssNrLocalStructure, 0.0f, 2.0f, 1.0f);
 
@@ -723,7 +719,18 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             config->DlssNrAutoMask = autoMask;
 
         HelpMarker("Lets the model find skin itself rather than treating the frame uniformly.");
-        }
+
+        renderReadouts(false);
+        bool applyModel = config->DlssNrApplyModel.value_or_default();
+        if (ImGui::Checkbox("Apply the model", &applyModel))
+            config->DlssNrApplyModel = applyModel;
+        HelpMarker("Shows the whole chain's effect. Turn off to compare with the original image while the models keep running.");
+
+        if (auto advanced = ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced"); advanced.IsHeaderOpen())
+        {
+        renderReadouts(true);
+        renderResampling();
+        if (auto proxy = ScopedCollapsingHeader("Reversible proxy##NrProxy"); proxy.IsHeaderOpen()) renderProxy();
 
         ImGui::Spacing();
         if (auto ch = ScopedCollapsingHeader("Colour##DlssNrColourSection"); ch.IsHeaderOpen())
@@ -1408,8 +1415,10 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "\ncentred on grey. A flat grey frame there means it is doing nothing.");
         }
 
+        }
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
+    }
     }
 
     // Multipass belongs to the same Neural Rendering page, but stays independently collapsible so

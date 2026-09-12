@@ -10,8 +10,8 @@ inline int DisplayPercent(float scale)
 {
     return std::isfinite(scale) ? int(std::lround(std::clamp(scale, 0.25f, 2.0f) * 100.0f)) : 100;
 }
-inline constexpr const char* Stages[] = { "Before game upscaling", "After game upscaling" };
-inline constexpr const char* Methods[] = { "Native Temporal", "Present (Compatibility)", "Present (Enhanced)" };
+inline constexpr const char* Stages[] = { "Before", "After" };
+inline constexpr const char* Methods[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
 inline constexpr const char* NativeResolutions[] = { "Automatic", "Manual" };
 inline constexpr const char* PresentPresets[] = {
     "Follow Game Render Resolution (Automatic)", "Full Output (100%)", "Ultra Quality (77%)",

@@ -19,14 +19,26 @@ class ScopedIndent
 class ScopedCollapsingHeader
 {
   public:
-    explicit ScopedCollapsingHeader(const char* label, ImGuiTreeNodeFlags flags = 0)
+    explicit ScopedCollapsingHeader(const char* label, ImGuiTreeNodeFlags flags = 0,
+                                   bool* enabled = nullptr, const char* toggleLabel = "Enabled")
     {
         ImGui::PushID(label);
 
         ImGui::BeginChild("##CollapsingHeaderChild", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        _headerOpen = ImGui::CollapsingHeader(label, flags);
+        if (enabled && ImGui::BeginTable("##HeaderControls", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Section", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Toggle", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableNextColumn();
+            _headerOpen = ImGui::CollapsingHeader(label, flags);
+            ImGui::TableNextColumn();
+            ImGui::Checkbox(toggleLabel, enabled);
+            ImGui::EndTable();
+        }
+        else
+            _headerOpen = ImGui::CollapsingHeader(label, flags);
         _active = true;
     }
 
