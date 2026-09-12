@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$PackageRoot,
-      [string]$EvidenceRoot = 'C:\OptiScaler-NR-Dev\logs\neurotic-simple-installer')
+      [string]$EvidenceRoot = 'C:\OptiScaler-NR-Dev\logs\neurotic-simple-installer',
+      [switch]$HardeningOnly)
 $ErrorActionPreference='Stop'
 $PackageRoot=(Resolve-Path -LiteralPath $PackageRoot).Path
 $testRoot=Join-Path $EvidenceRoot ('installer-fixtures-' + [Guid]::NewGuid().ToString('N'))
@@ -85,6 +86,8 @@ function Encoded([string]$Text,[string]$Kind){
 foreach($file in $manifest.files){Check ((HashFile (Join-Path $PackageRoot $file.path)) -eq $file.sha256) ('Package hash: '+$file.path)}
 Check (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'Public package contains NeuRotic-Uninstall.cmd'
 $candidateHash=HashFile (Join-Path $PackageRoot 'payload\OptiScaler.dll')
+$supported=@('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')
+if (-not $HardeningOnly) {
 
 # No occupied target: the actual customer launcher asks for the proxy name, then installs with no INSTALL text.
 $fresh=Fixture ('fresh unicode '+$unicode) $false
@@ -343,6 +346,10 @@ RunEngine 'baseline-install' @('-GameExecutable',(Join-Path $baseline 'FixtureGa
 RunEngine 'baseline-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $baseline 'FixtureGame.exe'),'-UninstallMode','KeepSettings','-ConfirmUninstall') | Out-Null
 Check ((HashFile (Join-Path $baseline 'dxgi.dll')) -eq $baselineProxy -and (HashFile (Join-Path $baseline 'OptiScaler.ini')) -eq $baselineIni) 'Keep Settings restores an existing proxy and original root INI exactly'
 Check ((Get-Content -Raw -LiteralPath (Join-Path $baseline 'NeuRotic\UserData\OptiScaler.ini')) -match 'current-neurotic-settings') 'Keep Settings saves current NeuRotic settings separately when an original INI existed'
+RunEngine 'baseline-reinstall-settings' @('-GameExecutable',(Join-Path $baseline 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','Replace') | Out-Null
+Check ((Get-Content -Raw -LiteralPath (Join-Path $baseline 'OptiScaler.ini')) -match 'current-neurotic-settings') 'Reinstall reuses saved settings when the restored original INI is still unchanged'
+RunEngine 'baseline-reinstall-remove' @('-Uninstall','-GameExecutable',(Join-Path $baseline 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
+Check ((HashFile (Join-Path $baseline 'OptiScaler.ini')) -eq $baselineIni) 'Retained-settings reinstall still restores the exact original INI'
 
 $full=Fixture 'public-full-cleanup' $true
 RunEngine 'full-install' @('-GameExecutable',(Join-Path $full 'FixtureGame.exe'),'-ProxyName','version.dll') | Out-Null
@@ -356,3 +363,124 @@ RunEngine 'manual-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $manual
 Check (-not (Test-Path -LiteralPath (Join-Path $manual 'dbghelp.dll')) -and (Test-Path -LiteralPath (Join-Path $manual 'nvngx_dlssnr.dll'))) 'Manual recovery removes only the explicitly selected verified proxy and preserves the model'
 
 Write-Output "PASS: public Setup, intelligent uninstall, exact recovery and atomic conflict flows. Evidence: $testRoot"
+}
+
+# Regression gates from public-package review. These use the actual CMD entry point.
+$cancelled=Fixture 'cancel-uninstall'
+RunEngine 'cancel-install' @('-GameExecutable',(Join-Path $cancelled 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+$cancelLauncher=Join-Path $cancelled 'Uninstall NeuRotic.cmd'
+$before=Inventory $cancelled
+RunCmd 'cancel-uninstall-menu' $cancelLauncher @() $true @('0','') | Out-Null
+Check ((Inventory $cancelled) -eq $before) 'Cancelling uninstall preserves the launcher and game files'
+RunCmd 'cancel-uninstall-confirmation' $cancelLauncher @('-UninstallMode','KeepSettings') $true @('NO','') | Out-Null
+RunCmd 'installed-uninstall-preview' $cancelLauncher @('-UninstallMode','Full','-CheckOnly') $true @('') | Out-Null
+Check ((Inventory $cancelled) -eq $before) 'Declined confirmation and installed preview preserve the launcher'
+
+# Missing managed files can be repaired, then uninstalled through the original baseline.
+Remove-Item -LiteralPath (Join-Path $cancelled 'dxgi.dll') -Force
+RunEngine 'repair-missing-proxy' @('-GameExecutable',(Join-Path $cancelled 'FixtureGame.exe'),'-ExistingInstallAction','Repair') | Out-Null
+Check ((HashFile (Join-Path $cancelled 'dxgi.dll')) -eq $candidateHash) 'Repair recreates a missing managed proxy'
+RunEngine 'repair-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $cancelled 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $cancelled 'dxgi.dll'))) 'Repaired installation uninstalls to the original absent proxy'
+
+$repeat=Fixture 'repeat-proxy'
+RunEngine 'repeat-proxy-first' @('-GameExecutable',(Join-Path $repeat 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+foreach($name in @('winmm.dll','version.dll','dxgi.dll')) {
+    RunEngine ('repeat-proxy-'+$name) @('-GameExecutable',(Join-Path $repeat 'FixtureGame.exe'),'-ProxyName',$name,'-ExistingInstallAction','ChangeProxy') | Out-Null
+}
+RunEngine 'repeat-proxy-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $repeat 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check (-not @(Get-ChildItem -LiteralPath $repeat -File | Where-Object Name -in @('dxgi.dll','winmm.dll','version.dll')).Count) 'Repeated proxy changes and change-back restore the original baseline'
+
+$unknown=Fixture 'preserve-untracked'
+RunEngine 'unknown-install' @('-GameExecutable',(Join-Path $unknown 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+$unknownBackup=Backup $unknown
+[IO.File]::WriteAllText((Join-Path $unknown 'NeuRotic\personal-notes.txt'),'user notes')
+[IO.File]::WriteAllText((Join-Path $unknownBackup 'personal-backup.txt'),'user backup')
+RunEngine 'unknown-full-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $unknown 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check ((Get-Content -Raw -LiteralPath (Join-Path $unknown 'NeuRotic\personal-notes.txt')) -eq 'user notes' -and
+    (Get-Content -Raw -LiteralPath (Join-Path $unknownBackup 'personal-backup.txt')) -eq 'user backup') 'Full cleanup preserves user-added files inside product and backup folders'
+
+# Distinct legacy generations are represented by a historical proxy transition.
+$legacy=Fixture 'legacy-migration'
+RunEngine 'legacy-first' @('-GameExecutable',(Join-Path $legacy 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+RunEngine 'legacy-second' @('-GameExecutable',(Join-Path $legacy 'FixtureGame.exe'),'-ProxyName','winmm.dll','-ExistingInstallAction','ChangeProxy') | Out-Null
+$legacyState=Join-Path $legacy 'NeuRotic\Installer\Current-Install.json'
+Remove-Item -LiteralPath $legacyState -Force
+RunEngine 'legacy-upgrade' @('-GameExecutable',(Join-Path $legacy 'FixtureGame.exe'),'-ProxyName','winmm.dll','-ExistingProxyAction','Replace') | Out-Null
+$migrated=Get-Content -Raw -LiteralPath $legacyState|ConvertFrom-Json
+Check ($migrated.restore_chain.Count -eq 3) 'Legacy upgrade retains all three generations'
+RunEngine 'legacy-migrated-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $legacy 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $legacy 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $legacy 'winmm.dll'))) 'Legacy history is imported in the correct uninstall order'
+
+# Load only function definitions for deterministic failure injection. No product hooks or source rewrites.
+$tokens=$null;$errors=$null
+$engineAst=[Management.Automation.Language.Parser]::ParseFile($engine,[ref]$tokens,[ref]$errors)
+foreach($definition in $engineAst.EndBlock.Statements | Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst]}) {
+    . ([scriptblock]::Create($definition.Extent.Text))
+}
+$allowedProxies=$supported
+$GameDirectory=$null;$GameExecutable=$null;$UninstallMode='KeepSettings';$ConfirmUninstall=$true
+$CheckOnly=$false;$Installed=$false;$RemovePrivateModel=$false;$LegacyManifest=$null;$ManualProxyName=$null
+$tx=Fixture 'transaction-failure'
+RunEngine 'tx-install-first' @('-GameExecutable',(Join-Path $tx 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+RunEngine 'tx-install-second' @('-GameExecutable',(Join-Path $tx 'FixtureGame.exe'),'-ExistingInstallAction','Update') | Out-Null
+$txStatePath=Join-Path $tx 'NeuRotic\Installer\Current-Install.json'
+$txState=Get-Content -Raw -LiteralPath $txStatePath|ConvertFrom-Json
+$txChain=@($txState.restore_chain);[array]::Reverse($txChain)
+$stateHash=HashFile $txStatePath
+$iniHash=HashFile (Join-Path $tx 'OptiScaler.ini')
+$olderBytes=[IO.File]::ReadAllBytes($txChain[1])
+$older=Read-InstallRecord $txChain[1]
+($older.files | Where-Object path -eq 'dxgi.dll').installed_hash='0'*64
+SaveRecord $txChain[1] $older
+RunEngine 'whole-chain-preflight-refusal' @('-Uninstall','-GameExecutable',(Join-Path $tx 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') $false | Out-Null
+Check ((HashFile $txStatePath) -eq $stateHash -and (Read-InstallRecord $txChain[0]).status -eq 'installed-verified' -and
+    -not (Test-Path -LiteralPath (Join-Path $tx 'NeuRotic\Installer\Uninstall-Transaction.json'))) 'Invalid older history fails preflight before the newest generation changes'
+[IO.File]::WriteAllBytes($txChain[1],$olderBytes)
+$saveRecordOriginal=${function:SaveRecord}
+$script:failRecord=$txChain[1]
+function SaveRecord([string]$Path,$Value) {
+    if($Path -eq $script:failRecord -and $Value.status -eq 'restored'){throw 'Injected late record failure'}
+    & $saveRecordOriginal $Path $Value
+}
+$GameDirectory=$tx;$failed=$false
+try { Invoke-PublicUninstall | Out-Null } catch {$failed=$true} finally {Set-Item Function:SaveRecord $saveRecordOriginal}
+Check ($failed -and (HashFile $txStatePath) -eq $stateHash -and (HashFile (Join-Path $tx 'dxgi.dll')) -eq $candidateHash -and
+    (HashFile (Join-Path $tx 'OptiScaler.ini')) -eq $iniHash) 'Late uninstall failure restores runtime, settings and managed state across the whole chain'
+foreach($path in $txChain){Check ((Read-InstallRecord $path).status -eq 'installed-verified') 'Rollback restores each installation record status'}
+
+# Model an abrupt exit after a restore completed, then recover in a fresh PowerShell process.
+$journal=New-UninstallTransaction $tx $txChain
+[void](Invoke-RestoreRecord $txChain[0])
+RunEngine 'interrupted-uninstall-recovery' @('-Uninstall','-GameExecutable',(Join-Path $tx 'FixtureGame.exe'),'-UninstallMode','KeepSettings','-ConfirmUninstall') | Out-Null
+Check ((HashFile $txStatePath) -eq $stateHash -and (Read-InstallRecord $txChain[0]).status -eq 'installed-verified') 'A fresh process recovers an interrupted uninstall before retry'
+RunEngine 'recovered-uninstall-retry' @('-Uninstall','-GameExecutable',(Join-Path $tx 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $tx 'dxgi.dll'))) 'Uninstall succeeds after recovery'
+
+$cleanupFixture=Fixture 'cleanup-retry'
+RunEngine 'cleanup-retry-install' @('-GameExecutable',(Join-Path $cleanupFixture 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+$removeOriginal=${function:Remove-OwnedFile}
+function Remove-OwnedFile([string]$Root,[string]$Relative,[string]$ExpectedHash) {
+    if($Relative -match '^NeuRotic-backups\\.*INSTALL-MANIFEST.json$'){throw 'Injected cleanup interruption'}
+    & $removeOriginal $Root $Relative $ExpectedHash
+}
+$GameDirectory=$cleanupFixture;$UninstallMode='Full';$failed=$false
+try {Invoke-PublicUninstall|Out-Null} catch {$failed=$true} finally {Set-Item Function:Remove-OwnedFile $removeOriginal}
+Check ($failed -and -not (Test-Path -LiteralPath (Join-Path $cleanupFixture 'dxgi.dll')) -and
+    (Test-Path -LiteralPath (Join-Path $cleanupFixture 'NeuRotic\Installer\Cleanup-Pending.json'))) 'Cleanup interruption retains a receipt after restoring the game'
+RunEngine 'cleanup-resume' @('-Uninstall','-GameExecutable',(Join-Path $cleanupFixture 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $cleanupFixture 'NeuRotic')) -and -not (Test-Path -LiteralPath (Join-Path $cleanupFixture 'NeuRotic-backups'))) 'Cleanup resumes in a fresh process and removes only remaining recorded files'
+
+$linked=Fixture 'linked-settings'
+$outside=Fixture 'linked-settings-target'
+RunEngine 'linked-settings-install' @('-GameExecutable',(Join-Path $linked 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+[IO.File]::WriteAllText((Join-Path $outside 'OptiScaler.ini'),'user data outside game')
+New-Item -ItemType Junction -Path (Join-Path $linked 'NeuRotic\UserData') -Value $outside | Out-Null
+RunEngine 'linked-settings-refusal' @('-Uninstall','-GameExecutable',(Join-Path $linked 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') $false | Out-Null
+Check ((Get-Content -Raw -LiteralPath (Join-Path $outside 'OptiScaler.ini')) -eq 'user data outside game' -and
+    (HashFile (Join-Path $linked 'dxgi.dll')) -eq $candidateHash) 'Linked settings paths are refused before uninstall or outside-file changes'
+
+foreach($name in @('DirectX_LICENSE.txt','FidelityFX_v2_LICENSE.md','XeSS_LICENSE.txt','RenoDX_ATTRIBUTION.txt')) {
+    Check (Test-Path -LiteralPath (Join-Path $PackageRoot ('payload\Licenses\'+$name)) -PathType Leaf) ('Redistribution license included: '+$name)
+}
+Write-Output "PASS: public package review regression gates. Evidence: $testRoot"

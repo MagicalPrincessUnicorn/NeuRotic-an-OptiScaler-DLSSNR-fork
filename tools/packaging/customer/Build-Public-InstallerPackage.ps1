@@ -23,10 +23,21 @@ $BuildManifest = (Resolve-Path -LiteralPath $BuildManifest).Path
 $build = Get-Content -Raw -Encoding UTF8 -LiteralPath $BuildManifest | ConvertFrom-Json
 $commit = (& git -C $worktree rev-parse HEAD).Trim()
 $branch = (& git -C $worktree branch --show-current).Trim()
-if ($LASTEXITCODE -ne 0 -or $build.status -ne 'built' -or $build.build.exit_code -ne 0 -or
+$dirty = @(& git -C $worktree status --porcelain)
+if ($LASTEXITCODE -ne 0 -or $dirty.Count) { throw 'Packaging requires a clean committed worktree.' }
+if ($LASTEXITCODE -ne 0 -or $build.dirty -or $build.branch -ne $branch -or $build.status -ne 'built' -or $build.build.exit_code -ne 0 -or
     -not $build.build.source_unchanged -or $build.allowed_terminal_phase -ne 'build' -or
     [IO.Path]::GetFullPath([string]$build.worktree).TrimEnd('\') -ne $worktree -or $build.commit -ne $commit) {
     throw 'A successful immutable build-only manifest for this exact worktree and commit is required.'
+}
+foreach ($name in @('OptiScaler.dll','nvngx.dll_dlssnr.dll')) {
+    $artifact = @($build.artifacts | Where-Object { $_.name -eq $name })
+    $expectedPath = Join-Path $worktree ('x64\Release\a\' + $name)
+    if ($artifact.Count -ne 1 -or $artifact[0].built_path -ine $expectedPath -or
+        (HashFile $expectedPath) -ne $artifact[0].sha256) { throw "Build output no longer matches the manifest: $name" }
+}
+if ((HashFile (Join-Path $worktree 'integration\OptiScaler.ini')) -ne $build.configuration.sha256) {
+    throw 'The package INI no longer matches the recorded configuration.'
 }
 
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\')
@@ -43,6 +54,14 @@ CopyRequired (Join-Path $releaseOutput 'OptiScaler') (Join-Path $payload 'OptiSc
 CopyRequired (Join-Path $worktree 'integration\OptiScaler.ini') (Join-Path $payload 'OptiScaler.ini')
 CopyRequired (Join-Path $worktree 'LICENSE') (Join-Path $payload 'NeuRotic-LICENSE.txt')
 CopyRequired (Join-Path $worktree 'Licenses') (Join-Path $payload 'Licenses')
+$licenseSources = @{
+    'DirectX_LICENSE.txt' = 'external\directx_agility_sdk\LICENSE.txt'
+    'FidelityFX_v2_LICENSE.md' = 'external\FidelityFX-SDK-v2\docs\license.md'
+    'XeSS_LICENSE.txt' = 'external\xess\LICENSE.txt'
+}
+foreach ($name in $licenseSources.Keys) {
+    CopyRequired (Join-Path $worktree $licenseSources[$name]) (Join-Path $payload ('Licenses\' + $name))
+}
 
 CopyRequired (Join-Path $templateRoot 'NeuRotic-Setup.cmd') (Join-Path $OutputDirectory 'NeuRotic-Setup.cmd')
 CopyRequired (Join-Path $templateRoot 'NeuRotic-Uninstall.cmd') (Join-Path $OutputDirectory 'NeuRotic-Uninstall.cmd')
