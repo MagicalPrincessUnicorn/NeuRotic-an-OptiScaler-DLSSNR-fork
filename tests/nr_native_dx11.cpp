@@ -88,15 +88,20 @@ int main(int argc, char** argv)
         else if(format==DXGI_FORMAT_D16_UNORM || format==DXGI_FORMAT_D24_UNORM_S8_UINT ||
            format==DXGI_FORMAT_D32_FLOAT || format==DXGI_FORMAT_D32_FLOAT_S8X24_UINT) desc.BindFlags=D3D11_BIND_DEPTH_STENCIL;
         D3D11_SUBRESOURCE_DATA init {data, pitch, 0};
-        ComPtr<ID3D11Texture2D> r; Check(d11->CreateTexture2D(&desc, data ? &init : nullptr, &r)); return r;
+        ComPtr<ID3D11Texture2D> r; const auto createHr=d11->CreateTexture2D(&desc, data ? &init : nullptr, &r);
+        if(FAILED(createHr)) std::printf("CreateTexture2D failed format=%u bind=0x%x data=%d\n",format,desc.BindFlags,data!=nullptr);
+        Check(createHr); return r;
     };
     auto checkPixels = [&](ID3D11Texture2D* texture, const std::vector<float>& expected, UINT components, float tolerance)
     {
         D3D11_TEXTURE2D_DESC d {}; texture->GetDesc(&d); d.Usage=D3D11_USAGE_STAGING;
         d.BindFlags=0; d.MiscFlags=0; d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
-        ComPtr<ID3D11Texture2D> staging; Check(d11->CreateTexture2D(&d, nullptr, &staging));
+        ComPtr<ID3D11Texture2D> staging; const auto stagingHr=d11->CreateTexture2D(&d, nullptr, &staging);
+        if(FAILED(stagingHr)) std::printf("Staging CreateTexture2D failed format=%u bind=0x%x misc=0x%x cpu=0x%x\n",d.Format,d.BindFlags,d.MiscFlags,d.CPUAccessFlags);
+        Check(stagingHr);
         c11->CopyResource(staging.Get(), texture);
-        D3D11_MAPPED_SUBRESOURCE map {}; Check(c11->Map(staging.Get(),0,D3D11_MAP_READ,0,&map));
+        D3D11_MAPPED_SUBRESOURCE map {}; const auto mapHr=c11->Map(staging.Get(),0,D3D11_MAP_READ,0,&map);
+        if(FAILED(mapHr)) std::puts("Staging Map failed"); Check(mapHr);
         for(UINT y=0;y<d.Height;++y) for(UINT x=0;x<d.Width*components;++x)
         {
             const auto* row = static_cast<const char*>(map.pData)+y*map.RowPitch;
@@ -110,6 +115,28 @@ int main(int argc, char** argv)
         }
         c11->Unmap(staging.Get(),0);
     };
+    // Native Temporal Post-SR uses a private, exact-format output carrier and returns it only
+    // after the D3D12 queue signals the shared fence.
+    {
+        const UINT w=17,h=9;
+        std::vector<float> values(w*h*4);
+        std::vector<unsigned short> half(values.size());
+        for(UINT i=0;i<values.size();++i) { values[i]=float(i%61)/64.0f; half[i]=DirectX::PackedVector::XMConvertFloatToHalf(values[i]); }
+        auto source=texture11(w,h,DXGI_FORMAT_R16G16B16A16_FLOAT,nullptr,0,
+            D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS);
+        c11->UpdateSubresource(source.Get(),0,nullptr,half.data(),w*8,0);
+        auto destination=texture11(w,h,DXGI_FORMAT_R16G16B16A16_FLOAT,nullptr,0,
+            D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS);
+        D3D11_TEXTURE2D_DESC desc {}; source->GetDesc(&desc);
+        T::Output output; assert(output.Prepare(d11.Get(),d12.Get(),desc,reason));
+        assert(output.bytes==UINT64(w)*h*8 && output.Matches(desc));
+        c11->CopyResource(output.shared.Get(),source.Get());
+        const UINT64 ready=2; Check(c11->Signal(f11.Get(),ready)); c11->Flush(); Check(queue->Wait(f12.Get(),ready));
+        Check(queue->Signal(f12.Get(),ready+1)); Check(c11->Wait(f11.Get(),ready+1));
+        c11->CopyResource(destination.Get(),output.shared.Get()); c11->Flush();
+        checkPixels(destination.Get(),values,4,0);
+        frameId=2; // keep the shared timeline monotonic for the matrix below
+    }
     // Every texel, including the margins outside the render rectangle, crosses the production converter.
     for (UINT w : {17u,33u,65u}) for (DXGI_FORMAT motionFormat : {DXGI_FORMAT_R16G16_FLOAT, DXGI_FORMAT_R32G32_FLOAT})
     for (DXGI_FORMAT depthFormat : {DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R16_UNORM, DXGI_FORMAT_R16_FLOAT,

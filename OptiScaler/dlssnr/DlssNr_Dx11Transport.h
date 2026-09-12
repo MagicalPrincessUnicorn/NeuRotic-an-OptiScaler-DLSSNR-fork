@@ -16,6 +16,7 @@ namespace DlssNr::Dx11Transport
 using Microsoft::WRL::ComPtr;
 inline constexpr size_t SlotCount = 4;
 inline constexpr UINT64 BudgetBytes = 1280ull * 1024 * 1024;
+inline constexpr UINT64 OutputBudgetBytes = 512ull * 1024 * 1024;
 inline bool SameObject(IUnknown* a, IUnknown* b)
 {
     ComPtr<IUnknown> x, y;
@@ -205,6 +206,64 @@ struct Texture
         input = nullptr; output = nullptr;
         context->CSSetShaderResources(0, 1, &input);
         context->CSSetUnorderedAccessViews(0, 1, &output, nullptr);
+        return true;
+    }
+};
+inline UINT FormatBytes(DXGI_FORMAT format)
+{
+    switch (format)
+    {
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+            return 8;
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+            return 4;
+        default:
+            return 0;
+    }
+}
+struct Output
+{
+    D3D11_TEXTURE2D_DESC sourceDesc {};
+    ComPtr<ID3D11Texture2D> shared;
+    ComPtr<ID3D12Resource> resource12;
+    UINT64 bytes = 0;
+    bool Matches(const D3D11_TEXTURE2D_DESC& d) const
+    {
+        return resource12 && d.Width == sourceDesc.Width && d.Height == sourceDesc.Height &&
+            d.Format == sourceDesc.Format && d.BindFlags == sourceDesc.BindFlags && SupportedShape(d);
+    }
+    static UINT64 RequiredBytes(const D3D11_TEXTURE2D_DESC& d)
+    {
+        return UINT64(d.Width) * d.Height * FormatBytes(d.Format);
+    }
+    bool Prepare(ID3D11Device* device11, ID3D12Device* device12,
+                 const D3D11_TEXTURE2D_DESC& input, std::string& reason)
+    {
+        if (!SupportedShape(input) || !FormatBytes(input.Format) ||
+            !(input.BindFlags & D3D11_BIND_UNORDERED_ACCESS))
+        { reason = "native output format/shape/UAV contract unsupported"; return false; }
+        if (Matches(input)) return true;
+        Output next; next.sourceDesc = input;
+        auto d = input;
+        d.Usage = D3D11_USAGE_DEFAULT; d.CPUAccessFlags = 0;
+        d.MiscFlags = D3D11_RESOURCE_MISC_SHARED | D3D11_RESOURCE_MISC_SHARED_NTHANDLE;
+        HRESULT hr = device11->CreateTexture2D(&d, nullptr, &next.shared);
+        ComPtr<IDXGIResource1> sharedResource;
+        HANDLE handle = nullptr;
+        if (SUCCEEDED(hr)) hr = next.shared.As(&sharedResource);
+        if (SUCCEEDED(hr)) hr = sharedResource->CreateSharedHandle(nullptr,
+            DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, nullptr, &handle);
+        if (SUCCEEDED(hr)) hr = device12->OpenSharedHandle(handle, IID_PPV_ARGS(&next.resource12));
+        if (handle) CloseHandle(handle);
+        if (FAILED(hr))
+        { reason = "private native output sharing failed: " + std::to_string(static_cast<unsigned int>(hr)); return false; }
+        next.bytes = RequiredBytes(input);
+        *this = std::move(next);
         return true;
     }
 };
