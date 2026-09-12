@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FrameTrace.h"
+#include "DredDiagnostics.h"
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentCompatibility.h"
 #include "DlssNr_PresentHistory.h"
@@ -494,6 +495,22 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
         ReleaseResources();
         return false;
     }
+    DredDiagnostics::Name(g_present.frame.Get(), L"NR Present model frame");
+    DredDiagnostics::Name(g_present.depth.Get(), L"NR Present depth");
+    DredDiagnostics::Name(g_present.motion.Get(), L"NR Present motion");
+    DredDiagnostics::Name(g_present.depthUpload.Get(), L"NR Present depth upload");
+    DredDiagnostics::Name(g_present.motionUpload.Get(), L"NR Present motion upload");
+    DredDiagnostics::Name(g_present.conversionSource.Get(), L"NR Present conversion input");
+    DredDiagnostics::Name(g_present.conversionOutput.Get(), L"NR Present conversion output");
+    DredDiagnostics::Name(g_present.fence.Get(), L"NR Present completion fence");
+    DredDiagnostics::Name(g_present.list.Get(), L"NR Present model and copyback list");
+    DredDiagnostics::Name(g_present.pacingReadback.Get(), L"NR Present timing readback");
+    DredDiagnostics::Name(g_present.pacingQueryHeap.Get(), L"NR Present timing queries");
+    for (auto& slot : g_present.slots)
+    {
+        DredDiagnostics::Name(slot.modelAllocator.Get(), L"NR Present model allocator");
+        DredDiagnostics::Name(slot.compositeAllocator.Get(), L"NR Present copyback allocator");
+    }
     return true;
 }
 
@@ -788,6 +805,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             FAILED(device->GetDeviceRemovedReason()))
         {
             SetFallback(api, "a direct D3D12 queue is unavailable", true);
+            if (DredDiagnostics::Enabled() && device)
+                DredDiagnostics::Collect(device.Get(), device->GetDeviceRemovedReason());
             return identity;
         }
         if (FAILED(swapChain3->GetBuffer(bufferIndex, IID_PPV_ARGS(backbuffer12.GetAddressOf()))))
@@ -1250,9 +1269,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };
     queue->ExecuteCommandLists(1, compositeLists);
-    NR_FRAME_TRACE("nr-copyback-submitted", "attempt={} list={:p} queue={:p} output={:p}",
+    NR_FRAME_TRACE("nr-copyback-submitted", "attempt={} list={:p} queue={:p} output={:p} "
+        "generation={} claimGeneration={} claimInstance={} providerGeneration={}",
         identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),
-        static_cast<void*>(presentOutput));
+        static_cast<void*>(presentOutput), FgLifecycle::Read().generation,
+        preFgFrame ? preFgFrame->diagnosticClaim.generation : 0, preFgFrame ? preFgFrame->diagnosticClaim.instance : 0,
+        preFgFrame ? preFgFrame->providerGeneration : 0);
     ++g_present.telemetry.compositeSubmissions;
     const UINT64 signal = g_present.nextFence++;
     if (FAILED(queue->Signal(g_present.fence.Get(), signal)))

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "dllmain.h"
+#include "dlssnr/FgLifecycle.h"
 
 #include "Util.h"
 #include "Config.h"
@@ -1825,6 +1826,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 #endif
 
         PrepareLogger();
+        NR_FG_EVENT("capture-start", "boundary=process-attach trigger=process-launch renderingChanges=false");
 
         spdlog::warn("{0} loaded", VER_PRODUCT_NAME);
         spdlog::warn("---------------------------------");

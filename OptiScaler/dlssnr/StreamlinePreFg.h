@@ -3,6 +3,7 @@
 // Included once, by Streamline_Hooks.cpp. Observe only the game's interposer;
 // OptiScaler's replacement providers retain their separate presentation owner.
 #include "PreFg.h"
+#include "DredDiagnostics.h"
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentGuides.h"
 #include "DlssNrFeature_Dx12.h"
@@ -146,6 +147,10 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     auto frame = Claim();
     frame.providerGeneration = provider.generation;
+    frame.diagnosticClaim = FgLifecycle::Read();
+    NR_FRAME_TRACE("fg-frame-claim", "generation={} instance={} providerGeneration={} token={} sequence={} "
+        "swapchain={:p} queue={:p}", frame.diagnosticClaim.generation, frame.diagnosticClaim.instance,
+        provider.generation, frame.key, frame.sequence, static_cast<void*>(chain), static_cast<void*>(owner->queue.Get()));
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
     const unsigned int route = config->DlssNrRoute.value_or_default();
     const bool requested = runtime.enabled && route != 0;
@@ -170,6 +175,8 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     // FG off uses the existing admission contract. Native mode still performs no Present model work.
     const auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, fg ? &frame : nullptr);
     frame.outputSubmitted = identity.completedOutput;
+    if (identity.completedOutput)
+        FgLifecycle::Output(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get());
     const double beforeProvider = Util::MillisecondsNow();
     if (identity.completedOutput) ++State().submitted;
     else if (requested) ++State().rejected;
@@ -181,6 +188,14 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     // Streamline. Its normal presenting-queue dependency orders the FG read after NR.
     ForwardFrame providerScope(frame);
     const HRESULT result = forward();
+    FgLifecycle::Present(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get(),
+        identity.completedOutput, result);
+    if (DredDiagnostics::Enabled() && FAILED(result) && owner->queue)
+    {
+        ComPtr<ID3D12Device> faultDevice;
+        if (SUCCEEDED(owner->queue->GetDevice(IID_PPV_ARGS(&faultDevice))))
+            DredDiagnostics::Collect(faultDevice.Get(), faultDevice->GetDeviceRemovedReason());
+    }
     if (fg && requested)
     {
         owner->startup.Observe(frame.valid && identity.modelPrepared && SUCCEEDED(result));
@@ -209,6 +224,8 @@ inline void Invalidate()
 inline HRESULT STDMETHODCALLTYPE Resize(IDXGISwapChain* chain, UINT count, UINT width, UINT height,
                                         DXGI_FORMAT format, UINT flags)
 {
+    NR_FG_EVENT("resize-begin", "swapchain={:p} count={} width={} height={} api=ResizeBuffers",
+        static_cast<void*>(chain), count, width, height);
     auto owner = GetOwner(chain);
     std::unique_lock<std::recursive_mutex> ownerLock;
     if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
@@ -216,11 +233,16 @@ inline HRESULT STDMETHODCALLTYPE Resize(IDXGISwapChain* chain, UINT count, UINT 
     Invalidate();
     PresentGuides::Instance().Enable(false);
     ReportPresentUnavailable(PresentApi::D3D12, "Present target changed");
-    return resize(chain, count, width, height, format, flags);
+    const auto result = resize(chain, count, width, height, format, flags);
+    NR_FG_EVENT("resize-end", "swapchain={:p} result={} api=ResizeBuffers", static_cast<void*>(chain),
+        static_cast<uint32_t>(result));
+    return result;
 }
 inline HRESULT STDMETHODCALLTYPE Resize1(IDXGISwapChain3* chain, UINT count, UINT width, UINT height,
     DXGI_FORMAT format, UINT flags, const UINT* masks, IUnknown* const* queues)
 {
+    NR_FG_EVENT("resize-begin", "swapchain={:p} count={} width={} height={} queueArray={:p} api=ResizeBuffers1",
+        static_cast<void*>(chain), count, width, height, static_cast<const void*>(queues));
     auto owner = GetOwner(chain);
     std::unique_lock<std::recursive_mutex> ownerLock;
     if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
@@ -229,6 +251,8 @@ inline HRESULT STDMETHODCALLTYPE Resize1(IDXGISwapChain3* chain, UINT count, UIN
     PresentGuides::Instance().Enable(false);
     ReportPresentUnavailable(PresentApi::D3D12, "Present target changed");
     const HRESULT result = resize1(chain, count, width, height, format, flags, masks, queues);
+    NR_FG_EVENT("resize-end", "swapchain={:p} result={} api=ResizeBuffers1", static_cast<void*>(chain),
+        static_cast<uint32_t>(result));
     // Per-buffer queue changes need a new adapter contract. Stop NR; never retain a guessed queue.
     if (SUCCEEDED(result) && queues && owner) owner->queue.Reset();
     return result;
@@ -252,9 +276,13 @@ inline void HookChain(IDXGISwapChain* chain, IUnknown* device)
         if (!Attach(resize1, table4[39], &Resize1)) return;
     }
     if (Register(chain, queue.Get()))
+    {
+        NR_FG_EVENT("swapchain-register", "swapchain={:p} creationQueue={:p} nativeQueue={:p}",
+            static_cast<void*>(chain), static_cast<void*>(queue.Get()), static_cast<void*>(GetOwner(chain)->queue.Get()));
         LOG_INFO("NR pre-FG: registered Streamline application Present, swapchain={:p} creationQueue={:p} nativeQueue={:p}",
             static_cast<void*>(chain), static_cast<void*>(queue.Get()),
             static_cast<void*>(GetOwner(chain)->queue.Get()));
+    }
 }
 inline HRESULT STDMETHODCALLTYPE Chain(IDXGIFactory* factory, IUnknown* device, DXGI_SWAP_CHAIN_DESC* desc,
                                       IDXGISwapChain** chain)

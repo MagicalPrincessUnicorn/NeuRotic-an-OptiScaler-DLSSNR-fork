@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "D3D12_Hooks.h"
+#include <dlssnr/DredDiagnostics.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 
 #include <Util.h>
@@ -1332,6 +1333,7 @@ VALIDATE_HOOK(hkD3D12CreateDevice, D3d12Proxy::PFN_D3D12CreateDevice)
 static HRESULT hkD3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVEL MinimumFeatureLevel, REFIID riid,
                                    void** ppDevice)
 {
+    DlssNr::DredDiagnostics::Configure(D3d12Proxy::D3D12GetDebugInterface_());
     LOG_DEBUG("Adapter: {:X}, Level: {:X}, Caller: {}", (size_t) pAdapter, (UINT) MinimumFeatureLevel,
               Util::WhoIsTheCaller(_ReturnAddress()));
 
@@ -1406,6 +1408,7 @@ static HRESULT hkD3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVEL Minimum
     _creatingD3D12Device = false;
 
     LOG_DEBUG("o_D3D12CreateDevice result: {:X}", (UINT) result);
+    DlssNr::DredDiagnostics::Device(SUCCEEDED(result) && ppDevice ? static_cast<IUnknown*>(*ppDevice) : nullptr, result);
 
     if (result == S_OK && ppDevice != nullptr && MinimumFeatureLevel != D3D_FEATURE_LEVEL_1_0_CORE && !nonPrimaryGpu)
     {

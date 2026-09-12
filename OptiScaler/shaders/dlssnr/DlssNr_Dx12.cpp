@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <dlssnr/FrameTrace.h>
+#include <dlssnr/DredDiagnostics.h>
 #include <dlssnr/DlssNr_PresentGuides.h>
 #include <dlssnr/PreFg.h>
 
@@ -1670,6 +1671,7 @@ ID3D12Resource* CreateScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned
     ID3D12Resource* res = nullptr;
     device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
                                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&res));
+    DlssNr::DredDiagnostics::Name(res, L"NR private model texture");
     return res;
 }
 
@@ -1731,6 +1733,7 @@ ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source)
     ID3D12Resource* res = nullptr;
     device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST,
                                     nullptr, IID_PPV_ARGS(&res));
+    DlssNr::DredDiagnostics::Name(res, L"NR private typed guide copy");
     return res;
 }
 

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <mutex>
 #include "NativeIdentity.h"
+#include "FgLifecycleContract.h"
 
 namespace DlssNr::PreFg
 {
@@ -21,6 +22,7 @@ struct Frame
     bool legacyTags = false;
     bool outputSubmitted = false;
     uint64_t providerGeneration = 0;
+    FgLifecycle::Snapshot diagnosticClaim {};
     bool (*prepareInputs)(const Frame&) = nullptr;
     bool allowOutput = true;
 };

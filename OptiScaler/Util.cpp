@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "Util.h"
+#include "dlssnr/DredDiagnostics.h"
 #include "Config.h"
 
 #include <proxies/Ntdll_Proxy.h>
@@ -724,6 +725,7 @@ void Util::GetDeviceRemovedReason(ID3D11Device* pDevice)
 void Util::GetDeviceRemovedReason(ID3D12Device* pDevice)
 {
     auto reason = pDevice->GetDeviceRemovedReason();
+    DlssNr::DredDiagnostics::Collect(pDevice, reason);
 
     switch (reason)
     {

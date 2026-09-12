@@ -1237,6 +1237,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
 
     state.dlssgLastSetMode = newOptions.mode;
 
+    const auto diagnosticOperation = DlssNr::FgLifecycle::Begin("options-begin");
     const auto result = o_slDLSSGSetOptions(viewport, newOptions);
     if (result == sl::Result::eOk)
         DlssNr::PreFg::PublishProvider(newOptions.mode != sl::DLSSGMode::eOff,
@@ -1245,6 +1246,12 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
             newOptions.queueParallelismMode == sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue &&
             newOptions.enableUserInterfaceRecomposition != sl::Boolean::eTrue &&
             static_cast<uint32_t>(newOptions.flags & sl::DLSSGFlags::eShowOnlyInterpolatedFrame) == 0);
+    if (DlssNr::FgLifecycle::Enabled())
+        DlssNr::FgLifecycle::Options(diagnosticOperation, static_cast<uint32_t>(viewport),
+        static_cast<int>(newOptions.mode), newOptions.numFramesToGenerate,
+        static_cast<unsigned>(newOptions.queueParallelismMode), static_cast<unsigned>(newOptions.flags),
+        static_cast<unsigned>(newOptions.enableUserInterfaceRecomposition), static_cast<int>(result),
+        DlssNr::PreFg::Provider().generation);
     return result;
 }
 
@@ -1260,6 +1267,10 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
 
         // We might be feeding a newer struct to an older SL but that seems to work just fine for this Get function
         result = o_slDLSSGGetState(viewport, dynamic_cast<sl::DLSSGState&>(newState), options);
+        DlssNr::FgLifecycle::Completion(static_cast<uint32_t>(viewport), static_cast<int>(result),
+            newState.structVersion, result == sl::Result::eOk && newState.structVersion >= 3 ? newState.inputsProcessingCompletionFence : nullptr,
+            result == sl::Result::eOk && newState.structVersion >= 3 ? newState.lastPresentInputsProcessingCompletionFenceValue : 0,
+            result == sl::Result::eOk ? newState.numFramesActuallyPresented : 0);
 
         // Copy back data to game's struct
         memcpy(&state, &newState, 56); // struct ver 1 size
@@ -1284,6 +1295,10 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     else
     {
         result = o_slDLSSGGetState(viewport, state, options);
+        DlssNr::FgLifecycle::Completion(static_cast<uint32_t>(viewport), static_cast<int>(result),
+            state.structVersion, result == sl::Result::eOk && state.structVersion >= 3 ? state.inputsProcessingCompletionFence : nullptr,
+            result == sl::Result::eOk && state.structVersion >= 3 ? state.lastPresentInputsProcessingCompletionFenceValue : 0,
+            result == sl::Result::eOk ? state.numFramesActuallyPresented : 0);
         State::Instance().dlssgGameDMFGSupported = state.bIsDynamicMFGSupported == sl::eTrue;
     }
 
@@ -1300,7 +1315,12 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
         {
             sl::DLSSGState localState {};
             sl::DLSSGOptions localOptions {};
-            if (o_slDLSSGGetState(viewport, localState, &localOptions) == sl::Result::eOk &&
+            const auto localResult = o_slDLSSGGetState(viewport, localState, &localOptions);
+            DlssNr::FgLifecycle::Completion(static_cast<uint32_t>(viewport), static_cast<int>(localResult),
+                localState.structVersion, localResult == sl::Result::eOk && localState.structVersion >= 3 ? localState.inputsProcessingCompletionFence : nullptr,
+                localResult == sl::Result::eOk && localState.structVersion >= 3 ? localState.lastPresentInputsProcessingCompletionFenceValue : 0,
+                localResult == sl::Result::eOk ? localState.numFramesActuallyPresented : 0);
+            if (localResult == sl::Result::eOk &&
                 localState.numFramesToGenerateMax > 0 && localState.numFramesToGenerateMax < 6)
             {
                 optiState.dlssgMfgMax = localState.numFramesToGenerateMax;

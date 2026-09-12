@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <dlssnr/FrameTrace.h>
 #include <dlssnr/PreFg.h>
+#include <dlssnr/FgLifecycle.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -924,7 +925,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
         {
             LOG_INFO("Passthrough to native NGX CreateFeature for feature {}", (int) InFeatureID);
 
+            const bool diagnosticFg = InFeatureID == NVSDK_NGX_Feature_FrameGeneration;
+            const auto operation = diagnosticFg ? DlssNr::FgLifecycle::Begin("fg-create-begin") : 0;
             NVSDK_NGX_Result res = NVNGXProxy::D3D12_CreateFeature()(InCmdList, InFeatureID, InParameters, OutHandle);
+            if (diagnosticFg)
+                DlssNr::FgLifecycle::Created(operation,
+                    res == NVSDK_NGX_Result_Success && OutHandle && *OutHandle ? (*OutHandle)->Id : 0,
+                    static_cast<uint32_t>(res), res == NVSDK_NGX_Result_Success, InCmdList);
 
             if (*OutHandle)
             {
@@ -940,6 +947,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
             return res;
         }
 
+        if (InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
+            DlssNr::FgLifecycle::Created(0, 0, static_cast<uint32_t>(NVSDK_NGX_Result_FAIL_FeatureNotSupported), false, InCmdList);
         LOG_WARN("Native DLSS passthrough not available for feature {}", (int) InFeatureID);
         return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
     }
@@ -980,6 +989,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     const auto featureIt = HandleToFeature.find(handleId);
     const NVSDK_NGX_Feature releasedFeature =
         featureIt != HandleToFeature.end() ? featureIt->second : (NVSDK_NGX_Feature) 0;
+    const auto diagnosticInstance = DlssNr::FgLifecycle::Find(handleId);
+    const bool diagnosticFg = releasedFeature == NVSDK_NGX_Feature_FrameGeneration || diagnosticInstance != 0;
     NrPipelineObservations.erase(handleId);
     NgxEvaluationTraceObservations.erase(handleId);
     if (featureIt != HandleToFeature.end())
@@ -1020,7 +1031,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
                 LOG_INFO("calling D3D12_ReleaseFeature for ({0})", handleId);
 
             // Clean up real DLSS feature
+            const auto operation = diagnosticFg ? DlssNr::FgLifecycle::Begin("fg-release-begin", handleId) : 0;
             auto result = NVNGXProxy::D3D12_ReleaseFeature()(InHandle);
+            if (diagnosticFg)
+                DlssNr::FgLifecycle::Released(operation, handleId, diagnosticInstance,
+                    static_cast<uint32_t>(result), result == NVSDK_NGX_Result_Success);
 
             if (!shutdown)
                 LOG_INFO("D3D12_ReleaseFeature result for ({0}): {1:X}", handleId, (UINT) result);
@@ -1031,6 +1046,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
         {
             if (!shutdown)
                 LOG_INFO("D3D12_ReleaseFeature not available for ({0})", handleId);
+            if (diagnosticFg)
+                DlssNr::FgLifecycle::Released(0, handleId, diagnosticInstance,
+                    static_cast<uint32_t>(NVSDK_NGX_Result_FAIL_FeatureNotFound), false);
 
             return NVSDK_NGX_Result_FAIL_FeatureNotFound;
         }
@@ -1318,10 +1336,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
             const auto* preFg = DlssNr::PreFg::forwardingFrame;
             NR_FRAME_TRACE("ngx-fg-input", "provider=nvngx handle={} list={:p} backbuffer={:p} "
                 "hudless={:p} backbufferResult={} hudlessResult={} realSequence={} providerToken={} "
-                "nrSubmitted={} association=present-call-scope", handleId,
+                "nrSubmitted={} association={} handleInstance={} generation={} claimGeneration={} providerGeneration={}", handleId,
                 static_cast<void*>(InCmdList), traceBackbuffer, traceHudless,
                 static_cast<unsigned int>(backbufferResult), static_cast<unsigned int>(hudlessResult),
-                preFg ? preFg->sequence : 0, preFg ? preFg->key : 0, preFg && preFg->outputSubmitted);
+                preFg ? preFg->sequence : 0, preFg ? preFg->key : 0, preFg && preFg->outputSubmitted,
+                preFg ? "present-call-scope" : "unknown", DlssNr::FgLifecycle::Find(handleId),
+                DlssNr::FgLifecycle::Read().generation, preFg ? preFg->diagnosticClaim.generation : 0,
+                preFg ? preFg->providerGeneration : 0);
         }
         evalWithoutFG = 0;
 
