@@ -961,8 +961,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
         HandleToFeature[(*OutHandle)->Id] = InFeatureID;
         if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
         {
-            DlssNr::SetNativeRayReconstructionActive(true);
-            LOG_INFO("DLSS-NR: native mode-aware RR owns reconstruction; NR will run after RR");
+            LOG_INFO("DLSS-NR: native mode-aware RR feature created; active reconstruction follows evaluation");
         }
     }
 
@@ -1312,6 +1311,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     const bool isNrPipelineFeature = IsNrPipelineFeature(feature);
     const bool isSuperResolution = feature == NVSDK_NGX_Feature_SuperSampling;
     const bool isRayReconstruction = feature == NVSDK_NGX_Feature_RayReconstruction;
+    // Cyberpunk retains its RR handle after switching RR off and begins evaluating a separate
+    // Super Resolution handle. Track the feature that owns this frame's reconstruction seam;
+    // handle creation alone otherwise leaves Present's RR compatibility gate permanently stale.
+    if (isNrPipelineFeature)
+        DlssNr::SetNativeRayReconstructionActive(isRayReconstruction);
     const auto traceEvaluation = DlssNr::FrameTrace::Event("ngx-evaluate-enter",
         "handle={} feature={} list={:p} fgOutput={}", handleId, static_cast<unsigned int>(feature),
         static_cast<void*>(InCmdList), static_cast<unsigned int>(state.activeFgOutput));
