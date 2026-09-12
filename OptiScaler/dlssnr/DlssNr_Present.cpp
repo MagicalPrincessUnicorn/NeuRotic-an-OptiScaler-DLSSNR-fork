@@ -1132,16 +1132,17 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     ID3D12CommandList* modelLists[] = { g_present.list.Get() };
     slot.firstSubmissionMs = Util::MillisecondsNow();
     queue->ExecuteCommandLists(1, modelLists);
+    const bool modelRecordingSealed = GpuSafety::SealOwnedRecording(g_present.list.Get());
     NR_FRAME_TRACE("nr-model-submitted",
         "attempt={} list={:p} queue={:p} output={:p} width={} height={} enhanced={} modelRecorded={}",
         identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),
         static_cast<void*>(presentOutput), workWidth, workHeight, enhanced, modelSucceeded);
     ++g_present.telemetry.modelSubmissions;
-    if (modelSucceeded && enhanced) PresentGuides::Instance().Evaluated();
+    if (modelSucceeded && modelRecordingSealed && enhanced) PresentGuides::Instance().Evaluated();
     if (uploadingGuides)
         g_present.guidesNeedUpload = false;
 
-    if (!modelSucceeded)
+    if (!modelSucceeded || !modelRecordingSealed)
     {
         const UINT64 signal = g_present.nextFence++;
         if (SUCCEEDED(queue->Signal(g_present.fence.Get(), signal)))
@@ -1153,9 +1154,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         else
             g_present.completionUntrackable = true;
         const char* reason = FailureReason();
-        SetFallback(api,
-                    reason != nullptr && reason[0] != 0 ? reason : "model creation/evaluation not yet successful",
-                    reason != nullptr && reason[0] != 0);
+        if (!modelRecordingSealed)
+            SetFallback(api, "private model command-list recording could not be sealed", true);
+        else
+            SetFallback(api,
+                        reason != nullptr && reason[0] != 0 ? reason : "model creation/evaluation not yet successful",
+                        reason != nullptr && reason[0] != 0);
         return identity;
     }
 

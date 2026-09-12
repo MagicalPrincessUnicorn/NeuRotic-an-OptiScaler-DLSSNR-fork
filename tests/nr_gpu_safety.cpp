@@ -139,6 +139,22 @@ int main()
     Check(gate->Signal(2));
     assert(Safety::Drain(5000) && Safety::Reusable(replay));
 
+    // Sealing an owned recording never bypasses the actual GPU completion point.
+    ComPtr<ID3D12Fence> ownedGate;
+    Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ownedGate)));
+    Check(queue->Wait(ownedGate.Get(), 1));
+    auto owned = Safety::Record(list.Get());
+    auto ownedRetirement = Safety::Pending();
+    assert(!Safety::SealOwnedRecording(list.Get())); // still unsubmitted
+    Check(list->Close());
+    submit(queue.Get());
+    assert(Safety::SealOwnedRecording(list.Get()));
+    assert(!Safety::Reusable(owned) && !Safety::Readable(owned) && !Safety::Reusable(ownedRetirement));
+    Check(ownedGate->Signal(1));
+    assert(Safety::Drain(5000));
+    assert(Safety::Reusable(owned) && Safety::Readable(owned) && Safety::Reusable(ownedRetirement));
+    Check(list->Reset(allocator.Get(), nullptr));
+
     // Track both queues without introducing a cycle into the host's Wait/Signal graph.
     Check(queue->Wait(gate.Get(), 3));
     auto first = Safety::Record(list.Get());
