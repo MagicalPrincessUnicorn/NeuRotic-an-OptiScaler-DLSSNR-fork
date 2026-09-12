@@ -7,6 +7,7 @@ $testRoot=Join-Path $EvidenceRoot ('installer-fixtures-' + [Guid]::NewGuid().ToS
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 $engine=Join-Path $PackageRoot 'support\NeuRotic-Setup-Engine.ps1'
 $launcher=Join-Path $PackageRoot 'NeuRotic-Setup.cmd'
+$uninstaller=Join-Path $PackageRoot 'NeuRotic-Uninstall.cmd'
 $manifest=Get-Content -Raw -LiteralPath (Join-Path $PackageRoot 'support\PACKAGE-MANIFEST.json') | ConvertFrom-Json
 $psExe='C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 $cmdExe='C:\Windows\System32\cmd.exe'
@@ -30,11 +31,16 @@ function Fixture([string]$Name,[bool]$Model=$true){
     return $folder
 }
 function Inventory([string]$Folder){
-    return (@(Get-ChildItem -LiteralPath $Folder -Recurse -File | Where-Object {$_.FullName -notmatch '\\NeuRotic-test-backups\\'} |
+    return (@(Get-ChildItem -LiteralPath $Folder -Recurse -File | Where-Object {$_.FullName -notmatch '\\NeuRotic-(?:test-)?backups\\' -and $_.FullName -notmatch '\\NeuRotic\\Installer\\'} |
         Sort-Object FullName | ForEach-Object {$_.FullName.Substring($Folder.Length)+':'+(HashFile $_.FullName)}) -join "`n")
 }
 function Backup([string]$Folder){
-    return @(Get-ChildItem -LiteralPath (Join-Path $Folder 'NeuRotic-test-backups') -Directory | Sort-Object CreationTime -Descending)[0].FullName
+    $folders=@()
+    foreach($name in @('NeuRotic-backups','NeuRotic-test-backups')){
+        $root=Join-Path $Folder $name
+        if(Test-Path -LiteralPath $root -PathType Container){$folders+=@(Get-ChildItem -LiteralPath $root -Directory)}
+    }
+    return @($folders | Sort-Object CreationTime -Descending)[0].FullName
 }
 function RunEngine([string]$Name,[string[]]$Arguments,[bool]$Success=$true,[string[]]$InputLines=@()){
     $old=$ErrorActionPreference;$ErrorActionPreference='Continue'
@@ -77,6 +83,7 @@ function Encoded([string]$Text,[string]$Kind){
 }
 
 foreach($file in $manifest.files){Check ((HashFile (Join-Path $PackageRoot $file.path)) -eq $file.sha256) ('Package hash: '+$file.path)}
+Check (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'Public package contains NeuRotic-Uninstall.cmd'
 $candidateHash=HashFile (Join-Path $PackageRoot 'payload\OptiScaler.dll')
 
 # No occupied target: the actual customer launcher asks for the proxy name, then installs with no INSTALL text.
@@ -261,4 +268,91 @@ RunEngine 'tampered-package' @('-GameExecutable',(Join-Path $wrongAction 'Fixtur
 $engine=$oldEngine
 Check ((Inventory $wrongAction) -eq $before) 'Tampered package fails before destination writes'
 
-Write-Output "PASS: simple customer installer, exact recovery and atomic conflict flows. Evidence: $testRoot"
+# Managed public install state drives both uninstaller entry points without asking for the proxy again.
+$public=Fixture 'public-uninstall-download' $true
+RunEngine 'public-install-download' @('-GameExecutable',(Join-Path $public 'FixtureGame.exe'),'-ProxyName','winmm.dll') | Out-Null
+$statePath=Join-Path $public 'NeuRotic\Installer\Current-Install.json'
+$installedUninstaller=Join-Path $public 'Uninstall NeuRotic.cmd'
+Check ((Test-Path -LiteralPath $statePath -PathType Leaf) -and (Test-Path -LiteralPath $installedUninstaller -PathType Leaf)) 'Setup installs managed state and an in-game uninstaller'
+Check ((Test-Path -LiteralPath (Join-Path $public 'NeuRotic-backups') -PathType Container) -and
+    -not (Test-Path -LiteralPath (Join-Path $public 'NeuRotic-test-backups'))) 'Public install uses the public backup folder, not the retired test folder'
+$state=Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+Check ($state.schema_version -eq 2 -and $state.selected_proxy -eq 'winmm.dll' -and $state.restore_chain.Count -eq 1) 'Managed state records proxy, version, time and restore chain'
+[IO.File]::AppendAllText((Join-Path $public 'OptiScaler.ini'),"`r`n; keep-public-settings")
+$modelHash=HashFile (Join-Path $public 'nvngx_dlssnr.dll')
+$output=RunCmd 'public-download-uninstall' $uninstaller @('-GameExecutable',(Join-Path $public 'FixtureGame.exe'),'-UninstallMode','KeepSettings','-ConfirmUninstall') $true @('')
+Check ($output -match 'Installed as: winmm.dll' -and $output -match 'PASS: NeuRotic was uninstalled') 'Downloaded uninstaller detects and reports the managed proxy'
+Check (-not (Test-Path -LiteralPath (Join-Path $public 'winmm.dll')) -and -not (Test-Path -LiteralPath (Join-Path $public 'OptiScaler.ini')) -and (Get-Content -Raw -LiteralPath (Join-Path $public 'NeuRotic\UserData\OptiScaler.ini')) -match 'keep-public-settings') 'Recommended uninstall restores the clean game root and saves settings for reinstalling'
+Check ((HashFile (Join-Path $public 'nvngx_dlssnr.dll')) -eq $modelHash) 'Recommended uninstall preserves the private model'
+Check (-not (Test-Path -LiteralPath $installedUninstaller)) 'Downloaded uninstaller removes the installed launcher after success'
+RunEngine 'public-reinstall-reuses-settings' @('-GameExecutable',(Join-Path $public 'FixtureGame.exe'),'-ProxyName','winmm.dll') | Out-Null
+Check ((Get-Content -Raw -LiteralPath (Join-Path $public 'OptiScaler.ini')) -match 'keep-public-settings') 'Reinstall automatically reuses settings retained by the uninstaller'
+RunEngine 'public-reinstall-cleanup' @('-Uninstall','-GameExecutable',(Join-Path $public 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+
+$installed=Fixture 'public-uninstall-installed-copy' $true
+RunEngine 'public-install-installed-copy' @('-GameExecutable',(Join-Path $installed 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+$installedUninstaller=Join-Path $installed 'Uninstall NeuRotic.cmd'
+$output=RunCmd 'public-installed-uninstall' $installedUninstaller @('-UninstallMode','RemoveSettings','-ConfirmUninstall') $true @('')
+Check ($output -notmatch 'select your game executable' -and $output -match 'Installed as: dxgi.dll') 'In-game uninstaller uses its own game folder without asking for an executable'
+Check (-not (Test-Path -LiteralPath (Join-Path $installed 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $installed 'OptiScaler.ini')) -and -not (Test-Path -LiteralPath $installedUninstaller)) 'In-game uninstaller removes a fresh runtime, settings and itself'
+Check (Test-Path -LiteralPath (Join-Path $installed 'nvngx_dlssnr.dll')) 'Remove Settings still preserves the private model'
+
+# Updates append to a restore chain; one uninstall reaches the first pre-NeuRotic state.
+$stacked=Fixture 'public-stacked-updates' $true
+RunEngine 'stacked-install-1' @('-GameExecutable',(Join-Path $stacked 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+RunEngine 'stacked-install-2' @('-GameExecutable',(Join-Path $stacked 'FixtureGame.exe'),'-ExistingInstallAction','Update') | Out-Null
+$state=Get-Content -Raw -LiteralPath (Join-Path $stacked 'NeuRotic\Installer\Current-Install.json') | ConvertFrom-Json
+Check ($state.restore_chain.Count -eq 2 -and $state.install_history.Count -eq 2) 'Update records a two-entry installation lineage'
+RunEngine 'stacked-uninstall-preview' @('-Uninstall','-GameExecutable',(Join-Path $stacked 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-CheckOnly') | Out-Null
+Check (Test-Path -LiteralPath (Join-Path $stacked 'dxgi.dll')) 'Uninstall preview makes no changes'
+RunEngine 'stacked-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $stacked 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $stacked 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $stacked 'OptiScaler.ini'))) 'One uninstall walks stacked updates back to the original fresh state'
+
+# A modified managed state/record must never redirect restore work to another game folder.
+$tamperedState=Fixture 'public-tampered-state' $true
+$otherGame=Fixture 'public-tampered-state-other-game' $true
+RunEngine 'tampered-state-install' @('-GameExecutable',(Join-Path $tamperedState 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+$tamperedStatePath=Join-Path $tamperedState 'NeuRotic\Installer\Current-Install.json'
+$tamperedStateRecord=Get-Content -Raw -LiteralPath $tamperedStatePath | ConvertFrom-Json
+$tamperedRecordPath=[string]$tamperedStateRecord.restore_chain[0]
+$originalRecordBytes=[IO.File]::ReadAllBytes($tamperedRecordPath)
+$tamperedRecord=Get-Content -Raw -LiteralPath $tamperedRecordPath | ConvertFrom-Json
+$tamperedRecord.game_executable=Join-Path $otherGame 'FixtureGame.exe'
+[IO.File]::WriteAllText($tamperedRecordPath,($tamperedRecord | ConvertTo-Json -Depth 20),(New-Object Text.UTF8Encoding($false)))
+$beforeSelected=Inventory $tamperedState;$beforeOther=Inventory $otherGame
+RunEngine 'tampered-state-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $tamperedState 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') $false | Out-Null
+Check ((Inventory $tamperedState) -eq $beforeSelected -and (Inventory $otherGame) -eq $beforeOther) 'Tampered restore chain is rejected before either game folder changes'
+[IO.File]::WriteAllBytes($tamperedRecordPath,$originalRecordBytes)
+RunEngine 'tampered-state-cleanup' @('-Uninstall','-GameExecutable',(Join-Path $tamperedState 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+
+$changedProxy=Fixture 'public-change-proxy' $true
+RunEngine 'change-proxy-install' @('-GameExecutable',(Join-Path $changedProxy 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+RunEngine 'change-proxy-transaction' @('-GameExecutable',(Join-Path $changedProxy 'FixtureGame.exe'),'-ProxyName','winmm.dll','-ExistingInstallAction','ChangeProxy') | Out-Null
+$state=Get-Content -Raw -LiteralPath (Join-Path $changedProxy 'NeuRotic\Installer\Current-Install.json') | ConvertFrom-Json
+Check (-not (Test-Path -LiteralPath (Join-Path $changedProxy 'dxgi.dll')) -and (HashFile (Join-Path $changedProxy 'winmm.dll')) -eq $candidateHash -and $state.selected_proxy -eq 'winmm.dll') 'Managed proxy change removes the old loader and records the new one atomically'
+RunEngine 'change-proxy-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $changedProxy 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $changedProxy 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $changedProxy 'winmm.dll'))) 'Uninstall after a proxy change returns to the original fresh state'
+
+# Existing proxy and settings are restored while current NeuRotic settings are retained separately.
+$baseline=Fixture 'public-existing-baseline' $true
+[IO.File]::WriteAllText((Join-Path $baseline 'dxgi.dll'),'original dxgi baseline')
+[IO.File]::WriteAllText((Join-Path $baseline 'OptiScaler.ini'),"[Plugins]`r`nLoadReshade = false`r`n; original")
+$baselineProxy=HashFile (Join-Path $baseline 'dxgi.dll');$baselineIni=HashFile (Join-Path $baseline 'OptiScaler.ini')
+RunEngine 'baseline-install' @('-GameExecutable',(Join-Path $baseline 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-ExistingProxyAction','Replace') | Out-Null
+[IO.File]::AppendAllText((Join-Path $baseline 'OptiScaler.ini'),"`r`n; current-neurotic-settings")
+RunEngine 'baseline-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $baseline 'FixtureGame.exe'),'-UninstallMode','KeepSettings','-ConfirmUninstall') | Out-Null
+Check ((HashFile (Join-Path $baseline 'dxgi.dll')) -eq $baselineProxy -and (HashFile (Join-Path $baseline 'OptiScaler.ini')) -eq $baselineIni) 'Keep Settings restores an existing proxy and original root INI exactly'
+Check ((Get-Content -Raw -LiteralPath (Join-Path $baseline 'NeuRotic\UserData\OptiScaler.ini')) -match 'current-neurotic-settings') 'Keep Settings saves current NeuRotic settings separately when an original INI existed'
+
+$full=Fixture 'public-full-cleanup' $true
+RunEngine 'full-install' @('-GameExecutable',(Join-Path $full 'FixtureGame.exe'),'-ProxyName','version.dll') | Out-Null
+RunEngine 'full-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $full 'FixtureGame.exe'),'-UninstallMode','Full','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $full 'version.dll')) -and -not (Test-Path -LiteralPath (Join-Path $full 'NeuRotic')) -and
+    -not (Test-Path -LiteralPath (Join-Path $full 'NeuRotic-backups')) -and (Test-Path -LiteralPath (Join-Path $full 'nvngx_dlssnr.dll'))) 'Full cleanup removes managed installer state and empty backup roots but preserves the private model'
+
+$manual=Fixture 'public-manual-recovery' $true
+Copy-Item -LiteralPath (Join-Path $PackageRoot 'payload\OptiScaler.dll') -Destination (Join-Path $manual 'dbghelp.dll')
+RunEngine 'manual-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $manual 'FixtureGame.exe'),'-ManualProxyName','dbghelp.dll','-UninstallMode','KeepSettings','-ConfirmUninstall') | Out-Null
+Check (-not (Test-Path -LiteralPath (Join-Path $manual 'dbghelp.dll')) -and (Test-Path -LiteralPath (Join-Path $manual 'nvngx_dlssnr.dll'))) 'Manual recovery removes only the explicitly selected verified proxy and preserves the model'
+
+Write-Output "PASS: public Setup, intelligent uninstall, exact recovery and atomic conflict flows. Evidence: $testRoot"

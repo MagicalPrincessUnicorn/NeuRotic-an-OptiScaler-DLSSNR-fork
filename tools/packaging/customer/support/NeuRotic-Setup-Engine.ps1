@@ -9,7 +9,19 @@ param(
     [string]$ExistingDxgiAction,
     [switch]$CheckOnly,
     [switch]$ConfirmInstall,
-    [switch]$Restore
+    [switch]$Restore,
+    [switch]$Uninstall,
+    [switch]$Installed,
+    [string]$GameDirectory,
+    [ValidateSet('Update','Repair','ChangeProxy','Uninstall','Cancel')]
+    [string]$ExistingInstallAction,
+    [ValidateSet('KeepSettings','RemoveSettings','Full')]
+    [string]$UninstallMode,
+    [ValidateSet('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')]
+    [string]$ManualProxyName,
+    [string]$LegacyManifest,
+    [switch]$RemovePrivateModel,
+    [switch]$ConfirmUninstall
 )
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -21,7 +33,15 @@ function HashBytes([byte[]]$Bytes) {
     finally { $sha.Dispose() }
 }
 function SaveRecord([string]$Path, $Value) {
-    [IO.File]::WriteAllText($Path, ($Value | ConvertTo-Json -Depth 12), (New-Object Text.UTF8Encoding($false)))
+    $parent = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+    $temporary = $Path + '.tmp'
+    [IO.File]::WriteAllText($temporary, ($Value | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding($false)))
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        [IO.File]::Replace($temporary,$Path,[NullString]::Value)
+    } else {
+        [IO.File]::Move($temporary,$Path)
+    }
 }
 function SafePath([string]$Root, [string]$Relative) {
     if ([string]::IsNullOrWhiteSpace($Relative) -or [IO.Path]::IsPathRooted($Relative) -or
@@ -156,11 +176,42 @@ function AllowedTarget([string]$Relative) {
         $Relative -match '^(OptiScaler|Licenses)\\[^:]+$')
 }
 
-if ($Restore) {
-    $recordPath = Join-Path $PSScriptRoot 'INSTALL-MANIFEST.json'
-    $record = Get-Content -Raw -Encoding UTF8 -LiteralPath $recordPath | ConvertFrom-Json
-    if ($record.kind -ne 'neurotic-customer-candidate-install' -or $record.status -ne 'installed-verified' -or
-        $record.backup -ne $PSScriptRoot -or $record.files.Count -lt 2) { throw 'This is not a completed installation backup.' }
+function Assert-PathUnderRoot([string]$Root,[string]$Path) {
+    $base = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $full = [IO.Path]::GetFullPath($Path).TrimEnd('\')
+    if (-not $full.StartsWith($base + '\',[StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path leaves the selected game folder: $full"
+    }
+    $walk = $full
+    while ($walk -and $walk.StartsWith($base,[StringComparison]::OrdinalIgnoreCase)) {
+        if (Test-Path -LiteralPath $walk) {
+            if ((Get-Item -Force -LiteralPath $walk).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "Linked installation records are not supported: $walk"
+            }
+        }
+        if ($walk -eq $base) { break }
+        $walk = Split-Path -Parent $walk
+    }
+    return $full
+}
+
+function Read-InstallRecord([string]$RecordPath) {
+    if (-not (Test-Path -LiteralPath $RecordPath -PathType Leaf)) { throw "Installation record was not found: $RecordPath" }
+    $record = Get-Content -Raw -Encoding UTF8 -LiteralPath $RecordPath | ConvertFrom-Json
+    if ($record.kind -ne 'neurotic-customer-candidate-install' -or $record.files.Count -lt 2) {
+        throw "This is not a recognized NeuRotic installation record: $RecordPath"
+    }
+    return $record
+}
+
+function Invoke-RestoreRecord([string]$RecordPath,[switch]$AllowRestored) {
+    $record = Read-InstallRecord $RecordPath
+    if ($record.status -ne 'installed-verified' -and -not ($AllowRestored -and $record.status -eq 'restored')) {
+        throw "This installation record is not active: $RecordPath"
+    }
+    if ($record.status -eq 'restored') { return $record }
+    $backupRoot = Split-Path -Parent $RecordPath
+    if ($record.backup -ne $backupRoot) { throw 'Installation record backup path does not match its location.' }
     $gameDir = Split-Path -Parent $record.game_executable
     CheckGameClosed $record.game_executable
     $current = New-Object System.Collections.Generic.List[object]
@@ -170,15 +221,19 @@ if ($Restore) {
         $existsNow = Test-Path -LiteralPath $target -PathType Leaf
         $currentHash = $(if ($existsNow) { HashFile $target } else { $null })
         $current.Add([pscustomobject]@{path=$file.path;existed=$existsNow;sha256=$currentHash})
-        if ($file.path -ne 'OptiScaler.ini' -and (-not $existsNow -or $currentHash -ne $file.installed_hash)) {
-            throw "A file has changed since installation: $target. Restore stopped."
+        $expectsInstalled = -not ($file.PSObject.Properties.Name -contains 'installed_exists') -or [bool]$file.installed_exists
+        if ($file.path -ne 'OptiScaler.ini') {
+            if ($expectsInstalled -and (-not $existsNow -or $currentHash -ne $file.installed_hash)) {
+                throw "A file has changed since installation: $target. Restore stopped."
+            }
+            if (-not $expectsInstalled -and $existsNow) { throw "A removed proxy name is occupied again: $target. Restore stopped." }
         }
-        if ($file.existed -and (HashFile (SafePath (Join-Path $PSScriptRoot 'previous') $file.path)) -ne $file.previous_hash) {
+        if ($file.existed -and (HashFile (SafePath (Join-Path $backupRoot 'previous') $file.path)) -ne $file.previous_hash) {
             throw 'A backup file failed verification.'
         }
     }
     if ($CheckOnly) { Write-Output 'PASS: restore preflight; no files changed.'; return }
-    $undo = Join-Path $PSScriptRoot ('restore-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
+    $undo = Join-Path $backupRoot ('restore-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
     New-Item -ItemType Directory -Path $undo | Out-Null
     foreach ($file in $current) {
         if ($file.existed) { CopyVerified (SafePath $gameDir $file.path) (SafePath $undo $file.path) $file.sha256 }
@@ -191,7 +246,7 @@ if ($Restore) {
             $target = SafePath $gameDir $file.path
             $touched.Add($file)
             if ($file.existed) {
-                CopyVerified (SafePath (Join-Path $PSScriptRoot 'previous') $file.path) $target $file.previous_hash
+                CopyVerified (SafePath (Join-Path $backupRoot 'previous') $file.path) $target $file.previous_hash
             } elseif (Test-Path -LiteralPath $target -PathType Leaf) {
                 Remove-Item -LiteralPath $target -Force
             } elseif (Test-Path -LiteralPath $target) {
@@ -211,7 +266,267 @@ if ($Restore) {
         throw
     }
     $record.status = 'restored'; $record.restored_utc = [DateTime]::UtcNow.ToString('o'); SaveRecord $recordPath $record
-    Write-Output "PASS: exact pre-install files restored, including $($record.selected_proxy) and OptiScaler.ini. Removed candidate files remain recoverable in: $undo"
+    Write-Host "PASS: exact pre-install files restored, including $($record.selected_proxy) and OptiScaler.ini. Removed candidate files remain recoverable in: $undo"
+    return $record
+}
+
+function Select-UninstallMode {
+    Write-Host ''
+    Write-Host 'What should happen to your NeuRotic settings?'
+    Write-Host '1. Keep my current settings for reinstalling (recommended)'
+    Write-Host '2. Remove NeuRotic settings and restore the exact pre-install state'
+    Write-Host '3. Full cleanup: remove settings plus installer history and backups'
+    Write-Host '0. Cancel'
+    $choice = (Read-Host 'Choose 0, 1, 2, or 3').Trim()
+    return $(switch ($choice) { '1' {'KeepSettings'} '2' {'RemoveSettings'} '3' {'Full'} default {$null} })
+}
+
+function Test-RecordAgainstHashes($Record,$Hashes) {
+    foreach ($file in $Record.files) {
+        if ($file.path -eq 'OptiScaler.ini') { continue }
+        $expectsInstalled = -not ($file.PSObject.Properties.Name -contains 'installed_exists') -or [bool]$file.installed_exists
+        if ($expectsInstalled -and (-not $Hashes.ContainsKey([string]$file.path) -or $Hashes[[string]$file.path] -ne [string]$file.installed_hash)) { return $false }
+        if (-not $expectsInstalled -and $Hashes.ContainsKey([string]$file.path)) { return $false }
+    }
+    return $true
+}
+
+function Get-LegacyRestoreChain([string]$GameRoot,[string]$SelectedManifest) {
+    $paths = @()
+    if ($SelectedManifest) {
+        $paths = @((Resolve-Path -LiteralPath $SelectedManifest).Path)
+    } else {
+        foreach ($relativeRoot in @('NeuRotic-test-backups','NeuRotic-backups')) {
+            $root = Join-Path $GameRoot $relativeRoot
+            if (Test-Path -LiteralPath $root -PathType Container) {
+                $paths += @(Get-ChildItem -LiteralPath $root -Filter 'INSTALL-MANIFEST.json' -File -Recurse | Select-Object -ExpandProperty FullName)
+            }
+        }
+    }
+    $records = @($paths | ForEach-Object {
+        try {
+            $r = Read-InstallRecord $_
+            if ($r.status -eq 'installed-verified' -and (Split-Path -Parent $r.game_executable) -eq $GameRoot) {
+                [pscustomobject]@{Path=$_;Record=$r}
+            }
+        } catch {}
+    })
+    if (-not $records.Count) { return @() }
+    $hashes = @{}
+    foreach ($name in $allowedProxies + @('ReShade64.dll','nvngx.dll_dlssnr.dll','OptiScaler.ini','NeuRotic-LICENSE.txt')) {
+        $candidate = Join-Path $GameRoot $name
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $hashes[$name] = HashFile $candidate }
+    }
+    foreach ($dir in @('OptiScaler','Licenses')) {
+        $candidateRoot = Join-Path $GameRoot $dir
+        if (Test-Path -LiteralPath $candidateRoot -PathType Container) {
+            foreach ($file in Get-ChildItem -LiteralPath $candidateRoot -File -Recurse) {
+                $relative = $file.FullName.Substring($GameRoot.Length + 1)
+                $hashes[$relative] = HashFile $file.FullName
+            }
+        }
+    }
+    $chain = New-Object System.Collections.Generic.List[string]
+    while ($true) {
+        $matches = @($records | Where-Object { Test-RecordAgainstHashes $_.Record $hashes })
+        if (-not $matches.Count) { break }
+        if ($matches.Count -gt 1) { throw 'More than one legacy installation record matches the current files. Select the exact game or use the installed uninstaller.' }
+        $match = $matches[0]
+        $chain.Add($match.Path)
+        foreach ($file in $match.Record.files) {
+            if ($file.existed) { $hashes[[string]$file.path] = [string]$file.previous_hash }
+            else { [void]$hashes.Remove([string]$file.path) }
+        }
+        $records = @($records | Where-Object { $_.Path -ne $match.Path })
+    }
+    return @($chain)
+}
+
+function Get-GameForUninstall {
+    if ($GameDirectory) {
+        $root = [IO.Path]::GetFullPath($GameDirectory).TrimEnd('\')
+        if (-not (Test-Path -LiteralPath $root -PathType Container)) { throw "Game folder was not found: $root" }
+        return [pscustomobject]@{Root=$root;Executable=$null}
+    }
+    if (-not $GameExecutable) {
+        Add-Type -AssemblyName System.Windows.Forms
+        $picker = New-Object System.Windows.Forms.OpenFileDialog
+        $picker.Title = 'NeuRotic Uninstall - select your game executable'
+        $picker.Filter = 'Game executable (*.exe)|*.exe'
+        try {
+            if ($picker.ShowDialog() -ne [Windows.Forms.DialogResult]::OK) { return $null }
+            $script:GameExecutable = $picker.FileName
+        } finally { $picker.Dispose() }
+    }
+    $exe = (Resolve-Path -LiteralPath $GameExecutable).Path
+    if ([IO.Path]::GetExtension($exe) -ine '.exe') { throw 'Select the game executable.' }
+    return [pscustomobject]@{Root=(Split-Path -Parent $exe);Executable=$exe}
+}
+
+function Invoke-ManualUninstall([string]$GameRoot,[string]$Mode) {
+    $packageManifestPath = Join-Path $PSScriptRoot 'PACKAGE-MANIFEST.json'
+    $knownHash = $null
+    $payload = @()
+    if (Test-Path -LiteralPath $packageManifestPath -PathType Leaf) {
+        $packageManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $packageManifestPath | ConvertFrom-Json
+        $payload = @($packageManifest.files | Where-Object { $_.path.StartsWith('payload\',[StringComparison]::OrdinalIgnoreCase) })
+        $runtime = @($payload | Where-Object { $_.path -eq 'payload\OptiScaler.dll' })
+        if ($runtime.Count -eq 1) { $knownHash = [string]$runtime[0].sha256 }
+    }
+    $detected = @($allowedProxies | Where-Object {
+        $path = Join-Path $GameRoot $_
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+        if ($knownHash -and (HashFile $path) -eq $knownHash) { return $true }
+        return (Get-Item -LiteralPath $path).VersionInfo.OriginalFilename -ieq 'OptiScaler.dll'
+    })
+    $proxy = $ManualProxyName
+    if (-not $proxy -and $detected.Count -eq 1) { $proxy = $detected[0] }
+    if (-not $proxy) {
+        Write-Host ''
+        if ($detected.Count) { Write-Host ('Possible NeuRotic proxy files: ' + ($detected -join ', ')) }
+        Write-Host 'No trustworthy installation record was found. Choose the filename you installed NeuRotic as.'
+        $proxy = SelectProxyName
+    }
+    if (-not $proxy) { Write-Output 'Uninstall cancelled. No files were changed.'; return }
+    $proxyPath = SafePath $GameRoot $proxy
+    if (-not (Test-Path -LiteralPath $proxyPath -PathType Leaf)) { throw "The selected proxy does not exist: $proxyPath" }
+    $managed = New-Object System.Collections.Generic.List[string]
+    $managed.Add($proxy)
+    foreach ($file in $payload) {
+        $relative = [string]$file.path.Substring(8)
+        if ($relative -eq 'OptiScaler.dll' -or $relative -eq 'OptiScaler.ini') { continue }
+        if (-not (AllowedTarget $relative)) { continue }
+        $target = SafePath $GameRoot $relative
+        if ((Test-Path -LiteralPath $target -PathType Leaf) -and (HashFile $target) -eq [string]$file.sha256) { $managed.Add($relative) }
+    }
+    Write-Output ''
+    Write-Output 'NeuRotic uninstall - manual recovery mode'
+    Write-Output "Game folder: $GameRoot"
+    Write-Output "Selected proxy: $proxy"
+    Write-Output ('Verified files to remove: ' + (($managed | Select-Object -Unique) -join ', '))
+    Write-Output 'No original proxy can be restored because no installation record was found.'
+    if ($CheckOnly) { Write-Output 'PASS: manual uninstall preview; no files changed.'; return }
+    if (-not $ConfirmUninstall -and (Read-Host 'Type UNINSTALL to continue') -cne 'UNINSTALL') { Write-Output 'Uninstall cancelled. No files were changed.'; return }
+    $recovery = Join-Path $GameRoot ('NeuRotic-uninstall-recovery\manual-' + [Guid]::NewGuid().ToString('N').Substring(0,12))
+    New-Item -ItemType Directory -Path $recovery -Force | Out-Null
+    foreach ($relative in @($managed | Select-Object -Unique)) {
+        $target = SafePath $GameRoot $relative
+        CopyVerified $target (SafePath $recovery $relative) (HashFile $target)
+    }
+    foreach ($relative in @($managed | Select-Object -Unique)) { Remove-Item -LiteralPath (SafePath $GameRoot $relative) -Force }
+    if ($Mode -ne 'KeepSettings') {
+        $iniPath = Join-Path $GameRoot 'OptiScaler.ini'
+        if (Test-Path -LiteralPath $iniPath -PathType Leaf) { Copy-Item -LiteralPath $iniPath -Destination $recovery; Remove-Item -LiteralPath $iniPath -Force }
+    }
+    Write-Output "PASS: manually selected NeuRotic files removed. Recovery: $recovery"
+}
+
+function Invoke-PublicUninstall {
+    $game = Get-GameForUninstall
+    if (-not $game) { Write-Output 'Uninstall cancelled. No files were changed.'; return }
+    $gameRoot = $game.Root
+    $statePath = Join-Path $gameRoot 'NeuRotic\Installer\Current-Install.json'
+    $state = $null
+    $chain = @()
+    if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+        $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
+        if ($state.kind -ne 'neurotic-public-install' -or $state.schema_version -ne 2 -or $state.status -ne 'installed-verified') {
+            throw 'The managed NeuRotic installation record is invalid or not active.'
+        }
+        if ([IO.Path]::GetFullPath([string]$state.game_directory).TrimEnd('\') -ne $gameRoot) { throw 'The managed installation record belongs to another game folder.' }
+        if ($state.game_executable) { $game.Executable = [string]$state.game_executable }
+        foreach ($item in @($state.restore_chain)) {
+            $candidate = Assert-PathUnderRoot $gameRoot ([string]$item)
+            $chain += $candidate
+        }
+        [array]::Reverse($chain)
+    } else {
+        $chain = @(Get-LegacyRestoreChain $gameRoot $LegacyManifest)
+    }
+    if ($game.Executable) { CheckGameClosed $game.Executable }
+    $mode = $UninstallMode
+    if (-not $mode) { $mode = Select-UninstallMode }
+    if (-not $mode) { Write-Output 'Uninstall cancelled. No files were changed.'; return }
+    if (-not $chain.Count) { Invoke-ManualUninstall $gameRoot $mode; return }
+    $validatedRecords = @($chain | ForEach-Object {
+        $recordPath = Assert-PathUnderRoot $gameRoot $_
+        $record = Read-InstallRecord $recordPath
+        $recordGameRoot = [IO.Path]::GetFullPath((Split-Path -Parent ([string]$record.game_executable))).TrimEnd('\')
+        $recordBackup = [IO.Path]::GetFullPath([string]$record.backup).TrimEnd('\')
+        $expectedBackup = [IO.Path]::GetFullPath((Split-Path -Parent $recordPath)).TrimEnd('\')
+        if (-not $recordGameRoot.Equals($gameRoot,[StringComparison]::OrdinalIgnoreCase) -or
+            -not $recordBackup.Equals($expectedBackup,[StringComparison]::OrdinalIgnoreCase)) {
+            throw "An installation record does not belong to the selected game folder: $recordPath"
+        }
+        $record
+    })
+    $newest = $validatedRecords[0]
+    $currentIniPath = Join-Path $gameRoot 'OptiScaler.ini'
+    $currentIniBytes = $(if (Test-Path -LiteralPath $currentIniPath -PathType Leaf) { [IO.File]::ReadAllBytes($currentIniPath) } else { $null })
+    Write-Output ''
+    Write-Output 'NeuRotic uninstall plan'
+    Write-Output "Game: $gameRoot"
+    Write-Output "Installed as: $($newest.selected_proxy)"
+    if ($state) {
+        Write-Output "Installed release: $($state.release_name)"
+        Write-Output "Last installed: $($state.last_install_utc)"
+        Write-Output "Installation history entries: $($chain.Count)"
+    } else { Write-Output "Legacy installation records: $($chain.Count)" }
+    Write-Output "Settings choice: $mode"
+    Write-Output 'Private NVIDIA NR model: keep (user-owned)'
+    if ($RemovePrivateModel) { Write-Output 'Private NVIDIA NR model: REMOVE (separately requested)' }
+    if ($CheckOnly) { Write-Output 'PASS: uninstall preview; no files changed.'; return }
+    if (-not $ConfirmUninstall -and (Read-Host 'Type UNINSTALL to continue') -cne 'UNINSTALL') { Write-Output 'Uninstall cancelled. No files were changed.'; return }
+    foreach ($recordPath in $chain) { [void](Invoke-RestoreRecord $recordPath) }
+    $savedSettingsPath = Join-Path $gameRoot 'NeuRotic\UserData\OptiScaler.ini'
+    if ($mode -eq 'KeepSettings' -and $currentIniBytes) {
+        $settingsHash = HashBytes $currentIniBytes
+        WriteVerifiedBytes $currentIniBytes $savedSettingsPath $settingsHash
+        Write-Output "Current NeuRotic settings saved for reinstalling: $savedSettingsPath"
+    } elseif (Test-Path -LiteralPath $savedSettingsPath -PathType Leaf) {
+        Remove-Item -LiteralPath $savedSettingsPath -Force
+    }
+    if ($RemovePrivateModel) {
+        $deleteModel = $true
+        if (-not $ConfirmUninstall) {
+            if ((Read-Host 'The private NVIDIA model was not installed by NeuRotic. Type DELETE MODEL to remove it') -cne 'DELETE MODEL') {
+                $deleteModel = $false
+                Write-Output 'Private-model removal was not confirmed. The model was preserved.'
+            }
+        }
+        $model = Join-Path $gameRoot 'nvngx_dlssnr.dll'
+        if ($deleteModel -and (Test-Path -LiteralPath $model -PathType Leaf)) { Remove-Item -LiteralPath $model -Force }
+    }
+    $installedLauncher = Join-Path $gameRoot 'Uninstall NeuRotic.cmd'
+    if ((Test-Path -LiteralPath $installedLauncher -PathType Leaf) -and -not $Installed) { Remove-Item -LiteralPath $installedLauncher -Force }
+    if ($state) {
+        $state.status = 'uninstalled'; $state.uninstalled_utc = [DateTime]::UtcNow.ToString('o'); $state.uninstall_mode = $mode
+        SaveRecord $statePath $state
+    }
+    if ($mode -eq 'Full') {
+        foreach ($recordPath in $chain) {
+            $folder = Assert-PathUnderRoot $gameRoot (Split-Path -Parent $recordPath)
+            if (Test-Path -LiteralPath $folder -PathType Container) { Remove-Item -LiteralPath $folder -Recurse -Force }
+        }
+        foreach ($relativeRoot in @('NeuRotic-backups','NeuRotic-test-backups')) {
+            $backupContainer = Join-Path $gameRoot $relativeRoot
+            if ((Test-Path -LiteralPath $backupContainer -PathType Container) -and
+                @(Get-ChildItem -Force -LiteralPath $backupContainer).Count -eq 0) {
+                Remove-Item -LiteralPath $backupContainer -Force
+            }
+        }
+        $managedRoot = Join-Path $gameRoot 'NeuRotic'
+        if (Test-Path -LiteralPath $managedRoot -PathType Container) { Remove-Item -LiteralPath $managedRoot -Recurse -Force }
+    }
+    Write-Output 'PASS: NeuRotic was uninstalled and the verified pre-install files were restored.'
+}
+
+if ($Restore) {
+    [void](Invoke-RestoreRecord (Join-Path $PSScriptRoot 'INSTALL-MANIFEST.json'))
+    return
+}
+if ($Uninstall) {
+    Invoke-PublicUninstall
     return
 }
 
@@ -227,7 +542,7 @@ foreach ($file in $manifest.files) {
         throw "Package verification failed: $($file.path)"
     }
 }
-foreach ($required in @('payload\OptiScaler.dll','payload\nvngx.dll_dlssnr.dll','payload\OptiScaler.ini','support\NeuRotic-Setup-Engine.ps1','support\BUILD-MANIFEST.json','NeuRotic-Setup.cmd')) {
+foreach ($required in @('payload\OptiScaler.dll','payload\nvngx.dll_dlssnr.dll','payload\OptiScaler.ini','support\NeuRotic-Setup-Engine.ps1','support\BUILD-MANIFEST.json','NeuRotic-Setup.cmd','NeuRotic-Uninstall.cmd')) {
     if (-not $seen.ContainsKey($required)) { throw "Missing manifest entry: $required" }
 }
 $build = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PSScriptRoot 'BUILD-MANIFEST.json') | ConvertFrom-Json
@@ -250,6 +565,62 @@ if ($gameDir -eq $packageRoot -or $gameDir.StartsWith($packageRoot + '\',[String
     throw 'Keep the complete installer folder outside the game folder.'
 }
 CheckGameClosed $GameExecutable
+$managerRoot = SafePath $gameDir 'NeuRotic\Installer'
+$currentStatePath = Join-Path $managerRoot 'Current-Install.json'
+$priorState = $null
+$changingFromProxy = $null
+if (Test-Path -LiteralPath $currentStatePath -PathType Leaf) {
+    $priorState = Get-Content -Raw -Encoding UTF8 -LiteralPath $currentStatePath | ConvertFrom-Json
+    if ($priorState.kind -ne 'neurotic-public-install' -or $priorState.schema_version -ne 2 -or
+        [IO.Path]::GetFullPath([string]$priorState.game_directory).TrimEnd('\') -ne $gameDir) {
+        throw 'An invalid managed NeuRotic installation record is present. No files were changed.'
+    }
+    if ($priorState.status -eq 'uninstalled') {
+        $priorState = $null
+    } elseif ($priorState.status -ne 'installed-verified') {
+        throw 'The managed NeuRotic installation record is incomplete. No files were changed.'
+    }
+}
+if ($priorState) {
+    if (-not $ProxyName) {
+        $choice = $ExistingInstallAction
+        if (-not $choice) {
+            Write-Host ''
+            Write-Host 'NeuRotic is already installed in this game.'
+            Write-Host ("Release: {0}" -f $priorState.release_name)
+            Write-Host ("Installed as: {0}" -f $priorState.selected_proxy)
+            Write-Host ("Last installed: {0}" -f $priorState.last_install_utc)
+            Write-Host '1. Update or repair using the same filename'
+            Write-Host '2. Change the proxy filename (uninstall first, then rerun Setup)'
+            Write-Host '3. Uninstall NeuRotic'
+            Write-Host '0. Cancel'
+            $answer = (Read-Host 'Choose 0, 1, 2, or 3').Trim()
+            $choice = $(switch ($answer) { '1' {'Update'} '2' {'ChangeProxy'} '3' {'Uninstall'} default {'Cancel'} })
+        }
+        if ($choice -eq 'Cancel') { Write-Output 'Setup cancelled. No files were changed.'; return }
+        if ($choice -eq 'Uninstall') {
+            $script:GameDirectory = $gameDir
+            Invoke-PublicUninstall
+            return
+        }
+        if ($choice -eq 'ChangeProxy') {
+            $changingFromProxy = [string]$priorState.selected_proxy
+            $ProxyName = SelectProxyName
+            if (-not $ProxyName) { Write-Output 'Setup cancelled. No files were changed.'; return }
+            if ($ProxyName -ieq $changingFromProxy) { $changingFromProxy = $null; $ExistingProxyAction = 'Replace' }
+        } else {
+            $ProxyName = [string]$priorState.selected_proxy
+            if (-not $ExistingProxyAction) { $ExistingProxyAction = 'Replace' }
+        }
+    } elseif ($ProxyName -ine [string]$priorState.selected_proxy) {
+        if ($ExistingInstallAction -ne 'ChangeProxy') {
+            throw "NeuRotic is managed as $($priorState.selected_proxy). Choose ChangeProxy or keep the recorded filename."
+        }
+        $changingFromProxy = [string]$priorState.selected_proxy
+    } elseif (-not $ExistingProxyAction) {
+        $ExistingProxyAction = 'Replace'
+    }
+}
 $action = 'None'
 $scriptedAction = $ExistingProxyAction
 $selectedProxy = $ProxyName
@@ -289,7 +660,7 @@ while ($true) {
 $ProxyName = $selectedProxy
 
 # Never infer the selected name from an existing DLL. Refuse a second active OptiScaler proxy.
-$otherOptiScaler = @($allowedProxies | Where-Object { $_ -ine $ProxyName } | Where-Object {
+$otherOptiScaler = @($allowedProxies | Where-Object { $_ -ine $ProxyName -and $_ -ine $changingFromProxy } | Where-Object {
     $candidate = SafePath $gameDir $_
     (Test-Path -LiteralPath $candidate -PathType Leaf) -and
         (Get-Item -LiteralPath $candidate).VersionInfo.OriginalFilename -ieq 'OptiScaler.dll'
@@ -313,7 +684,9 @@ foreach ($file in $manifest.files) {
     $operation = 'copy-package'
     $installedHash = $file.sha256
     if ($relative -eq 'OptiScaler.ini') {
-        $baseBytes = $(if ($exists) { [IO.File]::ReadAllBytes($target) } else { [IO.File]::ReadAllBytes((SafePath $packageRoot $file.path)) })
+        $savedSettings = Join-Path $gameDir 'NeuRotic\UserData\OptiScaler.ini'
+        $reuseSavedSettings = -not $exists -and (Test-Path -LiteralPath $savedSettings -PathType Leaf)
+        $baseBytes = $(if ($exists) { [IO.File]::ReadAllBytes($target) } elseif ($reuseSavedSettings) { [IO.File]::ReadAllBytes($savedSettings) } else { [IO.File]::ReadAllBytes((SafePath $packageRoot $file.path)) })
         if ($exists) { $iniOriginalBytes = $baseBytes }
         if ($action -eq 'RenameReShade') {
             $iniPlan = PlanLoadReshadeEdit $baseBytes
@@ -324,6 +697,7 @@ foreach ($file in $manifest.files) {
             $operation = 'preserve-existing'
         } else {
             $iniPlan = [pscustomobject]@{Bytes=$baseBytes;Encoding='package';HadBom=$false}
+            if ($reuseSavedSettings) { $installedHash = HashBytes $baseBytes; $operation = 'reuse-saved-settings' }
         }
     }
     $files.Add([pscustomobject][ordered]@{path=$relative;source=$file.path;operation=$operation;existed=$exists;
@@ -333,6 +707,31 @@ if ($action -eq 'RenameReShade') {
     $files.Add([pscustomobject][ordered]@{path='ReShade64.dll';source=$null;operation='rename-existing-proxy';existed=$false;
         previous_hash=$null;installed_hash=(HashFile $proxyPath)})
 }
+$oldProxyTransition = $null
+if ($changingFromProxy) {
+    if ($changingFromProxy -ieq 'dxgi.dll' -and (Test-Path -LiteralPath (Join-Path $gameDir 'ReShade64.dll') -PathType Leaf)) {
+        throw 'A managed ReShade proxy move is active. Uninstall first so dxgi.dll and ReShade64.dll can be restored together, then choose the new proxy.'
+    }
+    if (-not $priorState.restore_chain.Count) { throw 'The managed installation has no restore history for a proxy change.' }
+    $latestRecord = Read-InstallRecord ([string]$priorState.restore_chain[$priorState.restore_chain.Count-1])
+    $latestEntry = @($latestRecord.files | Where-Object { $_.path -ieq $changingFromProxy })
+    if ($latestEntry.Count -ne 1) { throw 'The active proxy is not represented exactly once in the latest installation record.' }
+    $oldProxyPath = SafePath $gameDir $changingFromProxy
+    if (-not (Test-Path -LiteralPath $oldProxyPath -PathType Leaf) -or (HashFile $oldProxyPath) -ne [string]$latestEntry[0].installed_hash) {
+        throw "The managed $changingFromProxy changed or is missing. Proxy change stopped."
+    }
+    $oldestRecordPath = [string]$priorState.restore_chain[0]
+    $oldestRecord = Read-InstallRecord $oldestRecordPath
+    $baselineEntry = @($oldestRecord.files | Where-Object { $_.path -ieq $changingFromProxy })
+    if ($baselineEntry.Count -ne 1) { throw 'The original proxy baseline is ambiguous.' }
+    $baselineExists = [bool]$baselineEntry[0].existed
+    $baselineHash = $(if ($baselineExists) {[string]$baselineEntry[0].previous_hash} else {$null})
+    $baselineSource = $(if ($baselineExists) { SafePath (Join-Path (Split-Path -Parent $oldestRecordPath) 'previous') $changingFromProxy } else {$null})
+    if ($baselineExists -and (HashFile $baselineSource) -ne $baselineHash) { throw 'The original proxy baseline backup failed verification.' }
+    $oldProxyTransition = [pscustomobject]@{path=$changingFromProxy;target=$oldProxyPath;final_exists=$baselineExists;final_hash=$baselineHash;source=$baselineSource}
+    $files.Add([pscustomobject][ordered]@{path=$changingFromProxy;source=$null;operation='restore-old-managed-proxy';existed=$true;
+        previous_hash=(HashFile $oldProxyPath);installed_exists=$baselineExists;installed_hash=$baselineHash})
+}
 $preserved = @()
 $modelPath = SafePath $gameDir 'nvngx_dlssnr.dll'
 if (Test-Path -LiteralPath $modelPath -PathType Leaf) { $preserved += @{path='nvngx_dlssnr.dll';sha256=(HashFile $modelPath)} }
@@ -341,6 +740,7 @@ Write-Output ''
 Write-Output ('NeuRotic - Candidate ' + $manifest.commit.Substring(0,8))
 Write-Output "Game: $GameExecutable"
 Write-Output "Install target: $ProxyName"
+if ($oldProxyTransition) { Write-Output "Proxy change: restore/remove managed $changingFromProxy, then install as $ProxyName in one rollback transaction." }
 if ($action -eq 'RenameReShade') {
     Write-Output 'Existing dxgi.dll: rename to ReShade64.dll and enable LoadReshade.'
 } elseif ($action -eq 'Replace') {
@@ -355,7 +755,10 @@ if (-not (Test-Path -LiteralPath $modelPath -PathType Leaf)) {
 if ($CheckOnly) { Write-Output 'PASS: full installer preflight; no files changed.'; return }
 
 $run = [Guid]::NewGuid().ToString('N').Substring(0,12)
-$backup = SafePath $gameDir ("NeuRotic-test-backups\candidate-$run")
+$backup = SafePath $gameDir ("NeuRotic-backups\install-$run")
+$priorChain = @()
+if ($priorState) { $priorChain = @($priorState.restore_chain | ForEach-Object { [string]$_ }) }
+else { $priorChain = @(Get-LegacyRestoreChain $gameDir $null) }
 foreach ($file in $files) {
     $restorePath = SafePath (Join-Path $backup 'restore-00000000') $file.path
     if ($restorePath.Length -ge 248) { throw 'The game folder path is too long for reliable Windows PowerShell backup/restore. No game files were changed.' }
@@ -364,6 +767,12 @@ New-Item -ItemType Directory -Path $backup | Out-Null
 foreach ($file in $files) {
     if ($file.existed) { CopyVerified (SafePath $gameDir $file.path) (SafePath (Join-Path $backup 'previous') $file.path) $file.previous_hash }
 }
+$managerWasPresent = Test-Path -LiteralPath $managerRoot -PathType Container
+$managerSnapshot = Join-Path $backup 'manager-previous'
+if ($managerWasPresent) { Copy-Item -LiteralPath $managerRoot -Destination $managerSnapshot -Recurse -Force }
+$priorInstalledLauncher = Join-Path $gameDir 'Uninstall NeuRotic.cmd'
+$launcherSnapshot = Join-Path $backup 'Uninstall NeuRotic.cmd.previous'
+if (Test-Path -LiteralPath $priorInstalledLauncher -PathType Leaf) { Copy-Item -LiteralPath $priorInstalledLauncher -Destination $launcherSnapshot -Force }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'NeuRotic-Setup-Engine.ps1') -Destination $backup
 [IO.File]::WriteAllText((Join-Path $backup 'Restore.cmd'), "@echo off`r`nsetlocal`r`ntitle NeuRotic Restore`r`nset `"PSModulePath=`"`r`n`"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File `"%~dp0NeuRotic-Setup-Engine.ps1`" -Restore %*`r`nset `"result=%ERRORLEVEL%`"`r`nif not `"%result%`"==`"0`" echo Restore did not complete. Read the message above.`r`npause`r`nexit /b %result%`r`n", [Text.Encoding]::ASCII)
 $iniEntry = @($files | Where-Object { $_.path -eq 'OptiScaler.ini' })[0]
@@ -394,8 +803,16 @@ try {
         Touch $ProxyName; Remove-Item -LiteralPath $proxyPath -Force
         if (Test-Path -LiteralPath $proxyPath) { throw "Existing $ProxyName could not be removed." }
     }
+    if ($oldProxyTransition) {
+        Touch $oldProxyTransition.path
+        if ($oldProxyTransition.final_exists) {
+            CopyVerified $oldProxyTransition.source $oldProxyTransition.target $oldProxyTransition.final_hash
+        } elseif (Test-Path -LiteralPath $oldProxyTransition.target -PathType Leaf) {
+            Remove-Item -LiteralPath $oldProxyTransition.target -Force
+        }
+    }
     foreach ($file in $files) {
-        if ($file.operation -eq 'rename-existing-proxy') { continue }
+        if ($file.operation -in @('rename-existing-proxy','restore-old-managed-proxy')) { continue }
         $target = SafePath $gameDir $file.path
         if ($file.operation -eq 'preserve-existing') {
             if ((HashFile $target) -ne $file.previous_hash) { throw 'OptiScaler.ini changed before installation.' }
@@ -414,12 +831,49 @@ try {
         }
     }
     foreach ($file in $files) {
-        if ((HashFile (SafePath $gameDir $file.path)) -ne $file.installed_hash) { throw "Installed verification failed: $($file.path)" }
+        $target = SafePath $gameDir $file.path
+        $expectsInstalled = -not ($file.PSObject.Properties.Name -contains 'installed_exists') -or [bool]$file.installed_exists
+        if ($expectsInstalled) {
+            if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or (HashFile $target) -ne $file.installed_hash) { throw "Installed verification failed: $($file.path)" }
+        } elseif (Test-Path -LiteralPath $target) { throw "Removed proxy still exists after the managed proxy change: $($file.path)" }
     }
     foreach ($file in $preserved) {
         if ((HashFile (SafePath $gameDir $file.path)) -ne $file.sha256) { throw 'The NVIDIA model changed externally.' }
     }
     $record.status='installed-verified'; $record.completed_utc=[DateTime]::UtcNow.ToString('o'); SaveRecord $recordPath $record
+
+    New-Item -ItemType Directory -Path $managerRoot -Force | Out-Null
+    $installedEngine = Join-Path $managerRoot 'NeuRotic-Setup-Engine.ps1'
+    CopyVerified (Join-Path $PSScriptRoot 'NeuRotic-Setup-Engine.ps1') $installedEngine (HashFile (Join-Path $PSScriptRoot 'NeuRotic-Setup-Engine.ps1'))
+    $installedLauncher = Join-Path $gameDir 'Uninstall NeuRotic.cmd'
+    $launcherText = @"
+@echo off
+setlocal
+title Uninstall NeuRotic
+echo NeuRotic Uninstaller
+echo This copy already knows which game folder it belongs to.
+echo.
+set "PSModulePath="
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0NeuRotic\Installer\NeuRotic-Setup-Engine.ps1" -Uninstall -Installed -GameDirectory "%~dp0." %*
+set "result=%ERRORLEVEL%"
+if not "%result%"=="0" echo Uninstall did not complete. Read the message above.
+pause
+if not "%result%"=="0" exit /b %result%
+(goto) 2>nul & del /f /q "%~f0" >nul 2>&1
+"@
+    [IO.File]::WriteAllText($installedLauncher,$launcherText,[Text.Encoding]::ASCII)
+    $chain = @($priorChain + $recordPath)
+    $history = @()
+    if ($priorState -and $priorState.install_history) { $history += @($priorState.install_history) }
+    $history += [pscustomobject][ordered]@{install_id=$run;release_name=$(if ($manifest.name) {[string]$manifest.name} else {'NeuRotic'});
+        commit=[string]$manifest.commit;installed_utc=$record.completed_utc;selected_proxy=$ProxyName;record=$recordPath}
+    $state = [ordered]@{kind='neurotic-public-install';schema_version=2;status='installed-verified';product='NeuRotic';
+        release_name=$(if ($manifest.name) {[string]$manifest.name} else {'NeuRotic'});commit=[string]$manifest.commit;
+        game_executable=$GameExecutable;game_directory=$gameDir;selected_proxy=$ProxyName;
+        first_install_utc=$(if ($priorState) {[string]$priorState.first_install_utc} else {$record.completed_utc});last_install_utc=$record.completed_utc;
+        install_history=$history;restore_chain=$chain;installed_uninstaller='Uninstall NeuRotic.cmd';
+        preserved=$preserved;uninstalled_utc=$null;uninstall_mode=$null}
+    SaveRecord $currentStatePath $state
 } catch {
     $record.error=$_.Exception.Message
     try {
@@ -432,6 +886,13 @@ try {
                 CopyVerified (SafePath (Join-Path $backup 'previous') $path) $target $file.previous_hash
             } elseif (Test-Path -LiteralPath $target -PathType Leaf) { Remove-Item -LiteralPath $target -Force }
         }
+        if ($managerWasPresent) {
+            if (Test-Path -LiteralPath $managerRoot) { Remove-Item -LiteralPath $managerRoot -Recurse -Force }
+            Copy-Item -LiteralPath $managerSnapshot -Destination $managerRoot -Recurse -Force
+        } elseif (Test-Path -LiteralPath $managerRoot) { Remove-Item -LiteralPath $managerRoot -Recurse -Force }
+        $installedLauncher = Join-Path $gameDir 'Uninstall NeuRotic.cmd'
+        if (Test-Path -LiteralPath $installedLauncher -PathType Leaf) { Remove-Item -LiteralPath $installedLauncher -Force }
+        if (Test-Path -LiteralPath $launcherSnapshot -PathType Leaf) { Copy-Item -LiteralPath $launcherSnapshot -Destination $installedLauncher -Force }
         $record.status='failed-rolled-back'
     } catch { $record.status='failed-rollback-incomplete';$record.rollback_error=$_.Exception.Message }
     SaveRecord $recordPath $record
@@ -439,4 +900,4 @@ try {
 }
 Write-Output "PASS: full installation verified. Recovery folder: $backup"
 Write-Output 'Next: launch the game and press Insert to open NeuRotic, unless you saved a different shortcut. Keep the recovery folder until testing is complete.'
-Write-Output "To revert, close the game and run Restore.cmd in that recovery folder. Restore runs immediately and returns $ProxyName and OptiScaler.ini to their exact pre-install state."
+Write-Output "To remove NeuRotic, close the game and run 'Uninstall NeuRotic.cmd' in the game folder. Setup also retains the exact recovery record at: $backup"
