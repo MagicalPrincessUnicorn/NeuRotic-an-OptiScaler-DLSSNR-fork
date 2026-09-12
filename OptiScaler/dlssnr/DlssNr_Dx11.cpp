@@ -104,7 +104,7 @@ struct Runtime
         if (handle) CloseHandle(handle);
         if (SUCCEEDED(hr)) hr = d12->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&done));
         handle = nullptr;
-        if (SUCCEEDED(hr)) hr = done->CreateSharedHandle(nullptr, GENERIC_ALL, nullptr, &handle);
+        if (SUCCEEDED(hr)) hr = d12->CreateSharedHandle(done.Get(), nullptr, GENERIC_ALL, nullptr, &handle);
         if (SUCCEEDED(hr)) hr = d11->OpenSharedFence(handle, IID_PPV_ARGS(&done11));
         if (handle) CloseHandle(handle);
         if (FAILED(hr) || !converter.Initialize(d11.Get(), reason))
