@@ -41,6 +41,8 @@ Assert-Ui ($nr.Contains('config.DlssNrApplyModel = false;') -and
            $nr.Contains('config.DlssNrPasses = 1u;') -and
            $nr.Contains('PresentResolution::Automatic') -and
            $nr.Contains('Analysis never tests below 100%%')) 'route analysis hides the effect and fixes every trial at 100 percent and one pass'
+Assert-Ui ($nr.Contains('present.frameIntervalMs') -and
+           (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;')) 'Advisor scores each route from its current live frame interval rather than a stale completed route window'
 Assert-Ui ($nr.Contains('RestoreAdvisorSettings') -and $menu.Contains('CancelAdvisorAnalysis(config') -and
            $menu.Contains('CancelAdvisorAnalysis(Config::Instance()') -and
            $nr.Contains('Output size changed; analysis stopped')) 'save, close, shutdown, cancel, and resize paths restore captured settings'
