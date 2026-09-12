@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include "dlssnr/DlssNr_StageControls.h"
+#include "dlssnr/DlssNr_MenuControls.h"
 
 struct StageUiFixture
 {
@@ -165,6 +166,18 @@ int main()
                 Check(ImGui::GetItemRectMax().x < 900 * scale, "action and language row fits");
                 bool showGraphs = true;
                 ImGui::Checkbox("Show Graphs", &showGraphs);
+                bool nrEnabled = false;
+                const ImGuiID emphasizedId = ImGui::GetID("Enable Neural Rendering");
+                DlssNr::MenuControls::EmphasizedCheckbox("Enable Neural Rendering", &nrEnabled);
+                Check(emphasizedId == ImGui::GetID("Enable Neural Rendering"),
+                      "emphasized checkbox preserves its stable ID");
+                Check(ImGui::GetItemRectMax().x < 900 * scale,
+                      "emphasized checkbox fits both themes at every UI scale");
+                const auto off = DlssNr::MenuControls::EmphasizedToggleStateColor(false);
+                const auto on = DlssNr::MenuControls::EmphasizedToggleStateColor(true);
+                const auto focus = DlssNr::MenuControls::EmphasizedToggleFocusColor();
+                Check(off.x > off.y && on.y > on.x && focus.x > 0.9f && focus.y > 0.6f,
+                      "emphasized checkbox has red off, green on and gold focus states");
                 ImGui::Text("3840x2160 -> 1920x1080 (2.0) [3840x2160 (1.0)]");
                 ImGui::SameLine(0, 10 * scale);
                 ImGui::Text("GPU: %s", "Test GPU");

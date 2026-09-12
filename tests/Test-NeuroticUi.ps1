@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $menu = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/menu/menu_common.cpp') -Raw
 $nr = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Menu.cpp') -Raw
+$nrControls = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssNr_MenuControls.h') -Raw
 $notes = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/NrToggleNotes.h') -Raw
 $config = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/Config.cpp') -Raw
 $header = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/Config.h') -Raw
@@ -19,7 +20,7 @@ Assert-Ui ($menu -match '(?s)void MenuCommon::RenderDiagnosticsPage.*?RenderLogg
 foreach ($label in @('Advanced Settings', 'Logging')) {
     Assert-Ui ($menu.Contains('ScopedCollapsingHeader("' + $label + '", ImGuiTreeNodeFlags_DefaultOpen)')) "$label starts expanded"
 }
-Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen,')) 'NR starts expanded and remains collapsible with a header enable checkbox'
+Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded with a plain collapsible heading'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
 Assert-Ui ($nr.Contains('DeferredNrSlider("##NrManualScale"') -and $nr.Contains('0.25f, 2.0f, 1.0f, "%d%%", true)')) 'manual model resolution retains bounded release-to-commit and 100 percent reset'
 Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
@@ -27,7 +28,7 @@ Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -an
 $multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
 Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
            $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
-Assert-Ui ($multipass.Contains('Checkbox("Enable NR Multipass"')) 'Multipass page uses the requested enable label'
+Assert-Ui ($multipass.Contains('EmphasizedCheckbox("Enable NR Multipass"')) 'Multipass page uses the emphasized enable control'
 Assert-Ui ($nr.Contains('static unsigned int RenderPassCountSelector(Config* config)') -and
            ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 1 -and
            $nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and
@@ -84,7 +85,7 @@ Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apolo
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
 Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink\(\).*?Enjoying NeuRotic\?.*?Send Coffee.*?GetContentRegionAvail.*?SetCursorPosX.*?TextUnformatted\(prompt\).*?Button\(button\)') 'compact Send Coffee prompt right-aligned in final row'
 Assert-Ui (-not $menu.Contains('constexpr const char* button = "Buy Me a Coffee"')) 'old support-button label is no longer rendered'
-Assert-Ui ($nr -match '(?s)&enabled, "Enable Neural Rendering".*?if \(enabled != wasEnabled\).*?NoteNrUserToggle\(\)') 'header checkbox contributes to the shared user-toggle burst'
+Assert-Ui ($nr -match '(?s)EmphasizedCheckbox\("Enable Neural Rendering", &enabled\).*?SetDlssNrEnabled\(enabled\);.*?NoteNrUserToggle\(\)') 'emphasized NR checkbox contributes to the shared user-toggle burst'
 Assert-Ui ($menu -match '(?s)inputDlssNr.*?SetDlssNrEnabled\(enabled\);\s*DlssNr::NoteNrUserToggle\(\);') 'NR hotkey contributes to the same user-toggle burst'
 Assert-Ui (($nr | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 2) 'shared tracker has one definition and one checkbox call'
 Assert-Ui (($menu | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 1) 'hotkey is the only shared-tracker call outside the NR menu'
@@ -104,7 +105,13 @@ Assert-Ui ($stage.Contains('Present Compatibility processes the') -and
            $stage.Contains('unavailable or invalid guides preserve the original image.')) 'method help accurately explains Native and both Present routes'
 Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains('DlssNrPresentCustomScale') -and $stage.Contains('resolution == 2 ? 3 : 2')) 'Present methods remember independent choices; Legacy is conditional'
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
-Assert-Ui ($nr.IndexOf('&enabled, "Enable Neural Rendering"') -lt $nr.IndexOf('StageUi::RenderControls(*config,')) 'enable lives in the NR heading'
+Assert-Ui ($nr.IndexOf('EmphasizedCheckbox("Enable Neural Rendering", &enabled)') -lt $nr.IndexOf('StageUi::RenderControls(*config,')) 'enable lives above the NR injection sentence'
+Assert-Ui ($nr.IndexOf('Checkbox("Apply the model", &applyModel)') -lt $nr.IndexOf('StageUi::RenderControls(*config,') -and
+           $nr.IndexOf('Checkbox("Apply the model", &applyModel)') -lt $nr.IndexOf('renderReadouts(false);')) 'Apply remains fixed beside or below Enable and precedes changing status text'
+Assert-Ui ($nrControls.Contains('enabled ? ImVec4(0.25f, 0.90f, 0.38f, 1.0f)') -and
+           $nrControls.Contains('ImVec4(0.95f, 0.25f, 0.22f, 1.0f)') -and
+           $nrControls.Contains('return ImVec4(1.0f, 0.72f, 0.18f, 1.0f);') -and
+           $nr.Contains('EmphasizedCheckbox("Enable NR Multipass", &enabled)')) 'both enable controls share red off, green on and gold hover or focus states'
 Assert-Ui ($nr.Contains('if (StageUi::ResolutionSelection(uiConfig) == 1)') -and
            $stage.Contains('stage == 0 ? 1 : 3, methodHelp, 0.0f, stage == 0')) 'manual slider covers every method and Before retains its fixed visible method'
 Assert-Ui ($nr -match '(?s)TextUnformatted\("Manual resolution"\);\s*HelpMarker\("Sets the Neural Rendering working resolution.*?Reset restores 100%') 'Manual resolution carries an adjacent stage-relative cost and supersampling explanation'

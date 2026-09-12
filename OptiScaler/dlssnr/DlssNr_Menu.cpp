@@ -8,6 +8,7 @@
 #include "DlssNr_PresentGuides.h"
 #include "DlssNr_MenuStatus.h"
 #include "DlssNr_StageControls.h"
+#include "DlssNr_MenuControls.h"
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
@@ -172,19 +173,26 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
     ImGui::Spacing();
     {
     bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
-    const bool wasEnabled = enabled;
-    auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen,
-                                    &enabled, "Enable Neural Rendering");
-    if (enabled != wasEnabled)
-    {
-        config->SetDlssNrEnabled(enabled);
-        NoteNrUserToggle();
-    }
+    auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen);
     if (ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
+
+        if (MenuControls::EmphasizedCheckbox("Enable Neural Rendering", &enabled))
+        {
+            config->SetDlssNrEnabled(enabled);
+            NoteNrUserToggle();
+        }
+        const bool applyInline = MenuControls::LastItemHasInlineRoom(
+            MenuControls::CheckboxWithHelpWidth("Apply the model"));
+        if (applyInline)
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x + ImGui::GetStyle().FramePadding.x);
+        bool applyModel = config->DlssNrApplyModel.value_or_default();
+        if (ImGui::Checkbox("Apply the model", &applyModel))
+            config->DlssNrApplyModel = applyModel;
+        HelpMarker("Shows the whole chain's effect. Turn off to compare with the original image while the models keep running.");
 
         const bool basicOwnsMain = BasicMultipass::Active(config->GetDlssNrConfigSnapshot()) && !IsVulkanInput();
         if (StageUi::RenderControls(*config, basicOwnsMain)) CancelNrEdits();
@@ -771,10 +779,6 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         HelpMarker("Lets the model find skin itself rather than treating the frame uniformly.");
 
         renderReadouts(false);
-        bool applyModel = config->DlssNrApplyModel.value_or_default();
-        if (ImGui::Checkbox("Apply the model", &applyModel))
-            config->DlssNrApplyModel = applyModel;
-        HelpMarker("Shows the whole chain's effect. Turn off to compare with the original image while the models keep running.");
 
         if (auto advanced = ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced"); advanced.IsHeaderOpen())
         {
@@ -1594,7 +1598,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
 
         bool enabled = config->DlssNrMultipassEnabled.value_or_default();
         if (!d3d12 && !presentRoute) ImGui::BeginDisabled();
-        if (ImGui::Checkbox("Enable NR Multipass", &enabled))
+        if (MenuControls::EmphasizedCheckbox("Enable NR Multipass", &enabled))
         {
             NrConfigSynchronization::Transaction transaction;
             config->DlssNrMultipassEnabled = enabled;
