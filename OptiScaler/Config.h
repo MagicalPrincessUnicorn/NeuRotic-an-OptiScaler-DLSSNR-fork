@@ -195,6 +195,7 @@ class Config
     // Multipass is a separate opt-in. A count of one is deliberately valid and behaves exactly like
     // the established single-pass route; up to nine later passes own independent sessions/history.
     NrOptional<bool> DlssNrMultipassEnabled { false };
+    NrOptional<DlssNr::BasicMultipass::Profile> DlssNrBasicMultipass { {} };
     // Experimental D3D12-only second composed NR layer. Off preserves the established single-pass
     // route exactly. Profiles created before these keys existed are seeded once from layer 1 during
     // load, then remain independent.

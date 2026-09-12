@@ -76,7 +76,9 @@ class ScopedNestedTextWrap
 // The "(?)" marker every control carries, matching the rest of the menu.
 static void HelpMarker(const char* tip)
 {
-    ImGui::SameLine();
+    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    if (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize("(?)").x <= right)
+        ImGui::SameLine();
     ImGui::TextDisabled("(?)");
 
     if (ImGui::IsItemHovered())
@@ -147,6 +149,7 @@ static unsigned int RenderPassCountSelector(Config* config)
     int passCountIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
     if (ImGui::Combo("Passes", &passCountIndex, passCounts, IM_ARRAYSIZE(passCounts)))
     {
+        NrConfigSynchronization::Transaction transaction;
         config->DlssNrPasses = (uint32_t) (passCountIndex + 1);
         // Retain the old field as an in-memory compatibility hint. The persisted alias remains
         // derived from the Multipass switch, so choosing a count alone never activates it.
@@ -181,14 +184,19 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
 
-        if (StageUi::RenderControls(*config)) CancelNrEdits();
+        const bool basicOwnsMain = BasicMultipass::Active(config->GetDlssNrConfigSnapshot()) && !IsVulkanInput();
+        if (StageUi::RenderControls(*config, basicOwnsMain)) CancelNrEdits();
         auto uiConfig = config->GetDlssNrConfigSnapshot();
+        if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
         const auto& routeNames = StageUi::Methods;
         const int route = std::clamp((int) uiConfig.DlssNrRoute.value_or_default(), 0, 2);
         const int stage = StageUi::Stage(uiConfig);
         const int renderMode = std::clamp(uiConfig.DlssNrRenderingMode.value_or_default(), 0, 1);
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
         const bool presentRoute = route != 0;
+        if (basicOwnsMain)
+            ImGui::TextWrapped("Basic Multipass controls resolution, downscaler and strengths for every pass. These controls show Pass 1; edit them in Multipass below.");
+        ImGui::BeginDisabled(basicOwnsMain);
         if (StageUi::ResolutionSelection(uiConfig) == 1)
         {
             static NrOptional<float> scalePreview { 1.0f };
@@ -203,16 +211,9 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
                 StageUi::SelectResolutionScale(*config, scalePreview.value_or_default());
             uiConfig = config->GetDlssNrConfigSnapshot();
+            if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
         }
-        if (presentRoute)
-            ImGui::TextWrapped(StageUi::ResolutionSelection(uiConfig) == 2 ?
-                "Legacy follows fresh game render dimensions. Selecting Automatic or Manual adopts the new resolution policy." :
-                "Present runs after upscaling and includes the HUD. Automatic uses the final output; Manual scales it. Each method remembers its selection.");
-        else if (stage == 0)
-            ImGui::TextWrapped("Only Native Temporal runs before game upscaling. Automatic follows 100% of the game render input; Manual scales that input.");
-        else
-            ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
-
+        ImGui::EndDisabled();
         const auto renderReadouts = [&](bool detailed)
         {
         // The setting requests Pre-SR. It is deliberately not described as active until the
@@ -243,6 +244,14 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
         if (!detailed)
         {
+        if (presentRoute)
+            ImGui::TextWrapped(StageUi::ResolutionSelection(uiConfig) == 2 ?
+                "Legacy follows fresh game render dimensions. Selecting Automatic or Manual adopts the new resolution policy." :
+                "Present runs after upscaling and includes the HUD. Automatic uses the final output; Manual scales it. Each method remembers its selection.");
+        else if (stage == 0)
+            ImGui::TextWrapped("Automatic uses 100% of the game render input; Manual scales that input.");
+        else
+            ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
         if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
             ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
         const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
@@ -274,9 +283,13 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         const auto dimensions = StageUi::DimensionText(workW, workH, outputW, outputH);
         const auto summaryResolution = resolutionLabel + " -> " + dimensions;
         ImGui::TextWrapped("%s -> %s -> %s", stageLabel.c_str(), methodLabel.c_str(), summaryResolution.c_str());
+        if (enabled && nativeOutput && nrTelemetry.totalGpuMs)
+            ImGui::TextColored(green, "NR processing: %.2f ms per frame", *nrTelemetry.totalGpuMs);
 
         if (!enabled)
             ImGui::TextColored(yellow, "Neural Rendering is off.");
+        else if (basicOwnsMain && BasicMultipass::Count(uiConfig.DlssNrBasicMultipass.value_or_default()) == 0)
+            ImGui::TextColored(yellow, "Basic Multipass totals are zero. Image unchanged; loaded resources retained.");
         else if (StageUi::RenderRuntimeStatus(status))
         {
             // A caller may supply verified telemetry; the UI does not produce frame identity.
@@ -524,7 +537,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         }
 
         };
-        ImGui::PushItemWidth(220.0f * menuResScale);
+        ImGui::PushItemWidth(std::clamp(ImGui::GetContentRegionAvail().x - 240.0f * menuResScale,
+                                      40.0f * menuResScale, 220.0f * menuResScale));
 
         const auto renderResampling = [&]
         {
@@ -532,30 +546,12 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         {
         ScopedIndent resamplingIndent {};
         ImGui::BeginDisabled(presentRoute);
-        const int scalePercent = StageUi::DisplayPercent(config->DlssNrWorkingScale.value_or_default());
+        const int scalePercent = StageUi::DisplayPercent(StageUi::ResolutionScale(uiConfig));
 
         if (!presentRoute && scalePercent > 100)
             ImGui::TextDisabled("Supersampling %.2fx: the model runs ABOVE native, then\n"
                                 "is sampled back down. Experimental, and costly -- time grows with the area.",
                                 scalePercent / 100.0f);
-
-        if (!presentRoute && scalePercent > 100)
-        {
-            static const char* dsNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
-                                             "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
-            int ds = (int) config->DlssNrScalingDownscaler.value_or_default();
-            if (ds < 0 || ds >= IM_ARRAYSIZE(dsNames))
-                ds = (int) Scaler::Lanczos3;
-
-            if (ImGui::Combo("Downscaler (NR)", &ds, dsNames, IM_ARRAYSIZE(dsNames)))
-                config->DlssNrScalingDownscaler = (Scaler) ds;
-
-            HelpMarker("The filter that averages the model's above-native answer back to display size --"
-                           "\nthis is what turns supersampling into LESS noise rather than more. Sharper"
-                           "\nfilters (Lanczos3, Kaiser3) keep the most detail; softer ones (Bicubic,"
-                           "\nCatmull-Rom) are gentler on ringing. Independent of the Output Scaling"
-                           "\ndownscaler, so the two can differ and run at the same time.");
-        }
 
         HelpMarker("What fraction of the frame the model works at. Cost falls with the square of"
                        "\nthis, so half resolution is roughly a quarter of the time."
@@ -571,7 +567,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         // supersampling composites its down-legged answer at native -- the residual collapses to the
         // model's own picture and the two modes are identical, so the control says so by going grey.
         {
-            const bool reduced = config->DlssNrWorkingScale.value_or_default() < 0.999f;
+            const bool reduced = StageUi::ResolutionScale(uiConfig) < 0.999f;
 
             if (!reduced)
                 ImGui::BeginDisabled();
@@ -604,10 +600,12 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         // The ordinary downscaler sits directly below manual resolution.
         if (StageUi::ResolutionScale(uiConfig) > 1.0f)
         {
+            ImGui::BeginDisabled(basicOwnsMain);
             static const char* names[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
-            int downscaler = std::clamp(int(config->DlssNrScalingDownscaler.value_or_default()), 0, 7);
+            int downscaler = std::clamp(int(uiConfig.DlssNrScalingDownscaler.value_or_default()), 0, 7);
             if (ImGui::Combo("Downscaler##NrDownscaler", &downscaler, names, 8))
                 config->DlssNrScalingDownscaler = (Scaler) downscaler;
+            ImGui::EndDisabled();
         }
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
         int preset = (int) config->DlssNrPreset.value_or_default();
@@ -637,15 +635,25 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                    "\n\nRead when the model is built, so a change rebuilds it after a moment. The"
                    "\nnames come from community testing; NVIDIA ships no names in the binaries.");
 
-        DeferredSlider("Model Strength", &config->DlssNrIntensity, 0.0f, 2.0f, 1.0f);
+        if (basicOwnsMain)
+        {
+            ImGui::BeginDisabled();
+            float strength = uiConfig.DlssNrIntensity.value_or_default();
+            ImGui::SliderFloat("Model Strength", &strength, 0.0f, 1.0f, "%.2f");
+            ImGui::EndDisabled();
+        }
+        else
+            DeferredSlider("Model Strength", &config->DlssNrIntensity, 0.0f, 2.0f, 1.0f);
 
-        float transfer = config->DlssNrTransferStrength.value_or_default();
+        ImGui::BeginDisabled(basicOwnsMain);
+        float transfer = uiConfig.DlssNrTransferStrength.value_or_default();
         if (ImGui::SliderFloat("Detail strength", &transfer, 0.0f, 2.0f, "%.2f"))
             config->DlssNrTransferStrength = transfer;
 
         ImGui::SameLine();
         if (ImGui::SmallButton("Reset##detail"))
             config->DlssNrTransferStrength = 1.0f;
+        ImGui::EndDisabled();
 
         HelpMarker("How far the frame moves toward the model's picture."
                        "\n\nThe model's answer is not added to the frame -- it is a complete picture of its"
@@ -655,7 +663,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture."
                        "\n\nAbove 1 carries on past it in the same direction, which is not something the"
                        "\nmodel asked for -- use it to see what it is doing, then come back down. This"
-                       "\nis the control to push if you want more effect: Intensity belongs to the model"
+                       "\nis the control to push if you want more effect: Model Strength belongs to the model"
                        "\nand it decides what to do with it.");
 
         float colour = config->DlssNrColourStrength.value_or_default();
@@ -1542,15 +1550,82 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         const bool presentRoute = config->DlssNrRoute.value_or_default() != 0;
         static unsigned int previousPassCount = 0;
 
+        auto basic = BasicMultipass::Normalize(config->DlssNrBasicMultipass.value_or_default());
+        int editor = basic.advanced ? 1 : 0;
+        static const char* editors[] = { "Basic", "Advanced" };
+        if (StageUi::SentenceCombo("##NrMultipassEditor", "", "Neural Rendering Settings", &editor, editors, 2))
+        {
+            BasicMultipass::Update(*config, [&](auto& p) { p.advanced = editor == 1; });
+            CancelNrEdits();
+            basic = config->DlssNrBasicMultipass.value_or_default();
+        }
+
         bool enabled = config->DlssNrMultipassEnabled.value_or_default();
         if (!d3d12 && !presentRoute) ImGui::BeginDisabled();
         if (ImGui::Checkbox("Enable NR Multipass", &enabled))
         {
+            NrConfigSynchronization::Transaction transaction;
             config->DlssNrMultipassEnabled = enabled;
             config->DlssNrSecondLayer = enabled && config->DlssNrPasses.value_or_default() > 1;
+            CancelNrEdits();
         }
         if (!d3d12 && !presentRoute) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
+
+        if (!basic.advanced)
+        {
+            const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
+                                    float BasicMultipass::Profile::* member, float minimum, float maximum)
+            {
+                preview = config->DlssNrBasicMultipass.value_or_default().*member;
+                ImGui::TextUnformatted(title);
+                ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
+                    ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
+                if (DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f, "%d%%", true))
+                    BasicMultipass::Update(*config, [&](auto& p) { p.*member = preview.value_or_default(); });
+            };
+            static NrOptional<float> resolution { 1.0f }, model { 1.0f }, detail { 1.0f };
+            slider("Model resolution", "##NrBasicResolution", resolution,
+                   &BasicMultipass::Profile::resolution, 0.25f, 2.0f);
+            basic = config->DlssNrBasicMultipass.value_or_default();
+            if (basic.resolution > 1.0f)
+            {
+                static const char* downscalers[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+                int selected = int(basic.downscaler);
+                if (ImGui::Combo("Downscaler##NrBasicDownscaler", &selected, downscalers, 8))
+                    BasicMultipass::Update(*config, [&](auto& p) { p.downscaler = uint32_t(selected); });
+            }
+            static const char* maximums[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
+            int maximum = int(basic.maximum) - 1;
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+            if (ImGui::Combo("Maximum passes##NrBasicMaximum", &maximum, maximums, 10))
+            {
+                BasicMultipass::Update(*config, [&](auto& p) { p.maximum = uint32_t(maximum + 1); });
+                CancelNrEdits();
+            }
+            basic = config->DlssNrBasicMultipass.value_or_default();
+            slider("Model Strength", "##NrBasicModel", model, &BasicMultipass::Profile::model, 0.0f, float(basic.maximum));
+            slider("Detail Strength", "##NrBasicDetail", detail, &BasicMultipass::Profile::detail, 0.0f, float(basic.maximum));
+            basic = config->DlssNrBasicMultipass.value_or_default();
+            const auto requested = BasicMultipass::Count(basic);
+            const auto telemetry = DlssNr::Telemetry();
+            static MenuStatus::SelectionObservation completedObservation;
+            const uint64_t key = uint64_t(std::lround(basic.model * 100)) |
+                (uint64_t(std::lround(basic.detail * 100)) << 12) |
+                (uint64_t(StageUi::DisplayPercent(basic.resolution)) << 24) |
+                (uint64_t(enabled) << 36) | (uint64_t(config->DlssNrRoute.value_or_default()) << 37);
+            const bool fresh = completedObservation.Fresh(key, telemetry.completedPipelineEvaluations);
+            if (enabled && requested == 0)
+                ImGui::TextWrapped("0 passes requested. Effect bypassed; loaded resources retained.");
+            else if (enabled && fresh && telemetry.running)
+                ImGui::Text("%u requested | %u completed on the last frame", requested, telemetry.layerCount);
+            else
+                ImGui::Text("%u requested | completed: unavailable", requested);
+            ImGui::TextWrapped("Totals include Pass 1. 230%% means 100%% + 100%% + 30%%. Remaining settings inherit the main section.");
+            if (!d3d12 && !presentRoute)
+                ImGui::TextWrapped("Multipass requires D3D12; native Vulkan keeps its saved single-pass settings.");
+            return;
+        }
 
         const unsigned int passCount = RenderPassCountSelector(config);
         if (previousPassCount != passCount) CancelNrEdits();

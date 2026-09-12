@@ -42,6 +42,12 @@ template<class Ini, class C> void SaveConfig(Ini& ini, const C& cfg)
 }
 template<class C> Policy Selected(const C& cfg)
 {
+    if constexpr (requires { cfg.DlssNrBasicMultipass; cfg.DlssNrMultipassEnabled; })
+    {
+        const auto basic = cfg.DlssNrBasicMultipass.value_or_default();
+        if (cfg.DlssNrMultipassEnabled.value_or_default() && !basic.advanced)
+            return {Manual, uint32_t(std::clamp(basic.resolution, 0.25f, 2.0f) * 100.0f + 0.5f)};
+    }
     return cfg.DlssNrRoute.value_or_default() == 2
         ? Load(cfg.DlssNrEnhancedResolution.value_or_default(), cfg.DlssNrEnhancedCustomScale.value_or_default())
         : Load(cfg.DlssNrPresentResolution.value_or_default(), cfg.DlssNrPresentCustomScale.value_or_default());

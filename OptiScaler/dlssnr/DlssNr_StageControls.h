@@ -61,7 +61,7 @@ inline bool SentenceCombo(const char* id, const char* prefix, const char* suffix
 }
 
 // Shared by the production page and the headless ImGui navigation/layout fixture.
-template<class C> bool RenderControls(C& config)
+template<class C> bool RenderControls(C& config, bool basicOwnsResolution = false)
 {
     bool changed = false;
     auto snapshot = config.GetDlssNrConfigSnapshot();
@@ -93,13 +93,15 @@ template<class C> bool RenderControls(C& config)
         ImGui::EndTooltip();
     }
     snapshot = config.GetDlssNrConfigSnapshot();
-    int resolution = ResolutionSelection(snapshot);
+    int resolution = basicOwnsResolution ? 1 : ResolutionSelection(snapshot);
+    ImGui::BeginDisabled(basicOwnsResolution);
     if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &resolution, Resolutions,
                       resolution == 2 ? 3 : 2))
     {
         SelectResolution(config, resolution);
         changed = true;
     }
+    ImGui::EndDisabled();
     return changed;
 }
 }

@@ -2,6 +2,7 @@
 #include "../OptiScaler/dlssnr/DlssNr_PresentHistory.h"
 #include "../OptiScaler/dlssnr/DlssNr_MenuStatus.h"
 #include "../OptiScaler/dlssnr/DlssNr_StageUi.h"
+#include "../OptiScaler/dlssnr/DlssNr_BasicMultipass.h"
 #include "../OptiScaler/shaders/dlssnr/DlssNr_Common.h"
 #include "../OptiScaler/NrConfigState.h"
 #include "../OptiScaler/CustomOptional.h"
@@ -33,6 +34,23 @@ void Load(CSimpleIniA& ini, Config& cfg)
 int main()
 {
     namespace U = DlssNr::StageUi;
+    for (bool advanced : {false, true})
+    {
+        DlssNr::BasicMultipass::Profile profile {advanced, 4, 1.25f, 6, 2.3f, 1.5f};
+        CSimpleIniA ini;
+        ini.SetValue("DlssNrLayer2", "Intensity", "0.45");
+        ini.SetValue("FutureSection", "Keep", "verbatim");
+        DlssNr::BasicMultipass::Save(ini, profile);
+        std::string bytes; assert(ini.Save(bytes) >= 0);
+        CSimpleIniA copy; assert(copy.LoadData(bytes) >= 0);
+        const auto loaded = DlssNr::BasicMultipass::Load([&](const char* key) -> std::optional<float> {
+            if (!copy.GetValue("DlssNrBasic", key)) return {};
+            return float(copy.GetDoubleValue("DlssNrBasic", key));
+        }, true);
+        assert(loaded == profile);
+        assert(std::string(copy.GetValue("DlssNrLayer2", "Intensity")) == "0.45");
+        assert(std::string(copy.GetValue("FutureSection", "Keep")) == "verbatim");
+    }
     // Continuous preview policy preserves old stored profiles and independent method memory.
     Config preview;
     R::LoadConfig(preview, [](const char*) -> std::optional<uint32_t> { return {}; }, false);

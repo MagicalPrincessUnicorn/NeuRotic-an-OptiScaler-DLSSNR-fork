@@ -27,7 +27,9 @@ class ScopedCollapsingHeader
         ImGui::BeginChild("##CollapsingHeaderChild", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        if (enabled && ImGui::BeginTable("##HeaderControls", 2, ImGuiTableFlags_SizingStretchProp))
+        const bool inlineToggle = enabled && ImGui::GetContentRegionAvail().x >=
+            ImGui::CalcTextSize(label, nullptr, true).x + ImGui::CalcTextSize(toggleLabel).x + ImGui::GetFrameHeight() * 3;
+        if (inlineToggle && ImGui::BeginTable("##HeaderControls", 2, ImGuiTableFlags_SizingStretchProp))
         {
             ImGui::TableSetupColumn("Section", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableSetupColumn("Toggle", ImGuiTableColumnFlags_WidthFixed);
@@ -38,7 +40,10 @@ class ScopedCollapsingHeader
             ImGui::EndTable();
         }
         else
+        {
             _headerOpen = ImGui::CollapsingHeader(label, flags);
+            if (enabled) ImGui::Checkbox(toggleLabel, enabled);
+        }
         _active = true;
     }
 

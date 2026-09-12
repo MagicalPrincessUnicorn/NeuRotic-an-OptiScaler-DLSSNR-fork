@@ -19,9 +19,9 @@ Assert-Ui ($menu -match '(?s)void MenuCommon::RenderDiagnosticsPage.*?RenderLogg
 foreach ($label in @('Advanced Settings', 'Logging')) {
     Assert-Ui ($menu.Contains('ScopedCollapsingHeader("' + $label + '", ImGuiTreeNodeFlags_DefaultOpen)')) "$label starts expanded"
 }
-Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded and remains collapsible'
+Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen,')) 'NR starts expanded and remains collapsible with a header enable checkbox'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
-Assert-Ui ($nr.Contains('DeferredNrSlider("Manual scale##NrManualScale"') -and $nr.Contains('0.25f, 2.0f, 1.0f, "%d%%", true)')) 'manual model resolution retains bounded release-to-commit and 100 percent reset'
+Assert-Ui ($nr.Contains('DeferredNrSlider("##NrManualScale"') -and $nr.Contains('0.25f, 2.0f, 1.0f, "%d%%", true)')) 'manual model resolution retains bounded release-to-commit and 100 percent reset'
 Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
            -not $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is contained within Neural Rendering'
 $multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
@@ -29,9 +29,9 @@ Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
            $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
 Assert-Ui ($multipass.Contains('Checkbox("Enable NR Multipass"')) 'Multipass page uses the requested enable label'
 Assert-Ui ($nr.Contains('static unsigned int RenderPassCountSelector(Config* config)') -and
-           ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 2 -and
+           ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 1 -and
            $nr.Contains('Combo("Passes"') -and $nr.Contains('"Standard (1 pass)"') -and
-           $nr.Contains('"10 passes"')) 'one shared pass selector exposes the complete one-to-ten range in both Neural Rendering sections'
+           $nr.Contains('"10 passes"')) 'Advanced pass selector exposes one-to-ten range only in Multipass'
 Assert-Ui (-not $nr.Contains('##DlssNrMultipassInactiveWarning') -and
            $nr.Contains('Additional passes require Enable NR Multipass on a compatible route.') -and
            $multipass -notmatch 'BeginDisabled\(\);\s*if \(ImGui::BeginTabBar\("NrMultipassLayers"') 'pass profiles remain configurable before Multipass is enabled'
@@ -84,7 +84,7 @@ Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apolo
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
 Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink\(\).*?Enjoying NeuRotic\?.*?Send Coffee.*?GetContentRegionAvail.*?SetCursorPosX.*?TextUnformatted\(prompt\).*?Button\(button\)') 'compact Send Coffee prompt right-aligned in final row'
 Assert-Ui (-not $menu.Contains('constexpr const char* button = "Buy Me a Coffee"')) 'old support-button label is no longer rendered'
-Assert-Ui ($nr -match '(?s)Checkbox\("Enable Neural Rendering".*?NoteNrUserToggle\(\)') 'NR checkbox contributes to the shared user-toggle burst'
+Assert-Ui ($nr -match '(?s)&enabled, "Enable Neural Rendering".*?if \(enabled != wasEnabled\).*?NoteNrUserToggle\(\)') 'header checkbox contributes to the shared user-toggle burst'
 Assert-Ui ($menu -match '(?s)inputDlssNr.*?SetDlssNrEnabled\(enabled\);\s*DlssNr::NoteNrUserToggle\(\);') 'NR hotkey contributes to the same user-toggle burst'
 Assert-Ui (($nr | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 2) 'shared tracker has one definition and one checkbox call'
 Assert-Ui (($menu | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 1) 'hotkey is the only shared-tracker call outside the NR menu'
@@ -93,18 +93,18 @@ Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 41 -and $burst.Cont
 Assert-Ui ($nr.Contains('"%s is active."') -and $nr.Contains('"Image unchanged. %s"') -and -not $nr.Contains('Use Native Temporal when it is available.')) 'Present active and actionable safe-fallback guidance without stale recommendation'
 $stage = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageControls.h')
 $adapter = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageUi.h')
-Assert-Ui ($stage.IndexOf('TextUnformatted("Processing stage"') -lt $stage.IndexOf('TextUnformatted("Rendering method"') -and $stage.IndexOf('TextUnformatted("Rendering method"') -lt $stage.IndexOf('TextUnformatted("Model resolution"')) 'stage, method and resolution retain fixed row order'
-Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains('DlssNrPresentCustomScale') -and $stage.Contains('PresentPresets, 7')) 'Present methods remember independent selections and expose exactly seven fixed presets'
+Assert-Ui ($stage.IndexOf('SentenceCombo("##NrStage"') -lt $stage.IndexOf('SentenceCombo("##NrMethod"') -and $stage.IndexOf('SentenceCombo("##NrMethod"') -lt $stage.IndexOf('SentenceCombo("##NrResolution"')) 'stage, method and resolution retain fixed sentence order'
+Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains('DlssNrPresentCustomScale') -and $stage.Contains('resolution == 2 ? 3 : 2')) 'Present methods remember independent choices; Legacy is conditional'
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
-Assert-Ui ($nr.IndexOf('Checkbox("Enable Neural Rendering"') -lt $nr.IndexOf('StageUi::RenderControls(*config)')) 'enable is the first NR control'
-Assert-Ui ($nr.Contains('if (!presentRoute && StageUi::Manual(uiConfig))') -and $stage.Contains('BeginDisabled(stage == 0)')) 'manual slider is Native only and before-stage method remains fixed and visible'
-$diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics")')
-Assert-Ui ($diagnostics -gt $nr.IndexOf('"Image unchanged. %s"') -and
-           $diagnostics -lt $nr.IndexOf('"Native capture calls %llu"') -and
-           $diagnostics -lt $nr.IndexOf('"Present history:')) 'useful status before collapsed diagnostics; counters and history inside'
+Assert-Ui ($nr.IndexOf('&enabled, "Enable Neural Rendering"') -lt $nr.IndexOf('StageUi::RenderControls(*config,')) 'enable lives in the NR heading'
+Assert-Ui ($nr.Contains('if (StageUi::ResolutionSelection(uiConfig) == 1)') -and $stage.Contains('BeginDisabled(stage == 0)')) 'manual slider covers every method and Before retains its fixed visible method'
+$diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced")')
+Assert-Ui ($diagnostics -gt $nr.IndexOf('renderReadouts(false);') -and
+           $diagnostics -gt $nr.IndexOf('Checkbox("Apply the model"') -and
+           $diagnostics -lt $nr.IndexOf('renderReadouts(true);')) 'basic readouts and Apply precede the final collapsed advanced settings'
 Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $stage.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
-Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 0 }') -and
-           $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'Enhanced Follow defaults do not enable NR or file logging'
+Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 1 }') -and
+           $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'fresh preview Automatic defaults do not enable NR or file logging'
 Assert-Ui ($menu.Contains('bool toFile = config->LogToFile.value_or_default(); ImGui::Checkbox("To File", &toFile)') -and
            $menu.Contains('config->LogToFile = toFile;') -and $config.Contains('LogToFile.set_from_config(readBool("Log", "LogToFile"))')) 'existing file logging checkbox uses effective config and keeps deliberate changes'
 foreach ($iniPath in @('OptiScaler.ini', 'integration/OptiScaler.ini')) {

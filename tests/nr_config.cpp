@@ -2,6 +2,7 @@
 #include "../OptiScaler/dlssnr/DlssNr_StageUi.h"
 
 #include <barrier>
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <future>
@@ -27,13 +28,23 @@ constexpr int UnboundKey = -1;
 enum class Scaler : uint32_t { Lanczos3 = 4 };
 struct TestConfig
 {
+    struct Layer
+    {
+        CustomOptional<float> workingScale {1.0f}, intensity {1.0f}, localStructure {1.0f}, localTone {1.0f},
+            skinStructure {-1.0f}, transferStrength {1.0f}, colourStrength {1.0f}, maxRatio {2.0f};
+        CustomOptional<Scaler> scalingDownscaler {Scaler::Lanczos3};
+        CustomOptional<uint32_t> transfer {1}, preset {0}, style {0}, reversibleMode {0};
+        CustomOptional<bool> autoMask {true}, applyModel {true};
+    };
     struct ExtraLayers
     {
-        int CopyForSnapshot(const NrConfigSynchronization::Transaction&) const { return 0; }
+        std::array<Layer, 8> values;
+        auto CopyForSnapshot(const NrConfigSynchronization::Transaction&) const { return values; }
     };
     NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
     NrOptional<bool> DlssNrEnabled { false };
     NrOptional<bool> DlssNrMultipassEnabled { false };
+    NrOptional<DlssNr::BasicMultipass::Profile> DlssNrBasicMultipass { {} };
     NrOptional<bool> DlssNrSecondLayer { false };
     NrOptional<float> DlssNrSecondLayerWorkingScale { 1.0f };
     NrOptional<Scaler> DlssNrSecondLayerScalingDownscaler { Scaler::Lanczos3 };
@@ -57,7 +68,7 @@ struct TestConfig
     NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
     NrOptional<uint32_t> DlssNrPresentResolution { 1 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
     NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
@@ -450,8 +461,91 @@ void StageFirstContract()
     std::cout << "PASS stage/method/resolution truth table, old-scale authority, UI memory, malformed hints, dynamic resolution and atomic stage publication\n";
 }
 
+static void BasicMultipassContract()
+{
+    namespace B = DlssNr::BasicMultipass;
+    TestConfig c;
+    c.DlssNrWorkingScale = 0.67f;
+    c.DlssNrIntensity = 1.4f;
+    c.DlssNrTransferStrength = 1.7f;
+    c.DlssNrSecondLayerWorkingScale = 1.75f;
+    c.DlssNrSecondLayerIntensity = 0.45f;
+    c.DlssNrExtraLayers.values[0].intensity = 0.65f;
+    c.DlssNrPreset = 3u;
+    c.DlssNrStyle = 2u;
+    c.DlssNrSkinStructure = 0.3f;
+    c.DlssNrColourStrength = 0.8f;
+    c.DlssNrMultipassEnabled = true;
+    for (float total : {0.0f, 1.0f, 1.1f, 2.3f, 3.3f, 10.0f})
+    for (float detail : {0.0f, 1.0f, 1.5f, 10.0f})
+    {
+        B::Update(c, [&](auto& p) { p.maximum = 10; p.model = total; p.detail = detail; p.resolution = 1.25f; });
+        auto s = TryNrConfigSnapshot(c); CHECK(s.has_value());
+        CHECK(s->DlssNrPasses.value_or_default() == uint32_t(std::ceil((std::max)(total, detail))));
+        CHECK(s->DlssNrWorkingScale.value_or_default() == 1.25f);
+        CHECK(s->DlssNrIntensity.value_or_default() == B::Strength(total, 0));
+        CHECK(s->DlssNrTransferStrength.value_or_default() == B::Strength(detail, 0));
+        CHECK(s->DlssNrSecondLayerIntensity.value_or_default() == B::Strength(total, 1));
+        CHECK(s->DlssNrSecondLayerTransferStrength.value_or_default() == B::Strength(detail, 1));
+        for (unsigned i = 0; i < 8; ++i)
+        {
+            const auto& layer = s->DlssNrExtraLayers[i];
+            CHECK(layer.intensity.value_or_default() == B::Strength(total, i + 2));
+            CHECK(layer.transferStrength.value_or_default() == B::Strength(detail, i + 2));
+            CHECK(layer.workingScale.value_or_default() == 1.25f);
+            CHECK(layer.preset.value_or_default() == 3 && layer.style.value_or_default() == 2);
+            CHECK(layer.skinStructure.value_or_default() == 0.3f && layer.colourStrength.value_or_default() == 0.8f);
+        }
+        // Derivation cannot modify any stored main or additional profile.
+        CHECK(c.DlssNrWorkingScale.value_or_default() == 0.67f && c.DlssNrIntensity.value_or_default() == 1.4f);
+        CHECK(c.DlssNrSecondLayerIntensity.value_or_default() == 0.45f);
+        CHECK(c.DlssNrExtraLayers.values[0].intensity.value_or_default() == 0.65f);
+    }
+    B::Update(c, [](auto& p) { p.advanced = true; });
+    auto advanced = TryNrConfigSnapshot(c); CHECK(advanced.has_value());
+    CHECK(advanced->DlssNrIntensity.value_or_default() == 1.4f);
+    CHECK(advanced->DlssNrTransferStrength.value_or_default() == 1.7f);
+    CHECK(advanced->DlssNrSecondLayerWorkingScale.value_or_default() == 1.75f);
+    CHECK(advanced->DlssNrExtraLayers[0].intensity.value_or_default() == 0.65f);
+    for (bool isAdvanced : {true, false})
+    {
+        B::Update(c, [&](auto& p) { p.advanced = isAdvanced; });
+        c.DlssNrApplyModel = false;
+        auto hidden = TryNrConfigSnapshot(c); CHECK(hidden.has_value());
+        CHECK(!hidden->DlssNrApplyModel.value_or_default() && !hidden->DlssNrSecondLayerApplyModel.value_or_default());
+        for (const auto& layer : hidden->DlssNrExtraLayers) CHECK(!layer.applyModel.value_or_default());
+        CHECK(c.DlssNrSecondLayerApplyModel.value_or_default());
+        c.DlssNrApplyModel = true;
+        CHECK(TryNrConfigSnapshot(c)->DlssNrSecondLayerApplyModel.value_or_default());
+    }
+    c.DlssNrMultipassEnabled = false;
+    CHECK(TryNrConfigSnapshot(c)->DlssNrWorkingScale.value_or_default() == 0.67f);
+    CHECK(TryNrConfigSnapshot(c)->DlssNrIntensity.value_or_default() == 1.4f);
+    std::atomic<bool> done = false;
+    auto writer = std::async(std::launch::async, [&] {
+        for (int i = 0; i < 10000; ++i)
+        {
+            B::Update(c, [](auto& p) { p.maximum = 10; p.model = 10; p.detail = 9; });
+            B::Update(c, [](auto& p) { p.maximum = 1; });
+        }
+        done = true;
+    });
+    do
+    {
+        const auto s = c.GetDlssNrConfigSnapshot();
+        const auto p = s.DlssNrBasicMultipass.value_or_default();
+        CHECK(p.model <= p.maximum && p.detail <= p.maximum);
+    } while (!done);
+    writer.get();
+    CHECK(!B::Load([](const char*) -> std::optional<float> { return {}; }, false).advanced);
+    CHECK(B::Load([](const char*) -> std::optional<float> { return {}; }, true).advanced);
+    CHECK(B::Load([](const char*) -> std::optional<float> { return NAN; }, false) == B::Profile{});
+    std::cout << "PASS Basic Multipass totals, independent distribution, profile restoration, global effect visibility and atomic maximum reduction\n";
+}
+
 int main()
 {
+    BasicMultipassContract();
     StageFirstContract();
     OptionalSemantics();
     ConcurrentOptional();

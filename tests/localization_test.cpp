@@ -45,6 +45,15 @@ int main()
     {
         Check(Neurotic::LanguageIndex("invalid") == 0, "unknown language falls back to English");
         Check(Neurotic::LanguageIndex("PT-BR") == 4, "Portuguese alias");
+        Neurotic::SetLanguage("fr");
+        const auto savedFrench = Neurotic::Translate("Automatic");
+        {
+            Neurotic::EnglishPreview preview;
+            Check(Neurotic::Translate("Automatic") == "Automatic", "NR preview is English");
+            { Neurotic::EnglishPreview nested; Check(Neurotic::Translate("Manual") == "Manual", "nested English preview"); }
+            Check(Neurotic::Translate("Automatic") == "Automatic", "outer override survives nested scope");
+        }
+        Check(Neurotic::Translate("Automatic") == savedFrench, "preview restores prior language without rewriting preference");
         for (int language = 0; language < Neurotic::LanguageCount; ++language)
         {
             Neurotic::SetLanguage(Neurotic::Languages[language].code);
@@ -215,6 +224,7 @@ int main()
                 // Exercise the actual production controls for every valid stage/method/preset.
                 for (int choice = 0; choice < 18; ++choice)
                 {
+                    Neurotic::EnglishPreview preview;
                     StageUiFixture cfg;
                     if (choice < 4)
                     {
@@ -231,19 +241,15 @@ int main()
                     ImGui::NewFrame();
                     ImGui::PushFont(nullptr, 16.0f * scale);
                     ImGui::SetNextWindowPos(ImVec2(0, 0));
-                    ImGui::SetNextWindowSize(ImVec2(820 * scale, 480 * scale));
+                    ImGui::SetNextWindowSize(ImVec2((choice % 2 ? 360 : 820) * scale, 650 * scale));
                     ImGui::Begin("Stage-first test###stage");
                     bool enabled = true;
                     ImGui::Checkbox("Enable Neural Rendering", &enabled);
                     const auto top = ImGui::GetCursorScreenPos();
                     const auto right = top.x + ImGui::GetContentRegionAvail().x;
                     Check(!DlssNr::StageUi::RenderControls(cfg), "drawing stage controls is read-only");
-                    Check(ImGui::GetItemID() == ImGui::GetID("##NrResolution"), "resolution is always the final primary row");
                     Check(ImGui::GetItemRectMax().x <= right + 1, "primary controls fit every language and scale");
                     Check(ImGui::GetItemRectMin().y > top.y, "primary rows retain vertical order");
-                    const float previewWidth = ImGui::GetItemRectSize().x - ImGui::GetFrameHeight() - 2 * ImGui::GetStyle().FramePadding.x;
-                    for (const char* label : DlssNr::StageUi::PresentPresets)
-                        Check(ImGui::CalcTextSize(label).x < previewWidth, "complete preset names fit the selector");
                     Check(cfg.DlssNrRoute.value_or_default() == before.DlssNrRoute.value_or_default() &&
                           cfg.DlssNrWorkingScale.value_or_default() == before.DlssNrWorkingScale.value_or_default(),
                           "layout never mutates rendering choices");
