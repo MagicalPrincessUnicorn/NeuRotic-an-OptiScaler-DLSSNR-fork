@@ -2180,7 +2180,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                            ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output,
                            const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue,
                            const NrConfigSnapshot<Config>& cfg, bool privateCommandList,
-                           unsigned int exactWorkWidth, unsigned int exactWorkHeight)
+                           unsigned int exactWorkWidth, unsigned int exactWorkHeight,
+                           bool nativeTemporalDomain)
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
@@ -2288,9 +2289,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // Native Temporal and Present Image-Only are distinct history domains. A route transition parks
     // every opaque feature before recording against the other domain, even when dimensions match.
-    if (g_nr.imageOnlyDomain != privateCommandList)
+    const bool imageOnlyDomain = privateCommandList && !nativeTemporalDomain;
+    if (g_nr.imageOnlyDomain != imageOnlyDomain)
     {
-        g_nr.imageOnlyDomain = privateCommandList;
+        g_nr.imageOnlyDomain = imageOnlyDomain;
         g_nr.reset = true;
         if (g_nr.feature != nullptr)
         {
@@ -2298,7 +2300,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             ParkNrFeature(g_nr.feature);
         }
         ParkAllAdditionalLayerFeatures("NR route domain changed");
-        LOG_INFO("DLSS-NR route domain changed to {}", privateCommandList ? "Present Image-Only" : "Native Temporal");
+        LOG_INFO("DLSS-NR route domain changed to {}", imageOnlyDomain ? "Present Image-Only" : "Native Temporal");
     }
 
     // ParkNrFeature captured every known recording that could reference the old session, including
@@ -3318,7 +3320,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // evaluation advances display readiness; proxy success alone previously exited too early.
     const unsigned int guideOrigins[] = {frame.DepthSubrectX, frame.DepthSubrectY,
                                          frame.MotionSubrectX, frame.MotionSubrectY};
-    const bool enhanced = privateCommandList && cfg.DlssNrRoute.value_or_default() == 2;
+    const bool enhanced = imageOnlyDomain && cfg.DlssNrRoute.value_or_default() == 2;
     const int result = enhanced ? (g_nr.evaluateGuided ? g_nr.evaluateGuided(
         cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
         workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
@@ -5369,6 +5371,51 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
                         queue, cfg, true, workWidth, workHeight);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     return g_nr.successfulEvaluations > before;
+}
+
+bool EvaluateNativeDx11PostSrCommandList(ID3D12GraphicsCommandList* cmdList,
+                                         ID3D12CommandQueue* queue,
+                                         ID3D12Resource* output,
+                                         ID3D12Resource* depth,
+                                         ID3D12Resource* motion,
+                                         const DlssNrFrameInfo& frame,
+                                         const NrConfigSnapshot<Config>& settings)
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
+        output == nullptr || depth == nullptr || motion == nullptr ||
+        settings.DlssNrRoute.value_or_default() != 0 ||
+        settings.DlssNrRunBeforeSr.value_or_default() ||
+        !settings.GetDlssNrRuntimeSnapshot().enabled)
+        return false;
+
+    ID3D12Device* device = nullptr;
+    if (FAILED(output->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+        return false;
+    if (!AcceptGenerationDevice(device))
+    {
+        device->Release();
+        return false;
+    }
+    if (g_compose == nullptr)
+        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering - native DX11 Post-SR", device);
+    device->Release();
+    if (g_compose == nullptr)
+        return false;
+
+    unsigned long long before = 0;
+    {
+        std::lock_guard<std::mutex> nrLock(g_nrMutex);
+        before = g_nr.completedPipelineEvaluations;
+    }
+
+    // The private list needs no game-state restoration, while its temporal history remains in the
+    // Native domain. The caller transitions these owned carriers to the documented arrival states.
+    g_compose->Dispatch(cmdList, output, depth, motion, output, frame, queue, settings,
+                        true, 0, 0, true);
+
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return g_nr.completedPipelineEvaluations > before;
 }
 
 void ProbeD3D11(void* d3d11Device)

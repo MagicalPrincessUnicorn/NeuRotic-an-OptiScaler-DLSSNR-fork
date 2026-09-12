@@ -20,6 +20,6 @@ class Feature
     ~Feature();
     void Created(NVSDK_NGX_Parameter* parameters);
     void Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* parameters);
-    void Complete(bool nativeSucceeded);
+    void Complete(ID3D11DeviceContext* context, bool nativeSucceeded);
 };
 }

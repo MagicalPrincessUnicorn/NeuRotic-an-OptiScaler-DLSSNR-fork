@@ -90,7 +90,7 @@ bool DLSSFeatureDx11::EvaluateInternal(ID3D11DeviceContext* InDeviceContext, NVS
 
         nvResult = NVNGXProxy::D3D11_EvaluateFeature()(InDeviceContext, _p_dlssHandle, InParameters, NULL);
 
-        _nrDx11.Complete(nvResult == NVSDK_NGX_Result_Success);
+        _nrDx11.Complete(InDeviceContext, nvResult == NVSDK_NGX_Result_Success);
 
         if (nvResult != NVSDK_NGX_Result_Success)
         {
