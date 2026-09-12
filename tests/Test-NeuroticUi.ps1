@@ -21,7 +21,7 @@ foreach ($label in @('Advanced Settings', 'Logging')) {
 }
 Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded and remains collapsible'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
-Assert-Ui ($nr -match '(?s)SmallButton\("Reset##NrModelResolution"\).*?DlssNrWorkingScale = 1.0f;\s*pendingScale = -1;\s*scalePercent = 100;') 'model resolution reset restores 100 percent and cancels pending change'
+Assert-Ui ($nr.Contains('DeferredNrSlider("Manual scale##NrManualScale"') -and $nr.Contains('0.25f, 2.0f, 1.0f, "%d%%", true)')) 'manual model resolution retains bounded release-to-commit and 100 percent reset'
 Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
            -not $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is contained within Neural Rendering'
 $multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
@@ -91,16 +91,18 @@ Assert-Ui (($menu | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).M
 $burst = [regex]::Match($notes, '(?s)ToggleBurstMessages\s*=\s*\{(.*?)\};').Groups[1].Value
 Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 41 -and $burst.Contains('ZZZZZZZzzzzzzzzzzzz')) 'all 41 approved burst notes are present'
 Assert-Ui ($nr.Contains('"%s is active."') -and $nr.Contains('"Image unchanged. %s"') -and -not $nr.Contains('Use Native Temporal when it is available.')) 'Present active and actionable safe-fallback guidance without stale recommendation'
-Assert-Ui ($nr.IndexOf('ImGui::Combo("NR resolution"') -gt $nr.IndexOf('ImGui::Combo("NR route"') -and $nr.IndexOf('ImGui::Combo("NR resolution"') -lt $nr.IndexOf('ImGui::Combo("Rendering mode"') -and -not $nr.Contains('ImGui::Combo("Present workload"')) 'NR resolution replaces workload below route selection'
-Assert-Ui ($nr.Contains('if (resolution == PresentResolution::Custom)') -and $nr.Contains('"Present Enhanced"') -and $nr.Contains('DlssNrEnhancedCustomScale')) 'three routes and conditional independent custom scale are present'
+$stage = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageControls.h')
+$adapter = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageUi.h')
+Assert-Ui ($stage.IndexOf('TextUnformatted("Processing stage"') -lt $stage.IndexOf('TextUnformatted("Rendering method"') -and $stage.IndexOf('TextUnformatted("Rendering method"') -lt $stage.IndexOf('TextUnformatted("Model resolution"')) 'stage, method and resolution retain fixed row order'
+Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains('DlssNrPresentCustomScale') -and $stage.Contains('PresentPresets, 7')) 'Present methods remember independent selections and expose exactly seven fixed presets'
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
-Assert-Ui ($nr.IndexOf('Checkbox("Enable Neural Rendering"') -lt $nr.IndexOf('Combo("NR route"')) 'enable is the first NR control'
-Assert-Ui ($nr -match '(?s)if \(!presentRoute\)\s*\{\s*if \(ImGui::Combo\("Rendering mode".*?HelpMarker\("Quality keeps NR.*?\n\s*\}') 'Native rendering mode and help hidden on both Present routes'
+Assert-Ui ($nr.IndexOf('Checkbox("Enable Neural Rendering"') -lt $nr.IndexOf('StageUi::RenderControls(*config)')) 'enable is the first NR control'
+Assert-Ui ($nr.Contains('if (!presentRoute && StageUi::Manual(uiConfig))') -and $stage.Contains('BeginDisabled(stage == 0)')) 'manual slider is Native only and before-stage method remains fixed and visible'
 $diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics")')
 Assert-Ui ($diagnostics -gt $nr.IndexOf('"Image unchanged. %s"') -and
            $diagnostics -lt $nr.IndexOf('"Native capture calls %llu"') -and
            $diagnostics -lt $nr.IndexOf('"Present history:')) 'useful status before collapsed diagnostics; counters and history inside'
-Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $nr.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
+Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $stage.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
 Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 0 }') -and
            $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'Enhanced Follow defaults do not enable NR or file logging'
 Assert-Ui ($menu.Contains('bool toFile = config->LogToFile.value_or_default(); ImGui::Checkbox("To File", &toFile)') -and

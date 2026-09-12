@@ -45,6 +45,13 @@ for path in ['OptiScaler/dlssnr/DlssNr_Menu.cpp', 'OptiScaler/menu/menu_common.c
     for key in visible(source(path)) - visible(old):
         if normalize(key) not in inventory and not key.startswith('https://'):
             missing.add(key)
+for path in ['OptiScaler/dlssnr/DlssNr_StageUi.h', 'OptiScaler/dlssnr/DlssNr_StageControls.h']:
+    for key in visible(source(path)):
+        if key.startswith('##') or key == '(?)': continue
+        if normalize(key) not in inventory: missing.add(key)
+    for match in re.finditer(r'(?:Stages|Methods|NativeResolutions|PresentPresets)\[\]\s*=\s*\{(.*?)\}', source(path), re.S):
+        for key in joined_strings(match.group(1)):
+            if normalize(key) not in inventory: missing.add(key)
 for match in re.finditer(r'ToggleBurstMessages\s*=\s*\{(.*?)\}', source('OptiScaler/dlssnr/NrToggleNotes.h'), re.S):
     for key in joined_strings(match.group(1)):
         if normalize(key) not in inventory: missing.add(key)
@@ -86,7 +93,7 @@ require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCo
 require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 0 and
         nr.count('RenderMultipassMenu(config, menuResScale);') == 1,
         'Multipass is a collapsible section within the Neural Rendering page')
-require(nr.count('ImGui::Combo("NR route"') == 1 and
+require(nr.count('StageUi::RenderControls(*config)') == 1 and
         nr.count('ImGui::Checkbox("Enable NR Multipass"') == 1,
         'single route and bounded multipass controls')
 require(nr.count('RenderPassCountSelector(config)') == 2 and

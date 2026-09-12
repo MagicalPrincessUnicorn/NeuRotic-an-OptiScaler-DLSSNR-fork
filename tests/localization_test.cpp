@@ -6,6 +6,22 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include "dlssnr/DlssNr_StageControls.h"
+
+struct StageUiFixture
+{
+    NrOptional<uint32_t> DlssNrRoute {2}, DlssNrUiAfterMethod {0};
+    NrOptional<int32_t> DlssNrRenderingMode {1};
+    NrOptional<bool> DlssNrRunBeforeSr {false}, DlssNrUiManualResolution {false};
+    NrOptional<float> DlssNrWorkingScale {1.0f}, DlssNrUiManualScale {1.0f};
+    NrOptional<uint32_t> DlssNrPresentResolution {1}, DlssNrPresentCustomScale {0};
+    NrOptional<uint32_t> DlssNrEnhancedResolution {0}, DlssNrEnhancedCustomScale {0};
+    StageUiFixture GetDlssNrConfigSnapshot() const
+    {
+        NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+        return *this;
+    }
+};
 
 struct CatalogEntry
 {
@@ -163,7 +179,7 @@ int main()
                                                "Advanced", "Tools", "Diagnostics" })
                         if (ImGui::BeginTabItem(label))
                         {
-                            ImGui::Text("Running: %.2f ms", 3.25);
+                ImGui::Text("Running: %.2f ms", 3.25);
                             ImGui::EndTabItem();
                         }
                     ImGui::EndTabBar();
@@ -196,6 +212,54 @@ int main()
                 ImGui::End();
                 ImGui::PopFont();
                 ImGui::Render();
+                // Exercise the actual production controls for every valid stage/method/preset.
+                for (int choice = 0; choice < 18; ++choice)
+                {
+                    StageUiFixture cfg;
+                    if (choice < 4)
+                    {
+                        DlssNr::StageUi::SelectMethod(cfg, 0);
+                        if (choice < 2) DlssNr::StageUi::SelectStage(cfg, 0);
+                        DlssNr::StageUi::SelectManual(cfg, choice % 2 != 0);
+                    }
+                    else
+                    {
+                        DlssNr::StageUi::SelectMethod(cfg, choice < 11 ? 1 : 2);
+                        DlssNr::StageUi::SelectPreset(cfg, (choice - 4) % 7);
+                    }
+                    const auto before = cfg.GetDlssNrConfigSnapshot();
+                    ImGui::NewFrame();
+                    ImGui::PushFont(nullptr, 16.0f * scale);
+                    ImGui::SetNextWindowPos(ImVec2(0, 0));
+                    ImGui::SetNextWindowSize(ImVec2(820 * scale, 480 * scale));
+                    ImGui::Begin("Stage-first test###stage");
+                    bool enabled = true;
+                    ImGui::Checkbox("Enable Neural Rendering", &enabled);
+                    const auto top = ImGui::GetCursorScreenPos();
+                    const auto right = top.x + ImGui::GetContentRegionAvail().x;
+                    Check(!DlssNr::StageUi::RenderControls(cfg), "drawing stage controls is read-only");
+                    Check(ImGui::GetItemID() == ImGui::GetID("##NrResolution"), "resolution is always the final primary row");
+                    Check(ImGui::GetItemRectMax().x <= right + 1, "primary controls fit every language and scale");
+                    Check(ImGui::GetItemRectMin().y > top.y, "primary rows retain vertical order");
+                    const float previewWidth = ImGui::GetItemRectSize().x - ImGui::GetFrameHeight() - 2 * ImGui::GetStyle().FramePadding.x;
+                    for (const char* label : DlssNr::StageUi::PresentPresets)
+                        Check(ImGui::CalcTextSize(label).x < previewWidth, "complete preset names fit the selector");
+                    Check(cfg.DlssNrRoute.value_or_default() == before.DlssNrRoute.value_or_default() &&
+                          cfg.DlssNrWorkingScale.value_or_default() == before.DlssNrWorkingScale.value_or_default(),
+                          "layout never mutates rendering choices");
+                    Check(!DlssNr::StageUi::RenderRuntimeStatus(std::nullopt), "absent provider snapshot retains generic status");
+                    DlssNr::MenuStatus::RuntimeStatus status;
+                    status.state = DlssNr::MenuStatus::State(choice % 7);
+                    status.realFrame = 1842;
+                    status.workWidth = 1712; status.workHeight = 960;
+                    status.outputWidth = 2560; status.outputHeight = 1440;
+                    std::snprintf(status.reason.data(), status.reason.size(), "fixture reason");
+                    Check(DlssNr::StageUi::RenderRuntimeStatus(status), "bounded read-only state snapshot rendered");
+                    Check(status.realFrame == 1842, "status rendering does not mutate telemetry");
+                    ImGui::End();
+                    ImGui::PopFont();
+                    ImGui::Render();
+                }
                 Check(ImGui::GetDrawData()->TotalVtxCount > 0, "translated draw data emitted");
                 for (auto* texture : io.Fonts->TexList)
                 {
@@ -207,6 +271,45 @@ int main()
                 }
             }
         }
+        // Real keyboard/controller events through the same production controls.
+        Neurotic::SetLanguage("en");
+        ImGui::GetStyle() = baseStyle;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+        io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+        StageUiFixture navigation;
+        DlssNr::StageUi::SelectMethod(navigation, 0);
+        DlssNr::StageUi::SelectStage(navigation, 0);
+        ImGuiID stageId = 0, resolutionId = 0, methodId = 0;
+        const auto navFrame = [&](bool focus = false) {
+            ImGui::NewFrame();
+            ImGui::SetNextWindowPos(ImVec2(0, 0));
+            ImGui::SetNextWindowSize(ImVec2(820, 480));
+            ImGui::Begin("Navigation###stage-nav");
+            stageId = ImGui::GetID("##NrStage");
+            methodId = ImGui::GetID("##NrMethod");
+            resolutionId = ImGui::GetID("##NrResolution");
+            if (focus) ImGui::SetKeyboardFocusHere();
+            DlssNr::StageUi::RenderControls(navigation);
+            ImGui::End();
+            ImGui::Render();
+        };
+        const auto key = [&](ImGuiKey k) {
+            io.AddKeyEvent(k, true); navFrame();
+            io.AddKeyEvent(k, false); navFrame(); navFrame();
+        };
+        navFrame(true); navFrame();
+        Check(GImGui->NavId == stageId, "keyboard focus starts on stage selector");
+        key(ImGuiKey_Tab);
+        // SetKeyboardFocusHere deliberately keeps the nav cursor hidden; the first Tab
+        // enters keyboard navigation on that item, the next advances to the next control.
+        key(ImGuiKey_Tab);
+        Check(GImGui->NavId == resolutionId, "Tab skips the fixed Before-stage method");
+        navFrame(true); navFrame();
+        key(ImGuiKey_Enter); key(ImGuiKey_DownArrow); key(ImGuiKey_Enter);
+        Check(DlssNr::StageUi::Stage(navigation) == 1, "keyboard selects After stage");
+        navFrame(true); navFrame();
+        key(ImGuiKey_GamepadDpadDown);
+        Check(GImGui->NavId == methodId, "controller navigation reaches the After-stage method");
         ImGui::DestroyContext();
         const auto ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();

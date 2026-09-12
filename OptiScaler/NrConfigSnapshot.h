@@ -26,6 +26,9 @@
     X(DlssNrSecondLayerApplyModel) \
     X(DlssNrExtraLayers) \
     X(DlssNrRoute) \
+    X(DlssNrUiManualResolution) \
+    X(DlssNrUiManualScale) \
+    X(DlssNrUiAfterMethod) \
     X(DlssNrPresentResolution) \
     X(DlssNrPresentCustomScale) \
     X(DlssNrEnhancedResolution) \

@@ -4,6 +4,7 @@
 
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <nvsdk_ngx.h>
+#include "DlssNr_MenuStatus.h"
 
 // DLSS 5 Neural Rendering, run over the upscaler's output.
 //
@@ -64,7 +65,8 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
 
 
 // The settings panel, drawn inside OptiScaler's menu.
-void RenderMenu(::Config* config, float menuResScale);
+void RenderMenu(::Config* config, float menuResScale,
+                const std::optional<MenuStatus::RuntimeStatus>& status = std::nullopt);
 
 // Clears the session failure latch and bounded transition circuits, so transient failure does not
 // require a restart.

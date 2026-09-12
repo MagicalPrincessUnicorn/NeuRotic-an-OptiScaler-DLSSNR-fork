@@ -1,4 +1,5 @@
 #include "../OptiScaler/NrConfigSnapshot.h"
+#include "../OptiScaler/dlssnr/DlssNr_StageUi.h"
 
 #include <barrier>
 #include <chrono>
@@ -51,6 +52,9 @@ struct TestConfig
     NrOptional<bool> DlssNrSecondLayerApplyModel { true };
     ExtraLayers DlssNrExtraLayers;
     NrOptional<uint32_t> DlssNrRoute { 2 };
+    NrOptional<bool> DlssNrUiManualResolution { false };
+    NrOptional<float> DlssNrUiManualScale { 1.0f };
+    NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
     NrOptional<uint32_t> DlssNrPresentResolution { 1 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
     NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
@@ -375,8 +379,80 @@ void SnapshotCopyFailure()
     std::cout << "PASS injected snapshot copy failure releases the transaction mutex\n";
 }
 
+void StageFirstContract()
+{
+    namespace U = DlssNr::StageUi;
+    namespace R = DlssNr::PresentResolution;
+    for (uint32_t route = 0; route < 3; ++route)
+    for (int mode = 0; mode < 2; ++mode)
+    for (float scale : {0.25f, 0.5f, 0.67f, 1.0f, 1.25f, 2.0f})
+    for (bool hint : {false, true})
+    {
+        TestConfig c;
+        c.DlssNrRoute = route;
+        NrConfigState::SetRoutingMode(c.DlssNrRenderingMode, c.DlssNrRunBeforeSr, mode);
+        c.DlssNrWorkingScale = scale;
+        U::LoadHints(c, hint, 0.77f, 999u);
+        CHECK(c.DlssNrRoute.value_or_default() == route);
+        CHECK(c.DlssNrRenderingMode.value_or_default() == mode);
+        CHECK(c.DlssNrWorkingScale.value_or_default() == scale);
+        CHECK(U::Stage(c) == (route == 0 && mode == 1 ? 0 : 1));
+        CHECK(U::Manual(c) == (scale != 1.0f || hint));
+        if (U::Stage(c) == 1)
+        {
+            U::SelectStage(c, 0); CHECK(c.DlssNrRoute.value_or_default() == 0);
+            U::SelectStage(c, 1); CHECK(c.DlssNrRoute.value_or_default() == route);
+        }
+        CHECK(c.DlssNrWorkingScale.value_or_default() == scale);
+        U::SelectManual(c, false); CHECK(c.DlssNrWorkingScale.value_or_default() == 1.0f);
+        U::SelectManual(c, true); CHECK(c.DlssNrWorkingScale.value_or_default() == scale);
+    }
+    for (uint32_t route : {1u, 2u})
+    for (int preset = 0; preset < 7; ++preset)
+    {
+        TestConfig c;
+        U::SelectMethod(c, route);
+        U::SelectPreset(c, preset);
+        const auto selected = R::Selected(c);
+        CHECK(U::Preset(selected) == preset);
+        const auto expected = R::Resolve(selected, 2560, 1440, 1280, 720);
+        CHECK(expected.width && expected.height);
+        U::SelectMethod(c, route == 1 ? 2 : 1); U::SelectPreset(c, (preset + 1) % 7);
+        U::SelectMethod(c, 0); U::SelectScale(c, 1.25f);
+        U::SelectMethod(c, route);
+        CHECK(R::Selected(c).mode == selected.mode && R::Selected(c).scale == selected.scale);
+        CHECK(R::Resolve(R::Selected(c), 2560, 1440, 1280, 720).width == expected.width);
+        if (preset == 0)
+            CHECK(R::Resolve(selected, 2560, 1440, 960, 540).width == 960);
+    }
+    for (auto hint : {std::optional<float>{}, std::optional<float>{-5.0f},
+                     std::optional<float>{9.0f}, std::optional<float>{NAN}})
+    {
+        TestConfig c; U::LoadHints(c, {}, hint, 99u);
+        CHECK(!U::Manual(c) && c.DlssNrWorkingScale.value_or_default() == 1.0f);
+        CHECK(c.DlssNrRoute.value_or_default() == 2 && !c.GetDlssNrRuntimeSnapshot().enabled);
+        U::SelectManual(c, true); CHECK(c.DlssNrWorkingScale.value_or_default() == 1.0f);
+    }
+    TestConfig c;
+    U::SelectMethod(c, 2);
+    std::atomic<bool> done = false;
+    auto writer = std::async(std::launch::async, [&] {
+        for (int n = 0; n < 10000; ++n) { U::SelectStage(c, 0); U::SelectStage(c, 1); }
+        done = true;
+    });
+    do
+    {
+        const auto s = c.GetDlssNrConfigSnapshot();
+        CHECK((s.DlssNrRoute.value_or_default() == 0 && s.DlssNrRenderingMode.value_or_default() == 1 && s.DlssNrRunBeforeSr.value_or_default()) ||
+              (s.DlssNrRoute.value_or_default() == 2 && s.DlssNrRenderingMode.value_or_default() == 0 && !s.DlssNrRunBeforeSr.value_or_default()));
+    } while (!done);
+    writer.get();
+    std::cout << "PASS stage/method/resolution truth table, old-scale authority, UI memory, malformed hints, dynamic resolution and atomic stage publication\n";
+}
+
 int main()
 {
+    StageFirstContract();
     OptionalSemantics();
     ConcurrentOptional();
     EnablePublication();

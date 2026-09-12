@@ -7,6 +7,7 @@
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentGuides.h"
 #include "DlssNr_MenuStatus.h"
+#include "DlssNr_StageControls.h"
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
@@ -26,6 +27,7 @@
 #include <cmath>
 #include <cstdio>
 #include <chrono>
+#include <bit>
 
 namespace DlssNr
 {
@@ -158,7 +160,7 @@ static unsigned int RenderPassCountSelector(Config* config)
 
 static void RenderMultipassMenu(Config* config, float menuResScale);
 
-void RenderMenu(Config* config, float menuResScale)
+void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status)
 {
 
     // DLSS Neural Rendering -----------------------------
@@ -182,57 +184,26 @@ void RenderMenu(Config* config, float menuResScale)
                    "and the nvngx.dll_dlssnr.dll forwarder supplied with this package.");
         ImGui::Spacing();
 
-        static const char* routeNames[] = { "Native Temporal", "Present Image Only", "Present Enhanced" };
-        int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 2);
-        if (ImGui::Combo("NR route", &route, routeNames, IM_ARRAYSIZE(routeNames)))
-        {
-            config->DlssNrRoute = (uint32_t) route;
-            LOG_INFO("DLSS-NR route requested: {}", routeNames[route]);
-        }
-        HelpMarker("Native Temporal runs with the game's upscaler. Present Image Only processes the final image. "
-                   "Present Enhanced also uses captured game depth and motion. Both Present routes include the HUD.");
-        const bool presentRoute = route != 0;
-
-        if (presentRoute)
-        {
-            auto& resolutionOption = route == 2 ? config->DlssNrEnhancedResolution : config->DlssNrPresentResolution;
-            auto& scaleOption = route == 2 ? config->DlssNrEnhancedCustomScale : config->DlssNrPresentCustomScale;
-            int resolution = std::clamp((int) resolutionOption.value_or_default(), 0, 2);
-            float resolutionWidth = 0.0f;
-            for (const char* name : PresentResolution::Names)
-                resolutionWidth = std::max(resolutionWidth, ImGui::CalcTextSize(name).x);
-            const float labelWidth = ImGui::CalcTextSize("NR resolution").x + ImGui::GetStyle().ItemInnerSpacing.x;
-            ImGui::SetNextItemWidth(std::min(resolutionWidth + ImGui::GetFrameHeight() + padding.x * 2.0f,
-                std::max(120.0f * menuResScale, ImGui::GetContentRegionAvail().x - labelWidth)));
-            if (ImGui::Combo("NR resolution", &resolution, PresentResolution::Names, 3))
-                resolutionOption = (uint32_t) resolution;
-            HelpMarker("Follow Native Render Resolution uses the game's current render dimensions. "
-                "Always Follow Output Resolution uses the full output size. Custom Scale uses a percentage of output size. "
-                "Each Present route remembers its own settings.");
-            if (resolution == PresentResolution::Custom)
-            {
-                static const char* scales[] = { "100%", "77%", "67%", "58%", "50%", "33%" };
-                int scale = std::clamp((int) scaleOption.value_or_default(), 0, 5);
-                if (ImGui::Combo("Custom Scale", &scale, scales, IM_ARRAYSIZE(scales)))
-                    scaleOption = (uint32_t) scale;
-            }
-        }
-
+        if (StageUi::RenderControls(*config)) CancelNrEdits();
+        auto uiConfig = config->GetDlssNrConfigSnapshot();
+        const auto& routeNames = StageUi::Methods;
+        const int route = std::clamp((int) uiConfig.DlssNrRoute.value_or_default(), 0, 2);
+        const int stage = StageUi::Stage(uiConfig);
+        const int renderMode = std::clamp(uiConfig.DlssNrRenderingMode.value_or_default(), 0, 1);
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
-        int renderMode = std::clamp(config->DlssNrRenderingMode.value_or_default(), 0, 1);
-        if (!presentRoute)
+        const bool presentRoute = route != 0;
+        if (!presentRoute && StageUi::Manual(uiConfig))
         {
-            if (ImGui::Combo("Rendering mode", &renderMode, renderModeNames, IM_ARRAYSIZE(renderModeNames)))
-            {
-                config->SetDlssNrRenderingMode(renderMode);
-                LOG_INFO("DLSS-NR rendering mode applied: {} (Super Resolution placement only; native RR remains RR -> NR)",
-                         renderModeNames[renderMode]);
-            }
-
-            HelpMarker("Quality keeps NR after native DLSS Super Resolution. Performance runs NR before "
-                       "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
-                       "to the final output in one mode-aware pass, so NR remains after RR in both modes.");
+            DeferredNrSlider("Manual scale##NrManualScale", { &config->DlssNrWorkingScale },
+                             0.25f, 2.0f, 1.0f, "%d%%", true);
+            uiConfig = config->GetDlssNrConfigSnapshot();
         }
+        if (presentRoute)
+            ImGui::TextWrapped("Present always runs after game upscaling and includes the HUD. Presets change model resolution only; each method remembers its selection.");
+        else if (stage == 0)
+            ImGui::TextWrapped("Only Native Temporal runs before game upscaling. Automatic follows 100% of the game render input; Manual scales that input.");
+        else
+            ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
 
         RenderPassCountSelector(config);
 
@@ -247,17 +218,60 @@ void RenderMenu(Config* config, float menuResScale)
         const ImVec4 yellow(1.0f, 0.72f, 0.25f, 1.0f);
         const ImVec4 red(1.0f, 0.4f, 0.35f, 1.0f);
         static MenuStatus::SelectionObservation observation;
-        const auto selection = (PresentResolution::CaptureKey(*config) << 1) | (enabled ? 1ull : 0ull);
+        const auto selection = (PresentResolution::CaptureKey(uiConfig) << 1) | (enabled ? 1ull : 0ull);
         const bool fresh = observation.Fresh(selection, presentTelemetry.presentAttempts + presentTelemetry.skippedFrames);
-        const auto policy = PresentResolution::Selected(*config);
+        const auto policy = PresentResolution::Selected(uiConfig);
         const bool presentMatches = fresh && presentTelemetry.requested &&
             presentTelemetry.requestedPlacement == (route == 2 ? "Present Enhanced" : "Present Image-Only");
         const bool presentActive = presentMatches && presentTelemetry.active &&
             presentTelemetry.resolution == policy.mode &&
             (policy.mode != PresentResolution::Custom || presentTelemetry.workload == policy.scale);
+        static MenuStatus::SelectionObservation nativeObservation;
+        const auto nativeSelection = selection ^ (uint64_t(renderMode) << 20) ^
+            (uint64_t(std::bit_cast<uint32_t>(uiConfig.DlssNrWorkingScale.value_or_default())) << 24);
+        const bool nativeFresh = nativeObservation.Fresh(nativeSelection, nrTelemetry.frames);
+        const bool nativeOutput = enabled && !presentRoute && !vulkan && nativeFresh &&
+            nrTelemetry.running && !nrTelemetry.outputQuarantined && !nrTelemetry.transitionPending &&
+            (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+        if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
+            ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
+        const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
+        const auto methodLabel = Neurotic::Translate(routeNames[route]);
+        auto resolutionLabel = Neurotic::Translate(presentRoute ? StageUi::PresentPresets[StageUi::Preset(policy)] :
+            StageUi::Manual(uiConfig) ? "Manual" : "Automatic");
+        if (!presentRoute && StageUi::Manual(uiConfig))
+            resolutionLabel += " (" + std::to_string(StageUi::DisplayPercent(uiConfig.DlssNrWorkingScale.value_or_default())) + "%)";
+        uint32_t workW = 0, workH = 0, outputW = 0, outputH = 0;
+        if (presentRoute && enabled && presentMatches)
+        {
+            outputW = presentTelemetry.backbufferWidth; outputH = presentTelemetry.backbufferHeight;
+            if (presentActive) { workW = presentTelemetry.workWidth; workH = presentTelemetry.workHeight; }
+        }
+        else if (nativeOutput)
+        {
+            workW = nrTelemetry.workWidth; workH = nrTelemetry.workHeight;
+            // Frame is the NR stage raster. Before SR it is not the final upscaled output.
+            const bool before = renderMode != 0 && !nrTelemetry.nativeRayReconstructionActive;
+            const auto feature = State::Instance().currentFeature;
+            outputW = before ? (feature ? feature->DisplayWidth() : 0u) : nrTelemetry.frameWidth;
+            outputH = before ? (feature ? feature->DisplayHeight() : 0u) : nrTelemetry.frameHeight;
+        }
+        if (enabled && status)
+        {
+            outputW = status->outputWidth; outputH = status->outputHeight;
+            const bool active = status->state == MenuStatus::State::Active;
+            workW = active ? status->workWidth : 0u; workH = active ? status->workHeight : 0u;
+        }
+        const auto dimensions = StageUi::DimensionText(workW, workH, outputW, outputH);
+        const auto summaryResolution = resolutionLabel + " -> " + dimensions;
+        ImGui::TextWrapped("%s -> %s -> %s", stageLabel.c_str(), methodLabel.c_str(), summaryResolution.c_str());
 
         if (!enabled)
             ImGui::TextColored(yellow, "Neural Rendering is off.");
+        else if (StageUi::RenderRuntimeStatus(status))
+        {
+            // A caller may supply verified telemetry; the UI does not produce frame identity.
+        }
         else if (presentRoute)
         {
             if (presentActive)
@@ -273,9 +287,7 @@ void RenderMenu(Config* config, float menuResScale)
         {
             const char* vkReason = DlssNr::FailureReasonVk();
             const char* reason = vulkan ? vkReason : nrTelemetry.failureReason;
-            const bool nativeActive = vulkan ? DlssNr::IsRunningVk() :
-                nrTelemetry.running && !nrTelemetry.outputQuarantined &&
-                (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+            const bool nativeActive = vulkan ? DlssNr::IsRunningVk() : nativeOutput;
             if (reason[0])
             {
                 ImGui::TextColored(red, "Neural Rendering unavailable: %s", reason);
@@ -294,17 +306,6 @@ void RenderMenu(Config* config, float menuResScale)
             ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
             HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
         }
-        if (presentRoute)
-        {
-            if (enabled && presentActive && presentTelemetry.workWidth && presentTelemetry.workHeight)
-                ImGui::Text("NR: %u x %u | Output: %u x %u", presentTelemetry.workWidth, presentTelemetry.workHeight,
-                            presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight);
-            else if (enabled && presentMatches && presentTelemetry.backbufferWidth && presentTelemetry.backbufferHeight)
-                ImGui::Text("NR: unavailable | Output: %u x %u", presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight);
-            else
-                ImGui::TextUnformatted("NR: unavailable | Output: unavailable");
-        }
-
         if (auto diagnostics = ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics"); diagnostics.IsHeaderOpen())
         {
         ScopedIndent diagnosticIndent {};
@@ -520,46 +521,18 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushItemWidth(220.0f * menuResScale);
 
-        if (!presentRoute)
+        if (auto resampling = ScopedCollapsingHeader("Advanced resampling##NrResampling"); resampling.IsHeaderOpen())
         {
-        // Any percentage, rather than a handful of steps somebody chose in advance. The lower bound
-        // is 25%: below that the model is working on so little of the picture that its answer no
-        // longer survives being enlarged onto it.
-        // Applied when the handle is let go, not while it is moving.
-        //
-        // Every distinct value here is a different working size, and a different working size tears
-        // down the scratch textures and rebuilds the model. Writing it on each pixel of a drag meant
-        // dozens of rebuilds in a second, which is felt as the whole frame hitching. The slider still
-        // reads live; only the commit waits.
-        static int pendingScale = -1;
+        ScopedIndent resamplingIndent {};
+        ImGui::BeginDisabled(presentRoute);
+        const int scalePercent = StageUi::DisplayPercent(config->DlssNrWorkingScale.value_or_default());
 
-        int scalePercent = pendingScale >= 0
-                               ? pendingScale
-                               : (int) lroundf(config->DlssNrWorkingScale.value_or_default() * 100.0f);
-
-        if (ImGui::SliderInt("Model resolution", &scalePercent, 25, 200, "%d%%"))
-            pendingScale = scalePercent;
-
-        if (ImGui::IsItemDeactivatedAfterEdit() && pendingScale >= 0)
-        {
-            config->DlssNrWorkingScale = std::clamp(pendingScale, 25, 200) / 100.0f;
-            pendingScale = -1;
-        }
-
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Reset##NrModelResolution"))
-        {
-            config->DlssNrWorkingScale = 1.0f;
-            pendingScale = -1;
-            scalePercent = 100;
-        }
-
-        if (scalePercent > 100)
+        if (!presentRoute && scalePercent > 100)
             ImGui::TextDisabled("Supersampling %.2fx: the model runs ABOVE native, then\n"
                                 "is sampled back down. Experimental, and costly -- time grows with the area.",
                                 scalePercent / 100.0f);
 
-        if (scalePercent > 100)
+        if (!presentRoute && scalePercent > 100)
         {
             static const char* dsNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
                                              "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
@@ -618,6 +591,7 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nidentical (supersampling brings its answer down to frame size before this)."
                            "\n\nFrom hhkbble's multi-pass work on this fork.");
         }
+        ImGui::EndDisabled();
         }
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
         int preset = (int) config->DlssNrPreset.value_or_default();

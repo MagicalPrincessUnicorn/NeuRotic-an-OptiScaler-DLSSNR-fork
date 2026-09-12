@@ -226,6 +226,10 @@ class Config
     NrConfigSnapshot<Config> GetDlssNrConfigSnapshot() const;
     // 0 = Native Temporal; 1 = Present Image Only; 2 = Present Enhanced (default).
     NrOptional<uint32_t> DlssNrRoute { 2 };
+    // UI memory only; legacy route/placement/working scale remain authoritative.
+    NrOptional<bool> DlssNrUiManualResolution { false };
+    NrOptional<float> DlssNrUiManualScale { 1.0f };
+    NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
     // Independent Present policies: 0 follow native, 1 full output, 2 custom.
     NrOptional<uint32_t> DlssNrPresentResolution { 1 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };

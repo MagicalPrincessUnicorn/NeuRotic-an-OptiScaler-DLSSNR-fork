@@ -2,6 +2,7 @@
 
 #include "Config.h"
 #include "dlssnr/DlssNr_PresentResolution.h"
+#include "dlssnr/DlssNr_StageUi.h"
 
 #include "Util.h"
 
@@ -384,6 +385,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCompareTags.set_from_config(readBool("DlssNr", "CompareTags"));
             DlssNrTagScale.set_from_config(readFloat("DlssNr", "TagScale"));
             DlssNrWorkingScale.set_from_config(readFloat("DlssNr", "WorkingScale"));
+            DlssNr::StageUi::LoadHints(*this, readBool("DlssNr", "UiManualResolution"),
+                readFloat("DlssNr", "UiManualScale"), readUInt("DlssNr", "UiAfterMethod"));
 
             if (auto v = readEnum<Scaler>("DlssNr", "ScalingDownscaler"))
                 DlssNrScalingDownscaler.set_from_config(*v);
@@ -1420,6 +1423,7 @@ bool Config::SaveIni()
     }
     ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
     DlssNr::PresentResolution::SaveConfig(ini, *Instance());
+    DlssNr::StageUi::SaveHints(ini, *Instance());
     // Persist the user-facing key and retain the legacy spelling for prior Alpha builds.
     const int renderingMode = std::clamp(Instance()->DlssNrRenderingMode.value_or_default(), 0, 1);
     ini.SetLongValue("DlssNr", "RenderingMode", static_cast<long>(renderingMode));
