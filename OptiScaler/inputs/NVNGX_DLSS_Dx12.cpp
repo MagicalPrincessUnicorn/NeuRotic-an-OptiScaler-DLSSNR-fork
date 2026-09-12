@@ -2,6 +2,7 @@
 #include <dlssnr/FrameTrace.h>
 #include <dlssnr/PreFg.h>
 #include <dlssnr/FgLifecycle.h>
+#include <dlssnr/NrGpuSafety.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -932,6 +933,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
                 DlssNr::FgLifecycle::Created(operation,
                     res == NVSDK_NGX_Result_Success && OutHandle && *OutHandle ? (*OutHandle)->Id : 0,
                     static_cast<uint32_t>(res), res == NVSDK_NGX_Result_Success, InCmdList);
+            if (diagnosticFg && res == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
+                DlssNr::PreFg::PublishNativeFgCreated((*OutHandle)->Id);
 
             if (*OutHandle)
             {
@@ -989,6 +992,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     const NVSDK_NGX_Feature releasedFeature =
         featureIt != HandleToFeature.end() ? featureIt->second : (NVSDK_NGX_Feature) 0;
     const auto diagnosticInstance = DlssNr::FgLifecycle::Find(handleId);
+    const auto nativeFgInstance = DlssNr::PreFg::NativeFgInstance(handleId);
     const bool diagnosticFg = releasedFeature == NVSDK_NGX_Feature_FrameGeneration || diagnosticInstance != 0;
     NrPipelineObservations.erase(handleId);
     NgxEvaluationTraceObservations.erase(handleId);
@@ -1035,6 +1039,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
             if (diagnosticFg)
                 DlssNr::FgLifecycle::Released(operation, handleId, diagnosticInstance,
                     static_cast<uint32_t>(result), result == NVSDK_NGX_Result_Success);
+            if (releasedFeature == NVSDK_NGX_Feature_FrameGeneration &&
+                result == NVSDK_NGX_Result_Success)
+                DlssNr::PreFg::PublishNativeFgReleased(handleId, nativeFgInstance);
 
             if (!shutdown)
                 LOG_INFO("D3D12_ReleaseFeature result for ({0}): {1:X}", handleId, (UINT) result);
@@ -1328,21 +1335,23 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     static std::optional<float> lastDlssgCameraNear {};
     static std::optional<float> lastDlssgCameraFar {};
+    void* fgBackbuffer = nullptr;
+    NVSDK_NGX_Result fgBackbufferResult = NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     if (feature == NVSDK_NGX_Feature_FrameGeneration)
     {
+        if (InParameters)
+            fgBackbufferResult = InParameters->Get("DLSSG.Backbuffer", &fgBackbuffer);
         if (DlssNr::FrameTrace::Armed() && InParameters)
         {
-            void* traceBackbuffer = nullptr;
             void* traceHudless = nullptr;
-            const auto backbufferResult = InParameters->Get("DLSSG.Backbuffer", &traceBackbuffer);
             const auto hudlessResult = InParameters->Get("DLSSG.HUDLess", &traceHudless);
             const auto* preFg = DlssNr::PreFg::forwardingFrame;
             NR_FRAME_TRACE("ngx-fg-input", "provider=nvngx handle={} list={:p} backbuffer={:p} "
                 "hudless={:p} backbufferResult={} hudlessResult={} realSequence={} providerToken={} "
                 "nrSubmitted={} association={} handleInstance={} generation={} claimGeneration={} providerGeneration={}", handleId,
-                static_cast<void*>(InCmdList), traceBackbuffer, traceHudless,
-                static_cast<unsigned int>(backbufferResult), static_cast<unsigned int>(hudlessResult),
+                static_cast<void*>(InCmdList), fgBackbuffer, traceHudless,
+                static_cast<unsigned int>(fgBackbufferResult), static_cast<unsigned int>(hudlessResult),
                 preFg ? preFg->sequence : 0, preFg ? preFg->key : 0, preFg && preFg->outputSubmitted,
                 preFg ? "present-call-scope" : "unknown", DlssNr::FgLifecycle::Find(handleId),
                 DlssNr::FgLifecycle::Read().generation, preFg ? preFg->diagnosticClaim.generation : 0,
@@ -1390,6 +1399,44 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
             if (isSuperResolution && nrSettings)
                 DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings);
+
+            if (feature == NVSDK_NGX_Feature_FrameGeneration)
+            {
+                ID3D12Resource* nativeBackbuffer = nullptr;
+                if (fgBackbufferResult == NVSDK_NGX_Result_Success && fgBackbuffer)
+                {
+                    const auto resolved = DlssNr::NativeIdentity::Resolve<ID3D12Resource>(
+                        static_cast<IUnknown*>(fgBackbuffer));
+                    nativeBackbuffer = resolved.object.Get();
+                }
+                if (!nativeBackbuffer && DlssNr::PreFg::PendingCompletions())
+                {
+                    NR_FRAME_TRACE("nr-fg-handoff-refused", "reason=missing-native-backbuffer handle={} list={:p}",
+                        handleId, static_cast<void*>(InCmdList));
+                    return NVSDK_NGX_Result_FAIL_InvalidParameter;
+                }
+                const auto provider = DlssNr::PreFg::Provider();
+                const auto completion = DlssNr::PreFg::ClaimCompletion(nativeBackbuffer, provider.generation, handleId);
+                bool handoffFailed = completion.result == DlssNr::PreFg::CompletionClaimResult::Refused;
+                if (completion.result == DlssNr::PreFg::CompletionClaimResult::Ready &&
+                    !DlssNr::GpuSafety::BindExternalWait(InCmdList, completion.dependency.fence.Get(),
+                        completion.dependency.value, completion.dependency.token,
+                        completion.dependency.sequence))
+                {
+                    DlssNr::PreFg::RejectCompletion(nativeBackbuffer, provider.generation, handleId,
+                        completion.dependency.token, completion.dependency.sequence);
+                    handoffFailed = true;
+                }
+                if (handoffFailed)
+                {
+                    NR_FRAME_TRACE("nr-fg-handoff-refused", "reason={} handle={} list={:p} backbuffer={:p} "
+                        "token={} sequence={}", completion.result == DlssNr::PreFg::CompletionClaimResult::Refused ?
+                        "identity-mismatch" : "wait-bind-failed", handleId, static_cast<void*>(InCmdList),
+                        static_cast<void*>(nativeBackbuffer), completion.dependency.token,
+                        completion.dependency.sequence);
+                    return NVSDK_NGX_Result_FAIL_PlatformError;
+                }
+            }
 
             NVSDK_NGX_Result result =
                 NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);

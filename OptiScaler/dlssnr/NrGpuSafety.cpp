@@ -33,10 +33,18 @@ struct Recording
     UINT64 submissions = 0;
     std::vector<Point> points;
 };
+struct ExternalWait
+{
+    ComPtr<ID3D12Fence> fence;
+    UINT64 value = 0;
+    UINT64 token = 0;
+    UINT64 sequence = 0;
+};
 namespace
 {
 constexpr GUID recordingGuid = {0x5ee0e247, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
 constexpr GUID timelineGuid = {0x5ee0e248, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
+constexpr GUID externalWaitGuid = {0x5ee0e249, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
 using ExecuteFn = void (STDMETHODCALLTYPE*)(ID3D12CommandQueue*, UINT, ID3D12CommandList* const*);
 using ResetFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, ID3D12CommandAllocator*, ID3D12PipelineState*);
 ExecuteFn originalExecute = nullptr;
@@ -145,17 +153,38 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     auto& s = State();
     std::lock_guard lock(s.mutex);
     CompletionSet uses;
+    std::vector<std::pair<ID3D12CommandList*, std::shared_ptr<ExternalWait>>> waits;
     for (UINT i = 0; i < count; ++i)
     {
         auto ticket = Get<Recording>(lists[i], recordingGuid);
         NR_FRAME_TRACE("queue-execute-enter", "queue={:p} list={:p} ticket={:p} batchCount={} batchIndex={}",
             static_cast<void*>(queue), static_cast<void*>(lists[i]), static_cast<void*>(ticket.get()), count, i);
         if (ticket) uses.push_back(ticket);
+        if (auto dependency = Get<ExternalWait>(lists[i], externalWaitGuid))
+            waits.push_back({lists[i], std::move(dependency)});
     }
-    if (uses.empty()) { originalExecute(queue, count, lists); return; }
+    if (uses.empty() && waits.empty()) { originalExecute(queue, count, lists); return; }
 
-    auto timeline = Get<Timeline>(queue, timelineGuid);
-    if (!timeline)
+    for (const auto& [list, dependency] : waits)
+    {
+        bool ok = queue->GetDesc().Type == D3D12_COMMAND_LIST_TYPE_DIRECT;
+        ComPtr<ID3D12Device> producerDevice, consumerDevice;
+        if (ok)
+            ok = SUCCEEDED(dependency->fence->GetDevice(IID_PPV_ARGS(&producerDevice))) &&
+                 SUCCEEDED(queue->GetDevice(IID_PPV_ARGS(&consumerDevice))) &&
+                 NativeObject(producerDevice.Get()) == NativeObject(consumerDevice.Get());
+        const HRESULT waitResult = ok ? queue->Wait(dependency->fence.Get(), dependency->value) : E_INVALIDARG;
+        ok = ok && SUCCEEDED(waitResult) &&
+             SUCCEEDED(list->SetPrivateDataInterface(externalWaitGuid, nullptr));
+        NR_FRAME_TRACE("nr-fg-wait-applied", "queue={:p} list={:p} fence={:p} value={} token={} "
+            "sequence={} result={} ok={}", static_cast<void*>(queue), static_cast<void*>(list),
+            static_cast<void*>(dependency->fence.Get()), dependency->value, dependency->token,
+            dependency->sequence, static_cast<unsigned int>(waitResult), ok);
+        if (!ok) s.failed = true;
+    }
+
+    auto timeline = uses.empty() ? std::shared_ptr<Timeline>{} : Get<Timeline>(queue, timelineGuid);
+    if (!uses.empty() && !timeline)
     {
         timeline = std::make_shared<Timeline>();
         ComPtr<ID3D12Device> device;
@@ -164,13 +193,12 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
             !Put(queue, timelineGuid, timeline)) timeline.reset();
         if (timeline && FAILED(queue->GetTimestampFrequency(&timeline->frequency))) timeline->frequency = 0;
     }
-    // Observe completion without inserting dependencies into the host's queue graph. An implicit
-    // cross-queue Wait could deadlock a valid host Wait/Signal pair. The host still owns GPU ordering
-    // of shared rendering inputs/history; lifetime reclamation covers every observed submission.
-    bool ok = timeline != nullptr && timeline->next < UINT64_MAX - 1;
+    // Recording tickets only observe host ordering. The wait above is the narrow exception: an
+    // explicit, exact-resource NR-to-native-FG handoff attached to the provider command list.
+    bool ok = uses.empty() || (timeline != nullptr && timeline->next < UINT64_MAX - 1);
     originalExecute(queue, count, lists);
-    const UINT64 value = ok ? ++timeline->next : 0;
-    if (ok) ok = SUCCEEDED(queue->Signal(timeline->fence.Get(), value));
+    const UINT64 value = !uses.empty() && ok ? ++timeline->next : 0;
+    if (!uses.empty() && ok) ok = SUCCEEDED(queue->Signal(timeline->fence.Get(), value));
     NR_FRAME_TRACE("queue-execute-signaled", "queue={:p} fence={:p} value={} ok={} tickets={}",
         static_cast<void*>(queue), timeline ? static_cast<void*>(timeline->fence.Get()) : nullptr,
         value, ok, uses.size());
@@ -202,6 +230,9 @@ HRESULT STDMETHODCALLTYPE Reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
             if (SUCCEEDED(list->SetPrivateDataInterface(recordingGuid, nullptr))) t->sealed = true;
             else { t->failed = true; State().failed = true; }
         }
+        if (Get<ExternalWait>(list, externalWaitGuid) &&
+            FAILED(list->SetPrivateDataInterface(externalWaitGuid, nullptr)))
+            State().failed = true;
     }
     return hr;
 }
@@ -302,6 +333,30 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
         static_cast<void*>(consumer), static_cast<void*>(point.timeline->fence.Get()),
         point.value, static_cast<unsigned int>(result));
     return SUCCEEDED(result);
+}
+bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
+                      UINT64 producerValue, UINT64 token, UINT64 sequence)
+{
+    if (!list || !producerFence || !producerValue ||
+        list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
+    list = NativeObject(list);
+    producerFence = NativeObject(producerFence);
+    if (!EnsureHooks(list)) return false;
+    std::lock_guard lock(State().mutex);
+    if (State().failed || Get<ExternalWait>(list, externalWaitGuid)) return false;
+    ComPtr<ID3D12Device> listDevice, fenceDevice;
+    if (FAILED(list->GetDevice(IID_PPV_ARGS(&listDevice))) ||
+        FAILED(producerFence->GetDevice(IID_PPV_ARGS(&fenceDevice))) ||
+        NativeObject(listDevice.Get()) != NativeObject(fenceDevice.Get())) return false;
+    auto dependency = std::make_shared<ExternalWait>();
+    dependency->fence = producerFence;
+    dependency->value = producerValue;
+    dependency->token = token;
+    dependency->sequence = sequence;
+    const bool bound = Put(list, externalWaitGuid, dependency);
+    NR_FRAME_TRACE("nr-fg-wait-bound", "list={:p} fence={:p} value={} token={} sequence={} ok={}",
+        static_cast<void*>(list), static_cast<void*>(producerFence), producerValue, token, sequence, bound);
+    return bound;
 }
 SlotSnapshot InspectSlots(const Ticket* tickets, unsigned int count)
 {

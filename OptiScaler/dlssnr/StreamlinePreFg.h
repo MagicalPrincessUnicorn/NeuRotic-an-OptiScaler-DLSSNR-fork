@@ -148,6 +148,9 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     auto frame = Claim();
     frame.providerGeneration = provider.generation;
     frame.diagnosticClaim = FgLifecycle::Read();
+    const auto nativeFg = NativeFg();
+    frame.nativeFgGeneration = nativeFg.generation;
+    frame.nativeFgInstance = nativeFg.instance;
     NR_FRAME_TRACE("fg-frame-claim", "generation={} instance={} providerGeneration={} token={} sequence={} "
         "swapchain={:p} queue={:p}", frame.diagnosticClaim.generation, frame.diagnosticClaim.instance,
         provider.generation, frame.key, frame.sequence, static_cast<void*>(chain), static_cast<void*>(owner->queue.Get()));
@@ -163,33 +166,72 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     {
         if (!provider.known || !provider.supported || ::State::Instance().activeFgOutput != FGOutput::NoFG ||
             ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOn ||
-            ::State::Instance().dlssgDetectedInterpolationCount > 1)
+            ::State::Instance().dlssgDetectedInterpolationCount > 1 ||
+            nativeFg.active != 1 || !nativeFg.instance)
         {
             frame.valid = false;
-            frame.refusal = "Pre-FG adapter supports native Streamline 2x, single-pass, RR off only";
+            frame.refusal = "Pre-FG adapter requires one native Streamline 2x provider with NR Multipass off";
+        }
+        if (frame.valid && frame.allowOutput)
+        {
+            ComPtr<IDXGISwapChain3> chain3;
+            ComPtr<ID3D12Resource> backbuffer;
+            if (FAILED(chain->QueryInterface(IID_PPV_ARGS(&chain3))) ||
+                FAILED(chain3->GetBuffer(chain3->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&backbuffer))))
+            {
+                frame.valid = false;
+                frame.refusal = "Could not identify the native FG backbuffer for this Present";
+            }
+            else
+            {
+                const auto nativeBuffer = NativeIdentity::Resolve<ID3D12Resource>(backbuffer.Get());
+                frame.outputResource = nativeBuffer.object.Get();
+                frame.completionReservation = ReserveCompletion(frame.outputResource, frame);
+                if (!frame.outputResource || !frame.completionReservation)
+                {
+                    frame.valid = false;
+                    frame.refusal = "Could not reserve the native FG completion handoff for this Present";
+                }
+            }
         }
         // Called only after successful NR model recording, before any backbuffer
         // copyback. Refused/missing-guide frames retain the game's original FG tags.
         if (frame.valid) frame.prepareInputs = &PrepareFullFrame;
     }
     // FG off uses the existing admission contract. Native mode still performs no Present model work.
-    const auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, fg ? &frame : nullptr);
-    frame.outputSubmitted = identity.completedOutput;
+    auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, fg ? &frame : nullptr);
+    if (frame.completionReservation && !identity.completedOutput)
+        CancelCompletion(frame.completionReservation);
+    bool completionPublished = false;
+    if (identity.completedOutput && frame.completionReservation)
+    {
+        const auto nativeOutput = NativeIdentity::Resolve<ID3D12Resource>(identity.outputResource);
+        completionPublished = nativeOutput.object.Get() == frame.outputResource &&
+            CommitCompletion(frame.completionReservation, frame.outputResource,
+                             identity.completionFence, identity.completionValue);
+    }
+    frame.outputSubmitted = identity.completedOutput && completionPublished;
+    if (identity.completedOutput && !completionPublished)
+        NR_FRAME_TRACE("nr-fg-handoff-refused", "reason=completion-publish-failed token={} sequence={} "
+            "resource={:p} identityResource={:p} fence={:p} value={}", frame.key, frame.sequence,
+            static_cast<void*>(frame.outputResource), static_cast<void*>(identity.outputResource),
+            static_cast<void*>(identity.completionFence), identity.completionValue);
     if (identity.completedOutput)
         FgLifecycle::Output(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get());
     const double beforeProvider = Util::MillisecondsNow();
-    if (identity.completedOutput) ++State().submitted;
+    if (frame.outputSubmitted) ++State().submitted;
     else if (requested) ++State().rejected;
     NR_FRAME_TRACE("nr-before-fg-forward", "provider=game-streamline realSequence={} token={} valid={} "
         "outputSubmitted={} swapchain={:p} queue={:p} policy=full-frame-hud-included",
-        frame.sequence, frame.key, frame.valid, identity.completedOutput,
+        frame.sequence, frame.key, frame.valid, frame.outputSubmitted,
         static_cast<void*>(chain), static_cast<void*>(owner->queue.Get()));
-    // The NR adapter submitted all work on the exact creation queue before entering
-    // Streamline. Its normal presenting-queue dependency orders the FG read after NR.
+    // The NR adapter submitted on the application creation queue. Native DLSSG
+    // claims the exact-backbuffer completion fence and binds it to its provider
+    // command list before that list reaches the provider-owned queue.
     ForwardFrame providerScope(frame);
     const HRESULT result = forward();
     FgLifecycle::Present(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get(),
-        identity.completedOutput, result);
+        frame.outputSubmitted, result);
     if (DredDiagnostics::Enabled() && FAILED(result) && owner->queue)
     {
         ComPtr<ID3D12Device> faultDevice;
@@ -201,14 +243,14 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         owner->startup.Observe(frame.valid && identity.modelPrepared && SUCCEEDED(result));
         NR_FRAME_TRACE("nr-startup-admission", "token={} modelPrepared={} outputAllowed={} outputSubmitted={} "
             "qualified={} required={}", frame.key, identity.modelPrepared, frame.allowOutput,
-            identity.completedOutput, owner->startup.Count(), StartupGate::required);
+            frame.outputSubmitted, owner->startup.Count(), StartupGate::required);
     }
     const double end = Util::MillisecondsNow();
     ReportPresentCallTiming({identity, interval, beforeProvider - start, end - start, end - beforeProvider, result});
     if (frame.sequence <= 4 || frame.sequence % 120 == 0)
         LOG_INFO("NR pre-FG: real={} submitted={} bypassedOutputs={} rejected={} token={} source={} result={:X}",
             State().realCalls.load(), State().submitted.load(), State().bypassed.load(), State().rejected.load(),
-            frame.key, identity.completedOutput ? "NR output" : "original", static_cast<unsigned int>(result));
+            frame.key, frame.outputSubmitted ? "NR output" : "original", static_cast<unsigned int>(result));
     return result;
 }
 inline HRESULT STDMETHODCALLTYPE Present(IDXGISwapChain* chain, UINT sync, UINT flags)
@@ -220,6 +262,7 @@ inline void Invalidate()
 {
     std::lock_guard lock(State().mutex);
     State().ledger.Reset();
+    State().completions.Reset();
 }
 inline HRESULT STDMETHODCALLTYPE Resize(IDXGISwapChain* chain, UINT count, UINT width, UINT height,
                                         DXGI_FORMAT format, UINT flags)

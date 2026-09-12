@@ -73,6 +73,11 @@ struct PresentCallIdentity
     // Successful model recording/submission with a tracked completion signal;
     // warmup can prepare work without publishing it or clearing the game's FG tags.
     bool modelPrepared = false;
+    // Borrowed process objects describing the successful D3D12 copyback. The
+    // pre-FG adapter retains the fence only when it publishes a native-FG handoff.
+    ID3D12Fence* completionFence = nullptr;
+    unsigned long long completionValue = 0;
+    ID3D12Resource* outputResource = nullptr;
 };
 
 struct PresentCallTimingSample

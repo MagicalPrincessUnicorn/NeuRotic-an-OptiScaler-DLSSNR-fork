@@ -35,6 +35,11 @@ bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue);
 // a different queue must share its device and gets a GPU wait on its observed fence.
 // never waits for an unsubmitted recording or grants permission to reuse resources.
 bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer);
+// Attach an already-signaled producer fence to an external provider command
+// list. Its first submission receives a GPU queue wait immediately before the
+// provider list executes; Reset before submission cancels the dependency.
+bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
+                      UINT64 producerValue, UINT64 token, UINT64 sequence);
 UINT64 TimestampFrequency(const Ticket& ticket);
 CompletionSet Pending();
 bool Reusable(const CompletionSet& tickets);

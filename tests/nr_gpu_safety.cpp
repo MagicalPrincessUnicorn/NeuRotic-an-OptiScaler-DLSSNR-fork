@@ -35,6 +35,40 @@ int main()
     Check(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr, IID_PPV_ARGS(&list)));
     auto submit = [&](ID3D12CommandQueue* q) { ID3D12CommandList* lists[] = {list.Get()}; q->ExecuteCommandLists(1, lists); };
 
+    // The provider list must wait on the producer fence without blocking the CPU.
+    ComPtr<ID3D12Fence> externalProducer, externalConsumer;
+    Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&externalProducer)));
+    Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&externalConsumer)));
+    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 41, 42));
+    assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 43, 44));
+    Check(list->Close());
+    submit(otherQueue.Get());
+    Check(otherQueue->Signal(externalConsumer.Get(), 1));
+    assert(externalConsumer->GetCompletedValue() == 0);
+    Check(externalProducer->Signal(1));
+    HANDLE externalDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    assert(externalDone);
+    Check(externalConsumer->SetEventOnCompletion(1, externalDone));
+    assert(WaitForSingleObject(externalDone, 5000) == WAIT_OBJECT_0);
+    CloseHandle(externalDone);
+    Check(list->Reset(allocator.Get(), nullptr));
+
+    // Reset before submission cancels the borrowed dependency.
+    ComPtr<ID3D12Fence> canceledProducer;
+    Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&canceledProducer)));
+    assert(Safety::BindExternalWait(list.Get(), canceledProducer.Get(), 1, 45, 46));
+    Check(list->Close());
+    Check(list->Reset(nextAllocator.Get(), nullptr));
+    Check(list->Close());
+    submit(otherQueue.Get());
+    Check(otherQueue->Signal(externalConsumer.Get(), 2));
+    externalDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    assert(externalDone);
+    Check(externalConsumer->SetEventOnCompletion(2, externalDone));
+    assert(WaitForSingleObject(externalDone, 5000) == WAIT_OBJECT_0);
+    CloseHandle(externalDone);
+    Check(list->Reset(allocator.Get(), nullptr));
+
     auto abandoned = Safety::Record(list.Get());
     assert(!Safety::OrderBefore(abandoned, otherQueue.Get()));
     assert(!Safety::OrderBefore(abandoned, queue.Get()));

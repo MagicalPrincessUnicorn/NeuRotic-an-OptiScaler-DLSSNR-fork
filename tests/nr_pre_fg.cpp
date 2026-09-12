@@ -101,6 +101,46 @@ int main()
     assert(Provider().generation > provider.generation && !Provider().supported);
     PublishProvider(false, false);
     assert(!Provider().enabled);
+
+    NativeFgState nativeFg;
+    const auto firstNativeInstance = nativeFg.Create(77);
+    assert(firstNativeInstance && nativeFg.Read().active == 1 &&
+           nativeFg.Read().instance == firstNativeInstance);
+    const auto firstNativeGeneration = nativeFg.Read().generation;
+    const auto replacementInstance = nativeFg.Create(77); // reused numeric handle
+    assert(replacementInstance > firstNativeInstance && nativeFg.Read().generation > firstNativeGeneration);
+    assert(!nativeFg.Release(77, firstNativeInstance));
+    assert(nativeFg.Release(77, replacementInstance) && nativeFg.Read().active == 0);
+
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> warp;
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+    assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));
+    assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
+    assert(SUCCEEDED(D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))));
+    assert(SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))));
+    auto* resourceA = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x1000));
+    auto* resourceB = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x2000));
+    CompletionLedger completions;
+    const auto reservation = completions.Reserve(resourceA, 3, 4, 5, 6, 7);
+    assert(reservation && !completions.Reserve(resourceA, 3, 4, 5, 8, 9));
+    assert(!completions.Commit(reservation, resourceB, fence.Get(), 1));
+    assert(completions.Commit(reservation, resourceA, fence.Get(), 1));
+    auto wrongProvider = completions.Claim(resourceA, 2, 4, 5);
+    assert(wrongProvider.result == CompletionClaimResult::Refused && completions.Count() == 1);
+    assert(completions.Claim(resourceA, 3, 4, 5).result == CompletionClaimResult::Ready);
+    const auto readyReservation = completions.Reserve(resourceA, 3, 4, 5, 8, 9);
+    assert(readyReservation && completions.Commit(readyReservation, resourceA, fence.Get(), 2));
+    const auto ready = completions.Claim(resourceA, 3, 4, 5);
+    assert(ready.result == CompletionClaimResult::Ready && ready.dependency.fence.Get() == fence.Get() &&
+           ready.dependency.value == 2 && ready.dependency.token == 8 && ready.dependency.sequence == 9);
+    assert(completions.Claim(resourceA, 3, 4, 5).result == CompletionClaimResult::None);
+    for (uintptr_t i = 1; i <= 8; ++i)
+        assert(completions.Reserve(reinterpret_cast<ID3D12Resource*>(i), 3, 4, 5, i, i));
+    assert(!completions.Reserve(reinterpret_cast<ID3D12Resource*>(9), 3, 4, 5, 9, 9));
+    completions.Reset();
+    assert(completions.Count() == 0);
     Frame outer, inner;
     outer.key = 123; inner.key = 124;
     assert(!forwardingFrame);
@@ -113,5 +153,5 @@ int main()
         other.join();
     }
     assert(!forwardingFrame);
-    std::puts("Pre-FG identity: missing/stale/future/duplicate/viewport/resize/wrap/concurrency PASS");
+    std::puts("Pre-FG identity/completion handoff: lifecycle/reuse/bounds/mismatch/claim-once PASS");
 }

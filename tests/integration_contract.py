@@ -123,5 +123,22 @@ require('CompositionPool::RequiredSlots(healthyPassCount)' in dx and
 require('cfg.DlssNrRoute.value_or_default() != 0' in dx and 'frame.Reset = gameReset != 0;' in dx and
         'frame.Reset = resetHistory;' in dx, 'native game reset and explicit Present-history reset are retained')
 require('completionUntrackable' in present and 'DXGI_PRESENT_TEST' in present and 'DirtyRectsCount' in present, 'Present failure-safe gates retained')
+prefg = source('OptiScaler/dlssnr/PreFg.h')
+streamline_prefg = source('OptiScaler/dlssnr/StreamlinePreFg.h')
+gpu_safety = source('OptiScaler/dlssnr/NrGpuSafety.cpp')
+ngx_dx12 = source('OptiScaler/inputs/NVNGX_DLSS_Dx12.cpp')
+require('nativeRayReconstructionActive' not in present[present.index('if (preFgFrame && !preFgFrame->valid'):present.index('// Experimental combinations')],
+        'native RR no longer triggers the combined pre-FG blanket refusal')
+require('ReserveCompletion(frame.outputResource, frame)' in streamline_prefg and
+        'CommitCompletion(frame.completionReservation' in streamline_prefg and
+        'State().completions.Reset();' in streamline_prefg,
+        'pre-FG copyback reserves, publishes and invalidates exact-backbuffer completion handoffs')
+require('ClaimCompletion(nativeBackbuffer' in ngx_dx12 and
+        'GpuSafety::BindExternalWait' in ngx_dx12 and
+        'nr-fg-handoff-refused' in ngx_dx12,
+        'native DLSSG claims the matching NR completion and fails closed when it cannot bind')
+require('queue->Wait(dependency->fence.Get(), dependency->value)' in gpu_safety and
+        'nr-fg-wait-applied' in gpu_safety and 'externalWaitGuid' in gpu_safety,
+        'provider submission applies the explicit GPU wait and command-list lifetime cookie')
 require('dlssnr_call_probe_d3d12' in source('OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp'), 'direct Feature 18 capability probe retained')
 print('PASS: integration source contracts; runtime evidence remains required')

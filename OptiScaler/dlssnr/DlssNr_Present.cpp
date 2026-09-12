@@ -708,9 +708,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::D3D12, preFgFrame->refusal);
         return identity;
     }
-    if (preFgFrame && (settings.DlssNrMultipassEnabled.value_or_default() || Telemetry().nativeRayReconstructionActive))
+    if (preFgFrame && settings.DlssNrMultipassEnabled.value_or_default())
     {
-        SetFallback(PresentApi::D3D12, "Pre-FG adapter supports native Streamline 2x, single-pass, RR off only");
+        SetFallback(PresentApi::D3D12, "Pre-FG adapter supports native Streamline 2x with NR Multipass off");
         return identity;
     }
 
@@ -1303,6 +1303,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     ++g_present.telemetry.compositeEvaluations;
     identity.completedOutput = true;
     identity.modelPrepared = true;
+    identity.completionFence = g_present.fence.Get();
+    identity.completionValue = signal;
+    identity.outputResource = presentOutput;
     g_present.telemetry.active = true;
     g_present.telemetry.failed = false;
     if (g_present.telemetry.consecutiveFallbacks != 0)
