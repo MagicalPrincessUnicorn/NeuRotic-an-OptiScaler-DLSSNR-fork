@@ -1,5 +1,32 @@
 NEUROTIC - CUSTOMER CANDIDATE
 
+UNINSTALL
+Every public package includes NeuRotic-Uninstall.cmd. Run it, select the same game
+executable used for installation, review the detected proxy and settings choice,
+then confirm. Setup also places "Uninstall NeuRotic.cmd" directly in the game folder;
+that copy already knows which game it belongs to and does not ask you to browse again.
+
+The uninstaller reads the verified installation record first. It automatically knows
+whether NeuRotic was installed as dxgi.dll, winmm.dll or another supported proxy and
+walks stacked updates back to the original pre-NeuRotic state. If no record can be
+proved, it enters a clearly labeled manual recovery mode and asks which proxy you used.
+It never deletes an arbitrary dxgi.dll merely because the filename looks familiar.
+
+The recommended option saves current settings under NeuRotic\UserData while returning
+the active game files to their exact pre-install state. Setup automatically reuses
+those settings on reinstall. Remove Settings discards the saved NeuRotic settings.
+Full Cleanup additionally removes recorded installer history and backups. Files you
+added yourself, modified backup files, and nonempty folders are preserved. The user-supplied
+nvngx_dlssnr.dll model is always preserved unless its separate advanced removal
+option is explicitly requested and confirmed.
+
+Cancel and preview keep the game-folder uninstaller available. Before uninstalling,
+the complete restore history and backup hashes are checked. Current settings and the
+pre-uninstall files are saved in a recovery journal before any active file changes.
+If Windows closes or uninstall is interrupted, run NeuRotic-Uninstall.cmd again and
+choose recovery first; then retry uninstall. A normal write failure automatically
+restores the pre-uninstall state. Keep the recovery folders until recovery completes.
+
 INSTALL
 1. Extract the complete ZIP to a folder outside the game folder.
 2. Close the game and double-click NeuRotic-Setup.cmd.
@@ -12,6 +39,15 @@ INSTALL
    cancel. For dxgi.dll only, you can instead keep it as ReShade64.dll and enable
    ReShade compatibility. Setup never guesses who owns an existing file.
 6. Wait for "full installation verified", then launch your game.
+
+After the first managed installation, Setup remembers the selected proxy, release
+and installation time. Running Setup again offers Update/Repair, Change Proxy or
+Uninstall. Updates reuse the recorded proxy automatically. A proxy change restores
+or removes the old managed loader and installs the new one as one rollback-safe
+transaction. ReShade-linked dxgi.dll changes deliberately use uninstall-then-install
+so the original ReShade placement is restored before selecting another proxy.
+Repair can recreate a missing managed loader. Proxy changes can be repeated or
+changed back while preserving the original state of each filename.
 
 When dxgi.dll already exists, Setup displays these choices in this order:
 1. Replace the file (Backup of original will be created)
@@ -39,12 +75,10 @@ game executable before enabling NR. The included nvngx.dll_dlssnr.dll is a
 different file: it is the forwarder. Both are needed for NR.
 
 RESTORE YOUR PREVIOUS INSTALLATION
-Setup displays a recovery folder inside the game's NeuRotic-test-backups folder.
-Close the game and run Restore.cmd in that recovery folder. It runs immediately,
-restores the original selected proxy name and the exact pre-install OptiScaler.ini, and
-removes a ReShade64.dll created by Setup. Your NR model stays in place. Any later
-INI is retained in the recovery folder before it is replaced. Keep that folder.
-If you install several versions, restore them in reverse order.
+Use Uninstall NeuRotic.cmd in the game folder for the normal public uninstall flow.
+Setup also retains its low-level Restore.cmd in each verified recovery folder for
+support and emergency rollback. The public uninstaller follows those records in the
+correct order automatically; users no longer need to restore several versions by hand.
 
 NEED HELP?
 Keep the extracted package together. The support folder contains internal setup
@@ -54,10 +88,9 @@ If the selected filename exists, choose its disposition yourself in Setup.
 For troubleshooting, enable file logging at Info in Diagnostics, restart, reproduce
 the problem and retain OptiScaler.log. Switch logging off again afterwards.
 
-This candidate is for testing before release. The preceding version passed the
-author's smoke tests in MHWilds, Dragon's Dogma 2 and Crimson Desert; the shared
-strength controls in this version need your confirmation in game. Known DD2
-first-menu/shop performance drops remain under investigation.
+This candidate contains the public Alpha 0.9.5 rendering source with revised
+installation and removal tools. Installer recovery is checked with disposable game
+folders; real-game behavior requires a separate review before release.
 
 Use only in games that permit modifications; avoid protected online sessions.
 These files are unsigned. No model downloads are performed by Setup.
