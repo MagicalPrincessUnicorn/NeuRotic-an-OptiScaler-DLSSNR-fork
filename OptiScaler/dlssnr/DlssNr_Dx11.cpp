@@ -142,6 +142,7 @@ struct Feature::State
     unsigned int flags = 0, width = 0, height = 0, outWidth = 0, outHeight = 0;
     int quality = 0;
     bool created = false, copyGuides = false, nativePostSr = false, nativePreSr = false;
+    bool guideContractReported = false;
     bool privateColorActive = false, privateColorUsed = false, preSrDelivered = false;
     bool colorXChanged = false, colorYChanged = false;
     int pending = -1;
@@ -195,6 +196,7 @@ Feature::~Feature()
 }
 void Feature::Created(NVSDK_NGX_Parameter* p)
 {
+    state->guideContractReported = false;
     state->created = p &&
         p->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &state->flags) == NVSDK_NGX_Result_Success &&
         p->Get(NVSDK_NGX_Parameter_Width, &state->width) == NVSDK_NGX_Result_Success &&
@@ -242,9 +244,6 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (s.pending >= 0) { s.Reject("overlapping native feature evaluations"); return; }
     if (s.copyGuides && (s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered))
     { s.Reject("jittered motion-vector convention is not validated"); return; }
-    if (s.copyGuides && !(s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) &&
-        (s.width != s.outWidth || s.height != s.outHeight))
-    { s.Reject("display-resolution motion vectors with sub-native color are not validated"); return; }
     Dx11Transport::ContextLock contextLock(context);
     auto& runtime = Transport();
     std::lock_guard lock(runtime.mutex);
@@ -316,6 +315,11 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     p->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, &s.frame.MotionSubrectX);
     p->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, &s.frame.MotionSubrectY);
     const auto rw = s.frame.RenderSubrectWidth, rh = s.frame.RenderSubrectHeight;
+    s.frame.DepthSubrectWidth = rw;
+    s.frame.DepthSubrectHeight = rh;
+    const bool lowResolutionMotion = (s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
+    s.frame.MotionSubrectWidth = lowResolutionMotion ? rw : s.outWidth;
+    s.frame.MotionSubrectHeight = lowResolutionMotion ? rh : s.outHeight;
     if (!rw || !rh || rw > s.outWidth || rh > s.outHeight || colorX > colorDesc.Width || colorY > colorDesc.Height ||
         rw > colorDesc.Width - colorX || rh > colorDesc.Height - colorY)
     { s.Reject("render subrect exceeds native color/output dimensions"); return; }
@@ -329,8 +333,19 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
         s.frame.DepthSubrectX > dd.Width || s.frame.DepthSubrectY > dd.Height ||
         rw > dd.Width - s.frame.DepthSubrectX || rh > dd.Height - s.frame.DepthSubrectY ||
         s.frame.MotionSubrectX > md.Width || s.frame.MotionSubrectY > md.Height ||
-        rw > md.Width - s.frame.MotionSubrectX || rh > md.Height - s.frame.MotionSubrectY))
+        s.frame.MotionSubrectWidth > md.Width - s.frame.MotionSubrectX ||
+        s.frame.MotionSubrectHeight > md.Height - s.frame.MotionSubrectY))
     { s.Reject("native guide shape/subrect unsupported"); return; }
+    if (s.copyGuides && !s.guideContractReported)
+    {
+        LOG_INFO("NR native DX11 guides: depth={}x{} at {},{} motion={}x{} at {},{} ({})",
+            s.frame.DepthSubrectWidth, s.frame.DepthSubrectHeight,
+            s.frame.DepthSubrectX, s.frame.DepthSubrectY,
+            s.frame.MotionSubrectWidth, s.frame.MotionSubrectHeight,
+            s.frame.MotionSubrectX, s.frame.MotionSubrectY,
+            lowResolutionMotion ? "render-resolution" : "output-resolution");
+        s.guideContractReported = true;
+    }
     D3D11_TEXTURE2D_DESC imageDesc = outputDesc;
     if (s.nativePreSr)
     {

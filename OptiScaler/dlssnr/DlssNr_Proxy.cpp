@@ -179,8 +179,11 @@ void Shutdown()
 unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource* color,
                  ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output,
                  unsigned int width, unsigned int height, unsigned int guideWidth,
-                 unsigned int guideHeight, bool depthInverted, bool reset, float mvScaleX,
-                 float mvScaleY, float jitterX, float jitterY, const NrConfigSnapshot<Config>& cfg)
+                 unsigned int guideHeight, unsigned int motionWidth, unsigned int motionHeight,
+                 bool depthInverted, bool reset, float mvScaleX,
+                 float mvScaleY, float jitterX, float jitterY, unsigned int depthX,
+                 unsigned int depthY, unsigned int motionX, unsigned int motionY,
+                 const NrConfigSnapshot<Config>& cfg)
 {
     CollectRetired();
     if (g_retired.size() >= 32 || !GpuSafety::Record(cmdList))
@@ -295,14 +298,14 @@ unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D1
     SetUInt(params, "DLSSNR.OutputSubrectBaseY", 0u);
     SetUInt(params, "DLSSNR.OutputSubrectWidth", width);
     SetUInt(params, "DLSSNR.OutputSubrectHeight", height);
-    SetUInt(params, "DLSSNR.DepthSubrectBaseX", 0u);
-    SetUInt(params, "DLSSNR.DepthSubrectBaseY", 0u);
+    SetUInt(params, "DLSSNR.DepthSubrectBaseX", depthX);
+    SetUInt(params, "DLSSNR.DepthSubrectBaseY", depthY);
     SetUInt(params, "DLSSNR.DepthSubrectWidth", guideWidth);
     SetUInt(params, "DLSSNR.DepthSubrectHeight", guideHeight);
-    SetUInt(params, "DLSSNR.MVecSubrectBaseX", 0u);
-    SetUInt(params, "DLSSNR.MVecSubrectBaseY", 0u);
-    SetUInt(params, "DLSSNR.MVecSubrectWidth", guideWidth);
-    SetUInt(params, "DLSSNR.MVecSubrectHeight", guideHeight);
+    SetUInt(params, "DLSSNR.MVecSubrectBaseX", motionX);
+    SetUInt(params, "DLSSNR.MVecSubrectBaseY", motionY);
+    SetUInt(params, "DLSSNR.MVecSubrectWidth", motionWidth);
+    SetUInt(params, "DLSSNR.MVecSubrectHeight", motionHeight);
 
     // The game's own encoding, passed through. Deriving this from the resolutions was a guess, and
     // at native resolution it came out as exactly 1.0 -- so a game using normalised vectors was

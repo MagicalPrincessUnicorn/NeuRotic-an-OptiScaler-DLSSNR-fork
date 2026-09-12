@@ -46,8 +46,11 @@ bool Available();
 unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource* color,
                  ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output,
                  unsigned int width, unsigned int height, unsigned int guideWidth,
-                 unsigned int guideHeight, bool depthInverted, bool reset, float mvScaleX,
-                 float mvScaleY, float jitterX, float jitterY, const NrConfigSnapshot<Config>& cfg);
+                 unsigned int guideHeight, unsigned int motionWidth, unsigned int motionHeight,
+                 bool depthInverted, bool reset, float mvScaleX,
+                 float mvScaleY, float jitterX, float jitterY, unsigned int depthX,
+                 unsigned int depthY, unsigned int motionX, unsigned int motionY,
+                 const NrConfigSnapshot<Config>& cfg);
 
 // Retires the feature and its parameter block without freeing pending GPU references.
 void Release();

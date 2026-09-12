@@ -244,8 +244,13 @@ class Bridge
         if (!telemetry.enabled) return;
         ++telemetry.captureAttempts;
         ++count; candidate = -1;
+        const auto depthWidth = frame.DepthSubrectWidth ? frame.DepthSubrectWidth : frame.RenderSubrectWidth;
+        const auto depthHeight = frame.DepthSubrectHeight ? frame.DepthSubrectHeight : frame.RenderSubrectHeight;
+        const auto motionWidth = frame.MotionSubrectWidth ? frame.MotionSubrectWidth : frame.RenderSubrectWidth;
+        const auto motionHeight = frame.MotionSubrectHeight ? frame.MotionSubrectHeight : frame.RenderSubrectHeight;
         telemetry.inputDescription = DescribeInput("Depth", depth) + " | " + DescribeInput("Motion", motion) +
-            " | subrect=" + std::to_string(frame.RenderSubrectWidth) + "x" + std::to_string(frame.RenderSubrectHeight);
+            " | depthRect=" + std::to_string(depthWidth) + "x" + std::to_string(depthHeight) +
+            " motionRect=" + std::to_string(motionWidth) + "x" + std::to_string(motionHeight);
         if (count != 1) { RejectCapture("Multiple Native evaluations before Present; no guide pair used"); return; }
         D3D12_RESOURCE_DESC dd {}, md {};
         if (!list) { RejectCapture("Native capture: command list missing"); return; }
@@ -254,7 +259,8 @@ class Bridge
         if (metadataError) { RejectCapture(metadataError); return; }
         if (dx11Producer && !dx11Producer->Valid())
         { RejectCapture("DX11 producer fence/order proof unavailable"); return; }
-        if (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight ||
+        if (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight || !depthWidth || !depthHeight ||
+            !motionWidth || !motionHeight ||
             frame.RenderSubrectWidth > width || frame.RenderSubrectHeight > height)
         { RejectCapture("Native capture: missing or invalid render-subrect dimensions"); return; }
         metadata.frame = frame; metadata.frame.ExposureTexture = nullptr;
@@ -271,11 +277,11 @@ class Bridge
         { RejectCapture("Native capture: non-finite motion scale/jitter"); return; }
         if (frame.DepthSubrectX > dd.Width || frame.DepthSubrectY > dd.Height ||
             frame.MotionSubrectX > md.Width || frame.MotionSubrectY > md.Height ||
-            frame.RenderSubrectWidth > dd.Width - frame.DepthSubrectX ||
-            frame.RenderSubrectHeight > dd.Height - frame.DepthSubrectY ||
-            frame.RenderSubrectWidth > md.Width - frame.MotionSubrectX ||
-            frame.RenderSubrectHeight > md.Height - frame.MotionSubrectY)
-        { RejectCapture("Native capture: render subrect exceeds guide dimensions: " + telemetry.inputDescription); return; }
+            depthWidth > dd.Width - frame.DepthSubrectX ||
+            depthHeight > dd.Height - frame.DepthSubrectY ||
+            motionWidth > md.Width - frame.MotionSubrectX ||
+            motionHeight > md.Height - frame.MotionSubrectY)
+        { RejectCapture("Native capture: active subrect exceeds guide dimensions: " + telemetry.inputDescription); return; }
         ComPtr<ID3D12Device> device, depthDevice, motionDevice;
         if (FAILED(list->GetDevice(IID_PPV_ARGS(&device))) ||
             FAILED(depth->GetDevice(IID_PPV_ARGS(&depthDevice))) ||

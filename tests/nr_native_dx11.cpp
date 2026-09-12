@@ -303,6 +303,8 @@ int main(int argc, char** argv)
         proof->sourceDevice=d11; proof->value=value; proof->feature=1; proof->evaluation=value;
         G::Bridge guides; guides.Enable(true);
         DlssNrFrameInfo frame {}; frame.RenderSubrectWidth=8; frame.RenderSubrectHeight=4;
+        frame.DepthSubrectWidth=8; frame.DepthSubrectHeight=4;
+        frame.MotionSubrectWidth=mw-3; frame.MotionSubrectHeight=mh;
         frame.DepthSubrectX=2; frame.MotionSubrectX=3; frame.MvScaleX=-1; frame.JitterX=0.25f;
         auto capture=[&] { guides.Capture(producer.Get(),td.resource12.Get(),tm.resource12.Get(),frame,
             d11.Get(),0,128,72,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COMMON,true,nullptr,proof); };
@@ -314,7 +316,8 @@ int main(int argc, char** argv)
         assert(!guides.MatchMetadata(selection,queue.Get(),d11.Get(),1,128,72));
         assert(!guides.MatchMetadata(selection,queue.Get(),d12.Get(),0,128,72));
         assert(guides.Bind(selection,consumer.Get(),queue.Get(),d11.Get(),0,128,72,inputs));
-        assert(inputs.frame.MotionSubrectX==3 && inputs.frame.JitterX==0.25f);
+        assert(inputs.frame.MotionSubrectX==3 && inputs.frame.MotionSubrectWidth==mw-3 &&
+            inputs.frame.MotionSubrectHeight==mh && inputs.frame.JitterX==0.25f);
         // Production capture -> separate DX12 consumer -> private shared DX11 destination, all pixels.
         T::Texture output; D3D11_TEXTURE2D_DESC od=md;
         assert(output.Prepare(d11.Get(),d12.Get(),od,false,reason));
