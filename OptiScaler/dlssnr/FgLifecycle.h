@@ -74,6 +74,15 @@ inline uint64_t Begin(const char* kind, uintptr_t handle = 0) noexcept
     NR_FRAME_TRACE("fg-operation-begin", "operation={} operationKind={} handle={}", operation, kind, handle);
     return operation;
 }
+inline uint64_t BeginOptions() noexcept
+{
+    uint64_t operation = 0;
+    Observe([&](Journal& j) { operation = ++j.operations; });
+    // SetOptions can run every frame. Keep its begin record in the NR-triggered frame trace while the
+    // launch-wide lifecycle journal samples the corresponding result in Options().
+    NR_FRAME_TRACE("fg-operation-begin", "operation={} operationKind=options-begin handle=0", operation);
+    return operation;
+}
 inline void Created(uint64_t operation, uintptr_t handle, uint32_t result, bool success, void* list) noexcept
 {
     Observe([&](Journal& j) {

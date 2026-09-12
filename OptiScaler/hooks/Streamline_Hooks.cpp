@@ -1242,7 +1242,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
 
     state.dlssgLastSetMode = newOptions.mode;
 
-    const auto diagnosticOperation = DlssNr::FgLifecycle::Begin("options-begin");
+    const auto diagnosticOperation = DlssNr::FgLifecycle::BeginOptions();
     const auto result = o_slDLSSGSetOptions(viewport, newOptions);
     if (result == sl::Result::eOk)
         DlssNr::PreFg::PublishProvider(newOptions.mode != sl::DLSSGMode::eOff,

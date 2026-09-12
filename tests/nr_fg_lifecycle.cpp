@@ -103,8 +103,8 @@ int main(int argc, char** argv)
         assert(completed == 3);
         std::vector<std::thread> workers;
         for (unsigned i = 0; i < 4; ++i)
-            workers.emplace_back([=] { for (unsigned n = 0; n < 50; ++n) {
-                const auto operation = FgLifecycle::Begin("options-begin");
+            workers.emplace_back([=] { for (unsigned n = 0; n < 2250; ++n) {
+                const auto operation = FgLifecycle::BeginOptions();
                 const auto snapshot = FgLifecycle::Read();
                 FgLifecycle::Present(snapshot, providerGeneration, n, nullptr, nullptr, false, S_OK);
                 FgLifecycle::Options(operation, i, 1, 1, 0, 0, 0, 0, providerGeneration);
@@ -114,13 +114,14 @@ int main(int argc, char** argv)
         for (unsigned i = 0; i < FgLifecycle::Budget::limit + 100; ++i) NR_FG_EVENT("fill", "index={}", i);
         std::ifstream file(directory / "FG-LIFECYCLE.log");
         std::string line, last;
-        uint64_t count = 0; unsigned options = 0;
+        uint64_t count = 0; unsigned options = 0, optionBegins = 0;
         while (std::getline(file, line)) {
             ++count; last = line;
             assert(line.find(" seq=" + std::to_string(count) + " ") != std::string::npos);
             if (line.find("kind=options-end") != std::string::npos) ++options;
+            if (line.find("kind=options-begin") != std::string::npos) ++optionBegins;
         }
-        assert(count == FgLifecycle::Budget::limit && options >= 2);
+        assert(count == FgLifecycle::Budget::limit && options >= 75 && optionBegins == 0);
         assert(last.find("kind=journal-ended reason=budget-exhausted") != std::string::npos);
     }
     std::cout << "PASS FG lifecycle: " << mode << '\n';
