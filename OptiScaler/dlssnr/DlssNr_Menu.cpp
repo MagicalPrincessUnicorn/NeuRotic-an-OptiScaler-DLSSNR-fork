@@ -29,6 +29,8 @@
 #include <cstdio>
 #include <chrono>
 #include <bit>
+#include <array>
+#include <optional>
 
 namespace DlssNr
 {
@@ -195,6 +197,534 @@ static unsigned int RenderPassCountSelector(Config* config)
 
 static void RenderMultipassMenu(Config* config, float menuResScale);
 
+namespace
+{
+enum class AdvisorPhase { Idle, Warmup, Sample };
+enum class AdvisorResultLevel { Unknown, Analyzing, Available, Unavailable, Recommended };
+
+struct AdvisorRouteResult
+{
+    AdvisorResultLevel level = AdvisorResultLevel::Unknown;
+    bool succeeded = false;
+    double fps = 0.0;
+    double modelMs = 0.0;
+    std::string detail = "Not measured";
+};
+
+struct AdvisorOriginalSettings
+{
+    bool captured = false;
+    std::optional<bool> enabled;
+    std::optional<bool> applyModel;
+    std::optional<bool> multipass;
+    std::optional<bool> secondLayer;
+    std::optional<uint32_t> passes;
+    std::optional<uint32_t> route;
+    std::optional<int32_t> renderingMode;
+    std::optional<bool> runBefore;
+    std::optional<bool> manualResolution;
+    std::optional<float> workingScale;
+    std::optional<uint32_t> presentResolution;
+    std::optional<uint32_t> presentScale;
+    std::optional<uint32_t> enhancedResolution;
+    std::optional<uint32_t> enhancedScale;
+};
+
+struct AdvisorState
+{
+    AdvisorPhase phase = AdvisorPhase::Idle;
+    bool running = false;
+    bool analyzed = false;
+    bool applied = false;
+    int targetIndex = 2; // 60 FPS
+    int goalIndex = 1;   // balanced
+    int routeIndex = 0;
+    int recommendation = -1;
+    double phaseStarted = 0.0;
+    unsigned int originalWidth = 0;
+    unsigned int originalHeight = 0;
+    unsigned long long startNativeFrames = 0;
+    unsigned long long startPresentEvaluations = 0;
+    double frameIntervalTotal = 0.0;
+    unsigned int frameIntervalSamples = 0;
+    std::array<AdvisorRouteResult, 3> routes;
+    AdvisorOriginalSettings original;
+    std::string status = "Choose a target and analyze the current game scene.";
+    std::string reason = "No settings change until Apply Recommendation is pressed.";
+    std::string gpuName = "Detecting graphics card...";
+};
+
+AdvisorState& Advisor()
+{
+    static AdvisorState state;
+    return state;
+}
+
+double AdvisorNow()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+void CaptureAdvisorSettings(Config& config, AdvisorOriginalSettings& out)
+{
+    NrConfigSynchronization::Transaction transaction;
+    out.enabled = config.DlssNrEnabled.snapshot();
+    out.applyModel = config.DlssNrApplyModel.snapshot();
+    out.multipass = config.DlssNrMultipassEnabled.snapshot();
+    out.secondLayer = config.DlssNrSecondLayer.snapshot();
+    out.passes = config.DlssNrPasses.snapshot();
+    out.route = config.DlssNrRoute.snapshot();
+    out.renderingMode = config.DlssNrRenderingMode.snapshot();
+    out.runBefore = config.DlssNrRunBeforeSr.snapshot();
+    out.manualResolution = config.DlssNrUiManualResolution.snapshot();
+    out.workingScale = config.DlssNrWorkingScale.snapshot();
+    out.presentResolution = config.DlssNrPresentResolution.snapshot();
+    out.presentScale = config.DlssNrPresentCustomScale.snapshot();
+    out.enhancedResolution = config.DlssNrEnhancedResolution.snapshot();
+    out.enhancedScale = config.DlssNrEnhancedCustomScale.snapshot();
+    out.captured = true;
+}
+
+void RestoreAdvisorSettings(Config& config, AdvisorOriginalSettings& original)
+{
+    if (!original.captured) return;
+    NrConfigSynchronization::Transaction transaction;
+    const bool enabled = original.enabled.value_or(false);
+    config.SetDlssNrEnabled(enabled);
+    config.DlssNrEnabled = original.enabled;
+    config.DlssNrApplyModel = original.applyModel;
+    config.DlssNrMultipassEnabled = original.multipass;
+    config.DlssNrSecondLayer = original.secondLayer;
+    config.DlssNrPasses = original.passes;
+    config.DlssNrRoute = original.route;
+    config.DlssNrRenderingMode = original.renderingMode;
+    config.DlssNrRunBeforeSr = original.runBefore;
+    config.DlssNrUiManualResolution = original.manualResolution;
+    config.DlssNrWorkingScale = original.workingScale;
+    config.DlssNrPresentResolution = original.presentResolution;
+    config.DlssNrPresentCustomScale = original.presentScale;
+    config.DlssNrEnhancedResolution = original.enhancedResolution;
+    config.DlssNrEnhancedCustomScale = original.enhancedScale;
+    original.captured = false;
+}
+
+void ConfigureAdvisorRoute(Config& config, int route)
+{
+    NrConfigSynchronization::Transaction transaction;
+    config.SetDlssNrEnabled(true);
+    config.DlssNrApplyModel = false;
+    config.DlssNrMultipassEnabled = false;
+    config.DlssNrSecondLayer = false;
+    config.DlssNrPasses = 1u;
+    config.DlssNrRoute = uint32_t(std::clamp(route, 0, 2));
+    if (route == 0)
+    {
+        config.DlssNrRenderingMode = 1;
+        config.DlssNrRunBeforeSr = true;
+        config.DlssNrUiManualResolution = false;
+        config.DlssNrWorkingScale = 1.0f;
+    }
+    else
+    {
+        config.DlssNrRenderingMode = 0;
+        config.DlssNrRunBeforeSr = false;
+        if (route == 1)
+        {
+            config.DlssNrPresentResolution = PresentResolution::Automatic;
+            config.DlssNrPresentCustomScale = 100u;
+        }
+        else
+        {
+            config.DlssNrEnhancedResolution = PresentResolution::Automatic;
+            config.DlssNrEnhancedCustomScale = 100u;
+        }
+    }
+}
+
+void BeginAdvisorRoute(Config& config, int route)
+{
+    auto& advisor = Advisor();
+    advisor.routeIndex = route;
+    advisor.phase = AdvisorPhase::Warmup;
+    advisor.phaseStarted = AdvisorNow();
+    ConfigureAdvisorRoute(config, route);
+    const auto native = DlssNr::Telemetry();
+    const auto present = DlssNr::PresentTelemetry();
+    advisor.startNativeFrames = native.completedPipelineEvaluations;
+    advisor.startPresentEvaluations = present.modelEvaluations;
+    advisor.frameIntervalTotal = 0.0;
+    advisor.frameIntervalSamples = 0;
+}
+
+double AdvisorTargetFps(const AdvisorState& advisor)
+{
+    static constexpr double values[] = { 30.0, 45.0, 60.0, 90.0, 120.0, 144.0 };
+    return values[std::clamp(advisor.targetIndex, 0, 5)];
+}
+
+void ChooseAdvisorRecommendation(AdvisorState& advisor)
+{
+    const double target = AdvisorTargetFps(advisor);
+    const auto meets = [&](int route, double margin)
+    {
+        const auto& result = advisor.routes[route];
+        return result.succeeded && (result.fps <= 0.0 || result.fps >= target * margin);
+    };
+
+    int selected = -1;
+    if (advisor.goalIndex == 0) // quality
+    {
+        for (int route : { 2, 1, 0 }) if (selected < 0 && meets(route, 0.90)) selected = route;
+    }
+    else if (advisor.goalIndex == 1) // balanced
+    {
+        for (int route : { 2, 1, 0 }) if (selected < 0 && meets(route, 1.0)) selected = route;
+    }
+    else // performance
+    {
+        double fastest = 0.0;
+        for (int route : { 0, 1, 2 })
+            if (meets(route, 1.0) && advisor.routes[route].fps >= fastest)
+                selected = route, fastest = advisor.routes[route].fps;
+    }
+    if (selected < 0)
+        for (int route : { 2, 1, 0 }) if (selected < 0 && advisor.routes[route].succeeded) selected = route;
+
+    advisor.recommendation = selected;
+    for (int route = 0; route < 3; ++route)
+        advisor.routes[route].level = !advisor.routes[route].succeeded ? AdvisorResultLevel::Unavailable :
+            route == selected ? AdvisorResultLevel::Recommended : AdvisorResultLevel::Available;
+
+    advisor.analyzed = true;
+    advisor.applied = false;
+    if (selected < 0)
+    {
+        advisor.status = "No verified Neural Rendering route was available.";
+        advisor.reason = "The original image was preserved. Review the route reasons below and try another scene.";
+    }
+    else
+    {
+        static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+        advisor.status = std::string("Recommended: ") + names[selected];
+        const bool targetMet = advisor.routes[selected].fps <= 0.0 || advisor.routes[selected].fps >= target;
+        advisor.reason = targetMet
+            ? "Verified at 100% model resolution and one pass for the selected target."
+            : "No verified 100% route met the target; this is the best available route without reducing resolution.";
+    }
+}
+
+void FinishAdvisorRoute(Config& config)
+{
+    auto& advisor = Advisor();
+    const int route = advisor.routeIndex;
+    auto& result = advisor.routes[route];
+    const auto native = DlssNr::Telemetry();
+    const auto present = DlssNr::PresentTelemetry();
+    const auto guides = DlssNr::PresentGuides::Instance().Inspect();
+    if (advisor.frameIntervalSamples != 0 && advisor.frameIntervalTotal > 0.0)
+        result.fps = 1000.0 / (advisor.frameIntervalTotal / advisor.frameIntervalSamples);
+    if (native.totalGpuMs) result.modelMs = *native.totalGpuMs;
+    if (route == 0)
+    {
+        result.succeeded = native.running && !native.failed && !native.outputQuarantined &&
+            native.completedPipelineEvaluations > advisor.startNativeFrames;
+        result.detail = result.succeeded ? "Verified at 100% before upscaling" :
+            (native.failureReason && native.failureReason[0] ? native.failureReason : "Native model output was not verified");
+    }
+    else
+    {
+        const bool expectedRoute = present.requestedPlacement ==
+            (route == 2 ? "Present Enhanced" : "Present Image-Only");
+        result.succeeded = expectedRoute && present.active && !present.failed &&
+            present.modelEvaluations > advisor.startPresentEvaluations && (route != 2 || guides.evaluated > 0);
+        if (result.succeeded)
+            result.detail = route == 2 ? "Verified depth and motion guides" : "Verified final-image compatibility path";
+        else if (!present.failure.empty()) result.detail = present.failure;
+        else if (!present.fallbackReason.empty()) result.detail = present.fallbackReason;
+        else if (route == 2 && !guides.status.empty()) result.detail = guides.status;
+        else result.detail = "Present output was not verified";
+    }
+
+    if (route < 2)
+        BeginAdvisorRoute(config, route + 1);
+    else
+    {
+        RestoreAdvisorSettings(config, advisor.original);
+        advisor.running = false;
+        advisor.phase = AdvisorPhase::Idle;
+        ChooseAdvisorRecommendation(advisor);
+    }
+}
+
+void StartAdvisorAnalysis(Config& config)
+{
+    auto& advisor = Advisor();
+    if (advisor.running) return;
+    advisor.routes = {};
+    for (auto& route : advisor.routes)
+    {
+        route.level = AdvisorResultLevel::Analyzing;
+        route.detail = "Analyzing...";
+    }
+    advisor.recommendation = -1;
+    advisor.analyzed = false;
+    advisor.applied = false;
+    advisor.status = "Testing available routes...";
+    advisor.reason = "Model effect hidden; 100% resolution and one pass. Original settings will be restored.";
+    CaptureAdvisorSettings(config, advisor.original);
+    const auto present = DlssNr::PresentTelemetry();
+    advisor.originalWidth = present.backbufferWidth;
+    advisor.originalHeight = present.backbufferHeight;
+    advisor.running = true;
+    BeginAdvisorRoute(config, 0);
+}
+
+void ApplyAdvisorRecommendation(Config& config)
+{
+    auto& advisor = Advisor();
+    if (advisor.running || advisor.recommendation < 0) return;
+    const int route = advisor.recommendation;
+    NrConfigSynchronization::Transaction transaction;
+    config.DlssNrRoute = uint32_t(route);
+    config.DlssNrUiAfterMethod = uint32_t(route == 0 ?
+        config.DlssNrUiAfterMethod.value_or_default() : route);
+    if (route == 0)
+    {
+        config.DlssNrRenderingMode = 1;
+        config.DlssNrRunBeforeSr = true;
+        config.DlssNrUiManualResolution = false;
+        config.DlssNrWorkingScale = 1.0f;
+    }
+    else
+    {
+        config.DlssNrRenderingMode = 0;
+        config.DlssNrRunBeforeSr = false;
+        auto& mode = route == 2 ? config.DlssNrEnhancedResolution : config.DlssNrPresentResolution;
+        auto& scale = route == 2 ? config.DlssNrEnhancedCustomScale : config.DlssNrPresentCustomScale;
+        mode = PresentResolution::Automatic;
+        scale = 100u;
+    }
+    advisor.applied = true;
+    advisor.status += " - applied";
+    advisor.reason = "Stage, method, and 100% resolution policy were applied atomically. Model tuning and Multipass were unchanged.";
+}
+
+ImVec4 AdvisorColor(AdvisorResultLevel level)
+{
+    switch (level)
+    {
+    case AdvisorResultLevel::Recommended: return { 0.25f, 0.90f, 0.38f, 1.0f };
+    case AdvisorResultLevel::Available: return { 1.00f, 0.66f, 0.20f, 1.0f };
+    case AdvisorResultLevel::Unavailable: return { 0.95f, 0.30f, 0.28f, 1.0f };
+    case AdvisorResultLevel::Analyzing: return { 0.30f, 0.68f, 1.00f, 1.0f };
+    default: return ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    }
+}
+
+const char* AdvisorLevelName(AdvisorResultLevel level)
+{
+    switch (level)
+    {
+    case AdvisorResultLevel::Recommended: return "Recommended";
+    case AdvisorResultLevel::Available: return "Available";
+    case AdvisorResultLevel::Unavailable: return "Unavailable";
+    case AdvisorResultLevel::Analyzing: return "Analyzing...";
+    default: return "Not measured";
+    }
+}
+
+void AdvisorSignal(const char* label, const std::string& value, const ImVec4& color)
+{
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextDisabled("%s", label);
+    ImGui::TableSetColumnIndex(1);
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::TextWrapped("%s", value.c_str());
+    ImGui::PopStyleColor();
+}
+
+const char* BackbufferFormatName(DXGI_FORMAT format)
+{
+    switch (format)
+    {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return "RGBA8 SDR";
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return "RGBA8 sRGB";
+    case DXGI_FORMAT_R10G10B10A2_UNORM: return "RGB10A2 HDR/SDR";
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: return "RGBA16F HDR";
+    default: return "Waiting for output format";
+    }
+}
+
+void RenderAdvisorRouteCard(int route, float height)
+{
+    static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+    auto& result = Advisor().routes[route];
+    const ImVec4 color = AdvisorColor(result.level);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(color.x, color.y, color.z, 0.07f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(color.x, color.y, color.z, 0.70f));
+    if (ImGui::BeginChild((std::string("##AdvisorRoute") + std::to_string(route)).c_str(),
+                          ImVec2(0.0f, height), ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImGui::TextColored(color, "%s", names[route]);
+        ImGui::SameLine();
+        ImGui::TextColored(color, "- %s", AdvisorLevelName(result.level));
+        ImGui::TextWrapped("%s", result.detail.c_str());
+        if (result.fps > 0.0)
+        {
+            ImGui::TextDisabled("Measured %.0f FPS%s", result.fps,
+                result.modelMs > 0.0 ? StrFmt(" | %.2f ms NR", result.modelMs).c_str() : "");
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+}
+
+void RenderAdvisor(Config* config, float menuResScale)
+{
+    auto& advisor = Advisor();
+    const auto native = DlssNr::Telemetry();
+    const auto present = DlssNr::PresentTelemetry();
+    const auto guides = DlssNr::PresentGuides::Instance().Inspect();
+    const auto& host = State::Instance();
+    const bool fg = host.activeFgInput != FGInput::NoFG && host.activeFgOutput != FGOutput::NoFG;
+    const ImVec4 green(0.40f, 0.90f, 0.50f, 1.0f);
+    const ImVec4 orange(1.00f, 0.72f, 0.25f, 1.0f);
+    const ImVec4 muted = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    const float width = ImGui::GetContentRegionAvail().x;
+    const bool wide = width >= 700.0f * menuResScale;
+
+    ImGui::Spacing();
+    auto header = ScopedCollapsingHeader("Neural Rendering Advisor", ImGuiTreeNodeFlags_DefaultOpen);
+    if (!header.IsHeaderOpen()) return;
+    ScopedIndent indent {};
+    ImGui::Spacing();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.12f, 0.18f, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.60f, 0.90f, 0.55f));
+    if (ImGui::BeginChild("##AdvisorSummary", ImVec2(0.0f, 68.0f * menuResScale),
+                          ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+    {
+        ImGui::TextColored(advisor.running ? AdvisorColor(AdvisorResultLevel::Analyzing) : green,
+                           "%s", advisor.status.c_str());
+        ImGui::TextWrapped("%s", advisor.reason.c_str());
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::Spacing();
+
+    const auto renderSignals = [&]()
+    {
+        ImGui::TextDisabled("WHAT OPTISCALER SEES");
+        if (ImGui::BeginTable("##AdvisorSignals", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Signal", ImGuiTableColumnFlags_WidthStretch, 0.44f);
+            ImGui::TableSetupColumn("Reading", ImGuiTableColumnFlags_WidthStretch, 0.56f);
+            AdvisorSignal("Graphics path", ApiUpscalerInputName(host.currentInputApiName), muted);
+            AdvisorSignal("Graphics card", advisor.gpuName, muted);
+            const unsigned int outputW = present.backbufferWidth ? present.backbufferWidth : native.frameWidth;
+            const unsigned int outputH = present.backbufferHeight ? present.backbufferHeight : native.frameHeight;
+            AdvisorSignal("Present output", outputW && outputH ?
+                StrFmt("%u x %u | %s", outputW, outputH, BackbufferFormatName(present.backbufferFormat)) :
+                "Waiting for a rendered frame", outputW && outputH ? green : orange);
+            const bool verifiedGuides = guides.evaluated > 0 || guides.matched > 0;
+            AdvisorSignal("Depth guide", verifiedGuides ? "Captured and matched" : "Not yet verified",
+                          verifiedGuides ? green : orange);
+            AdvisorSignal("Motion guide", verifiedGuides ? "Captured and matched" : "Not yet verified",
+                          verifiedGuides ? green : orange);
+            AdvisorSignal("Guide matching", guides.status, verifiedGuides ? green : orange);
+            AdvisorSignal("Frame generation", fg ? "Active - native FPS estimate limited" : "Off",
+                          fg ? orange : muted);
+            ImGui::EndTable();
+        }
+    };
+
+    const auto renderRecommendation = [&]()
+    {
+        ImGui::TextDisabled("RECOMMENDED SETUP");
+        if (advisor.recommendation >= 0)
+        {
+            static constexpr const char* routeNames[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+            ImGui::TextColored(green, "%s", routeNames[advisor.recommendation]);
+            ImGui::Text("Automatic | 100%% | 1 pass");
+            ImGui::TextWrapped("%s", advisor.reason.c_str());
+        }
+        else
+        {
+            ImGui::TextColored(advisor.running ? AdvisorColor(AdvisorResultLevel::Analyzing) : muted,
+                               "%s", advisor.running ? "Testing available routes..." : "Analysis required");
+            ImGui::TextWrapped("OptiScaler will test each route without displaying the model effect, then restore your current setup.");
+        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Confidence: %s", fg ? "Limited while Frame Generation is active" :
+            advisor.analyzed ? "Based on current-session measurements" : "Not measured");
+    };
+
+    if (wide && ImGui::BeginTable("##AdvisorOverview", 2,
+        ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV))
+    {
+        ImGui::TableNextColumn(); renderSignals();
+        ImGui::TableNextColumn(); renderRecommendation();
+        ImGui::EndTable();
+    }
+    else
+    {
+        renderSignals(); ImGui::Separator(); renderRecommendation();
+    }
+
+    ImGui::Spacing();
+    if (wide && ImGui::BeginTable("##AdvisorRoutes", 3, ImGuiTableFlags_SizingStretchSame))
+    {
+        for (int route = 0; route < 3; ++route) { ImGui::TableNextColumn(); RenderAdvisorRouteCard(route, 76.0f * menuResScale); }
+        ImGui::EndTable();
+    }
+    else
+        for (int route = 0; route < 3; ++route) RenderAdvisorRouteCard(route, 70.0f * menuResScale);
+
+    ImGui::TextDisabled("Green recommended  |  Orange available  |  Red unavailable  |  Grey not measured");
+    ImGui::Spacing();
+    static constexpr const char* targets[] = { "30 FPS", "45 FPS", "60 FPS", "90 FPS", "120 FPS", "144 FPS" };
+    static constexpr const char* goals[] = { "Prioritize quality", "Balance quality and performance", "Prioritize performance" };
+    const float comboWidth = wide ? 230.0f * menuResScale : (std::max)(120.0f, width * 0.62f);
+    ImGui::BeginDisabled(advisor.running);
+    ImGui::TextUnformatted("Target native framerate");
+    ImGui::SetNextItemWidth(comboWidth);
+    if (ImGui::Combo("##AdvisorTargetFps", &advisor.targetIndex, targets, IM_ARRAYSIZE(targets)))
+    {
+        advisor.analyzed = false; advisor.recommendation = -1; advisor.applied = false;
+        advisor.status = "Target changed - analyze again.";
+        advisor.reason = "No settings change until Apply Recommendation is pressed.";
+        advisor.routes = {};
+    }
+    HelpMarker("The target is real rendered-frame cadence. When Frame Generation is active, confidence remains limited until a verified native cadence is available.");
+    ImGui::TextUnformatted("Optimization goal");
+    ImGui::SetNextItemWidth(comboWidth);
+    if (ImGui::Combo("##AdvisorGoal", &advisor.goalIndex, goals, IM_ARRAYSIZE(goals)))
+    {
+        advisor.analyzed = false; advisor.recommendation = -1; advisor.applied = false;
+        advisor.status = "Optimization goal changed - analyze again.";
+        advisor.reason = "No settings change until Apply Recommendation is pressed.";
+        advisor.routes = {};
+    }
+    HelpMarker("Quality prefers verified Present Enhanced. Balanced requires the target at 100%. Performance chooses the fastest verified route that meets it.");
+    ImGui::EndDisabled();
+    ImGui::Spacing();
+    if (advisor.running)
+    {
+        if (ImGui::Button("Cancel Analysis")) CancelAdvisorAnalysis(config);
+    }
+    else if (ImGui::Button("Analyze This Game"))
+        StartAdvisorAnalysis(*config);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(advisor.running || advisor.recommendation < 0 || advisor.applied);
+    if (ImGui::Button(advisor.applied ? "Recommendation Applied" : "Apply Recommendation"))
+        ApplyAdvisorRecommendation(*config);
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Analysis never tests below 100%% and never changes presets, strengths, Multipass, or Advanced settings.");
+}
+} // namespace
+
 static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig, bool enabled,
                                bool basicOwnsMain,
                                const std::optional<MenuStatus::RuntimeStatus>& status)
@@ -277,9 +807,61 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
     }
 }
 
-void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status)
+void TickAdvisor(Config* config)
+{
+    auto& advisor = Advisor();
+    if (!advisor.running || config == nullptr) return;
+    const auto present = DlssNr::PresentTelemetry();
+    if ((advisor.originalWidth && present.backbufferWidth && advisor.originalWidth != present.backbufferWidth) ||
+        (advisor.originalHeight && present.backbufferHeight && advisor.originalHeight != present.backbufferHeight))
+    {
+        CancelAdvisorAnalysis(config, "Output size changed; analysis stopped and original settings were restored.");
+        return;
+    }
+    if (State::Instance().isShuttingDown)
+    {
+        CancelAdvisorAnalysis(config, "Rendering device is shutting down; original settings were restored.");
+        return;
+    }
+    const double elapsed = AdvisorNow() - advisor.phaseStarted;
+    if (advisor.phase == AdvisorPhase::Warmup && elapsed >= 1.0)
+    {
+        const auto native = DlssNr::Telemetry();
+        advisor.startNativeFrames = native.completedPipelineEvaluations;
+        advisor.startPresentEvaluations = present.modelEvaluations;
+        advisor.phase = AdvisorPhase::Sample;
+        advisor.phaseStarted = AdvisorNow();
+    }
+    else if (advisor.phase == AdvisorPhase::Sample && elapsed >= 2.0)
+        FinishAdvisorRoute(*config);
+    else if (advisor.phase == AdvisorPhase::Sample && std::isfinite(present.frameIntervalMs) &&
+             present.frameIntervalMs > 0.0 && present.frameIntervalMs < 1000.0)
+    {
+        advisor.frameIntervalTotal += present.frameIntervalMs;
+        ++advisor.frameIntervalSamples;
+    }
+}
+
+void CancelAdvisorAnalysis(Config* config, const char* reason)
+{
+    auto& advisor = Advisor();
+    if (!advisor.running || config == nullptr) return;
+    RestoreAdvisorSettings(*config, advisor.original);
+    advisor.running = false;
+    advisor.phase = AdvisorPhase::Idle;
+    advisor.analyzed = false;
+    advisor.recommendation = -1;
+    advisor.routes = {};
+    advisor.status = reason != nullptr ? reason : "Analysis cancelled; original settings restored.";
+    advisor.reason = "No recommendation was applied.";
+}
+
+void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status,
+                const char* gpuName)
 {
     Neurotic::EnglishPreview englishPreview;
+    Advisor().gpuName = gpuName != nullptr && gpuName[0] != 0 ? gpuName : "Detecting graphics card...";
+    RenderAdvisor(config, menuResScale);
     // DLSS Neural Rendering -----------------------------
     ImGui::Spacing();
     {

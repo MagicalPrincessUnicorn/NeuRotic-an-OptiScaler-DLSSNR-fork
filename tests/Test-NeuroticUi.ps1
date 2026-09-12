@@ -16,16 +16,41 @@ Assert-Ui ($menu.Contains('Open NeuRotic on GitHub') -and $menu.Contains('Could 
 Assert-Ui ($menu.Contains('https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork')) 'NeuRotic update feed and repository link are configured'
 Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuTabs.*?DisplaySize\.y - 220\.0f \* ctx\.menuResScale.*?std::min\(720\.0f \* ctx\.menuResScale, viewportRemaining\)') 'tab page height uses a stable viewport reserve'
 Assert-Ui (-not ($menu -match '(?s)void MenuCommon::RenderMainMenuTabs.*?ImGui::GetCursorScreenPos\(\).*?const auto renderPage')) 'tab page height does not depend on dragged window position'
+Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuTabs.*?BeginTabItem\("General"\).*?BeginTabItem\("Neural Rendering"\).*?BeginTabItem\("Upscaling"\).*?BeginTabItem\("Frame Generation"\).*?BeginTabItem\("Advanced"\).*?BeginTabItem\("Tools"\).*?BeginTabItem\("Diagnostics"\)') 'top-level pages follow the rendered pipeline order'
 Assert-Ui ($menu -match '(?s)void MenuCommon::RenderDiagnosticsPage.*?RenderLoggingSettings\(ctx\);\s*RenderQuirksSettings\(ctx\);\s*RenderFpsOverlaySettings\(ctx\);') 'logging first in Diagnostics'
 foreach ($label in @('Advanced Settings', 'Logging')) {
     Assert-Ui ($menu.Contains('ScopedCollapsingHeader("' + $label + '", ImGuiTreeNodeFlags_DefaultOpen)')) "$label starts expanded"
 }
 Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded with a plain collapsible heading'
+Assert-Ui ($nr.Contains('ScopedCollapsingHeader("Neural Rendering Advisor", ImGuiTreeNodeFlags_DefaultOpen)') -and
+           $nr.IndexOf('ScopedCollapsingHeader("Neural Rendering Advisor"') -lt $nr.IndexOf('ScopedCollapsingHeader("DLSS Neural Rendering"')) 'Advisor is default-open, collapsible, and immediately precedes Neural Rendering'
+Assert-Ui ($nr.Contains('WHAT OPTISCALER SEES') -and $nr.Contains('RECOMMENDED SETUP') -and
+           $nr.Contains('Graphics card') -and $menu.Contains('ctx.primaryGpu->name.c_str()')) 'Advisor shows the mock signal and recommendation panels with the detected GPU name'
+Assert-Ui ($nr.Contains('Native Temporal') -and $nr.Contains('Present Compatibility') -and
+           $nr.Contains('Present Enhanced') -and -not $nr.Contains('Prism Enhanced') -and -not $nr.Contains('Prism Compact')) 'Advisor uses the current Present route terminology'
+Assert-Ui ($nr.Contains('std::string("##AdvisorRoute") + std::to_string(route)') -and
+           $nr.Contains('for (int route = 0; route < 3; ++route)') -and $nr.Contains('Green recommended') -and
+           -not $nr.Contains('Selectable("Native Temporal')) 'route cards are informational status tiles rather than competing selectors'
+Assert-Ui ($nr.Contains('route.level = AdvisorResultLevel::Analyzing') -and
+           $nr.Contains('advisor.routes = {};') -and $nr.Contains('Testing available routes...')) 'Analyze clears prior recommendation colors and gives all routes a neutral analyzing state'
+Assert-Ui ($nr.Contains('Target native framerate') -and $nr.Contains('Optimization goal') -and
+           $nr.Contains('Prioritize quality') -and $nr.Contains('Balance quality and performance') -and
+           $nr.Contains('Prioritize performance')) 'Advisor exposes the approved frame target and optimization goals'
+Assert-Ui ($nr.Contains('config.DlssNrApplyModel = false;') -and
+           $nr.Contains('config.DlssNrMultipassEnabled = false;') -and
+           $nr.Contains('config.DlssNrPasses = 1u;') -and
+           $nr.Contains('PresentResolution::Automatic') -and
+           $nr.Contains('Analysis never tests below 100%%')) 'route analysis hides the effect and fixes every trial at 100 percent and one pass'
+Assert-Ui ($nr.Contains('RestoreAdvisorSettings') -and $menu.Contains('CancelAdvisorAnalysis(config') -and
+           $menu.Contains('CancelAdvisorAnalysis(Config::Instance()') -and
+           $nr.Contains('Output size changed; analysis stopped')) 'save, close, shutdown, cancel, and resize paths restore captured settings'
+Assert-Ui ($nr.Contains('Stage, method, and 100% resolution policy were applied atomically.') -and
+           $nr.Contains('Model tuning and Multipass were unchanged.')) 'Apply limits its atomic update to the recommended route and resolution policy'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
 Assert-Ui ($nr.Contains('DeferredNrSlider("##NrManualScale"') -and $nr.Contains('0.25f, 2.0f, 1.0f, "%d%%", true)')) 'manual model resolution retains bounded release-to-commit and 100 percent reset'
 Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
            -not $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is contained within Neural Rendering'
-$multipass = $nr.Substring($nr.IndexOf('static void RenderMultipassMenu'))
+$multipass = $nr.Substring($nr.LastIndexOf('static void RenderMultipassMenu'))
 Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
            $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
 Assert-Ui ($multipass.Contains('EmphasizedCheckbox("Enable NR Multipass"')) 'Multipass page uses the emphasized enable control'

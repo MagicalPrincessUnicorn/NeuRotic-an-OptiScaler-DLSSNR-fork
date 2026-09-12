@@ -7141,7 +7141,8 @@ void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
 
 void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
 {
-    DlssNr::RenderMenu(ctx.config, ctx.menuResScale);
+    const char* gpuName = ctx.primaryGpu ? ctx.primaryGpu->name.c_str() : "Detecting graphics card...";
+    DlssNr::RenderMenu(ctx.config, ctx.menuResScale, std::nullopt, gpuName);
 }
 
 void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
@@ -7202,6 +7203,12 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
         ImGui::EndTabItem();
     }
 
+    if (ImGui::BeginTabItem("Neural Rendering"))
+    {
+        renderPage(RenderNeuralRenderingPage);
+        ImGui::EndTabItem();
+    }
+
     if (ImGui::BeginTabItem("Upscaling"))
     {
         renderPage(RenderUpscalingPage);
@@ -7211,12 +7218,6 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if (ImGui::BeginTabItem("Frame Generation"))
     {
         renderPage(RenderFrameGenerationPage);
-        ImGui::EndTabItem();
-    }
-
-    if (ImGui::BeginTabItem("Neural Rendering"))
-    {
-        renderPage(RenderNeuralRenderingPage);
         ImGui::EndTabItem();
     }
 
@@ -7429,12 +7430,17 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
     ImGui::SameLine(0.0f, 15.0f);
 
     if (ImGui::Button("Save Settings"))
+    {
+        // Never serialize the Advisor's temporary route trial.  Cancellation is a no-op when idle.
+        DlssNr::CancelAdvisorAnalysis(config, "Settings save requested; analysis stopped and original settings restored.");
         config->SaveIni();
+    }
 
     ImGui::SameLine(0.0f, 6.0f);
 
     if (ImGui::Button("Close"))
     {
+        DlssNr::CancelAdvisorAnalysis(config);
         _isVisible = false;
         hasGamepad = (io.BackendFlags | ImGuiBackendFlags_HasGamepad) > 0;
         io.BackendFlags &= 30;
@@ -7976,6 +7982,9 @@ bool MenuCommon::RenderMenu()
     ctx.now = Util::MillisecondsNow();
     ctx.currentFeature = ctx.state.currentFeature;
 
+    // Advisor route trials are session-only and advance independently of the selected top-level tab.
+    DlssNr::TickAdvisor(ctx.config);
+
     // 1) Collect timing and input state before any ImGui drawing.
     UpdateRenderTiming(ctx);
     UpdateMenuInputMode(ctx);
@@ -8110,6 +8119,8 @@ void MenuCommon::Shutdown()
     if (!MenuCommon::_isInited)
         return;
 
+    DlssNr::CancelAdvisorAnalysis(Config::Instance(), "Menu shutdown; original settings restored.");
+
     // if (_oWndProc != nullptr)
     //{
     //     auto handle = (HWND) ImGui::GetMainViewport()->PlatformHandleRaw;
@@ -8142,6 +8153,7 @@ void MenuCommon::HideMenu()
     if (!_isVisible)
         return;
 
+    DlssNr::CancelAdvisorAnalysis(Config::Instance());
     _isVisible = false;
 
     ImGuiIO& io = ImGui::GetIO();

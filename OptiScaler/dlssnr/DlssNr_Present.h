@@ -50,6 +50,7 @@ struct PresentTelemetrySnapshot
     unsigned int pendingSlots = 0;
     double adapterCpuMs = 0.0;
     double adapterCpuMaxMs = 0.0;
+    double frameIntervalMs = 0.0;
     double originalPresentMs = 0.0;
     double originalPresentMaxMs = 0.0;
     bool hasPacingSummary = false;

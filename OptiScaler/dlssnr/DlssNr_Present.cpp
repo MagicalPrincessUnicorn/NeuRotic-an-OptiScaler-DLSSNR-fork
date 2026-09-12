@@ -549,6 +549,7 @@ PresentTelemetrySnapshot PresentTelemetry()
 void ReportPresentCallTiming(const PresentCallTimingSample& sample)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
+    g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;
     if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal &&
         sample.identity.completedOutput)
     {
