@@ -57,6 +57,7 @@ struct Selection
 {
     bool enabled = false;
     unsigned long long epoch = 0, generation = 0;
+    unsigned long long providerFrame = 0;
     unsigned int count = 0;
     int slot = -1;
     std::string captureError;
@@ -82,6 +83,7 @@ class Bridge
         GpuSafety::Ticket producer, consumer;
         DlssNrFrameInfo frame;
         UINT64 epoch = 0, generation = 0, bytes = 0;
+        UINT64 providerFrame = 0;
         UINT width = 0, height = 0, backbuffer = 0;
     };
     std::mutex mutex;
@@ -206,7 +208,7 @@ class Bridge
                  const DlssNrFrameInfo& frame, IUnknown* swapchain, UINT backbuffer,
                  UINT width, UINT height, D3D12_RESOURCE_STATES depthState,
                  D3D12_RESOURCE_STATES motionState, bool copyGuides = true,
-                 const char* metadataError = nullptr)
+                 const char* metadataError = nullptr, UINT64 providerFrame = 0)
     {
         std::lock_guard lock(mutex);
         if (!telemetry.enabled) return;
@@ -224,6 +226,7 @@ class Bridge
             frame.RenderSubrectWidth > width || frame.RenderSubrectHeight > height)
         { RejectCapture("Native capture: missing or invalid render-subrect dimensions"); return; }
         metadata.frame = frame; metadata.frame.ExposureTexture = nullptr;
+        metadata.providerFrame = providerFrame;
         metadata.swapchain = swapchain; metadata.backbuffer = backbuffer;
         metadata.width = width; metadata.height = height;
         metadata.producer = GpuSafety::Record(list);
@@ -302,6 +305,7 @@ class Bridge
         next.swapchain = swapchain; next.backbuffer = backbuffer;
         next.width = width; next.height = height;
         next.epoch = epoch; next.generation = telemetry.generation; next.bytes = bytes;
+        next.providerFrame = providerFrame;
         next.frame = frame; next.frame.ExposureTexture = nullptr;
         Copy(list, depth, next.depth.Get(), depthState);
         Copy(list, motion, next.motion.Get(), motionState);
@@ -312,7 +316,7 @@ class Bridge
     }
     bool Bind(const Selection& selection, ID3D12GraphicsCommandList* list,
               ID3D12CommandQueue* queue, IUnknown* swapchain, UINT backbuffer,
-              UINT width, UINT height, Inputs& inputs)
+              UINT width, UINT height, Inputs& inputs, UINT64 providerFrame = 0)
     {
         std::lock_guard lock(mutex);
         if (!telemetry.enabled || !selection.enabled || selection.generation != telemetry.generation)
@@ -325,10 +329,12 @@ class Bridge
         { Reject("No unique completed Native capture for this Present interval"); return false; }
         auto& slot = slots[selection.slot];
         if (slot.epoch != selection.epoch || slot.generation != selection.generation ||
-            slot.swapchain.Get() != swapchain || slot.backbuffer != backbuffer ||
+            slot.swapchain.Get() != swapchain ||
+            (providerFrame ? slot.providerFrame != providerFrame : slot.backbuffer != backbuffer) ||
             slot.width != width || slot.height != height || slot.consumer)
         { Reject("Native guide frame/swapchain/size mismatch"); return false; }
-        if (!GpuSafety::OrderedOn(slot.producer, queue))
+        if (!(providerFrame ? GpuSafety::OrderBefore(slot.producer, queue) :
+                              GpuSafety::OrderedOn(slot.producer, queue)))
         { Reject("Native copy not uniquely submitted on Present queue"); return false; }
         slot.consumer = GpuSafety::Record(list);
         if (!slot.consumer) { Reject("Present guide consumer tracking unavailable"); return false; }
@@ -338,7 +344,8 @@ class Bridge
         return true;
     }
     bool MatchMetadata(const Selection& selection, ID3D12CommandQueue* queue,
-                       IUnknown* swapchain, UINT backbuffer, UINT width, UINT height)
+                       IUnknown* swapchain, UINT backbuffer, UINT width, UINT height,
+                       UINT64 providerFrame = 0)
     {
         std::lock_guard lock(mutex);
         if (!telemetry.enabled || !selection.enabled || selection.generation != telemetry.generation)
@@ -346,10 +353,12 @@ class Bridge
         if (!selection.captureError.empty()) { Reject(selection.captureError); return false; }
         if (selection.count != 1 || !selection.producer)
         { Reject("No fresh unique Native render metadata in this Present interval"); return false; }
-        if (selection.swapchain.Get() != swapchain || selection.backbuffer != backbuffer ||
+        if (selection.swapchain.Get() != swapchain ||
+            (providerFrame ? selection.providerFrame != providerFrame : selection.backbuffer != backbuffer) ||
             selection.width != width || selection.height != height)
         { Reject("Native metadata frame/swapchain/output-size mismatch"); return false; }
-        if (!GpuSafety::OrderedOn(selection.producer, queue))
+        if (!(providerFrame ? GpuSafety::OrderBefore(selection.producer, queue) :
+                              GpuSafety::OrderedOn(selection.producer, queue)))
         { Reject("Native metadata not uniquely submitted on Present queue"); return false; }
         return true;
     }

@@ -28,6 +28,7 @@ StreamlineVkDiagnosticContext& GetStreamlineVkDiagnosticContext()
 #include <sl1_reflex.h>
 #include <magic_enum.hpp>
 #include "detours/detours.h"
+#include <dlssnr/StreamlinePreFg.h>
 
 static bool IsSL1AndDLSSGActive()
 {
@@ -1784,6 +1785,7 @@ void StreamlineHooks::updateDlssgOptions()
 void StreamlineHooks::unhookInterposer()
 {
     LOG_FUNC();
+    DlssNr::PreFg::Streamline::Uninstall();
 
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
@@ -1986,6 +1988,8 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                     o_slGetFeatureVersion = nullptr;
                     o_slGetFeatureFunction = nullptr;
                 }
+                else
+                    DlssNr::PreFg::Streamline::Install(slInterposer);
             }
         }
         else if (sl_version.major == 1)

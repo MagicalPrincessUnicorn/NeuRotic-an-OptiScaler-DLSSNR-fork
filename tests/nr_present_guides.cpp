@@ -148,6 +148,46 @@ int main(int argc, char** argv)
     }
     readback->Unmap(0, nullptr);
     reset(producer.Get(), pa.Get()); // consumer stays completed-but-replayable and owns one slot
+    // Provider-token handoff: proxy backbuffer indices can differ from the native
+    // DXGI index. Only an exact provider frame may use the explicitly ordered queue.
+    {
+        Guides::Bridge handoff; handoff.Enable(true);
+        ComPtr<ID3D12CommandAllocator> handoffAllocator;
+        ComPtr<ID3D12GraphicsCommandList> handoffList;
+        Check(device->CreateCommandAllocator(qd.Type, IID_PPV_ARGS(&handoffAllocator)));
+        Check(device->CreateCommandList(0, qd.Type, handoffAllocator.Get(), nullptr, IID_PPV_ARGS(&handoffList)));
+        handoff.Capture(producer.Get(), depth.Get(), motion.Get(), frame, device.Get(), 2, 16, 8,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            true, nullptr, 123);
+        const auto packet = handoff.BeginPresent();
+        submit(producer.Get());
+        assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 123)); // not sealed
+        // A new recording seals the submitted producer without waiting on its GPU.
+        Check(producer->Reset(pa.Get(), nullptr));
+        assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 124));
+        assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 32, 8, 123));
+        assert(handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 123));
+        Guides::Inputs handed;
+        assert(handoff.Bind(packet, handoffList.Get(), other.Get(), device.Get(), 0, 16, 8, handed, 123));
+        assert(!handoff.Bind(packet, handoffList.Get(), other.Get(), device.Get(), 0, 16, 8, handed, 123));
+        for (auto* image : {handed.depth.Get(), handed.motion.Get()})
+            transition(handoffList.Get(), image, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                       D3D12_RESOURCE_STATE_COPY_SOURCE);
+        copyTexture(handoffList.Get(), handed.depth.Get(), readback.Get(), 0, false);
+        copyTexture(handoffList.Get(), handed.motion.Get(), readback.Get(), 1024, false);
+        for (auto* image : {handed.depth.Get(), handed.motion.Get()})
+            transition(handoffList.Get(), image, D3D12_RESOURCE_STATE_COPY_SOURCE,
+                       D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        Check(handoffList->Close());
+        ID3D12CommandList* handedLists[] = {handoffList.Get()};
+        other->ExecuteCommandLists(1, handedLists);
+        assert(Safety::Drain(5000));
+        Check(readback->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+        for (UINT y = 0; y < 4; ++y)
+            for (UINT x = 0; x < 8; ++x) assert(data[y * 64 + x] == float(y * 64 + x) / 1024.0f);
+        readback->Unmap(0, nullptr);
+        Check(producer->Close()); reset(producer.Get(), pa.Get());
+    }
     assert(!bind(bridge.BeginPresent(), inputs)); // no previous-frame reuse
     capture(); capture(); selected = bridge.BeginPresent();
     assert(selected.count == 2 && !bind(selected, inputs)); // ambiguous evaluations

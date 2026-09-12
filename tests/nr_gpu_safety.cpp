@@ -36,6 +36,7 @@ int main()
     auto submit = [&](ID3D12CommandQueue* q) { ID3D12CommandList* lists[] = {list.Get()}; q->ExecuteCommandLists(1, lists); };
 
     auto abandoned = Safety::Record(list.Get());
+    assert(!Safety::OrderBefore(abandoned, otherQueue.Get()));
     assert(!Safety::OrderedOn(abandoned, queue.Get()));
     assert(abandoned && !Safety::Reusable(abandoned) && !Safety::Drain(0));
     Check(list->Close());
@@ -51,9 +52,15 @@ int main()
     bool replacementSessionCreated = false;
     Check(list->Close());
     submit(queue.Get());
+    assert(!Safety::OrderBefore(pending, otherQueue.Get())); // unsealed lists could replay
     Check(list->Reset(nextAllocator.Get(), nullptr)); // list Reset is legal while old work runs
     assert(Safety::OrderedOn(pending, queue.Get())); // GPU need not be CPU-complete
     assert(!Safety::OrderedOn(pending, otherQueue.Get()));
+    ComPtr<ID3D12Fence> consumerPassed;
+    Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&consumerPassed)));
+    assert(Safety::OrderBefore(pending, otherQueue.Get()));
+    Check(otherQueue->Signal(consumerPassed.Get(), 1));
+    assert(consumerPassed->GetCompletedValue() == 0); // wait cannot pass the blocked producer
     for (int i = 0; i < 1000; ++i)
     {
         if (Safety::Reusable(retirement)) retiredSessionReleased = true;
@@ -63,6 +70,11 @@ int main()
     }
     assert(!Safety::Drain(1));
     Check(gate->Signal(1));
+    HANDLE handoffDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    assert(handoffDone);
+    Check(consumerPassed->SetEventOnCompletion(1, handoffDone));
+    assert(WaitForSingleObject(handoffDone, 5000) == WAIT_OBJECT_0);
+    CloseHandle(handoffDone);
     assert(Safety::Drain(5000));
     if (Safety::Reusable(retirement)) retiredSessionReleased = true;
     if (retiredSessionReleased) replacementSessionCreated = true;
@@ -110,6 +122,7 @@ int main()
     Check(gate->Signal(4));
     assert(Safety::Drain(5000) && Safety::Reusable(multiQueue));
     assert(Safety::TimestampFrequency(multiQueue) == 0); // no ambiguous timing calculation
+    assert(!Safety::OrderBefore(multiQueue, otherQueue.Get()));
 
     auto destroyedInFlight = Safety::Record(list.Get());
     Check(list->Close());

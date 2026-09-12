@@ -274,6 +274,26 @@ bool Reusable(const Ticket& ticket)
     std::lock_guard lock(State().mutex);
     return !ticket || (ticket->sealed && Completed(ticket));
 }
+bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
+{
+    if (!ticket || !consumer) return false;
+    std::lock_guard lock(State().mutex);
+    if (State().failed || ticket->failed || ticket->submissions != 1 || ticket->points.size() != 1)
+        return false;
+    const auto& point = ticket->points.front();
+    if (point.timeline->fence->GetCompletedValue() == UINT64_MAX) return false;
+    if (Get<Timeline>(NativeObject(consumer), timelineGuid) == point.timeline) return true;
+    if (!ticket->sealed || consumer->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
+    ComPtr<ID3D12Device> producerDevice, consumerDevice;
+    if (FAILED(point.timeline->fence->GetDevice(IID_PPV_ARGS(&producerDevice))) ||
+        FAILED(consumer->GetDevice(IID_PPV_ARGS(&consumerDevice))) ||
+        NativeObject(producerDevice.Get()) != NativeObject(consumerDevice.Get())) return false;
+    const auto result = consumer->Wait(point.timeline->fence.Get(), point.value);
+    NR_FRAME_TRACE("nr-guide-gpu-wait", "queue={:p} fence={:p} value={} result={}",
+        static_cast<void*>(consumer), static_cast<void*>(point.timeline->fence.Get()),
+        point.value, static_cast<unsigned int>(result));
+    return SUCCEEDED(result);
+}
 SlotSnapshot InspectSlots(const Ticket* tickets, unsigned int count)
 {
     std::lock_guard lock(State().mutex);

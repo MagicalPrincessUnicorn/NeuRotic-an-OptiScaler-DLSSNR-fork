@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <dlssnr/FrameTrace.h>
 #include <dlssnr/DlssNr_PresentGuides.h>
+#include <dlssnr/PreFg.h>
 
 #include <set>
 #include <map>
@@ -4990,7 +4991,8 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                 static_cast<D3D12_RESOURCE_STATES>(config->DepthResourceBarrier.value_or(
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)),
                 static_cast<D3D12_RESOURCE_STATES>(config->MVResourceBarrier.value_or(
-                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)), enhanced, metadataError);
+                      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)), enhanced, metadataError,
+                  PreFg::CurrentFrame());
             if (FrameTrace::Armed())
             {
                 const auto observed = PresentGuides::Instance().Inspect();

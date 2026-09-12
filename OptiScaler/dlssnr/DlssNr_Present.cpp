@@ -609,7 +609,8 @@ void ReportPresentUnavailable(PresentApi api, const char* reason)
 
 PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown* presentDevice,
                                              UINT presentFlags,
-                                             const DXGI_PRESENT_PARAMETERS* presentParameters)
+                                             const DXGI_PRESENT_PARAMETERS* presentParameters,
+                                             const PreFg::Frame* preFgFrame)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto tracePresent = FrameTrace::Event("nr-present-enter", "swapchain={:p} presentDevice={:p} flags={}",
@@ -683,6 +684,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         InvalidateHistory("NR resume generation changed");
     g_present.presentWasRequested = true;
     g_present.resumeGeneration = runtime.resumeGeneration;
+
+    if (preFgFrame && !preFgFrame->valid)
+    {
+        SetFallback(PresentApi::D3D12, preFgFrame->refusal);
+        return identity;
+    }
 
     // Experimental combinations are attempted. Actual guide/resource admission below still applies.
     const unsigned int experimentalFlags = enhanced ?
@@ -897,7 +904,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     {
         auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
         if (!PresentGuides::Instance().MatchMetadata(guideSelection,
-                queue.Get(), swapchainIdentity.Get(), bufferIndex, width, height))
+                queue.Get(), swapchainIdentity.Get(), bufferIndex, width, height,
+                preFgFrame ? preFgFrame->key : 0))
         {
             const auto status = PresentGuides::Instance().Inspect();
             SetFallback(api, status.status.c_str());
@@ -1014,7 +1022,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
         if (!PresentGuides::Instance().Bind(guideSelection,
             g_present.list.Get(), queue.Get(), swapchainIdentity.Get(), bufferIndex,
-            static_cast<UINT>(backDesc.Width), backDesc.Height, nativeGuides))
+            static_cast<UINT>(backDesc.Width), backDesc.Height, nativeGuides,
+            preFgFrame ? preFgFrame->key : 0))
         {
             g_present.list->Close();
             const auto guideStatus = PresentGuides::Instance().Inspect();

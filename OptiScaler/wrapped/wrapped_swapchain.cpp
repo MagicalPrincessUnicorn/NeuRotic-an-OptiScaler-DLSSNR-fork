@@ -374,8 +374,13 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         // v9.6 owns no Present call. It may enqueue same-queue DX12 work, then this function continues
         // to the one original Present/Present1 invocation with the existing arguments and return path.
         presentHookStartMs = Util::MillisecondsNow();
-        nrPresentIdentity =
-            DlssNr::EvaluatePresentImageOnly(pSwapChain, pDevice, Flags, pPresentParameters);
+        const bool nrOwnedBeforeFg = DlssNr::PreFg::BypassLate(pSwapChain);
+        if (!nrOwnedBeforeFg)
+            nrPresentIdentity =
+                DlssNr::EvaluatePresentImageOnly(pSwapChain, pDevice, Flags, pPresentParameters);
+        else
+            NR_FRAME_TRACE("nr-provider-output-bypass", "swapchain={:p} owner=streamline-real-present",
+                static_cast<void*>(pSwapChain));
         nrAdapterCpuMs = Util::MillisecondsNow() - presentHookStartMs;
 
         // Draw overlay
@@ -427,7 +432,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     const double originalPresentCpuMs = Util::MillisecondsNow() - originalPresentStart;
     NR_FRAME_TRACE("original-present-return", "call={} swapchain={:p} result={}", tracePresent,
         static_cast<void*>(pSwapChain), static_cast<unsigned int>(presentResult));
-    if (willPresent)
+    if (willPresent && !DlssNr::PreFg::GetOwner(pSwapChain))
     {
         DlssNr::ReportPresentCallTiming({nrPresentIdentity, presentFrameIntervalMs, nrAdapterCpuMs,
                                         Util::MillisecondsNow() - presentHookStartMs,
@@ -453,6 +458,7 @@ WrappedIDXGISwapChain4::WrappedIDXGISwapChain4(IDXGISwapChain* real, IUnknown* p
                                                bool isUWP)
     : _real(real), _device(pDevice), _handle(hWnd), _refcount(1), _uwp(isUWP)
 {
+    DlssNr::PreFg::RememberQueue(real, pDevice);
     _id = ++scCount;
     _lastFlags = flags;
 

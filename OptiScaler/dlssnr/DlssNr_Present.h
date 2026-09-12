@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DlssNr_PresentPacing.h"
+#include "PreFg.h"
 
 #include <dxgi1_4.h>
 #include <string>
@@ -84,7 +85,8 @@ struct PresentCallTimingSample
 // Called immediately before the one original Present/Present1 call. The adapter never presents.
 PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown* presentDevice,
                                              UINT presentFlags,
-                                             const DXGI_PRESENT_PARAMETERS* presentParameters);
+                                             const DXGI_PRESENT_PARAMETERS* presentParameters,
+                                             const PreFg::Frame* preFgFrame = nullptr);
 void ReportPresentUnavailable(PresentApi api, const char* reason);
 // One behavior-neutral CPU observation reported after the original game Present call. GPU timing is
 // collected separately from non-blocking timestamps and the existing completion fence.
