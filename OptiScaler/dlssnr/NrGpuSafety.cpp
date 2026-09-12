@@ -239,6 +239,22 @@ Ticket Record(ID3D12GraphicsCommandList* list)
     s.pending.push_back(ticket);
     return ticket;
 }
+bool SealOwnedRecording(ID3D12GraphicsCommandList* list)
+{
+    if (!list) return false;
+    list = NativeObject(list);
+    auto& s = State();
+    std::lock_guard lock(s.mutex);
+    auto ticket = Get<Recording>(list, recordingGuid);
+    if (!ticket || ticket->failed || ticket->submissions == 0) return false;
+    if (FAILED(list->SetPrivateDataInterface(recordingGuid, nullptr)))
+    {
+        ticket->failed = true;
+        s.failed = true;
+        return false;
+    }
+    return ticket->sealed;
+}
 bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue)
 {
     if (!ticket || !queue) return false;

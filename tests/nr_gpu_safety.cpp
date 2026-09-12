@@ -83,6 +83,24 @@ int main()
     Check(gate->Signal(2));
     assert(Safety::Drain(5000) && Safety::Reusable(replay));
 
+    // A private list that the owner promises not to replay may be sealed after submission.
+    // Its resources remain unavailable until the real GPU completion point is reached.
+    ComPtr<ID3D12Fence> ownedGate;
+    Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ownedGate)));
+    Check(queue->Wait(ownedGate.Get(), 1));
+    auto owned = Safety::Record(list.Get());
+    auto ownedRetirement = Safety::Pending();
+    Check(list->Close());
+    submit(queue.Get());
+    assert(Safety::SealOwnedRecording(list.Get()));
+    assert(!Safety::Reusable(owned) && !Safety::Readable(owned) &&
+           !Safety::Reusable(ownedRetirement));
+    Check(ownedGate->Signal(1));
+    assert(Safety::Drain(5000));
+    assert(Safety::Reusable(owned) && Safety::Readable(owned) &&
+           Safety::Reusable(ownedRetirement));
+    Check(list->Reset(allocator.Get(), nullptr));
+
     // Track both queues without introducing a cycle into the host's Wait/Signal graph.
     Check(queue->Wait(gate.Get(), 3));
     auto first = Safety::Record(list.Get());
@@ -261,5 +279,6 @@ int main()
     // The sentinel UINT64_MAX is device loss, not a very large successful fence value.
     assert(!Safety::Reusable(pending) && !Safety::Readable(pending));
     std::puts("PASS: unsubmitted cancellation, 1000 premature reuse/read checks, delayed GPU completion,");
-    std::puts("      replay, independent queues/host dependencies, retirement, capture shape changes, failure and device loss.");
+    std::puts("      replay, explicit owned-list sealing, independent queues/host dependencies, retirement,");
+    std::puts("      capture shape changes, failure and device loss.");
 }

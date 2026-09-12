@@ -467,9 +467,10 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
     { runtime.failed = true; s.Reject("private capture close failed"); return; }
     ID3D12CommandList* lists[] = {slot.list.Get()};
     runtime.queue->ExecuteCommandLists(1, lists);
+    const bool recordingSealed = GpuSafety::SealOwnedRecording(slot.list.Get());
     slot.completed = ++runtime.nextCompleted;
     if (FAILED(runtime.queue->Signal(runtime.completed12.Get(), slot.completed)) ||
-        !GpuSafety::OrderedOn(ticket, runtime.queue.Get()))
+        !GpuSafety::OrderedOn(ticket, runtime.queue.Get()) || !recordingSealed)
     { runtime.failed = true; s.Reject("private capture submission completion untrackable; restart required"); return; }
 
     if (s.nativePostSr && delivered)

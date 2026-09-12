@@ -12,6 +12,9 @@ using CompletionSet = std::vector<Ticket>;
 
 // Register BEFORE recording any NR commands. Null means no work may be recorded.
 Ticket Record(ID3D12GraphicsCommandList* list);
+// An OptiScaler-owned list may be retired immediately after its one submission when the caller
+// guarantees that it will not be replayed before Reset. Completion is still fence-gated.
+bool SealOwnedRecording(ID3D12GraphicsCommandList* list);
 // Reuse requires both GPU completion and Reset/destruction of the old recording, since a
 // closed list may be replayed. A reset of an unsubmitted list cancels that recording safely.
 bool Reusable(const Ticket& ticket);
