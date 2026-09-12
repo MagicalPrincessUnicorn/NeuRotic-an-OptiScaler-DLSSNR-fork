@@ -4,6 +4,7 @@
 #include <Util.h>
 #include <Config.h>
 #include <dlssnr/DlssNr_Present.h>
+#include <dlssnr/DlssNr_Dx11.h>
 
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
@@ -469,6 +470,8 @@ WrappedIDXGISwapChain4::WrappedIDXGISwapChain4(IDXGISwapChain* real, IUnknown* p
 
     _device2 = _device;
 
+    DlssNr::NativeDx11::RegisterSwapchain(_real);
+
     LOG_INFO("{} created, real: {:X}, refCount: {}", _id, (UINT64) real, refCount);
 }
 
@@ -581,6 +584,7 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
 
     if (ret == 0)
     {
+        DlssNr::NativeDx11::UnregisterSwapchain(_real);
 #ifdef USE_LOCAL_MUTEX
         OwnedLockGuard lock(_localMutex, 999);
 #endif
@@ -759,6 +763,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::GetDesc(DXGI_SWAP_CHAIN_DESC* 
 HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount, UINT Width, UINT Height,
                                                                 DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
+    DlssNr::NativeDx11::ResizeSwapchain(_real);
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -1176,6 +1181,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
                                                                  const UINT* pCreationNodeMask,
                                                                  IUnknown* const* ppPresentQueue)
 {
+    DlssNr::NativeDx11::ResizeSwapchain(_real);
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX

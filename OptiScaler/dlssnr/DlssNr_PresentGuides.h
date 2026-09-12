@@ -53,6 +53,21 @@ struct Snapshot
     std::string inputDescription;
     std::string status = "Control: constant depth / zero motion";
 };
+// Native DX11 produces shared carriers before the private DX12 capture submission.
+// Keep the actual GPU fence/value and the queue which accepted its Wait, in addition
+// to the ordinary command-list ticket. A scalar frame counter is not producer proof.
+struct Dx11Producer
+{
+    ComPtr<ID3D12Fence> ready;
+    ComPtr<ID3D12CommandQueue> orderedQueue;
+    ComPtr<IUnknown> sourceDevice;
+    UINT64 value = 0, feature = 0, evaluation = 0;
+    bool Valid() const
+    {
+        return ready && orderedQueue && sourceDevice && value && feature && evaluation &&
+            ready->GetCompletedValue() != UINT64_MAX;
+    }
+};
 struct Selection
 {
     bool enabled = false;
@@ -63,6 +78,7 @@ struct Selection
     DlssNrFrameInfo frame;
     ComPtr<IUnknown> swapchain;
     GpuSafety::Ticket producer;
+    std::shared_ptr<const Dx11Producer> dx11Producer;
     UINT backbuffer = 0, width = 0, height = 0;
 };
 struct Inputs
@@ -80,6 +96,7 @@ class Bridge
         ComPtr<ID3D12Resource> depth, motion, originalDepth, originalMotion;
         ComPtr<IUnknown> swapchain;
         GpuSafety::Ticket producer, consumer;
+        std::shared_ptr<const Dx11Producer> dx11Producer;
         DlssNrFrameInfo frame;
         UINT64 epoch = 0, generation = 0, bytes = 0;
         UINT width = 0, height = 0, backbuffer = 0;
@@ -178,6 +195,20 @@ class Bridge
     }
   public:
     Snapshot Inspect() { std::lock_guard lock(mutex); return telemetry; }
+    void Invalidate()
+    {
+        std::lock_guard lock(mutex);
+        ++telemetry.generation; ++epoch; count = 0; candidate = -1;
+        metadata = {}; epochError.clear();
+        telemetry.status = "Native source lifecycle changed; waiting for fresh guides";
+    }
+    void RejectNative(const std::string& reason)
+    {
+        std::lock_guard lock(mutex);
+        if (!telemetry.enabled) return;
+        ++telemetry.captureAttempts; ++count; candidate = -1;
+        RejectCapture(reason);
+    }
     void Enable(bool enabled, UINT64 key = 0)
     {
         std::lock_guard lock(mutex);
@@ -206,7 +237,8 @@ class Bridge
                  const DlssNrFrameInfo& frame, IUnknown* swapchain, UINT backbuffer,
                  UINT width, UINT height, D3D12_RESOURCE_STATES depthState,
                  D3D12_RESOURCE_STATES motionState, bool copyGuides = true,
-                 const char* metadataError = nullptr)
+                 const char* metadataError = nullptr,
+                 std::shared_ptr<const Dx11Producer> dx11Producer = {})
     {
         std::lock_guard lock(mutex);
         if (!telemetry.enabled) return;
@@ -220,6 +252,8 @@ class Bridge
         if (!swapchain) { RejectCapture("Native capture: current swapchain/identity unavailable"); return; }
         if (!width || !height) { RejectCapture("Native capture: output missing or empty"); return; }
         if (metadataError) { RejectCapture(metadataError); return; }
+        if (dx11Producer && !dx11Producer->Valid())
+        { RejectCapture("DX11 producer fence/order proof unavailable"); return; }
         if (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight ||
             frame.RenderSubrectWidth > width || frame.RenderSubrectHeight > height)
         { RejectCapture("Native capture: missing or invalid render-subrect dimensions"); return; }
@@ -227,6 +261,7 @@ class Bridge
         metadata.swapchain = swapchain; metadata.backbuffer = backbuffer;
         metadata.width = width; metadata.height = height;
         metadata.producer = GpuSafety::Record(list);
+        metadata.dx11Producer = dx11Producer;
         if (!metadata.producer) { RejectCapture("Native metadata producer tracking unavailable"); return; }
         if (!copyGuides) return;
         if (!Describe(depth, false, dd)) { RejectCapture("Native capture: unsupported depth: " + telemetry.inputDescription); return; }
@@ -297,6 +332,7 @@ class Bridge
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&next.motion))))
         { RejectCapture("Native guide copy allocation failed"); return; }
         next.producer = GpuSafety::Record(list);
+        next.dx11Producer = std::move(dx11Producer);
         if (!next.producer) { RejectCapture("Native guide producer tracking unavailable"); return; }
         next.originalDepth = depth; next.originalMotion = motion;
         next.swapchain = swapchain; next.backbuffer = backbuffer;
@@ -330,6 +366,8 @@ class Bridge
         { Reject("Native guide frame/swapchain/size mismatch"); return false; }
         if (!GpuSafety::OrderedOn(slot.producer, queue))
         { Reject("Native copy not uniquely submitted on Present queue"); return false; }
+        if (slot.dx11Producer && (!slot.dx11Producer->Valid() || slot.dx11Producer->orderedQueue.Get() != queue))
+        { Reject("DX11 guide producer fence/queue mismatch"); return false; }
         slot.consumer = GpuSafety::Record(list);
         if (!slot.consumer) { Reject("Present guide consumer tracking unavailable"); return false; }
         inputs = {slot.depth, slot.motion, slot.frame};
@@ -351,6 +389,9 @@ class Bridge
         { Reject("Native metadata frame/swapchain/output-size mismatch"); return false; }
         if (!GpuSafety::OrderedOn(selection.producer, queue))
         { Reject("Native metadata not uniquely submitted on Present queue"); return false; }
+        if (selection.dx11Producer && (!selection.dx11Producer->Valid() ||
+            selection.dx11Producer->orderedQueue.Get() != queue))
+        { Reject("DX11 metadata producer fence/queue mismatch"); return false; }
         return true;
     }
     void Evaluated()
