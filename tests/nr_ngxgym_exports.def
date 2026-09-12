@@ -8,3 +8,8 @@ NVSDK_NGX_D3D11_EvaluateFeature
 NVSDK_NGX_D3D11_ReleaseFeature
 NVSDK_NGX_D3D11_DestroyParameters
 NVSDK_NGX_D3D11_Shutdown1
+NVSDK_NGX_Parameter_SetUI
+NVSDK_NGX_Parameter_SetI
+NVSDK_NGX_Parameter_GetUI
+NVSDK_NGX_Parameter_GetF
+NVSDK_NGX_Parameter_GetVoidPointer
