@@ -898,24 +898,6 @@ static unsigned int RequestedPassCount(const NrConfigSnapshot<Config>& cfg)
     return std::clamp(cfg.DlssNrPasses.value_or_default(), 1u, 10u);
 }
 
-NrSecondLayerState& AdditionalLayer(size_t index);
-static bool BypassZeroBasic(const NrConfigSnapshot<Config>& cfg)
-{
-    if (!DlssNr::BasicMultipass::Active(cfg) || RequestedPassCount(cfg) != 0) return false;
-    std::lock_guard<std::mutex> nrLock(g_nrMutex);
-    // Retain every allocation/session, but require fresh temporal history on resume.
-    g_nr.reset = true;
-    g_nr.preSrScratchPrimed = false;
-    g_nr.preSrAwaitingEvaluation = true;
-    g_lastLayerCount = 0;
-    for (size_t index = 0; index < 9; ++index)
-    {
-        AdditionalLayer(index).reset = true;
-        AdditionalLayer(index).ready = false;
-    }
-    return true;
-}
-
 static NrPassSettings PassSettings(const NrConfigSnapshot<Config>& cfg, unsigned int pass)
 {
     if (pass == 0)
@@ -1972,6 +1954,23 @@ void RecordAdditionalLayerTuning(const NrConfigSnapshot<Config>& cfg, size_t ind
 // holding two threads apart -- but the D3D11-on-D3D12 bridge enters from its own call site, and the
 // cost is a CPU-side lock on a path that already records command lists.
 std::mutex g_nrMutex;
+
+static bool BypassZeroBasic(const NrConfigSnapshot<Config>& cfg)
+{
+    if (!DlssNr::BasicMultipass::Active(cfg) || RequestedPassCount(cfg) != 0) return false;
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    // Retain every allocation/session, but require fresh temporal history on resume.
+    g_nr.reset = true;
+    g_nr.preSrScratchPrimed = false;
+    g_nr.preSrAwaitingEvaluation = true;
+    g_lastLayerCount = 0;
+    for (size_t index = 0; index < 9; ++index)
+    {
+        AdditionalLayer(index).reset = true;
+        AdditionalLayer(index).ready = false;
+    }
+    return true;
+}
 
 // Runs the pass inside the same state envelope every other OptiScaler compute pass runs in.
 //
