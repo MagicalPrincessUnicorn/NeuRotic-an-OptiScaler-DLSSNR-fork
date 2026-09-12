@@ -89,7 +89,7 @@ require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMul
         nr.count('RenderMultipassMenu(config, menuResScale);') == 1,
         'Multipass is a collapsible section within the Neural Rendering page')
 require(nr.count('StageUi::RenderControls(*config, basicOwnsMain)') == 1 and
-        nr.count('ImGui::Checkbox("Enable NR Multipass"') == 1,
+        nr.count('MenuControls::EmphasizedCheckbox("Enable NR Multipass"') == 1,
         'single route and bounded multipass controls')
 require(nr.count('RenderPassCountSelector(config)') == 1 and
         nr.count('ImGui::Combo("Passes"') == 1,
