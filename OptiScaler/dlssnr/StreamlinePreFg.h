@@ -235,8 +235,9 @@ inline void HookChain(IDXGISwapChain* chain, IUnknown* device)
         if (!Attach(resize1, table4[39], &Resize1)) return;
     }
     if (Register(chain, queue.Get()))
-        LOG_INFO("NR pre-FG: registered Streamline application Present, swapchain={:p} queue={:p}",
-            static_cast<void*>(chain), static_cast<void*>(queue.Get()));
+        LOG_INFO("NR pre-FG: registered Streamline application Present, swapchain={:p} creationQueue={:p} nativeQueue={:p}",
+            static_cast<void*>(chain), static_cast<void*>(queue.Get()),
+            static_cast<void*>(GetOwner(chain)->queue.Get()));
 }
 inline HRESULT STDMETHODCALLTYPE Chain(IDXGIFactory* factory, IUnknown* device, DXGI_SWAP_CHAIN_DESC* desc,
                                       IDXGISwapChain** chain)

@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include "NativeIdentity.h"
 
 namespace DlssNr::PreFg
 {
@@ -148,7 +149,10 @@ inline void RememberQueue(IDXGISwapChain* chain, IUnknown* device)
 {
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
     if (chain && device && SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&queue))))
-        chain->SetPrivateDataInterface(creationQueueKey, queue.Get());
+    {
+        const auto native = NativeIdentity::Resolve<ID3D12CommandQueue>(queue.Get());
+        if (native.object) chain->SetPrivateDataInterface(creationQueueKey, native.object.Get());
+    }
 }
 class Owner final : public IUnknown
 {
@@ -185,10 +189,12 @@ inline Microsoft::WRL::ComPtr<Owner> GetOwner(IDXGISwapChain* chain)
 }
 inline bool Register(IDXGISwapChain* chain, ID3D12CommandQueue* queue)
 {
-    if (!chain || !queue || queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
+    if (!chain || !queue) return false;
+    const auto native = NativeIdentity::Resolve<ID3D12CommandQueue>(queue);
+    if (!native.object || native.object->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
     if (GetOwner(chain)) return true;
     Microsoft::WRL::ComPtr<Owner> owner;
-    owner.Attach(new Owner(queue));
+    owner.Attach(new Owner(native.object.Get()));
     return SUCCEEDED(chain->SetPrivateDataInterface(ownerKey, owner.Get()));
 }
 inline bool BypassLate(IDXGISwapChain* chain)

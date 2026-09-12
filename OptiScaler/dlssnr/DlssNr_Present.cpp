@@ -5,6 +5,7 @@
 #include "DlssNr_PresentHistory.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
+#include "NativeIdentity.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
 #include <with_dx12/dx11_with_dx12.h>
@@ -795,12 +796,21 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             return identity;
         }
         ComPtr<ID3D12Device> backbufferDevice;
-        if (FAILED(backbuffer12->GetDevice(IID_PPV_ARGS(backbufferDevice.GetAddressOf()))) ||
-            !SameComObject(device.Get(), backbufferDevice.Get()))
+        const HRESULT backbufferDeviceResult = backbuffer12->GetDevice(IID_PPV_ARGS(backbufferDevice.GetAddressOf()));
+        const auto devices = NativeIdentity::CompareDevices(device.Get(), backbufferDevice.Get());
+        NR_FRAME_TRACE("nr-device-identity", "queueDevice={:p} backbufferDevice={:p} nativeQueueDevice={:p} "
+            "nativeBackbufferDevice={:p} queueLayers={} backbufferLayers={} queueResolve={} "
+            "backbufferResolve={} backbufferGetDevice={} equal={}",
+            static_cast<void*>(device.Get()), static_cast<void*>(backbufferDevice.Get()),
+            static_cast<void*>(devices.left.object.Get()), static_cast<void*>(devices.right.object.Get()),
+            devices.left.layers, devices.right.layers, static_cast<unsigned int>(devices.left.result),
+            static_cast<unsigned int>(devices.right.result), static_cast<unsigned int>(backbufferDeviceResult), devices.equal);
+        if (FAILED(backbufferDeviceResult) || !devices.equal)
         {
             SetFallback(api, "Present target and NR queue use different devices");
             return identity;
         }
+        device = devices.left.object;
         backDesc = backbuffer12->GetDesc();
         NR_FRAME_TRACE("nr-backbuffer", "swapchain={:p} index={} resource={:p} device={:p} queue={:p} "
             "width={} height={} format={}", static_cast<void*>(swapChain), bufferIndex,
