@@ -1,4 +1,5 @@
 #include <pch.h>
+#include <dlssnr/FrameTrace.h>
 
 #include "Streamline_Hooks.h"
 
@@ -444,6 +445,23 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
                                                const sl::ResourceTag* resources, uint32_t numResources,
                                                sl::CommandBuffer* cmdBuffer)
 {
+    if (DlssNr::FrameTrace::Armed())
+    {
+        NR_FRAME_TRACE("sl-tags-enter", "provider=game-streamline frame={} viewport={} list={:p} count={} api={}",
+            static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport), static_cast<void*>(cmdBuffer),
+            numResources, static_cast<unsigned int>(renderApi));
+        // Cap the observation batch; its declared count above makes omissions visible.
+        for (uint32_t i = 0; resources && i < numResources && i < 32; ++i)
+        {
+            const auto& tag = resources[i];
+            NR_FRAME_TRACE("sl-tag-input", "frame={} viewport={} index={} type={} resource={:p} list={:p} "
+                "state={} lifecycle={} x={} y={} width={} height={}", static_cast<uint32_t>(frame),
+                static_cast<uint32_t>(viewport), i, static_cast<unsigned int>(tag.type),
+                tag.resource ? tag.resource->native : nullptr, static_cast<void*>(cmdBuffer),
+                tag.resource ? tag.resource->state : 0, static_cast<unsigned int>(tag.lifecycle),
+                tag.extent.left, tag.extent.top, tag.extent.width, tag.extent.height);
+        }
+    }
     if (renderApi == sl::RenderAPI::eD3D11 || renderApi == sl::RenderAPI::eVulkan)
     {
         LOG_ERROR("hkslSetTagForFrame only supports DX12");
@@ -517,6 +535,8 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
     }
 
     auto result = o_slSetTagForFrame(frame, viewport, resources, numResources, cmdBuffer);
+    NR_FRAME_TRACE("sl-tags-return", "frame={} viewport={} result={}", static_cast<uint32_t>(frame),
+        static_cast<uint32_t>(viewport), static_cast<unsigned int>(result));
     return result;
 }
 

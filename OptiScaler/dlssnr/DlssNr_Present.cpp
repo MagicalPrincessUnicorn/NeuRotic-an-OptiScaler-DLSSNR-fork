@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "FrameTrace.h"
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentCompatibility.h"
 #include "DlssNr_PresentHistory.h"
@@ -182,6 +183,8 @@ void RefreshCompletionTelemetry()
     }
 
     const UINT64 completed = g_present.fence->GetCompletedValue();
+    NR_FRAME_TRACE("nr-completion-poll", "fence={:p} completed={} submitted={}",
+        static_cast<void*>(g_present.fence.Get()), completed, g_present.telemetry.lastSubmittedFence);
     if (completed == UINT64_MAX)
         return;
 
@@ -200,6 +203,8 @@ void RefreshCompletionTelemetry()
 
 void RecordSubmission(UINT64 signal)
 {
+    NR_FRAME_TRACE("nr-fence-signaled", "fence={:p} value={} attempt={}",
+        static_cast<void*>(g_present.fence.Get()), signal, g_present.telemetry.presentAttempts);
     g_present.telemetry.lastSubmittedFence = signal;
     RefreshCompletionTelemetry();
 }
@@ -227,6 +232,8 @@ void UavBarrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource)
 
 void SetFallback(PresentApi api, const char* reason, bool failed = false)
 {
+    NR_FRAME_TRACE("nr-fallback", "attempt={} api={} failed={} reason={}", g_present.telemetry.presentAttempts,
+        static_cast<unsigned int>(api), failed, reason ? reason : "unknown");
     const bool changedReason = g_present.telemetry.fallbackReason != (reason ? reason : "unknown fallback");
     // A fallback leaves the game image alone, so its successor must never inherit the last model
     // result.  This covers admission, bridge, conversion, queue, copy-back, and model failures.
@@ -590,6 +597,8 @@ void ReportPresentUnavailable(PresentApi api, const char* reason)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto* config = Config::Instance();
+    NR_FRAME_TRACE("nr-present-unavailable", "api={} reason={}", static_cast<unsigned int>(api),
+        reason ? reason : "unknown");
     PresentGuides::Instance().BeginPresent(); // discard candidates even on unavailable Presents
     if (!config->GetDlssNrRuntimeSnapshot().enabled || config->DlssNrRoute.value_or_default() == 0)
         return;
@@ -603,6 +612,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
                                              const DXGI_PRESENT_PARAMETERS* presentParameters)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
+    const auto tracePresent = FrameTrace::Event("nr-present-enter", "swapchain={:p} presentDevice={:p} flags={}",
+        static_cast<void*>(swapChain), static_cast<void*>(presentDevice), presentFlags);
+    FrameTrace::Context traceContext(FrameTrace::presentObservation, tracePresent);
     const auto* config = Config::Instance();
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
     const auto capturedSettings = TryNrConfigSnapshot(*config);
@@ -621,6 +633,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const auto routeKey = PresentResolution::CaptureKey(settings);
     PresentGuides::Instance().Enable(runtime.enabled && observeNative, routeKey);
     const auto guideSelection = PresentGuides::Instance().BeginPresent();
+    NR_FRAME_TRACE("guide-selection",
+        "epoch={} generation={} count={} producer={:p} identity={:p} backbuffer={} width={} height={} route={}",
+        guideSelection.epoch, guideSelection.generation, guideSelection.count,
+        static_cast<void*>(guideSelection.producer.get()), static_cast<void*>(guideSelection.swapchain.Get()),
+        guideSelection.backbuffer, guideSelection.width, guideSelection.height,
+        settings.DlssNrRoute.value_or_default());
     if (g_present.guideGeneration != guideSelection.generation)
     {
         InvalidateHistory("Present route changed");
@@ -772,6 +790,10 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             return identity;
         }
         backDesc = backbuffer12->GetDesc();
+        NR_FRAME_TRACE("nr-backbuffer", "swapchain={:p} index={} resource={:p} device={:p} queue={:p} "
+            "width={} height={} format={}", static_cast<void*>(swapChain), bufferIndex,
+            static_cast<void*>(backbuffer12.Get()), static_cast<void*>(device.Get()), static_cast<void*>(queue.Get()),
+            backDesc.Width, backDesc.Height, static_cast<unsigned int>(backDesc.Format));
     }
     else
     {
@@ -1067,6 +1089,10 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     ID3D12CommandList* modelLists[] = { g_present.list.Get() };
     slot.firstSubmissionMs = Util::MillisecondsNow();
     queue->ExecuteCommandLists(1, modelLists);
+    NR_FRAME_TRACE("nr-model-submitted",
+        "attempt={} list={:p} queue={:p} output={:p} width={} height={} enhanced={} modelRecorded={}",
+        identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),
+        static_cast<void*>(presentOutput), workWidth, workHeight, enhanced, modelSucceeded);
     ++g_present.telemetry.modelSubmissions;
     if (modelSucceeded && enhanced) PresentGuides::Instance().Evaluated();
     if (uploadingGuides)
@@ -1177,6 +1203,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };
     queue->ExecuteCommandLists(1, compositeLists);
+    NR_FRAME_TRACE("nr-copyback-submitted", "attempt={} list={:p} queue={:p} output={:p}",
+        identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),
+        static_cast<void*>(presentOutput));
     ++g_present.telemetry.compositeSubmissions;
     const UINT64 signal = g_present.nextFence++;
     if (FAILED(queue->Signal(g_present.fence.Get(), signal)))

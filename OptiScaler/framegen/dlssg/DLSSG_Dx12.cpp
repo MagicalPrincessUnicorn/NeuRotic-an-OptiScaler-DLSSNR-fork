@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/FrameTrace.h>
 
 #include "DLSSG_Dx12.h"
 
@@ -537,6 +538,8 @@ bool DLSSG_Dx12::Dispatch()
     }
 
     auto result = StreamlineProxy::SetConstants()(constData, *frameToken, viewport);
+    NR_FRAME_TRACE("dlssg-constants-return", "provider=streamline frame={} token={:p} result={}",
+        frameId, static_cast<void*>(frameToken), static_cast<unsigned int>(result));
     if (result != sl::Result::eOk)
     {
         LOG_ERROR("SetConstants error: {} ({})", magic_enum::enum_name(result), (UINT) result);
@@ -784,6 +787,9 @@ void DLSSG_Dx12::CreateObjects(ID3D12Device* InDevice)
 
 bool DLSSG_Dx12::Present()
 {
+    NR_FRAME_TRACE("dlssg-present", "provider=streamline frame={} swapchain={:p} device={:p} queue={:p}",
+        _frameCount, static_cast<void*>(_swapChain), static_cast<void*>(_device),
+        static_cast<void*>(_gameCommandQueue));
     auto fIndex = GetIndexWillBeDispatched();
     LOG_DEBUG("fIndex: {}", fIndex);
 
@@ -1010,12 +1016,18 @@ bool DLSSG_Dx12::SetResource(Dx12Resource* inputResource)
         if (_resourceCopy[fIndex].contains(type))
             copyOutput = _resourceCopy[fIndex][type];
 
+        NR_FRAME_TRACE("dlssg-copy-record-enter", "frame={} type={} list={:p} source={:p} state={}",
+            _frameCount, static_cast<unsigned int>(type), static_cast<void*>(inputResource->cmdList),
+            static_cast<void*>(inputResource->resource), static_cast<unsigned int>(inputResource->state));
         if (!CopyResource(inputResource->cmdList, inputResource->resource, &copyOutput, inputResource->state))
         {
             LOG_ERROR("{}, CopyResource error!", magic_enum::enum_name(type));
             return false;
         }
 
+        NR_FRAME_TRACE("dlssg-copy-recorded", "frame={} list={:p} source={:p} destination={:p}",
+            _frameCount, static_cast<void*>(inputResource->cmdList), static_cast<void*>(inputResource->resource),
+            static_cast<void*>(copyOutput));
         _resourceCopy[fIndex][type] = copyOutput;
         _resourceCopy[fIndex][type]->SetName(std::format(L"_resourceCopy[{}][{}]", fIndex, (UINT) type).c_str());
         fResource->copy = copyOutput;
@@ -1110,6 +1122,14 @@ bool DLSSG_Dx12::SetResource(Dx12Resource* inputResource)
             }
 
             auto result = StreamlineProxy::SetTagForFrame()(*frameToken, viewport, &resourceTag, 1, fResource->cmdList);
+            NR_FRAME_TRACE("dlssg-tag-return",
+                "provider=streamline frame={} token={:p} type={} resource={:p} list={:p} device={:p} "
+                "queue={:p} state={} lifecycle={} width={} height={} x={} y={} result={}", frameId,
+                static_cast<void*>(frameToken), static_cast<unsigned int>(resourceTag.type), resource.native,
+                static_cast<void*>(fResource->cmdList), static_cast<void*>(_device),
+                static_cast<void*>(_gameCommandQueue), resource.state,
+                static_cast<unsigned int>(resourceTag.lifecycle), resource.width, resource.height,
+                resourceTag.extent.left, resourceTag.extent.top, static_cast<unsigned int>(result));
             LOG_DEBUG("SetTagForFrame, frameId: {}, type: {} result: {} ({})", frameId, magic_enum::enum_name(type),
                       magic_enum::enum_name(result), (int32_t) result);
 

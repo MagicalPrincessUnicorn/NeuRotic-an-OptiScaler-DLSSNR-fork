@@ -2,6 +2,9 @@
 #include "pch.h"
 #include <SysUtils.h>
 #include <Logger.h>
+#include "FrameTrace.h"
+#else
+#define NR_FRAME_TRACE(...) do {} while (false)
 #endif
 #include "NrGpuSafety.h"
 #include <windows.h>
@@ -143,7 +146,12 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     std::lock_guard lock(s.mutex);
     CompletionSet uses;
     for (UINT i = 0; i < count; ++i)
-        if (auto ticket = Get<Recording>(lists[i], recordingGuid)) uses.push_back(ticket);
+    {
+        auto ticket = Get<Recording>(lists[i], recordingGuid);
+        NR_FRAME_TRACE("queue-execute-enter", "queue={:p} list={:p} ticket={:p} batchCount={} batchIndex={}",
+            static_cast<void*>(queue), static_cast<void*>(lists[i]), static_cast<void*>(ticket.get()), count, i);
+        if (ticket) uses.push_back(ticket);
+    }
     if (uses.empty()) { originalExecute(queue, count, lists); return; }
 
     auto timeline = Get<Timeline>(queue, timelineGuid);
@@ -163,10 +171,16 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     originalExecute(queue, count, lists);
     const UINT64 value = ok ? ++timeline->next : 0;
     if (ok) ok = SUCCEEDED(queue->Signal(timeline->fence.Get(), value));
+    NR_FRAME_TRACE("queue-execute-signaled", "queue={:p} fence={:p} value={} ok={} tickets={}",
+        static_cast<void*>(queue), timeline ? static_cast<void*>(timeline->fence.Get()) : nullptr,
+        value, ok, uses.size());
     if (!ok) s.failed = true;
     for (auto& ticket : uses)
     {
         ++ticket->submissions;
+        NR_FRAME_TRACE("ticket-submitted", "ticket={:p} queue={:p} submissions={} fence={:p} value={} ok={}",
+            static_cast<void*>(ticket.get()), static_cast<void*>(queue), ticket->submissions,
+            timeline ? static_cast<void*>(timeline->fence.Get()) : nullptr, value, ok);
         if (!ok) { ticket->failed = true; continue; }
         auto found = std::find_if(ticket->points.begin(), ticket->points.end(),
                                  [&](const Point& p) { return p.timeline == timeline; });
@@ -180,6 +194,7 @@ HRESULT STDMETHODCALLTYPE Reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
 {
     std::lock_guard lock(State().mutex);
     const HRESULT hr = originalReset(list, allocator, pipeline);
+    NR_FRAME_TRACE("command-list-reset", "list={:p} result={}", static_cast<void*>(list), static_cast<unsigned int>(hr));
     if (SUCCEEDED(hr))
     {
         if (auto t = Get<Recording>(list, recordingGuid))
@@ -230,13 +245,18 @@ Ticket Record(ID3D12GraphicsCommandList* list)
     auto& s = State();
     std::lock_guard lock(s.mutex);
     if (s.failed) return Unavailable("submission/fence failure; process restart required");
-    if (auto t = Get<Recording>(list, recordingGuid)) return t;
+    if (auto t = Get<Recording>(list, recordingGuid))
+    {
+        NR_FRAME_TRACE("ticket-record-existing", "list={:p} ticket={:p}", static_cast<void*>(list), static_cast<void*>(t.get()));
+        return t;
+    }
     std::erase_if(s.pending, [](const Ticket& t) { return t->sealed && Completed(t); });
     if (s.failed) return Unavailable("device loss; process restart required");
     if (s.pending.size() >= 256) return Unavailable("recording capacity exhausted");
     auto ticket = std::make_shared<Recording>();
     if (!Put(list, recordingGuid, ticket)) return Unavailable("command-list lifetime cookie failed");
     s.pending.push_back(ticket);
+    NR_FRAME_TRACE("ticket-record-new", "list={:p} ticket={:p}", static_cast<void*>(list), static_cast<void*>(ticket.get()));
     return ticket;
 }
 bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue)

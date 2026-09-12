@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/FrameTrace.h>
 #include "wrapped_swapchain.h"
 
 #include <Util.h>
@@ -410,6 +411,11 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         State::Instance().frameCount = _frameCounter;
     }
 
+    const auto tracePresent = DlssNr::FrameTrace::Event("original-present-enter",
+        "swapchain={:p} flags={} sync={} present1={} attempt={} outputSubmitted={} fgOutput={}",
+        static_cast<void*>(pSwapChain), Flags, SyncInterval, pPresentParameters != nullptr,
+        nrPresentIdentity.presentAttempt, nrPresentIdentity.completedOutput,
+        static_cast<unsigned int>(State::Instance().activeFgOutput));
     LOG_DEBUG("Calling original present");
 
     // swapchain present
@@ -419,6 +425,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     else
         presentResult = ((IDXGISwapChain1*) pSwapChain)->Present1(SyncInterval, Flags, pPresentParameters);
     const double originalPresentCpuMs = Util::MillisecondsNow() - originalPresentStart;
+    NR_FRAME_TRACE("original-present-return", "call={} swapchain={:p} result={}", tracePresent,
+        static_cast<void*>(pSwapChain), static_cast<unsigned int>(presentResult));
     if (willPresent)
     {
         DlssNr::ReportPresentCallTiming({nrPresentIdentity, presentFrameIntervalMs, nrAdapterCpuMs,

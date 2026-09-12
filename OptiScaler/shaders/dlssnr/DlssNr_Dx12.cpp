@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/FrameTrace.h>
 #include <dlssnr/DlssNr_PresentGuides.h>
 
 #include <set>
@@ -4973,6 +4974,16 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                 enhanced && !haveTemporal ? "Native capture: reset or jitter metadata missing" : nullptr;
             const auto desc = target ? target->GetDesc() : D3D12_RESOURCE_DESC{};
             const auto* config = Config::Instance();
+            NR_FRAME_TRACE("native-guide-input",
+                "forceAfterUpscale={} list={:p} swapchain={:p} identity={:p} output={:p} depth={:p} motion={:p} "
+                "width={} height={} renderWidth={} renderHeight={} depthX={} depthY={} motionX={} motionY={} "
+                "outputX={} outputY={} inverted={} mvX={} mvY={} jitterX={} jitterY={} reset={} "
+                "exposurePolicy=not-handed-off", forceAfterUpscale, static_cast<void*>(cmdList),
+                static_cast<void*>(swapchain.Get()), static_cast<void*>(identity.Get()), static_cast<void*>(target),
+                static_cast<void*>(depth), static_cast<void*>(motion), desc.Width, desc.Height,
+                frame.RenderSubrectWidth, frame.RenderSubrectHeight, depthX, depthY, motionX, motionY,
+                outputX, outputY, frame.DepthInverted, frame.MvScaleX, frame.MvScaleY,
+                frame.JitterX, frame.JitterY, frame.Reset);
             PresentGuides::Instance().Capture(cmdList, depth, motion, frame, identity.Get(),
                 swapchain ? swapchain->GetCurrentBackBufferIndex() : 0,
                 static_cast<UINT>(desc.Width), desc.Height,
@@ -4980,6 +4991,13 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)),
                 static_cast<D3D12_RESOURCE_STATES>(config->MVResourceBarrier.value_or(
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)), enhanced, metadataError);
+            if (FrameTrace::Armed())
+            {
+                const auto observed = PresentGuides::Instance().Inspect();
+                NR_FRAME_TRACE("native-guide-capture-return",
+                    "generation={} attempts={} captures={} rejected={} status={}", observed.generation,
+                    observed.captureAttempts, observed.captures, observed.rejected, observed.status);
+            }
         }
         return;
     }

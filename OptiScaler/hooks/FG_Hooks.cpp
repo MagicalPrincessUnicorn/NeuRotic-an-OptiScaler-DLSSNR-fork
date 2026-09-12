@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/FrameTrace.h>
 #include "FG_Hooks.h"
 #include <Config.h>
 
@@ -1101,6 +1102,10 @@ HRESULT FGHooks::hkFGPresent1(IDXGISwapChain1* This, UINT SyncInterval, UINT Fla
 HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
                            const DXGI_PRESENT_PARAMETERS* pPresentParameters)
 {
+    const auto traceFgPresent = DlssNr::FrameTrace::Event("fg-present-enter",
+        "swapchain={:p} flags={} sync={} input={} output={}", static_cast<void*>(This), Flags, SyncInterval,
+        static_cast<unsigned int>(State::Instance().activeFgInput),
+        static_cast<unsigned int>(State::Instance().activeFgOutput));
     _lastPresentFlags = Flags;
 
     auto& state = State::Instance();
@@ -1219,7 +1224,10 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         else if (state.activeFgInput == FGInput::FSRFG30)
             FSR3FG::ffxPresentCallback();
 
+        NR_FRAME_TRACE("fg-provider-present-enter", "call={} frame={} swapchain={:p}", traceFgPresent,
+            fg->FrameCount(), static_cast<void*>(This));
         fg->Present();
+        NR_FRAME_TRACE("fg-provider-present-return", "call={} frame={}", traceFgPresent, fg->FrameCount());
     }
     else if (willPresent && fg != nullptr)
     {
@@ -1267,11 +1275,15 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         state.fgPresentIsCalled = true;
 
     HRESULT result;
+    NR_FRAME_TRACE("fg-original-present-enter", "call={} swapchain={:p} flags={}", traceFgPresent,
+        static_cast<void*>(This), Flags);
     if (pPresentParameters == nullptr)
         result = o_FGSCPresent(This, SyncInterval, Flags);
     else
         result = o_FGSCPresent1((IDXGISwapChain1*) This, SyncInterval, Flags, pPresentParameters);
 
+    NR_FRAME_TRACE("fg-original-present-return", "call={} result={}", traceFgPresent,
+        static_cast<unsigned int>(result));
     if (result == S_OK)
     {
         LOG_DEBUG("Result: {:X}", result);

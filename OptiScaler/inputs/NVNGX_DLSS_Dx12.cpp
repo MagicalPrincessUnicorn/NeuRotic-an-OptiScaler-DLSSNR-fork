@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/FrameTrace.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -1292,6 +1293,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     const bool isNrPipelineFeature = IsNrPipelineFeature(feature);
     const bool isSuperResolution = feature == NVSDK_NGX_Feature_SuperSampling;
     const bool isRayReconstruction = feature == NVSDK_NGX_Feature_RayReconstruction;
+    const auto traceEvaluation = DlssNr::FrameTrace::Event("ngx-evaluate-enter",
+        "handle={} feature={} list={:p} fgOutput={}", handleId, static_cast<unsigned int>(feature),
+        static_cast<void*>(InCmdList), static_cast<unsigned int>(state.activeFgOutput));
+    DlssNr::FrameTrace::Context traceContext(DlssNr::FrameTrace::nativeObservation, traceEvaluation);
     LogNgxEvaluationTrace(handleId, featureIt != HandleToFeature.end(), feature);
     LogNrPipelineObservation(handleId, feature, InParameters, cfg.DlssNrRunBeforeSr.value_or_default());
     static size_t evalWithoutFG = 0;
@@ -1303,6 +1308,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     if (feature == NVSDK_NGX_Feature_FrameGeneration)
     {
+        if (DlssNr::FrameTrace::Armed() && InParameters)
+        {
+            void* traceBackbuffer = nullptr;
+            void* traceHudless = nullptr;
+            const auto backbufferResult = InParameters->Get("DLSSG.Backbuffer", &traceBackbuffer);
+            const auto hudlessResult = InParameters->Get("DLSSG.HUDLess", &traceHudless);
+            NR_FRAME_TRACE("ngx-fg-input", "provider=nvngx handle={} list={:p} backbuffer={:p} "
+                "hudless={:p} backbufferResult={} hudlessResult={} classifier=unavailable", handleId,
+                static_cast<void*>(InCmdList), traceBackbuffer, traceHudless,
+                static_cast<unsigned int>(backbufferResult), static_cast<unsigned int>(hudlessResult));
+        }
         evalWithoutFG = 0;
 
         int frameCount = 0;
@@ -1348,6 +1364,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
             NVSDK_NGX_Result result =
                 NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            NR_FRAME_TRACE("ngx-native-return", "handle={} feature={} result={} list={:p}", handleId,
+                static_cast<unsigned int>(feature), static_cast<unsigned int>(result), static_cast<void*>(InCmdList));
 
             DlssNr::RestoreAfterUpscale(InParameters);
 
@@ -1387,6 +1405,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     const NVSDK_NGX_Result optiResult =
         TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
+    NR_FRAME_TRACE("ngx-replacement-return", "handle={} feature={} result={} list={:p}", handleId,
+        static_cast<unsigned int>(feature), static_cast<unsigned int>(optiResult), static_cast<void*>(InCmdList));
 
     DlssNr::RestoreAfterUpscale(InParameters);
 

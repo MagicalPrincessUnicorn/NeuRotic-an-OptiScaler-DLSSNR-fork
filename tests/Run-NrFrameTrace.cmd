@@ -1,0 +1,18 @@
+@echo off
+setlocal
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
+if errorlevel 1 exit /b 1
+pushd "%~dp0.."
+cl /nologo /std:c++20 /EHsc /W4 /I OptiScaler tests\nr_frame_trace.cpp /Fe:C:\OptiScaler-NR-Dev\logs\nr_frame_trace_test.exe /Fo:C:\OptiScaler-NR-Dev\logs\nr_frame_trace_test.obj
+if errorlevel 1 (popd & exit /b 1)
+C:\OptiScaler-NR-Dev\logs\nr_frame_trace_test.exe
+if errorlevel 1 (popd & exit /b 1)
+cl /nologo /std:c++20 /utf-8 /EHsc /W4 /I OptiScaler /I external\spdlog\include tests\nr_frame_trace_runtime.cpp /Fe:C:\OptiScaler-NR-Dev\logs\nr_frame_trace_runtime_test.exe /Fo:C:\OptiScaler-NR-Dev\logs\nr_frame_trace_runtime_test.obj
+if errorlevel 1 (popd & exit /b 1)
+for %%m in (off invalid on) do (
+    C:\OptiScaler-NR-Dev\logs\nr_frame_trace_runtime_test.exe %%m
+    if errorlevel 1 (popd & exit /b 1)
+)
+set "testResult=%ERRORLEVEL%"
+popd
+exit /b %testResult%
