@@ -2,6 +2,7 @@
 
 #include "NrGpuSafety.h"
 #include "NrScreenshotPng.h"
+#include "NrScreenshotContract.h"
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -36,13 +37,21 @@ class PresentStages
     unsigned int wanted() const { return wanted_; }
     bool wantsFrame(ULONGLONG now) const { return armed_ && !ready_ && now >= start_; }
     void setIdleStatus(std::string value) { if (!active()) status_ = std::move(value); }
+    void awaitPublication() { publicationPending_ = true; }
+    void completePublication(bool succeeded)
+    {
+        publicationPending_ = false;
+        if (!succeeded) cancel();
+    }
 
-    void request(ULONGLONG now, unsigned int delayMs = 5000, unsigned int frames = MaxFrames, bool png = false)
+    void request(ULONGLONG now, unsigned int delayMs = 5000, unsigned int frames = MaxFrames, bool png = false,
+                 std::string buildIdentity = "offline-fixture")
     {
         if (active()) return;
         start_ = now + delayMs;
         limit_ = (std::max)(1u, (std::min)(frames, MaxFrames));
         png_ = png;
+        buildIdentity_ = std::move(buildIdentity);
         armed_ = true;
         status_ = delayMs ? "Capture starts in 5 seconds. Close the menu." :
                   png_ ? "Waiting for the next complete output frame." : "Waiting for the next complete NR frame.";
@@ -59,7 +68,7 @@ class PresentStages
 
     bool record(ID3D12GraphicsCommandList* cmd, ID3D12Device* device,
                 const std::vector<StageInput>& inputs, UINT64 frameId, bool reset,
-                const std::string& settings)
+                const std::string& settings, const Screenshots::Identity& identity = {})
     {
         if (!wantsFrame(GetTickCount64()) || cmd == nullptr || device == nullptr) return false;
         if (inputs.empty() || inputs.size() > 6) { cancel(); return false; }
@@ -83,7 +92,7 @@ class PresentStages
         settings_ = settings;
         for (size_t i = 0; i < inputs.size(); ++i)
             copy(cmd, inputs[i], stages_[i], captured_);
-        frames_.push_back({ticket, frameId, reset});
+        frames_.push_back({ticket, frameId, reset, identity});
         ++captured_;
         ready_ = captured_ == wanted_;
         status_ = ready_ ? "Capture recorded. Keep playing while the copies finish."
@@ -95,9 +104,17 @@ class PresentStages
     // and its command-list recording is sealed. No frame-age approximation is used.
     void poll(const std::filesystem::path& root)
     {
-        if (!ready_) return;
+        if (!ready_ || publicationPending_) return;
         for (const auto& frame : frames_)
+        {
+            const auto state = GpuSafety::InspectSlots(&frame.use, 1);
+            if (state.failed || state.registryFailed)
+            {
+                status_ = "Capture failed: GPU completion unavailable. Resources retained until shutdown.";
+                return;
+            }
             if (!GpuSafety::Reusable(frame.use)) return;
+        }
         for (const auto& frame : frames_)
             discarded_ = discarded_ || !GpuSafety::Readable(frame.use);
         if (discarded_)
@@ -142,6 +159,7 @@ class PresentStages
                 continue;
             }
             created = true;
+            if (std::filesystem::exists(directory / (prefix + "_manifest.json"), ec)) created = false;
             for (const auto& stage : stages_)
                 for (unsigned int i = 0; !ec && i < captured_; ++i)
                     if (std::filesystem::exists(directory / screenshotName(prefix, stage.name, i), ec))
@@ -157,8 +175,49 @@ class PresentStages
             for (unsigned int i = 0; ok && i < captured_; ++i)
                 ok = dump(directory / (png_ ? screenshotName(prefix, stage.name, i) :
                     stage.name + "_" + std::to_string(i) + ".raw"), stage, i, png_);
-        // PNG screenshots contain images only. Raw developer diagnostics retain
-        // their manifest; partial diagnostic batches never claim success.
+        // Publish the matching manifest last. A partial batch cannot claim success.
+        if (ok && png_)
+        {
+            std::ostringstream manifest;
+            manifest << "{\n  \"schema\": 1,\n  \"build_identity\": " << Screenshots::JsonString(buildIdentity_)
+                     << ",\n  \"settings\": " << Screenshots::JsonString(settings_)
+                     << ",\n  \"brightness_adjustment\": false,\n  \"frames\": [";
+            for (size_t i = 0; i < frames_.size(); ++i)
+            {
+                const auto& frame = frames_[i];
+                if (i) manifest << ',';
+                manifest << "{\"evaluation\":" << frame.id << ",\"reset\":" << (frame.reset ? "true" : "false")
+                         << ",\"route\":" << Screenshots::JsonString(Screenshots::RouteName(frame.identity.route))
+                         << ",\"provider_frame\":" << frame.identity.providerFrame
+                         << ",\"provider_generation\":" << frame.identity.providerGeneration
+                         << ",\"resource_generation\":" << frame.identity.resourceGeneration
+                         << ",\"backbuffer\":" << frame.identity.backbuffer << '}';
+            }
+            manifest << "],\n  \"images\": [";
+            bool first = true;
+            for (const auto& stage : stages_)
+                for (unsigned int i = 0; i < captured_; ++i)
+                {
+                    if (!first) manifest << ',';
+                    first = false;
+                    manifest << "{\"file\":" << Screenshots::JsonString(screenshotName(prefix, stage.name, i))
+                             << ",\"width\":" << stage.desc.Width << ",\"height\":" << stage.desc.Height
+                             << ",\"format\":" << int(stage.desc.Format) << '}';
+                }
+            manifest << "]\n}\n";
+            const auto bytes = manifest.str();
+            const auto path = directory / (prefix + "_manifest.json");
+            HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+            DWORD written = 0;
+            ok = file != INVALID_HANDLE_VALUE;
+            if (ok)
+            {
+                ok = bytes.size() <= MAXDWORD && WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr)
+                    && written == bytes.size() && FlushFileBuffers(file);
+                ok = CloseHandle(file) && ok;
+                if (!ok) std::filesystem::remove(path, ec);
+            }
+        }
         if (ok && !png_)
         {
             const auto path = directory / "manifest.txt";
@@ -180,6 +239,10 @@ class PresentStages
             else ok = false;
         }
         if (reservation != INVALID_HANDLE_VALUE) CloseHandle(reservation);
+        if (!ok && png_ && created)
+            for (const auto& stage : stages_)
+                for (unsigned int i = 0; i < captured_; ++i)
+                    std::filesystem::remove(directory / screenshotName(prefix, stage.name, i), ec);
         release();
         status_ = ok ? "Saved: " + (png_ ? directory / prefix : directory).string() :
                       "Capture could not be saved completely. Check disk space and permissions.";
@@ -194,6 +257,7 @@ class PresentStages
         frames_.clear();
         captured_ = wanted_ = 0;
         armed_ = ready_ = discarded_ = false;
+        publicationPending_ = false;
         settings_.clear();
     }
 
@@ -207,7 +271,7 @@ class PresentStages
         UINT64 bytes = 0;
         std::vector<ID3D12Resource*> shots;
     };
-    struct Frame { GpuSafety::Ticket use; UINT64 id; bool reset; };
+    struct Frame { GpuSafety::Ticket use; UINT64 id; bool reset; Screenshots::Identity identity; };
     std::vector<Stage> stages_;
     std::vector<Frame> frames_;
     unsigned int captured_ = 0, wanted_ = 0;
@@ -215,7 +279,9 @@ class PresentStages
     bool png_ = false;
     ULONGLONG start_ = 0;
     bool armed_ = false, ready_ = false, discarded_ = false;
+    bool publicationPending_ = false;
     std::string settings_;
+    std::string buildIdentity_;
     std::string status_ = "Ready to capture.";
 
     std::string screenshotName(const std::string& prefix, const std::string& stage, unsigned int frame) const

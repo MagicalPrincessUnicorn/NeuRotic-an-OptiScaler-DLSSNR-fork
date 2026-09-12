@@ -223,6 +223,13 @@ bool CaptureInProgress();
 void RequestPresentStageCapture();
 std::string PresentStageCaptureStatus();
 void RequestComparisonScreenshot();
+// Same final-output evaluation, immediately before Present copyback; records no model work.
+bool RecordPresentComparison(ID3D12GraphicsCommandList* list, ID3D12Device* device,
+    ID3D12Resource* before, D3D12_RESOURCE_STATES beforeState,
+    ID3D12Resource* after, D3D12_RESOURCE_STATES afterState,
+    const NrConfigSnapshot<::Config>& settings, UINT64 evaluation, UINT64 providerFrame,
+    UINT64 providerGeneration, UINT64 resourceGeneration, UINT backbuffer);
+void CompletePresentComparison(bool succeeded);
 // Called at the real Present boundary, before the NeuRotic overlay.
 void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags);
 void CancelComparisonScreenshot();

@@ -4,6 +4,31 @@
 #include "dlssnr/DlssNr_BasicMultipass.h"
 #include <new>
 
+// Compare effective immutable render values without changing CustomOptional semantics.
+template<class T> bool NrSnapshotEqual(const T& a, const T& b)
+{
+    if constexpr (requires { a.value_or_default(); }) return a.value_or_default() == b.value_or_default();
+    else if constexpr (requires { a.has_value(); a.value(); })
+        return a.has_value() == b.has_value() && (!a.has_value() || a.value() == b.value());
+    else if constexpr (requires { a.workingScale; })
+    {
+#define NR_COMPARE_LAYER(name) if (!NrSnapshotEqual(a.name, b.name)) return false;
+        NR_COMPARE_LAYER(workingScale) NR_COMPARE_LAYER(scalingDownscaler)
+        NR_COMPARE_LAYER(transfer) NR_COMPARE_LAYER(preset) NR_COMPARE_LAYER(intensity)
+        NR_COMPARE_LAYER(style) NR_COMPARE_LAYER(localStructure) NR_COMPARE_LAYER(localTone)
+        NR_COMPARE_LAYER(skinStructure) NR_COMPARE_LAYER(autoMask) NR_COMPARE_LAYER(transferStrength)
+        NR_COMPARE_LAYER(colourStrength) NR_COMPARE_LAYER(maxRatio) NR_COMPARE_LAYER(reversibleMode)
+        NR_COMPARE_LAYER(applyModel)
+#undef NR_COMPARE_LAYER
+        return true;
+    }
+    else
+    {
+        for (size_t i = 0; i < a.size(); ++i) if (!NrSnapshotEqual(a[i], b[i])) return false;
+        return true;
+    }
+}
+
 // Keep every Config::DlssNr* option here. The result owns its storage, including strings.
 // The explicit list also keeps unrelated config out of the render snapshot.
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
@@ -89,6 +114,16 @@ template <class Source> struct NrConfigSnapshot
 #undef NR_DECLARE_SNAPSHOT
 
     NrConfigState::RuntimeSnapshot GetDlssNrRuntimeSnapshot() const noexcept { return _runtime; }
+
+    bool SameConfiguration(const NrConfigSnapshot& other) const
+    {
+        if (_runtime.enabled != other._runtime.enabled || _runtime.resumeGeneration != other._runtime.resumeGeneration)
+            return false;
+#define NR_COMPARE_SNAPSHOT(name) if (!NrSnapshotEqual(name, other.name)) return false;
+        NR_CONFIG_SNAPSHOT_FIELDS(NR_COMPARE_SNAPSHOT)
+#undef NR_COMPARE_SNAPSHOT
+        return true;
+    }
 
     explicit NrConfigSnapshot(const Source& source)
         : NrConfigSnapshot(source, NrConfigSynchronization::Transaction {}) {}

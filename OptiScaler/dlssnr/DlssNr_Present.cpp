@@ -46,12 +46,15 @@ struct PresentSlot
     bool timingStarted = false;
     bool timingResolved = false;
     bool pacingExpected = false;
+    UINT64 historyGeneration = 0;
 };
 
 struct PresentState
 {
     std::mutex mutex;
     UINT64 guideGeneration = 0;
+    UINT64 historyGeneration = 0;
+    UINT64 resourceGeneration = 0;
     UINT64 resourceRouteKey = 0;
     UINT nativeWidth = 0, nativeHeight = 0;
     DlssNrFrameInfo nativeFrame;
@@ -109,6 +112,8 @@ void SyncHistoryTelemetry()
 
 void InvalidateHistory(const char* reason)
 {
+    ++g_present.historyGeneration;
+    g_present.telemetry.presentGpuMs.reset();
     g_present.history.Invalidate(reason != nullptr ? reason : "unknown continuity interruption");
     SyncHistoryTelemetry();
 }
@@ -174,7 +179,7 @@ void ReadCompletedPacingSample(PresentSlot& slot, unsigned int slotIndex, UINT64
     const UINT64 fenceAge = currentAttempt >= slot.presentAttempt ? currentAttempt - slot.presentAttempt : 0;
     if (!g_present.pacing.recordGpu(slot.pacing, gpuMs, completionMs, fenceAge))
         ++g_present.telemetry.unmatchedGpuTimingSamples;
-    else
+    else if (slot.historyGeneration == g_present.historyGeneration)
     {
         g_present.telemetry.presentGpuMs = gpuMs;
         g_present.telemetry.presentGpuRoute = slot.pacing.route;
@@ -1009,6 +1014,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             return identity;
         }
         g_present.resourceRouteKey = routeKey;
+        ++g_present.resourceGeneration;
     }
 
     if (!DirectD3D12Available(device.Get()))
@@ -1080,6 +1086,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     slot.pacing = identity.pacing;
+    slot.historyGeneration = g_present.historyGeneration;
     slot.presentAttempt = identity.presentAttempt;
     slot.firstSubmissionMs = 0.0;
     slot.completionObserved = true;
@@ -1211,6 +1218,20 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "copyback command list could not be reset", true);
         return identity;
     }
+    struct ScreenshotPublication
+    {
+        bool recorded = false;
+        bool succeeded = false;
+        bool sealed = true;
+        ~ScreenshotPublication() { if (recorded) CompletePresentComparison(succeeded && sealed); }
+    } screenshotPublication;
+    const auto captureFinalPair = [&](ID3D12Resource* finalOutput, D3D12_RESOURCE_STATES finalState)
+    {
+        screenshotPublication.recorded = RecordPresentComparison(g_present.list.Get(), device.Get(),
+            presentInput, presentRestingState, finalOutput, finalState, settings, identity.presentAttempt,
+            preFgFrame ? preFgFrame->key : 0, preFgFrame ? preFgFrame->providerGeneration : 0,
+            g_present.resourceGeneration, bufferIndex);
+    };
     bool outputPrepared = true;
     if (!settings.DlssNrApplyModel.value_or_default())
     {
@@ -1218,6 +1239,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     else if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
     {
+        captureFinalPair(g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                    D3D12_RESOURCE_STATE_COPY_SOURCE);
         Transition(g_present.list.Get(), presentOutput, presentRestingState,
@@ -1235,6 +1257,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         outputPrepared = g_present.outputTransfer->Dispatch(g_present.list.Get(),
             g_present.frame.Get(), g_present.conversionOutput.Get());
         UavBarrier(g_present.list.Get(), g_present.conversionOutput.Get());
+        if (outputPrepared)
+            captureFinalPair(g_present.conversionOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         Transition(g_present.list.Get(), g_present.frame.Get(),
                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1263,7 +1287,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "10-bit output conversion could not be recorded", true);
         return identity;
     }
-    if (slot.timingStarted)
+    if (slot.timingStarted && !screenshotPublication.recorded)
     {
         g_present.list->EndQuery(g_present.pacingQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
                                  slotIndex * 2 + 1);
@@ -1302,6 +1326,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };
     queue->ExecuteCommandLists(1, compositeLists);
+    if (screenshotPublication.recorded)
+        screenshotPublication.sealed = GpuSafety::SealOwnedRecording(g_present.list.Get());
     identity.copybackSubmitted = true;
     NR_FRAME_TRACE("nr-copyback-submitted", "attempt={} list={:p} queue={:p} output={:p} "
         "generation={} claimGeneration={} claimInstance={} providerGeneration={}",
@@ -1336,6 +1362,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     ++g_present.telemetry.modelEvaluations;
     ++g_present.telemetry.compositeEvaluations;
     identity.completedOutput = true;
+    screenshotPublication.succeeded = true;
     identity.modelPrepared = true;
     identity.completionFence = g_present.fence.Get();
     identity.completionValue = signal;

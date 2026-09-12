@@ -486,6 +486,7 @@ void StartAdvisorAnalysis(Config& config)
 {
     auto& advisor = Advisor();
     if (advisor.running) return;
+    CancelComparisonScreenshot();
     advisor.routes = {};
     for (auto& route : advisor.routes)
     {
@@ -2788,34 +2789,42 @@ void RenderScreenshotMenu(Config* config)
     {
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
-        const bool present = config->DlssNrRoute.value_or_default() == 1;
+        const unsigned int route = config->DlssNrRoute.value_or_default();
+        const bool present = route == 1 || route == 2;
         const bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         const bool busy = ComparisonScreenshotBusy();
         const bool nativePair = NativeComparisonScreenshotAvailable();
-        ImGui::TextWrapped("Save full-resolution PNG images in NeuroticScreenshots beside the game. No extra text files.");
-        ImGui::BeginDisabled(busy);
+        ImGui::TextWrapped("Save full-resolution PNG comparisons and matching JSON manifests in NeuroticScreenshots beside the game.");
+        const bool analysis = Advisor().running;
+        ImGui::BeginDisabled(busy || analysis);
         bool before = config->ScreenshotNrOff.value_or_default();
         ImGui::BeginDisabled(enabled && !present && !nativePair);
         if (ImGui::Checkbox("NR off", &before)) config->ScreenshotNrOff = before;
         ImGui::EndDisabled();
         bool native = config->ScreenshotNativeNr.value_or_default();
         ImGui::BeginDisabled(present || !enabled);
-        if (ImGui::Checkbox(nativePair ? "Native NR on" : "Current full output", &native)) config->ScreenshotNativeNr = native;
+        if (ImGui::Checkbox(nativePair ? "Native NR on##ScreenshotNative" : "Current full output##ScreenshotNative", &native)) config->ScreenshotNativeNr = native;
         ImGui::EndDisabled();
         bool imageOnly = config->ScreenshotPresentNr.value_or_default();
         ImGui::BeginDisabled(!present || !enabled);
         if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
         ImGui::EndDisabled();
+        if (route == 0)
+            ImGui::TextWrapped("Experimental Native comparison: display conversion remains under investigation. Brightness may differ; no brightness adjustment is applied.");
         if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
-            ImGui::TextWrapped("Performance with NR off selected: a screenshot request temporarily upscales both versions of one frame with fresh DLSS history, then stops. This can briefly pause rendering and use extra memory. The pair compares NR on that frame; it does not reproduce the live image's accumulated DLSS history. With NR off unchecked, Native NR on saves the current full output.");
+            ImGui::TextWrapped("Performance compares one frame using two temporary DLSS evaluations with fresh history, then stops. Live history is unchanged. Capture can briefly pause rendering and use extra memory.");
         else if (nativePair)
-            ImGui::TextWrapped("Native comparisons capture the same upscaled frame before and after NR, ahead of later game effects and HUD. Linear scenes use matching colour conversion for both images.");
+            ImGui::TextWrapped("Native pairs capture the same scene before and after NR, ahead of later game effects and HUD.");
         else if (enabled && !present)
             ImGui::TextWrapped("Performance comparisons currently require native DX12 DLSS at full display output. This upscaler can save its current full output; unavailable comparisons are disabled.");
         else if (enabled)
             ImGui::TextWrapped("Present NR saves the selected before/after images from the same full-resolution frame.");
         else
             ImGui::TextWrapped("NR is off: its current full output is available. Unavailable comparisons are disabled.");
+        if (route == 2)
+            ImGui::TextWrapped("Present Enhanced comparisons are experimental; runtime image quality is not yet validated.");
+        if (analysis)
+            ImGui::TextWrapped("Finish or cancel analysis before taking comparisons.");
         ImGui::TextWrapped("Capture starts on the next ready frame. You can leave this menu open; it is excluded automatically. In-game HUD and other overlays already in the image remain.");
         if (ImGui::Button("Take screenshots")) RequestComparisonScreenshot();
         ImGui::EndDisabled();

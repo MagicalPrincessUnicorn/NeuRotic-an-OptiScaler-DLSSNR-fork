@@ -7191,6 +7191,13 @@ void MenuCommon::RenderDiagnosticsPage(RenderMenuContext& ctx)
     RenderLoggingSettings(ctx);
     RenderQuirksSettings(ctx);
     RenderFpsOverlaySettings(ctx);
+    if (auto capture = ScopedCollapsingHeader("Developer capture"); capture.IsHeaderOpen())
+    {
+        ImGui::BeginDisabled(DlssNr::ComparisonScreenshotBusy());
+        if (ImGui::Button("Capture model stages (5-second delay)")) DlssNr::RequestPresentStageCapture();
+        ImGui::EndDisabled();
+        ImGui::TextWrapped("%s", DlssNr::PresentStageCaptureStatus().c_str());
+    }
 }
 
 void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)

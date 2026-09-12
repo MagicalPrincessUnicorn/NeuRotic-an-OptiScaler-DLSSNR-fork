@@ -326,10 +326,12 @@ void CoherentSnapshots()
     for (auto& reader : readers) reader.join();
 
     const NrConfigSnapshot<TestConfig> held(config);
+    CHECK(held.SameConfiguration(NrConfigSnapshot<TestConfig>(config)));
     auto writerWithSnapshotAlive = std::async(std::launch::async, [&] { config.DlssNrIntensity = -1.0f; });
     CHECK(writerWithSnapshotAlive.wait_for(std::chrono::seconds(3)) == std::future_status::ready);
     writerWithSnapshotAlive.get();
     CHECK(held.DlssNrIntensity.value_or_default() == 30000.0f);
+    CHECK(!held.SameConfiguration(NrConfigSnapshot<TestConfig>(config)));
 
     // Reload must preserve an existing canonical UI choice when filling an empty legacy option.
     config.DlssNrRunBeforeSr.reset();

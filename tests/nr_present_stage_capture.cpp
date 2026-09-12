@@ -89,7 +89,15 @@ static std::filesystem::path FindScreenshot(const std::filesystem::path& root, c
     for (const auto& entry : std::filesystem::directory_iterator(root))
     {
         assert(entry.is_regular_file());
-        assert(entry.path().extension() == ".png"); // No sidecars, folders or leftover claims.
+        assert(entry.path().extension() == ".png" || entry.path().extension() == ".json");
+        if (entry.path().extension() == ".json")
+        {
+            std::ifstream manifest(entry.path());
+            const std::string text((std::istreambuf_iterator<char>(manifest)), {});
+            assert(text.find("\"brightness_adjustment\": false") != std::string::npos);
+            assert(text.find("\"build_identity\":") != std::string::npos);
+            continue;
+        }
         if (entry.path() != exclude && entry.path().filename().string().ends_with("_" + tag + ".png"))
         {
             assert(result.empty());
@@ -282,9 +290,11 @@ int main(int argc, char** argv)
     std::vector<DlssNr::StageCapture::StageInput> screenshotInputs {inputs[0], inputs[2]};
     screenshotInputs[0].name = "NR-Off";
     screenshotInputs[1].name = "Present-NR-On";
-    capture.request(GetTickCount64(), 0, 1, true);
+    capture.request(GetTickCount64(), 0, 1, true, "integration-test-build");
     assert(capture.wantsFrame(GetTickCount64()));
-    assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 600, false, "same_evaluation true"));
+    assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 600, false, "same_evaluation true",
+        DlssNr::Screenshots::Identity {2, 123, 4, 5, 1}));
+    capture.awaitPublication();
     assert(capture.count() == 1 && capture.wanted() == 1);
     assert(!capture.record(lists[0].Get(), device.Get(), screenshotInputs, 601, false, "same_evaluation true"));
     Check(lists[0]->Close());
@@ -292,14 +302,26 @@ int main(int argc, char** argv)
     assert(Safety::Drain(10000));
     Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
     capture.poll(root / "screenshots");
+    assert(capture.active() && !std::filesystem::exists(root / "screenshots"));
+    capture.completePublication(true);
+    capture.poll(root / "screenshots");
     assert(!capture.active() && capture.status().find("Saved:") == 0);
     const auto pngDir = root / "screenshots";
-    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 2);
+    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 3);
     const auto offPng = FindScreenshot(pngDir, "NROFF");
     const auto presentPng = FindScreenshot(pngDir, "NRONPRESENT");
     const auto offName = offPng.filename().string();
     const auto batchPrefix = offName.substr(0, offName.size() - std::string("_NROFF.png").size());
     assert(presentPng.filename() == batchPrefix + "_NRONPRESENT.png");
+    {
+        std::ifstream file(pngDir / (batchPrefix + "_manifest.json"));
+        const std::string manifest((std::istreambuf_iterator<char>(file)), {});
+        assert(manifest.find("integration-test-build") != std::string::npos);
+        assert(manifest.find("Present Enhanced") != std::string::npos);
+        assert(manifest.find("\"provider_frame\":123") != std::string::npos);
+        assert(manifest.find(offPng.filename().string()) != std::string::npos);
+        assert(manifest.find(presentPng.filename().string()) != std::string::npos);
+    }
     assert(!std::filesystem::exists(pngDir / (batchPrefix + "_CAPTURE.txt")));
     Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
     {
@@ -477,7 +499,7 @@ int main(int argc, char** argv)
         const auto secondOutput = FindScreenshot(fullDir, "NRON", firstOutput);
         verifyPng(secondOutput, 7, 5, {16, 16, 16});
         verifyPng(firstOutput, 7, 5, {72, 72, 72}); // Never overwrite the previous capture.
-        assert(std::distance(std::filesystem::directory_iterator(fullDir), std::filesystem::directory_iterator()) == 2);
+        assert(std::distance(std::filesystem::directory_iterator(fullDir), std::filesystem::directory_iterator()) == 4);
         Check(queue->Wait(gate.Get(), 3));
         capture.request(GetTickCount64(), 0, 1, true);
         assert(finalOutput.submit(queue.Get(), textures[0].Get(), capture, "Current-output", 702, "cancelled output"));
@@ -544,5 +566,5 @@ int main(int argc, char** argv)
     std::cout << "PASS screenshots: every selection mask, exactly one matched GPU frame, PNG decode/pixel/dimension checks, RGBA/BGRA/R10, opaque alpha and invalid-format/stride rejection.\n";
     std::cout << "PASS full output: immediate request, completion-owned private submission, pre-overlay pixels, repeat capture, real readback pair above 512 MiB and distinct missing-buffer failure.\n";
     std::cout << "PASS Native: one full-resolution linear pair, fixed exposure, typeless float and R11 PNG pixels, exact completion/recording-seal gate.\n";
-    std::cout << "PASS flat naming: PNG files only, shared pair prefix, final NR tags and repeated capture preserves earlier pixels.\n";
+    std::cout << "PASS flat naming: PNG and matching JSON, shared pair prefix, final NR tags and repeated capture preserves earlier pixels.\n";
 }
