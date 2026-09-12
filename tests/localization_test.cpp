@@ -297,6 +297,12 @@ int main()
               "main tuning slider reserves reset, help and spacing at narrow widths");
         Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(1000.0f, 2.0f, 60.0f, 20.0f, 8.0f) - 880.0f) < 0.01f,
               "main tuning slider preferred width follows UI scale");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(700.0f, 1.0f, 60.0f, 8.0f) - 320.0f) < 0.01f,
+              "Basic shared resolution uses its shorter preferred width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(260.0f, 1.0f, 60.0f, 8.0f) - 192.0f) < 0.01f,
+              "Basic shared resolution preserves reset space at narrow widths");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(1000.0f, 2.0f, 60.0f, 8.0f) - 640.0f) < 0.01f,
+              "Basic shared resolution preferred width follows UI scale");
         Neurotic::SetLanguage("en");
         ImGui::GetStyle() = baseStyle;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;

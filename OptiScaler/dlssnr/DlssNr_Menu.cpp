@@ -648,7 +648,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 
         HelpMarker("Default leaves the choice to the model."
                        "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
-                       "\nthe same number means something different here.");
+                       "\nthe same number means something different here."
+                       "\n\nI have no idea what this does. Seems like nothing.");
 
         static const char* nrStyleNames[] = { "Standard", "Natural", "Cinematic" };
         int style = (int) config->DlssNrStyle.value_or_default();
@@ -1612,7 +1613,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         {
             const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
                                     float BasicMultipass::Profile::* member, float minimum, float maximum,
-                                    const char* hint = nullptr)
+                                    const char* hint = nullptr, float preferredWidth = 0.0f)
             {
                 BasicMultipass::Profile original;
                 uint64_t generation;
@@ -1623,12 +1624,16 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 }
                 preview = original.*member;
                 ImGui::TextUnformatted(title);
-                ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
-                    ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
+                if (hint) HelpMarker(hint);
+                const auto& style = ImGui::GetStyle();
+                const float resetWidth = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
+                ImGui::SetNextItemWidth(preferredWidth > 0.0f ?
+                    MenuControls::ResponsiveBasicResolutionWidth(ImGui::GetContentRegionAvail().x,
+                        menuResScale, resetWidth, style.ItemSpacing.x, preferredWidth) :
+                    (std::max)(1.0f, ImGui::GetContentRegionAvail().x - resetWidth - style.ItemSpacing.x));
                 if (DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f, "%d%%", true))
                     if (!BasicMultipass::CommitEdit(*config, original, generation, member, preview.value_or_default()))
                         CancelNrEdits();
-                if (hint) HelpMarker(hint);
             };
             static NrOptional<float> resolution { 1.0f }, model { 1.0f }, detail { 1.0f };
             slider("Shared Model Resolution (All Passes)", "##NrBasicResolution", resolution,
@@ -1636,7 +1641,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                    "Sets one model-raster percentage for Pass 1 and every active additional pass "
                    "in Basic mode. The composed frame remains full resolution. Releasing commits "
                    "the shared value and rebuilds changed models; disabling Multipass restores the "
-                   "saved main settings.");
+                   "saved main settings.", 320.0f);
             basic = config->DlssNrBasicMultipass.value_or_default();
             if (basic.resolution > 1.0f)
             {
@@ -1735,15 +1740,15 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 HelpMarker(hint);
                 if (pendingNrEdits[label].Mixed()) ImGui::TextDisabled("%s", mixedHint);
             };
-            sharedSlider("Additional Passes — Model Resolution###Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
+            sharedSlider("Global Pass Resolution (Passes 2–N)###Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
                 "Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once.",
-                "Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
-            sharedSlider("Additional Passes — Model Strength###Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
+                "Passes 2–N have mixed model resolutions; adjusting this slider applies one value to all of them.");
+            sharedSlider("Global Pass Model Strength (Passes 2–N)###Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
                 "Sets internal model intensity for Pass 2 through the selected final pass. Release to apply and rebuild only changed child models. 100% is default; 0% does not disable model execution. Pass 1 is unchanged.",
-                "Additional pass model strengths are mixed; adjusting this slider applies one value to all of them.");
-            sharedSlider("Additional Passes — Detail Strength###Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
+                "Passes 2–N have mixed model strengths; adjusting this slider applies one value to all of them.");
+            sharedSlider("Global Pass Detail Strength (Passes 2–N)###Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
                 "Sets detail blending for Pass 2 through the selected final pass. Release to apply without rebuilding models. 100% is default; 0% hides the detail edit. Pass 1 and colour strength are unchanged.",
-                "Additional pass detail strengths are mixed; adjusting this slider applies one value to all of them.");
+                "Passes 2–N have mixed detail strengths; adjusting this slider applies one value to all of them.");
         }
         else
         {

@@ -62,4 +62,12 @@ inline bool LastItemHasInlineRoom(float requiredWidth)
     const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
     return right - ImGui::GetItemRectMax().x >= ImGui::GetStyle().ItemSpacing.x + requiredWidth;
 }
+
+inline float ResponsiveBasicResolutionWidth(float available, float menuScale,
+                                            float resetWidth, float spacing,
+                                            float preferredWidth = 320.0f)
+{
+    const float safeWidth = (std::max)(1.0f, available - resetWidth - spacing);
+    return (std::min)(preferredWidth * menuScale, safeWidth);
+}
 }
