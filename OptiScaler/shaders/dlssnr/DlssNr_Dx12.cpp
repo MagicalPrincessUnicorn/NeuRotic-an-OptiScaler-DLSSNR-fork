@@ -2567,8 +2567,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     float layer2WorkScale = cfg.DlssNrSecondLayerWorkingScale.value_or_default();
     layer2WorkScale = layer2WorkScale < 0.25f ? 0.25f : (layer2WorkScale > 2.0f ? 2.0f : layer2WorkScale);
-    const unsigned int layer2WorkWidth = std::max(8u, (unsigned int) (width * layer2WorkScale + 0.5f) & ~7u);
-    const unsigned int layer2WorkHeight = std::max(8u, (unsigned int) (height * layer2WorkScale + 0.5f) & ~7u);
+    const bool sharedBasicRaster = DlssNr::BasicMultipass::Active(cfg);
+    const unsigned int layer2WorkWidth = sharedBasicRaster ? workWidth :
+        std::max(8u, (unsigned int) (width * layer2WorkScale + 0.5f) & ~7u);
+    const unsigned int layer2WorkHeight = sharedBasicRaster ? workHeight :
+        std::max(8u, (unsigned int) (height * layer2WorkScale + 0.5f) & ~7u);
     const bool layer2Reduced = layer2WorkWidth != width || layer2WorkHeight != height;
     std::array<float, 9> additionalWorkScale {};
     std::array<unsigned int, 9> additionalWorkWidth {};
@@ -2579,9 +2582,9 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         float scale = PassSettings(cfg, static_cast<unsigned int>(index + 1)).workingScale;
         scale = std::clamp(scale, 0.25f, 2.0f);
         additionalWorkScale[index] = scale;
-        additionalWorkWidth[index] =
+        additionalWorkWidth[index] = sharedBasicRaster ? workWidth :
             std::max(8u, (unsigned int) (width * scale + 0.5f) & ~7u);
-        additionalWorkHeight[index] =
+        additionalWorkHeight[index] = sharedBasicRaster ? workHeight :
             std::max(8u, (unsigned int) (height * scale + 0.5f) & ~7u);
         additionalReduced[index] =
             additionalWorkWidth[index] != width || additionalWorkHeight[index] != height;
@@ -5618,9 +5621,14 @@ TelemetrySnapshot Telemetry()
     t.workHeight = g_nr.workHeight;
     t.guideWidth = g_nr.guideWidth;
     t.guideHeight = g_nr.guideHeight;
-    t.runBeforeSr = Config::Instance()->DlssNrRunBeforeSr.value_or_default();
-    t.layer2Requested = Config::Instance()->DlssNrMultipassEnabled.value_or_default() &&
-                        Config::Instance()->DlssNrPasses.value_or_default() > 1;
+    {
+        NrConfigSynchronization::Transaction transaction;
+        const auto* config = Config::Instance();
+        t.runBeforeSr = config->DlssNrRoute.value_or_default() == 0 && config->DlssNrRunBeforeSr.value_or_default();
+        const auto basic = config->DlssNrBasicMultipass.value_or_default();
+        const auto passes = basic.advanced ? config->DlssNrPasses.value_or_default() : BasicMultipass::Count(basic);
+        t.layer2Requested = config->DlssNrMultipassEnabled.value_or_default() && passes > 1;
+    }
     t.layer2Loaded = g_nr.layer2.feature != nullptr;
     t.layer2Ready = g_nr.layer2.ready && t.layer2Loaded && !g_nr.layer2.failed;
     t.layer2Retiring = g_nr.layer2.featureAwaitingRelease != nullptr;

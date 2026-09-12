@@ -540,6 +540,14 @@ static void BasicMultipassContract()
     CHECK(!B::Load([](const char*) -> std::optional<float> { return {}; }, false).advanced);
     CHECK(B::Load([](const char*) -> std::optional<float> { return {}; }, true).advanced);
     CHECK(B::Load([](const char*) -> std::optional<float> { return NAN; }, false) == B::Profile{});
+    const auto expected = c.DlssNrBasicMultipass.value_or_default();
+    const auto generation = NrConfigSynchronization::ProfileGeneration();
+    CHECK(B::CommitEdit(c, expected, generation, &B::Profile::model, 0.5f));
+    CHECK(!B::CommitEdit(c, expected, generation, &B::Profile::detail, 0.25f));
+    const auto beforeReload = c.DlssNrBasicMultipass.value_or_default();
+    NrConfigSynchronization::InvalidateProfileEdits();
+    CHECK(!B::CommitEdit(c, beforeReload, generation, &B::Profile::detail, 0.25f));
+    CHECK(c.DlssNrBasicMultipass.value_or_default() == beforeReload);
     std::cout << "PASS Basic Multipass totals, independent distribution, profile restoration, global effect visibility and atomic maximum reduction\n";
 }
 

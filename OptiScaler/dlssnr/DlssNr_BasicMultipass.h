@@ -42,6 +42,16 @@ template<class C, class Edit> void Update(C& c, Edit edit)
     edit(p);
     c.DlssNrBasicMultipass = Normalize(p);
 }
+template<class C> bool CommitEdit(C& c, Profile expected, uint64_t generation,
+                                 float Profile::* member, float value)
+{
+    NrConfigSynchronization::Transaction transaction;
+    if (generation != NrConfigSynchronization::ProfileGeneration() ||
+        c.DlssNrBasicMultipass.value_or_default() != expected) return false;
+    expected.*member = value;
+    c.DlssNrBasicMultipass = Normalize(expected);
+    return true;
+}
 template<class Reader> Profile Load(Reader read, bool existingMultipass)
 {
     Profile p;

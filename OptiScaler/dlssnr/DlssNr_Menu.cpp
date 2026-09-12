@@ -204,12 +204,22 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             const auto selection = PresentResolution::CaptureKey(uiConfig) * 4 + stage;
             if (selection != previousSelection) CancelNrEdits();
             previousSelection = selection;
-            scalePreview = StageUi::ResolutionScale(uiConfig);
+            const auto editGeneration = NrConfigSynchronization::ProfileGeneration();
+            const float originalScale = StageUi::ResolutionScale(uiConfig);
+            scalePreview = originalScale;
             ImGui::TextUnformatted("Manual resolution");
             ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
                 ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
             if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
-                StageUi::SelectResolutionScale(*config, scalePreview.value_or_default());
+            {
+                NrConfigSynchronization::Transaction transaction;
+                const auto current = config->GetDlssNrConfigSnapshot();
+                if (editGeneration == NrConfigSynchronization::ProfileGeneration() &&
+                    selection == PresentResolution::CaptureKey(current) * 4 + StageUi::Stage(current) &&
+                    originalScale == StageUi::ResolutionScale(current))
+                    StageUi::SelectResolutionScale(*config, scalePreview.value_or_default());
+                else CancelNrEdits();
+            }
             uiConfig = config->GetDlssNrConfigSnapshot();
             if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
         }
@@ -1577,12 +1587,20 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
             const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
                                     float BasicMultipass::Profile::* member, float minimum, float maximum)
             {
-                preview = config->DlssNrBasicMultipass.value_or_default().*member;
+                BasicMultipass::Profile original;
+                uint64_t generation;
+                {
+                    NrConfigSynchronization::Transaction transaction;
+                    original = config->DlssNrBasicMultipass.value_or_default();
+                    generation = NrConfigSynchronization::ProfileGeneration();
+                }
+                preview = original.*member;
                 ImGui::TextUnformatted(title);
                 ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
                     ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
                 if (DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f, "%d%%", true))
-                    BasicMultipass::Update(*config, [&](auto& p) { p.*member = preview.value_or_default(); });
+                    if (!BasicMultipass::CommitEdit(*config, original, generation, member, preview.value_or_default()))
+                        CancelNrEdits();
             };
             static NrOptional<float> resolution { 1.0f }, model { 1.0f }, detail { 1.0f };
             slider("Model resolution", "##NrBasicResolution", resolution,

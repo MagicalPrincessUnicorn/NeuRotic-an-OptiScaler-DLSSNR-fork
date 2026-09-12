@@ -13,6 +13,9 @@ function Require([bool]$condition, [string]$message) {
 Require ($header.Contains('NrOptional<bool> DlssNrMultipassEnabled { false };') -and
          $header.Contains('NrOptional<uint32_t> DlssNrPasses { 1 };')) `
     'multipass remains opt-in with one pass as the shipped default'
+Require (([regex]::Matches($dx12, 'sharedBasicRaster \? workWidth')).Count -eq 2 -and
+         ([regex]::Matches($dx12, 'sharedBasicRaster \? workHeight')).Count -eq 2) `
+    'Basic children use the exact first-pass raster; Advanced retains its independent dimension formulas'
 Require ($header.Contains('static constexpr size_t Count = 8;') -and
          $header.Contains('DlssNrExtraLayerOptions DlssNrExtraLayers;')) `
     'pass 2 compatibility plus eight extra settings records cover passes 1 through 10'
