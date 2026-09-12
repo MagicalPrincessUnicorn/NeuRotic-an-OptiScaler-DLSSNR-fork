@@ -94,10 +94,20 @@ Assert-Ui ($nr.Contains('"%s is active."') -and $nr.Contains('"Image unchanged. 
 $stage = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageControls.h')
 $adapter = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageUi.h')
 Assert-Ui ($stage.IndexOf('SentenceCombo("##NrStage"') -lt $stage.IndexOf('SentenceCombo("##NrMethod"') -and $stage.IndexOf('SentenceCombo("##NrMethod"') -lt $stage.IndexOf('SentenceCombo("##NrResolution"')) 'stage, method and resolution retain fixed sentence order'
+Assert-Ui ($stage.Contains('"Neural Rendering Injection", "upscaling"') -and
+           -not $stage.Contains('"Neural Rendering Injection", "Upscaling"') -and
+           $stage.Contains('stageHelp, ImGui::GetFontSize() * 8.0f')) 'stage sentence uses lowercase upscaling and a scale-aware wider selector'
+Assert-Ui ($stage -match '(?s)const bool changed = ImGui::Combo.*?if \(hasHelp\).*?SentenceHelpMarker\(help\);.*?if \(\*suffix\)') 'sentence help is rendered directly after its selector and before the suffix'
+Assert-Ui ($stage.Contains('Before runs Neural Rendering on the game''s render input before upscaling') -and
+           $stage.Contains('Your last selected After method is remembered.')) 'stage help explains both placements and remembered After method'
+Assert-Ui ($stage.Contains('Present Compatibility processes the') -and
+           $stage.Contains('unavailable or invalid guides preserve the original image.')) 'method help accurately explains Native and both Present routes'
 Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains('DlssNrPresentCustomScale') -and $stage.Contains('resolution == 2 ? 3 : 2')) 'Present methods remember independent choices; Legacy is conditional'
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
 Assert-Ui ($nr.IndexOf('&enabled, "Enable Neural Rendering"') -lt $nr.IndexOf('StageUi::RenderControls(*config,')) 'enable lives in the NR heading'
-Assert-Ui ($nr.Contains('if (StageUi::ResolutionSelection(uiConfig) == 1)') -and $stage.Contains('BeginDisabled(stage == 0)')) 'manual slider covers every method and Before retains its fixed visible method'
+Assert-Ui ($nr.Contains('if (StageUi::ResolutionSelection(uiConfig) == 1)') -and
+           $stage.Contains('stage == 0 ? 1 : 3, methodHelp, 0.0f, stage == 0')) 'manual slider covers every method and Before retains its fixed visible method'
+Assert-Ui ($nr -match '(?s)TextUnformatted\("Manual resolution"\);\s*HelpMarker\("Sets the Neural Rendering working resolution.*?Reset restores 100%') 'Manual resolution carries an adjacent stage-relative cost and supersampling explanation'
 $diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced")')
 Assert-Ui ($diagnostics -gt $nr.IndexOf('renderReadouts(false);') -and
            $diagnostics -gt $nr.IndexOf('Checkbox("Apply the model"') -and

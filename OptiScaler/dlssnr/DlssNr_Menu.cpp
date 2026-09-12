@@ -208,6 +208,11 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             const float originalScale = StageUi::ResolutionScale(uiConfig);
             scalePreview = originalScale;
             ImGui::TextUnformatted("Manual resolution");
+            HelpMarker("Sets the Neural Rendering working resolution as a percentage of the selected "
+                       "stage: the game's render input Before upscaling, or the final upscaled output "
+                       "After. Lower values reduce model cost and fine detail. Values above 100% "
+                       "supersample, increase cost roughly with image area, and reveal the downscaler. "
+                       "Reset restores 100%.");
             ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
                 ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
             if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
