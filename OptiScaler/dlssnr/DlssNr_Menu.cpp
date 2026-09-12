@@ -573,8 +573,10 @@ void RenderAdvisorRouteCard(int route, float height)
         ImGui::TextWrapped("%s", result.detail.c_str());
         if (result.fps > 0.0)
         {
-            ImGui::TextDisabled("Measured %.0f FPS%s", result.fps,
-                result.modelMs > 0.0 ? StrFmt(" | %.2f ms NR", result.modelMs).c_str() : "");
+            if (result.modelMs > 0.0)
+                ImGui::TextDisabled("Measured %.0f FPS | %.2f ms NR", result.fps, result.modelMs);
+            else
+                ImGui::TextDisabled("Measured %.0f FPS", result.fps);
         }
     }
     ImGui::EndChild();
@@ -625,9 +627,11 @@ void RenderAdvisor(Config* config, float menuResScale)
             AdvisorSignal("Graphics card", advisor.gpuName, muted);
             const unsigned int outputW = present.backbufferWidth ? present.backbufferWidth : native.frameWidth;
             const unsigned int outputH = present.backbufferHeight ? present.backbufferHeight : native.frameHeight;
-            AdvisorSignal("Present output", outputW && outputH ?
-                StrFmt("%u x %u | %s", outputW, outputH, BackbufferFormatName(present.backbufferFormat)) :
-                "Waiting for a rendered frame", outputW && outputH ? green : orange);
+            char outputText[128] = "Waiting for a rendered frame";
+            if (outputW && outputH)
+                std::snprintf(outputText, sizeof(outputText), "%u x %u | %s", outputW, outputH,
+                              BackbufferFormatName(present.backbufferFormat));
+            AdvisorSignal("Present output", outputText, outputW && outputH ? green : orange);
             const bool verifiedGuides = guides.evaluated > 0 || guides.matched > 0;
             AdvisorSignal("Depth guide", verifiedGuides ? "Captured and matched" : "Not yet verified",
                           verifiedGuides ? green : orange);
