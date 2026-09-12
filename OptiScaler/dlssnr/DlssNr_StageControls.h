@@ -47,6 +47,13 @@ inline void SentenceHelpMarker(const char* tip)
     }
 }
 
+inline float ResponsiveSliderWidth(float available, float menuScale, float resetWidth,
+                                   float helpWidth, float spacing)
+{
+    const float reserved = resetWidth + helpWidth + spacing * 2.0f;
+    return (std::max)(1.0f, (std::min)(440.0f * menuScale, available - reserved));
+}
+
 // Wrap at word boundaries when a sentence will not fit alongside its selector. Help stays beside
 // the selector even when the prefix and suffix need their own lines.
 inline bool SentenceCombo(const char* id, const char* prefix, const char* suffix, int* value,

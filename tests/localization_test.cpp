@@ -278,6 +278,12 @@ int main()
             }
         }
         // Real keyboard/controller events through the same production controls.
+        Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(1000.0f, 1.0f, 60.0f, 20.0f, 8.0f) - 440.0f) < 0.01f,
+              "main tuning slider reaches doubled preferred width when space permits");
+        Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(300.0f, 1.0f, 60.0f, 20.0f, 8.0f) - 204.0f) < 0.01f,
+              "main tuning slider reserves reset, help and spacing at narrow widths");
+        Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(1000.0f, 2.0f, 60.0f, 20.0f, 8.0f) - 880.0f) < 0.01f,
+              "main tuning slider preferred width follows UI scale");
         Neurotic::SetLanguage("en");
         ImGui::GetStyle() = baseStyle;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;

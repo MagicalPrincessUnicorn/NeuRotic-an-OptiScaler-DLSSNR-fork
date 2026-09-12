@@ -125,7 +125,9 @@ static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<flo
     if (ImGui::IsItemDeactivatedAfterEdit()) changed = edit.Commit(mn, mx);
     edit.Finish(ImGui::IsItemActive());
     ImGui::SameLine();
-    const std::string resetId = std::string("Reset##") + label;
+    const char* stableLabel = strstr(label, "###");
+    const std::string resetId = stableLabel ?
+        std::string("Reset###Reset##") + (stableLabel + 3) : std::string("Reset##") + label;
     if (ImGui::SmallButton(resetId.c_str()))
     {
         edit.Reset(def);
@@ -555,6 +557,15 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         ImGui::PushItemWidth(std::clamp(ImGui::GetContentRegionAvail().x - 240.0f * menuResScale,
                                       40.0f * menuResScale, 220.0f * menuResScale));
 
+        const auto mainTuningSliderWidth = [&]
+        {
+            const auto& style = ImGui::GetStyle();
+            const float resetWidth = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
+            return StageUi::ResponsiveSliderWidth(ImGui::GetContentRegionAvail().x, menuResScale,
+                                                   resetWidth, ImGui::CalcTextSize("(?)").x,
+                                                   style.ItemSpacing.x);
+        };
+
         const auto renderResampling = [&]
         {
         if (auto resampling = ScopedCollapsingHeader("Advanced resampling##NrResampling"); resampling.IsHeaderOpen())
@@ -650,6 +661,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                    "\n\nRead when the model is built, so a change rebuilds it after a moment. The"
                    "\nnames come from community testing; NVIDIA ships no names in the binaries.");
 
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
         if (basicOwnsMain)
         {
             ImGui::BeginDisabled();
@@ -662,7 +674,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 
         ImGui::BeginDisabled(basicOwnsMain);
         float transfer = uiConfig.DlssNrTransferStrength.value_or_default();
-        if (ImGui::SliderFloat("Detail strength", &transfer, 0.0f, 2.0f, "%.2f"))
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        if (ImGui::SliderFloat("Detail Strength###Detail strength", &transfer, 0.0f, 2.0f, "%.2f"))
             config->DlssNrTransferStrength = transfer;
 
         ImGui::SameLine();
@@ -682,7 +695,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "\nand it decides what to do with it.");
 
         float colour = config->DlssNrColourStrength.value_or_default();
-        if (ImGui::SliderFloat("Colour strength", &colour, 0.0f, 4.0f, "%.2f"))
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        if (ImGui::SliderFloat("Colour Strength###Colour strength", &colour, 0.0f, 4.0f, "%.2f"))
             config->DlssNrColourStrength = colour;
 
         ImGui::SameLine();
@@ -737,12 +751,15 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 
         };
 
-        DeferredSlider("Local structure", &config->DlssNrLocalStructure, 0.0f, 2.0f, 1.0f);
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        DeferredSlider("Local Structure###Local structure", &config->DlssNrLocalStructure, 0.0f, 2.0f, 1.0f);
 
-        DeferredSlider("Local tone", &config->DlssNrLocalTone, 0.0f, 2.0f, 1.0f);
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        DeferredSlider("Local Tone###Local tone", &config->DlssNrLocalTone, 0.0f, 2.0f, 1.0f);
 
 
-        DeferredSlider("Skin structure", &config->DlssNrSkinStructure, -1.0f, 2.0f, -1.0f);
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        DeferredSlider("Skin Structure###Skin structure", &config->DlssNrSkinStructure, -1.0f, 2.0f, -1.0f);
 
         HelpMarker("-1 means follow local structure, and is the model's own default -- it is not a"
                        "\nstrength of zero. 0 and above set skin independently of the rest of the frame.");
@@ -1590,7 +1607,8 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         if (!basic.advanced)
         {
             const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
-                                    float BasicMultipass::Profile::* member, float minimum, float maximum)
+                                    float BasicMultipass::Profile::* member, float minimum, float maximum,
+                                    const char* hint = nullptr)
             {
                 BasicMultipass::Profile original;
                 uint64_t generation;
@@ -1606,10 +1624,15 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 if (DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f, "%d%%", true))
                     if (!BasicMultipass::CommitEdit(*config, original, generation, member, preview.value_or_default()))
                         CancelNrEdits();
+                if (hint) HelpMarker(hint);
             };
             static NrOptional<float> resolution { 1.0f }, model { 1.0f }, detail { 1.0f };
-            slider("Model resolution", "##NrBasicResolution", resolution,
-                   &BasicMultipass::Profile::resolution, 0.25f, 2.0f);
+            slider("Shared Model Resolution (All Passes)", "##NrBasicResolution", resolution,
+                   &BasicMultipass::Profile::resolution, 0.25f, 2.0f,
+                   "Sets one model-raster percentage for Pass 1 and every active additional pass "
+                   "in Basic mode. The composed frame remains full resolution. Releasing commits "
+                   "the shared value and rebuilds changed models; disabling Multipass restores the "
+                   "saved main settings.");
             basic = config->DlssNrBasicMultipass.value_or_default();
             if (basic.resolution > 1.0f)
             {
@@ -1708,13 +1731,13 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 HelpMarker(hint);
                 if (pendingNrEdits[label].Mixed()) ImGui::TextDisabled("%s", mixedHint);
             };
-            sharedSlider("Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
+            sharedSlider("Additional Passes — Model Resolution###Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
                 "Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once.",
                 "Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
-            sharedSlider("Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
+            sharedSlider("Additional Passes — Model Strength###Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
                 "Sets internal model intensity for Pass 2 through the selected final pass. Release to apply and rebuild only changed child models. 100% is default; 0% does not disable model execution. Pass 1 is unchanged.",
                 "Additional pass model strengths are mixed; adjusting this slider applies one value to all of them.");
-            sharedSlider("Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
+            sharedSlider("Additional Passes — Detail Strength###Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
                 "Sets detail blending for Pass 2 through the selected final pass. Release to apply without rebuilding models. 100% is default; 0% hides the detail edit. Pass 1 and colour strength are unchanged.",
                 "Additional pass detail strengths are mixed; adjusting this slider applies one value to all of them.");
         }

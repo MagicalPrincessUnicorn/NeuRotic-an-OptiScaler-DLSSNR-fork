@@ -48,10 +48,10 @@ Assert-Ui ($multipass.Contains('Button("Reset this pass")') -and
            $multipass -match '(?s)ResetPassOptions\(pass\);\s*CancelNrEdits\(\);') 'each selected pass has a confirmed profile reset that cancels pending edits'
 Assert-Ui ($multipass.Contains('Copy Pass %u settings') -and
            $multipass -match '(?s)CopyPassOptions\(PassOptions\(config, index - 1\), pass\);\s*CancelNrEdits\(\);') 'later passes can copy the preceding profile without a stale pending edit overwriting it'
-Assert-Ui ($multipass.Contains('sharedSlider("Model Resolution##AdditionalPassModelResolution"') -and
+Assert-Ui ($multipass.Contains('sharedSlider("Additional Passes — Model Resolution###Model Resolution##AdditionalPassModelResolution"') -and
            $multipass.Contains('for (unsigned int index = 1; index < passCount; ++index)') -and
-           $nr.Contains('const std::string resetId = std::string("Reset##") + label;')) 'additional passes share an optional model-resolution slider without changing pass 1'
-Assert-Ui ($multipass -match '(?s)sharedSlider\("Model Resolution##.*?sharedSlider\("Model Strength##.*?sharedSlider\("Detail Strength##.*?BeginTabBar\("NrMultipassLayers"') 'shared resolution, model strength and detail strength precede child tabs'
+           $nr.Contains('std::string("Reset###Reset##") + (stableLabel + 3)')) 'additional passes share an optional model-resolution slider without changing pass 1 or stable reset identifiers'
+Assert-Ui ($multipass -match '(?s)sharedSlider\("Additional Passes — Model Resolution###.*?sharedSlider\("Additional Passes — Model Strength###.*?sharedSlider\("Additional Passes — Detail Strength###.*?BeginTabBar\("NrMultipassLayers"') 'truthful additional-pass shared controls precede child tabs'
 Assert-Ui ($multipass.Contains('&PassOptionRefs::intensity, 0.0f, 2.0f') -and $multipass.Contains('&PassOptionRefs::transferStrength, 0.0f, 2.0f')) 'shared strengths target independent existing options at zero to two'
 Assert-Ui ($multipass.Contains('Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass.') -and
            $multipass.Contains('releasing commits that percentage to all additional passes and rebuilds them once.')) 'shared model-resolution tooltip clearly describes its all-additional-pass scope and release behavior'
@@ -108,6 +108,15 @@ Assert-Ui ($nr.IndexOf('&enabled, "Enable Neural Rendering"') -lt $nr.IndexOf('S
 Assert-Ui ($nr.Contains('if (StageUi::ResolutionSelection(uiConfig) == 1)') -and
            $stage.Contains('stage == 0 ? 1 : 3, methodHelp, 0.0f, stage == 0')) 'manual slider covers every method and Before retains its fixed visible method'
 Assert-Ui ($nr -match '(?s)TextUnformatted\("Manual resolution"\);\s*HelpMarker\("Sets the Neural Rendering working resolution.*?Reset restores 100%') 'Manual resolution carries an adjacent stage-relative cost and supersampling explanation'
+Assert-Ui ($stage.Contains('440.0f * menuScale') -and
+           ([regex]::Matches($nr, 'SetNextItemWidth\(mainTuningSliderWidth\(\)\)').Count -eq 6)) 'six main tuning sliders use the responsive doubled preferred width'
+foreach ($stableLabel in @('Detail Strength###Detail strength', 'Colour Strength###Colour strength',
+    'Local Structure###Local structure', 'Local Tone###Local tone', 'Skin Structure###Skin structure')) {
+    Assert-Ui ($nr.Contains($stableLabel)) "$stableLabel displays title case while preserving its prior ImGui identifier"
+}
+Assert-Ui ($nr.Contains('Shared Model Resolution (All Passes)') -and
+           $nr.Contains('for Pass 1 and every active additional pass')) 'Basic resolution truthfully describes its all-pass ownership'
+Assert-Ui ($nr.Contains('std::string("Reset###Reset##") + (stableLabel + 3)')) 'capitalized deferred sliders preserve their reset identifiers'
 $diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced")')
 Assert-Ui ($diagnostics -gt $nr.IndexOf('renderReadouts(false);') -and
            $diagnostics -gt $nr.IndexOf('Checkbox("Apply the model"') -and
