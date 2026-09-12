@@ -150,6 +150,7 @@ int main(int argc, char** argv)
     reset(producer.Get(), pa.Get()); // consumer stays completed-but-replayable and owns one slot
     // Provider-token handoff: proxy backbuffer indices can differ from the native
     // DXGI index. Only an exact provider frame may use the explicitly ordered queue.
+    for (auto* targetQueue : {queue.Get(), other.Get()})
     {
         Guides::Bridge handoff; handoff.Enable(true);
         ComPtr<ID3D12CommandAllocator> handoffAllocator;
@@ -160,16 +161,19 @@ int main(int argc, char** argv)
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             true, nullptr, 123);
         const auto packet = handoff.BeginPresent();
+        assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 123)); // not submitted
         submit(producer.Get());
         assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 123)); // not sealed
-        // A new recording seals the submitted producer without waiting on its GPU.
-        Check(producer->Reset(pa.Get(), nullptr));
-        assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 124));
-        assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 32, 8, 123));
-        assert(handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 123));
+        // Cross-queue still needs sealing; DD2's same-queue consumer must work
+        // before the game resets its producer command list.
+        if (targetQueue == other.Get()) Check(producer->Reset(pa.Get(), nullptr));
+        assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 124));
+        assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 32, 8, 123));
+        assert(handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 123));
+        if (targetQueue == queue.Get()) assert(!Safety::Reusable(packet.producer));
         Guides::Inputs handed;
-        assert(handoff.Bind(packet, handoffList.Get(), other.Get(), device.Get(), 0, 16, 8, handed, 123));
-        assert(!handoff.Bind(packet, handoffList.Get(), other.Get(), device.Get(), 0, 16, 8, handed, 123));
+        assert(handoff.Bind(packet, handoffList.Get(), targetQueue, device.Get(), 0, 16, 8, handed, 123));
+        assert(!handoff.Bind(packet, handoffList.Get(), targetQueue, device.Get(), 0, 16, 8, handed, 123));
         for (auto* image : {handed.depth.Get(), handed.motion.Get()})
             transition(handoffList.Get(), image, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                        D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -180,13 +184,15 @@ int main(int argc, char** argv)
                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         Check(handoffList->Close());
         ID3D12CommandList* handedLists[] = {handoffList.Get()};
-        other->ExecuteCommandLists(1, handedLists);
+        targetQueue->ExecuteCommandLists(1, handedLists);
         assert(Safety::Drain(5000));
         Check(readback->Map(0, nullptr, reinterpret_cast<void**>(&data)));
         for (UINT y = 0; y < 4; ++y)
             for (UINT x = 0; x < 8; ++x) assert(data[y * 64 + x] == float(y * 64 + x) / 1024.0f);
         readback->Unmap(0, nullptr);
-        Check(producer->Close()); reset(producer.Get(), pa.Get());
+        if (targetQueue == queue.Get()) assert(!Safety::Reusable(packet.producer));
+        else Check(producer->Close());
+        reset(producer.Get(), pa.Get());
     }
     assert(!bind(bridge.BeginPresent(), inputs)); // no previous-frame reuse
     capture(); capture(); selected = bridge.BeginPresent();

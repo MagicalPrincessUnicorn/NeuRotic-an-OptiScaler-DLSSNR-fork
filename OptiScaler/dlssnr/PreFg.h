@@ -22,6 +22,23 @@ struct Frame
     bool outputSubmitted = false;
     uint64_t providerGeneration = 0;
     bool (*prepareInputs)(const Frame&) = nullptr;
+    bool allowOutput = true;
+};
+// Keep the game's original image visible while private model initialization and
+// frame admission settle. A failure restarts qualification, never reuses output.
+class StartupGate
+{
+    unsigned int successful = 0;
+  public:
+    static constexpr unsigned int required = 8;
+    bool Ready() const { return successful >= required; }
+    unsigned int Count() const { return successful; }
+    void Reset() { successful = 0; }
+    void Observe(bool validModelAndPresent)
+    {
+        if (!validModelAndPresent) Reset();
+        else if (successful < required) ++successful;
+    }
 };
 // Present-scoped provenance only; zero outside the provider's synchronous call.
 // An asynchronous provider must supply its own token mapping, never inherit this by time proximity.
@@ -163,6 +180,9 @@ class Owner final : public IUnknown
     bool lastFg = false;
     uint64_t providerGeneration = 0;
     double previousPresentMs = 0.0;
+    StartupGate startup;
+    unsigned int startupRoute = 0;
+    uint64_t startupResume = 0;
     explicit Owner(ID3D12CommandQueue* value) : queue(value) { ++State().swapchains; }
     ~Owner() { --State().swapchains; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override

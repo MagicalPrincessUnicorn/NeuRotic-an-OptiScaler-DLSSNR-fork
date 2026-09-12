@@ -7,6 +7,39 @@
 int main()
 {
     using namespace DlssNr::PreFg;
+    StartupGate startup;
+    assert(!startup.Ready());
+    // The observed startup had short success bursts interspersed with refusals.
+    for (int burst = 1; burst <= 7; ++burst)
+    {
+        for (int i = 0; i < burst; ++i) { assert(!startup.Ready()); startup.Observe(true); }
+        assert(!startup.Ready()); startup.Observe(false);
+    }
+    for (unsigned int i = 0; i < StartupGate::required; ++i)
+    { assert(!startup.Ready()); startup.Observe(true); }
+    assert(startup.Ready());
+    for (int i = 0; i < 1000; ++i) startup.Observe(true);
+    assert(startup.Count() == StartupGate::required);
+    startup.Observe(false); assert(!startup.Ready()); // token/model/Present failure
+    startup.Observe(true); startup.Reset(); assert(!startup.Count()); // route/resize/off/provider change
+    // Exact success/refusal runs from DD2 session 378c3ac68c034ac3bfc4e77f3848281d
+    // (68d7b76f, 523 Image Only attempts). Positive = successful model/output;
+    // negative = initialization/token refusal. Replay does not predict new GPU timing.
+    const int capturedRuns[] = {-7,1,-6,1,-5,1,-4,1,-3,1,-3,1,-2,1,-2,1,-2,1,-2,1,-2,1,
+        -3,1,-2,1,-2,2,-3,2,-2,2,-2,2,-2,3,-2,4,-2,6,-2,429};
+    unsigned int attempts = 0, published = 0, transitions = 0;
+    bool previousPublished = false;
+    for (int run : capturedRuns)
+        for (int i = 0; i < (run < 0 ? -run : run); ++i)
+        {
+            ++attempts;
+            const bool publish = startup.Ready() && run > 0;
+            if (publish) { ++published; assert(attempts >= 103); }
+            if (publish != previousPublished) ++transitions;
+            previousPublished = publish;
+            startup.Observe(run > 0);
+        }
+    assert(attempts == 523 && published == 421 && transitions == 1);
     Ledger ledger;
     assert(!ledger.Claim().valid);
     ledger.Constants(0, 0);

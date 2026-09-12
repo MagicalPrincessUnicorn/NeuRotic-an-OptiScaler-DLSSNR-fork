@@ -278,11 +278,20 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
 {
     if (!ticket || !consumer) return false;
     std::lock_guard lock(State().mutex);
-    if (State().failed || ticket->failed || !ticket->sealed || ticket->submissions != 1 || ticket->points.size() != 1)
+    if (State().failed || ticket->failed || ticket->submissions != 1 || ticket->points.size() != 1)
         return false;
     const auto& point = ticket->points.front();
     if (point.timeline->fence->GetCompletedValue() == UINT64_MAX) return false;
-    if (Get<Timeline>(NativeObject(consumer), timelineGuid) == point.timeline) return true;
+    if (Get<Timeline>(NativeObject(consumer), timelineGuid) == point.timeline)
+    {
+        // Already submitted on this queue: later consumer work follows the producer.
+        // Reset/destruction seals recording lifetime, not queue submission order.
+        // Reusable/Readable still require sealing; observed replay still refuses.
+        NR_FRAME_TRACE("nr-guide-same-queue-order", "queue={:p} fence={:p} value={} sealed={}",
+            static_cast<void*>(consumer), static_cast<void*>(point.timeline->fence.Get()), point.value, ticket->sealed);
+        return true;
+    }
+    if (!ticket->sealed) return false; // cross-queue replay cannot be ordered by this fence alone
     if (consumer->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
     ComPtr<ID3D12Device> producerDevice, consumerDevice;
     if (FAILED(point.timeline->fence->GetDevice(IID_PPV_ARGS(&producerDevice))) ||

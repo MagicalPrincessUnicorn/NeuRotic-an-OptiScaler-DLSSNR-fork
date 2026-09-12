@@ -1140,6 +1140,26 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
+    if (preFgFrame && !preFgFrame->allowOutput)
+    {
+        const UINT64 signal = g_present.nextFence++;
+        if (SUCCEEDED(queue->Signal(g_present.fence.Get(), signal)))
+        {
+            slot.completion = signal;
+            slot.completionObserved = false;
+            RecordSubmission(signal);
+            identity.modelPrepared = true;
+        }
+        else
+            g_present.completionUntrackable = true;
+        // No full-frame tag change, copyback, or output-history advancement.
+        // Reuse stays gated by the normal completion fence and recording lifetime.
+        NR_FRAME_TRACE("nr-startup-private-model", "token={} prepared={} fence={}",
+            preFgFrame->key, identity.modelPrepared, signal);
+        SetFallback(api, "Waiting for the selected route. Image unchanged.");
+        return identity;
+    }
+
     const bool providerReady = !preFgFrame || !preFgFrame->prepareInputs ||
         preFgFrame->prepareInputs(*preFgFrame);
     if (!providerReady || FAILED(slot.compositeAllocator->Reset()) ||
@@ -1260,6 +1280,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     ++g_present.telemetry.modelEvaluations;
     ++g_present.telemetry.compositeEvaluations;
     identity.completedOutput = true;
+    identity.modelPrepared = true;
     g_present.telemetry.active = true;
     g_present.telemetry.failed = false;
     if (g_present.telemetry.consecutiveFallbacks != 0)

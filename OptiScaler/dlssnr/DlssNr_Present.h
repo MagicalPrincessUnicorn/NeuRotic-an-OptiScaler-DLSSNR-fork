@@ -70,6 +70,9 @@ struct PresentCallIdentity
     // Set only after the complete private output path has reached the game backbuffer.  The original
     // Present result decides whether this frame may become temporal history for the next one.
     bool completedOutput = false;
+    // Successful model recording/submission with a tracked completion signal;
+    // warmup can prepare work without publishing it or clearing the game's FG tags.
+    bool modelPrepared = false;
 };
 
 struct PresentCallTimingSample

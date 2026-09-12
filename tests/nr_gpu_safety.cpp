@@ -37,6 +37,7 @@ int main()
 
     auto abandoned = Safety::Record(list.Get());
     assert(!Safety::OrderBefore(abandoned, otherQueue.Get()));
+    assert(!Safety::OrderBefore(abandoned, queue.Get()));
     assert(!Safety::OrderedOn(abandoned, queue.Get()));
     assert(abandoned && !Safety::Reusable(abandoned) && !Safety::Drain(0));
     Check(list->Close());
@@ -52,6 +53,8 @@ int main()
     bool replacementSessionCreated = false;
     Check(list->Close());
     submit(queue.Get());
+    assert(Safety::OrderBefore(pending, queue.Get())); // submitted, GPU blocked, not Reset
+    assert(!Safety::Reusable(pending) && !Safety::Readable(pending)); // ordering does not retire work
     assert(!Safety::OrderBefore(pending, otherQueue.Get())); // unsealed lists could replay
     Check(list->Reset(nextAllocator.Get(), nullptr)); // list Reset is legal while old work runs
     assert(Safety::OrderedOn(pending, queue.Get())); // GPU need not be CPU-complete
@@ -91,6 +94,7 @@ int main()
     submit(queue.Get());
     Check(list->Reset(allocator.Get(), nullptr));
     assert(!Safety::OrderedOn(replay, queue.Get()));
+    assert(!Safety::OrderBefore(replay, queue.Get())); // observed replay still fails same-queue admission
     assert(!Safety::Reusable(replay) && !Safety::Drain(0));
     Check(gate->Signal(2));
     assert(Safety::Drain(5000) && Safety::Reusable(replay));

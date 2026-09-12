@@ -142,10 +142,18 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         State().ledger.Reset();
         owner->lastFg = fg;
         owner->providerGeneration = provider.generation;
+        owner->startup.Reset();
     }
     auto frame = Claim();
     frame.providerGeneration = provider.generation;
-    const bool requested = config->GetDlssNrRuntimeSnapshot().enabled && config->DlssNrRoute.value_or_default() != 0;
+    const auto runtime = config->GetDlssNrRuntimeSnapshot();
+    const unsigned int route = config->DlssNrRoute.value_or_default();
+    const bool requested = runtime.enabled && route != 0;
+    if (!requested || !fg || route != owner->startupRoute || runtime.resumeGeneration != owner->startupResume)
+        owner->startup.Reset();
+    owner->startupRoute = route;
+    owner->startupResume = runtime.resumeGeneration;
+    if (fg) frame.allowOutput = owner->startup.Ready();
     if (fg)
     {
         if (!provider.known || !provider.supported || ::State::Instance().activeFgOutput != FGOutput::NoFG ||
@@ -173,6 +181,13 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     // Streamline. Its normal presenting-queue dependency orders the FG read after NR.
     ForwardFrame providerScope(frame);
     const HRESULT result = forward();
+    if (fg && requested)
+    {
+        owner->startup.Observe(frame.valid && identity.modelPrepared && SUCCEEDED(result));
+        NR_FRAME_TRACE("nr-startup-admission", "token={} modelPrepared={} outputAllowed={} outputSubmitted={} "
+            "qualified={} required={}", frame.key, identity.modelPrepared, frame.allowOutput,
+            identity.completedOutput, owner->startup.Count(), StartupGate::required);
+    }
     const double end = Util::MillisecondsNow();
     ReportPresentCallTiming({identity, interval, beforeProvider - start, end - start, end - beforeProvider, result});
     if (frame.sequence <= 4 || frame.sequence % 120 == 0)
@@ -197,6 +212,7 @@ inline HRESULT STDMETHODCALLTYPE Resize(IDXGISwapChain* chain, UINT count, UINT 
     auto owner = GetOwner(chain);
     std::unique_lock<std::recursive_mutex> ownerLock;
     if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
+    if (owner) owner->startup.Reset();
     Invalidate();
     PresentGuides::Instance().Enable(false);
     ReportPresentUnavailable(PresentApi::D3D12, "Present target changed");
@@ -208,6 +224,7 @@ inline HRESULT STDMETHODCALLTYPE Resize1(IDXGISwapChain3* chain, UINT count, UIN
     auto owner = GetOwner(chain);
     std::unique_lock<std::recursive_mutex> ownerLock;
     if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
+    if (owner) owner->startup.Reset();
     Invalidate();
     PresentGuides::Instance().Enable(false);
     ReportPresentUnavailable(PresentApi::D3D12, "Present target changed");
