@@ -1,6 +1,7 @@
 #include <pch.h>
 #include "DlssNr_Dx11.h"
 #include "DlssNr_Dx11Transport.h"
+#include "NrNativeDx11OutputContract.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
 #include <with_dx12/with_dx12.h>
@@ -290,10 +291,13 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     const bool outputBackingMatches = s.nativePreSr
         ? outputDesc.Width >= s.outWidth && outputDesc.Height >= s.outHeight
         : outputDesc.Width == s.outWidth && outputDesc.Height == s.outHeight;
-    if (outputX || outputY || !outputBackingMatches ||
-        s.outWidth != chainDesc.Width || s.outHeight != chainDesc.Height ||
-        !Dx11Transport::SupportedShape(outputDesc))
-    { s.Reject("partial/ambiguous output does not match the full Present target"); return; }
+    const auto outputContract = ValidateOutputContract(s.nativePostSr || s.nativePreSr,
+        outputX, outputY, outputBackingMatches, Dx11Transport::SupportedShape(outputDesc),
+        s.outWidth, s.outHeight, chainDesc.Width, chainDesc.Height);
+    if (outputContract == OutputContractResult::PartialOrUnsupported)
+    { s.Reject("native output texture/subrect is partial or unsupported"); return; }
+    if (outputContract == OutputContractResult::PresentTargetMismatch)
+    { s.Reject("native output does not match the full Present target"); return; }
     s.frame = {};
     s.frame.RenderSubrectWidth = s.width; s.frame.RenderSubrectHeight = s.height;
     p->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &s.frame.RenderSubrectWidth);

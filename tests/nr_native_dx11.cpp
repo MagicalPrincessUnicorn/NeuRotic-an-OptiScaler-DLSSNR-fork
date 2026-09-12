@@ -2,6 +2,7 @@
 #include "../OptiScaler/dlssnr/NrGpuSafety.cpp"
 #include "../OptiScaler/dlssnr/DlssNr_Dx11Transport.h"
 #include "../OptiScaler/dlssnr/DlssNr_PresentGuides.h"
+#include "../OptiScaler/dlssnr/NrNativeDx11OutputContract.h"
 #include <d3d11sdklayers.h>
 #include <d3d12sdklayers.h>
 #include <cassert>
@@ -32,6 +33,18 @@ static void Barrier(ID3D12GraphicsCommandList* list, ID3D12Resource* r,
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout,nullptr,_IONBF,0);
+    using OutputResult = DlssNr::NativeDx11::OutputContractResult;
+    using DlssNr::NativeDx11::ValidateOutputContract;
+    assert(ValidateOutputContract(true,0,0,true,true,2560,1440,3840,2160)==OutputResult::Accepted);
+    assert(ValidateOutputContract(false,0,0,true,true,2560,1440,3840,2160)==
+        OutputResult::PresentTargetMismatch);
+    assert(ValidateOutputContract(false,0,0,true,true,3840,2160,3840,2160)==OutputResult::Accepted);
+    assert(ValidateOutputContract(true,1,0,true,true,2560,1440,3840,2160)==
+        OutputResult::PartialOrUnsupported);
+    assert(ValidateOutputContract(true,0,0,false,true,2560,1440,3840,2160)==
+        OutputResult::PartialOrUnsupported);
+    assert(ValidateOutputContract(true,0,0,true,false,2560,1440,3840,2160)==
+        OutputResult::PartialOrUnsupported);
     const bool hardware = argc > 1 && std::strcmp(argv[1], "--hardware") == 0;
     ComPtr<ID3D12Debug> debug12;
     const bool debug = SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug12)));
