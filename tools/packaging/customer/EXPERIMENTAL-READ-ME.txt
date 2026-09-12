@@ -1,0 +1,40 @@
+NEUROTIC - COHERENT NR EXPERIMENTAL REVIEW
+
+Keep experimental. This matched folder is for review and separately authorized
+runtime testing. It is not a release, stable promotion or selected public candidate.
+Source identity and binary hashes are in support\PACKAGE-MANIFEST.json and
+support\BUILD-MANIFEST.json. Keep this complete folder outside the game folder.
+No archive extraction or Downloads location is required.
+
+RUNTIME LIMITS
+Native Temporal, Present Image Only and Present Enhanced expose screenshot
+comparisons. Native display conversion has a known defect: brightness may differ.
+No brightness correction is applied. Performance comparisons use temporary DLSS
+evaluations with fresh history; they do not reproduce accumulated live history.
+Present Enhanced image quality and combined FG/RR/Multipass behavior still require
+runtime testing. Unsupported resource or provider contracts are refused.
+
+FUTURE AUTHORIZED INSTALLATION
+Close the game. Run NeuRotic-Setup.cmd and select the actual game executable and
+proxy filename. Read the detected-file decision before proceeding: selecting a
+free filename installs immediately. Existing settings are preserved; selecting
+ReShade compatibility explicitly enables its setting. Fresh installations use
+the unchanged integration INI recorded in the build manifest.
+
+The private nvngx_dlssnr.dll model is not included. Preserve or supply your own
+model before enabling NR. The included nvngx.dll_dlssnr.dll is the forwarder,
+not the model. Dependency files and redistribution licenses are included.
+
+UNINSTALL AND RECOVERY
+Run NeuRotic-Uninstall.cmd for the same game, or the installed
+"Uninstall NeuRotic.cmd". Recommended Keep Settings restores the original game
+files and retains NeuRotic settings for reinstall. The private model is preserved.
+For an interrupted uninstall, run the uninstaller again and choose recovery first.
+Keep its recovery folders until recovery completes. Setup also retains Restore.cmd
+inside each verified backup folder for exact rollback.
+
+The installer verifies ownership and restore history, refuses linked paths,
+supports repeated proxy changes and recovers interrupted operations. It never
+infers ownership from a DLL filename alone. This package was prepared without
+deploying to a real game. See the accompanying review report for fixture evidence
+and the runtime acceptance matrix before planning a game test.

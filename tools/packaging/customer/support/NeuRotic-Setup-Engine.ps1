@@ -979,7 +979,9 @@ $modelPath = SafePath $gameDir 'nvngx_dlssnr.dll'
 if (Test-Path -LiteralPath $modelPath -PathType Leaf) { $preserved += @{path='nvngx_dlssnr.dll';sha256=(HashFile $modelPath)} }
 
 Write-Output ''
-Write-Output ('NeuRotic - Candidate ' + $manifest.commit.Substring(0,8))
+$identityLabel = if ($manifest.PSObject.Properties.Name -contains 'lifecycle' -and
+    $manifest.lifecycle -eq 'experimental-review') { 'Experimental Review ' } else { 'Candidate ' }
+Write-Output ('NeuRotic - ' + $identityLabel + $manifest.commit.Substring(0,8))
 Write-Output "Game: $GameExecutable"
 Write-Output "Install target: $ProxyName"
 if ($oldProxyTransition) { Write-Output "Proxy change: restore/remove managed $changingFromProxy, then install as $ProxyName in one rollback transaction." }

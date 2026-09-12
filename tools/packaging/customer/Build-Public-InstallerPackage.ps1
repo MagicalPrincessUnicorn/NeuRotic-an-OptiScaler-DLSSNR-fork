@@ -66,7 +66,8 @@ foreach ($name in $licenseSources.Keys) {
 
 CopyRequired (Join-Path $templateRoot 'NeuRotic-Setup.cmd') (Join-Path $OutputDirectory 'NeuRotic-Setup.cmd')
 CopyRequired (Join-Path $templateRoot 'NeuRotic-Uninstall.cmd') (Join-Path $OutputDirectory 'NeuRotic-Uninstall.cmd')
-CopyRequired (Join-Path $templateRoot 'READ ME.txt') (Join-Path $OutputDirectory 'READ ME.txt')
+$readmeName = if ($ExperimentalReview) { 'EXPERIMENTAL-READ-ME.txt' } else { 'READ ME.txt' }
+CopyRequired (Join-Path $templateRoot $readmeName) (Join-Path $OutputDirectory 'READ ME.txt')
 CopyRequired (Join-Path $templateRoot 'support\NeuRotic-Setup-Engine.ps1') (Join-Path $support 'NeuRotic-Setup-Engine.ps1')
 CopyRequired (Join-Path $templateRoot 'support\TESTING.txt') (Join-Path $support 'TESTING.txt')
 CopyRequired $BuildManifest (Join-Path $support 'BUILD-MANIFEST.json')
