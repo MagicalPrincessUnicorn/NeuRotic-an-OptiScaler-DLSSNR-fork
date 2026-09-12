@@ -1,4 +1,5 @@
 #include "../OptiScaler/dlssnr/PreFg.h"
+#include "../OptiScaler/dlssnr/NativeFeatureRegistry.h"
 #include <cassert>
 #include <cstdio>
 #include <thread>
@@ -7,6 +8,27 @@
 int main()
 {
     using namespace DlssNr::PreFg;
+    DlssNr::NativeFeatureRegistry<unsigned int> features;
+    features.Set(77, 11);
+    const auto oldFeature = features.Read(77);
+    assert(!features.Released(77, oldFeature, false) && features.Has(11));
+    features.Set(77, 11);
+    assert(!features.Released(77, oldFeature, true));
+    assert(features.Released(77, features.Read(77), true) && !features.Has(11));
+    std::vector<std::thread> registryWorkers;
+    for (unsigned int thread = 0; thread < 8; ++thread)
+        registryWorkers.emplace_back([&, thread] {
+            for (unsigned int i = 0; i < 2000; ++i)
+            {
+                features.Set(thread, i % 2 ? 11 : 13);
+                const auto entry = features.Read(thread);
+                assert(entry && features.Has(entry.feature));
+                assert(!features.Released(thread, entry, false));
+                assert(features.Released(thread, entry, true));
+            }
+        });
+    for (auto& thread : registryWorkers) thread.join();
+    assert(!features.Has(11) && !features.Has(13));
     StartupGate startup;
     assert(!startup.Ready());
     // The observed startup had short success bursts interspersed with refusals.
@@ -111,6 +133,13 @@ int main()
     assert(replacementInstance > firstNativeInstance && nativeFg.Read().generation > firstNativeGeneration);
     assert(!nativeFg.Release(77, firstNativeInstance));
     assert(nativeFg.Release(77, replacementInstance) && nativeFg.Read().active == 0);
+    assert(!nativeFg.Release(0, 0));
+    NativeFgState overflow;
+    std::array<uint64_t, 8> instances {};
+    for (uintptr_t i = 0; i < instances.size(); ++i) instances[i] = overflow.Create(i + 1);
+    assert(!overflow.Create(9));
+    for (uintptr_t i = 0; i < 7; ++i) assert(overflow.Release(i + 1, instances[i]));
+    assert(overflow.Read().active != 1 && !overflow.Read().instance);
 
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter> warp;
@@ -123,6 +152,18 @@ int main()
     auto* resourceA = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x1000));
     auto* resourceB = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x2000));
     CompletionLedger completions;
+    assert(!completions.Reserve(resourceA, 3, 4, 5, 0, 1));
+    assert(!completions.Reserve(resourceA, 3, 4, 5, 1, 0));
+    // A claimed packet must not disappear while its GPU copyback is outstanding.
+    const auto duplicateReservation = completions.Reserve(resourceA, 3, 4, 5, 1, 1);
+    assert(completions.Commit(duplicateReservation, resourceA, fence.Get(), 1));
+    assert(completions.Claim(resourceA, 3, 4, 5).result == CompletionClaimResult::Ready);
+    assert(completions.Claim(resourceA, 3, 4, 5).result == CompletionClaimResult::Refused);
+    completions.Reset();
+    assert(completions.Claim(resourceA, 4, 4, 5).result == CompletionClaimResult::Refused);
+    assert(!completions.Reserve(resourceA, 4, 4, 5, 2, 2));
+    assert(SUCCEEDED(fence->Signal(1)));
+    completions.Reset();
     const auto reservation = completions.Reserve(resourceA, 3, 4, 5, 6, 7);
     assert(reservation && !completions.Reserve(resourceA, 3, 4, 5, 8, 9));
     assert(!completions.Commit(reservation, resourceB, fence.Get(), 1));
@@ -135,12 +176,100 @@ int main()
     const auto ready = completions.Claim(resourceA, 3, 4, 5);
     assert(ready.result == CompletionClaimResult::Ready && ready.dependency.fence.Get() == fence.Get() &&
            ready.dependency.value == 2 && ready.dependency.token == 8 && ready.dependency.sequence == 9);
-    assert(completions.Claim(resourceA, 3, 4, 5).result == CompletionClaimResult::None);
+    assert(completions.Claim(resourceA, 3, 4, 5).result == CompletionClaimResult::Refused);
+    assert(!completions.Reserve(resourceA, 3, 4, 5, 10, 10));
+    assert(SUCCEEDED(fence->Signal(2)));
+    completions.Reset();
+    std::array<uint64_t, 8> pendingReservations {};
     for (uintptr_t i = 1; i <= 8; ++i)
-        assert(completions.Reserve(reinterpret_cast<ID3D12Resource*>(i), 3, 4, 5, i, i));
+    {
+        pendingReservations[i - 1] = completions.Reserve(reinterpret_cast<ID3D12Resource*>(i), 3, 4, 5, i, i);
+        assert(pendingReservations[i - 1]);
+    }
     assert(!completions.Reserve(reinterpret_cast<ID3D12Resource*>(9), 3, 4, 5, 9, 9));
     completions.Reset();
+    assert(completions.Count() == 8); // uncommitted may already have submitted a copyback
+    for (auto id : pendingReservations) completions.Cancel(id);
     assert(completions.Count() == 0);
+
+    // Publication racing invalidation retains the fence, but refuses the old frame.
+    const auto invalidated = completions.Reserve(resourceA, 3, 4, 5, 12, 12);
+    completions.Reset();
+    assert(!completions.Commit(invalidated, resourceA, fence.Get(), 3));
+    assert(completions.Claim(resourceA, 4, 4, 5).result == CompletionClaimResult::Refused);
+    assert(SUCCEEDED(fence->Signal(3)));
+    assert(completions.Claim(resourceA, 4, 4, 5).result == CompletionClaimResult::None);
+    const auto skipped = completions.Reserve(resourceA, 4, 4, 5, 13, 13);
+    assert(!completions.Commit(skipped, resourceA, fence.Get(), UINT64_MAX));
+    assert(completions.Commit(skipped, resourceA, fence.Get(), 3));
+    assert(!completions.Reserve(resourceA, 4, 4, 5, 13, 13));
+    const auto recovered = completions.Reserve(resourceA, 4, 4, 5, 14, 14);
+    assert(recovered); // fresh real frame recovers when FG skipped the prior one
+    completions.Cancel(recovered);
+
+    PublishProvider(true, true);
+    PublishNativeFgCreated(77);
+    Frame current;
+    current.providerGeneration = Provider().generation;
+    current.nativeFgGeneration = NativeFg().generation;
+    current.nativeFgInstance = NativeFg().instance;
+    current.key = current.sequence = 1;
+    PublishProvider(false, false);
+    assert(!ReserveCompletion(resourceA, current)); // stale snapshot cannot republish after reset
+    PublishProvider(true, true);
+    current.providerGeneration = Provider().generation;
+    PublishNativeFgCreated(77);
+    assert(!ReserveCompletion(resourceA, current)); // same handle, different instance
+    current.nativeFgGeneration = NativeFg().generation;
+    current.nativeFgInstance = NativeFg().instance;
+    const auto live = ReserveCompletion(resourceA, current);
+    assert(live && CommitCompletion(live, resourceA, fence.Get(), 4));
+    std::atomic<unsigned int> claims {0}, refusals {0};
+    workers.clear();
+    for (int i = 0; i < 16; ++i)
+        workers.emplace_back([&] {
+            const auto result = ClaimCompletion(resourceA, current.providerGeneration, 77).result;
+            if (result == CompletionClaimResult::Ready) ++claims;
+            if (result == CompletionClaimResult::Refused) ++refusals;
+        });
+    for (auto& worker : workers) worker.join();
+    assert(claims == 1 && refusals == 15);
+    PublishNativeFgReleased(77, current.nativeFgInstance);
+    assert(ClaimCompletion(resourceA, current.providerGeneration, 77).result == CompletionClaimResult::Refused);
+    assert(SUCCEEDED(fence->Signal(4)));
+    ResetCompletions();
+
+    // NR Off must resume unmodified FG input without changing provider options,
+    // recreating FG, or reserving another NR frame. Exercise both claimed and
+    // skipped FG packets across repeated Off/On cycles with delayed producers.
+    PublishNativeFgCreated(77);
+    current.nativeFgGeneration = NativeFg().generation;
+    current.nativeFgInstance = NativeFg().instance;
+    const auto steadyProvider = Provider();
+    const auto steadyNative = NativeFg();
+    for (uint64_t cycle = 0; cycle < 32; ++cycle)
+    {
+        current.key = current.sequence = cycle + 100;
+        const auto signalValue = cycle + 5;
+        for (auto* resource : {resourceA, resourceB})
+        {
+            const auto packet = ReserveCompletion(resource, current);
+            assert(packet && CommitCompletion(packet, resource, fence.Get(), signalValue));
+        }
+        assert(ClaimCompletion(resourceA, current.providerGeneration, 77).result == CompletionClaimResult::Ready);
+        ResetCompletions(); // production disabled-request Present boundary
+        ResetCompletions(); // repeated disabled Present cannot drop unfinished work
+        for (auto* resource : {resourceA, resourceB})
+            assert(ClaimCompletion(resource, current.providerGeneration, 77).result == CompletionClaimResult::Refused);
+        assert(SUCCEEDED(fence->Signal(signalValue)));
+        for (auto* resource : {resourceA, resourceB})
+            for (int frame = 0; frame < 16; ++frame)
+                assert(ClaimCompletion(resource, current.providerGeneration, 77).result == CompletionClaimResult::None);
+        assert(!PendingCompletions());
+        assert(Provider().generation == steadyProvider.generation);
+        assert(NativeFg().generation == steadyNative.generation && NativeFg().instance == steadyNative.instance);
+    }
+    std::puts("NR Off/On: delayed completion retained, original FG resumed, unchanged provider, 32 cycles PASS");
     Frame outer, inner;
     outer.key = 123; inner.key = 124;
     assert(!forwardingFrame);

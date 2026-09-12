@@ -3,6 +3,7 @@
 #include <dlssnr/PreFg.h>
 #include <dlssnr/FgLifecycle.h>
 #include <dlssnr/NrGpuSafety.h>
+#include <dlssnr/NativeFeatureRegistry.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -32,7 +33,9 @@
 #include <misc/IdentifyGpu.h>
 
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Dx12>> Dx12Contexts;
-static std::unordered_map<unsigned int, NVSDK_NGX_Feature> HandleToFeature;
+static DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature> HandleToFeature;
+static std::mutex ngxObservationMutex;
+static std::mutex fgObservationMutex;
 static ID3D12Device* D3D12Device = nullptr;
 
 static const char* NgxFeatureName(NVSDK_NGX_Feature feature)
@@ -83,6 +86,7 @@ static std::unordered_map<unsigned int, NgxEvaluationTraceObservation> NgxEvalua
 static void LogNgxEvaluationTrace(unsigned int handleId, bool tracked, NVSDK_NGX_Feature feature)
 {
     const NgxEvaluationTraceObservation observed { tracked, feature };
+    std::lock_guard lock(ngxObservationMutex);
     const auto it = NgxEvaluationTraceObservations.find(handleId);
     if (it != NgxEvaluationTraceObservations.end() && it->second.tracked == observed.tracked &&
         it->second.feature == observed.feature)
@@ -143,6 +147,7 @@ static void LogNrPipelineObservation(unsigned int handleId, NVSDK_NGX_Feature fe
         observed.outputHeight = desc.Height;
     }
 
+    std::lock_guard lock(ngxObservationMutex);
     const auto it = NrPipelineObservations.find(handleId);
     if (it != NrPipelineObservations.end() && it->second.feature == observed.feature &&
         it->second.preSr == observed.preSr && it->second.inputWidth == observed.inputWidth &&
@@ -908,10 +913,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 
         NVSDK_NGX_Result res = Nvngx_FG::D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, OutHandle);
 
-        if (*OutHandle)
+        if (res == NVSDK_NGX_Result_Success && *OutHandle)
         {
             LOG_INFO("Created modded DLSSG feature with HandleId: {}", (*OutHandle)->Id);
-            HandleToFeature[(*OutHandle)->Id] = InFeatureID;
+            HandleToFeature.Set((*OutHandle)->Id, InFeatureID);
         }
 
         LogNgxCreateTrace(InFeatureID, "DLSSG replacement", res, *OutHandle);
@@ -936,10 +941,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
             if (diagnosticFg && res == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
                 DlssNr::PreFg::PublishNativeFgCreated((*OutHandle)->Id);
 
-            if (*OutHandle)
+            if (res == NVSDK_NGX_Result_Success && *OutHandle)
             {
                 LOG_INFO("Native CreateFeature success, HandleId: {}", (*OutHandle)->Id);
-                HandleToFeature[(*OutHandle)->Id] = InFeatureID;
+                HandleToFeature.Set((*OutHandle)->Id, InFeatureID);
             }
             else
             {
@@ -961,7 +966,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 
     if (tryResult == NVSDK_NGX_Result_Success)
     {
-        HandleToFeature[(*OutHandle)->Id] = InFeatureID;
+        if (*OutHandle) HandleToFeature.Set((*OutHandle)->Id, InFeatureID);
         if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
         {
             LOG_INFO("DLSS-NR: native mode-aware RR feature created; active reconstruction follows evaluation");
@@ -988,25 +993,25 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
 
     auto handleId = InHandle->Id;
 
-    const auto featureIt = HandleToFeature.find(handleId);
-    const NVSDK_NGX_Feature releasedFeature =
-        featureIt != HandleToFeature.end() ? featureIt->second : (NVSDK_NGX_Feature) 0;
+    const auto featureSnapshot = HandleToFeature.Read(handleId);
+    const NVSDK_NGX_Feature releasedFeature = featureSnapshot.feature;
     const auto diagnosticInstance = DlssNr::FgLifecycle::Find(handleId);
     const auto nativeFgInstance = DlssNr::PreFg::NativeFgInstance(handleId);
     const bool diagnosticFg = releasedFeature == NVSDK_NGX_Feature_FrameGeneration || diagnosticInstance != 0;
-    NrPipelineObservations.erase(handleId);
-    NgxEvaluationTraceObservations.erase(handleId);
-    if (featureIt != HandleToFeature.end())
-        HandleToFeature.erase(featureIt);
-
-    if (releasedFeature == NVSDK_NGX_Feature_RayReconstruction)
-    {
-        const bool anotherRrFeatureActive =
-            std::any_of(HandleToFeature.begin(), HandleToFeature.end(), [](const auto& pair) {
-                return pair.second == NVSDK_NGX_Feature_RayReconstruction;
-            });
-        DlssNr::SetNativeRayReconstructionActive(anotherRrFeatureActive);
-    }
+    const auto finishRelease = [&](NVSDK_NGX_Result result) {
+        if (HandleToFeature.Released(handleId, featureSnapshot, result == NVSDK_NGX_Result_Success))
+        {
+            {
+                std::lock_guard lock(ngxObservationMutex);
+                NrPipelineObservations.erase(handleId);
+                NgxEvaluationTraceObservations.erase(handleId);
+            }
+            if (releasedFeature == NVSDK_NGX_Feature_RayReconstruction &&
+                !HandleToFeature.Has(NVSDK_NGX_Feature_RayReconstruction))
+                DlssNr::SetNativeRayReconstructionActive(false);
+        }
+        return result;
+    };
 
     // A replacement can retain the same dimensions and preset. Treat release of either feature
     // that owns the NR seam as a continuity break; unrelated NGX features must not perturb NR.
@@ -1046,7 +1051,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
             if (!shutdown)
                 LOG_INFO("D3D12_ReleaseFeature result for ({0}): {1:X}", handleId, (UINT) result);
 
-            return result;
+            return finishRelease(result);
         }
         else
         {
@@ -1063,7 +1068,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     else if (State::Instance().activeFgNvngx != FGNvngxReplacement::None && handleId >= NVNGX_PROVIDER_ID_OFFSET)
     {
         LOG_INFO("D3D12_ReleaseFeature modded DLSSG with HandleId: {0}", handleId);
-        return Nvngx_FG::D3D12_ReleaseFeature(InHandle);
+        return finishRelease(Nvngx_FG::D3D12_ReleaseFeature(InHandle));
     }
 
     // Remove feature from context map
@@ -1088,7 +1093,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
             LOG_ERROR("can't release feature with id {0}!", handleId);
     }
 
-    return NVSDK_NGX_Result_Success;
+    return finishRelease(NVSDK_NGX_Result_Success);
 }
 
 /**
@@ -1296,9 +1301,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         return NVSDK_NGX_Result_FAIL_FeatureNotFound;
     }
 
-    if (!InCmdList)
+    if (!InCmdList || !InParameters)
     {
-        LOG_ERROR("InCmdList is null");
+        LOG_ERROR("NGX evaluation requires a command list and parameter block");
         return NVSDK_NGX_Result_Fail;
     }
 
@@ -1308,13 +1313,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     const State& state = State::Instance();
     const Config& cfg = *Config::Instance();
 
-    const auto featureIt = HandleToFeature.find(handleId);
-    if (featureIt == HandleToFeature.end())
+    const auto featureSnapshot = HandleToFeature.Read(handleId);
+    if (!featureSnapshot)
     {
         LOG_WARN("EvaluateFeature received untracked handle {}; NR is not attached", handleId);
     }
-    const NVSDK_NGX_Feature feature =
-        featureIt != HandleToFeature.end() ? featureIt->second : (NVSDK_NGX_Feature) 0;
+    const NVSDK_NGX_Feature feature = featureSnapshot.feature;
     const bool isNrPipelineFeature = IsNrPipelineFeature(feature);
     const bool isSuperResolution = feature == NVSDK_NGX_Feature_SuperSampling;
     const bool isRayReconstruction = feature == NVSDK_NGX_Feature_RayReconstruction;
@@ -1327,11 +1331,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         "handle={} feature={} list={:p} fgOutput={}", handleId, static_cast<unsigned int>(feature),
         static_cast<void*>(InCmdList), static_cast<unsigned int>(state.activeFgOutput));
     DlssNr::FrameTrace::Context traceContext(DlssNr::FrameTrace::nativeObservation, traceEvaluation);
-    LogNgxEvaluationTrace(handleId, featureIt != HandleToFeature.end(), feature);
+    LogNgxEvaluationTrace(handleId, static_cast<bool>(featureSnapshot), feature);
     LogNrPipelineObservation(handleId, feature, InParameters, cfg.DlssNrRunBeforeSr.value_or_default());
     static size_t evalWithoutFG = 0;
-    bool fgCreated = std::any_of(HandleToFeature.begin(), HandleToFeature.end(),
-                                 [](const auto& pair) { return pair.second == NVSDK_NGX_Feature_FrameGeneration; });
+    const bool fgCreated = HandleToFeature.Has(NVSDK_NGX_Feature_FrameGeneration);
 
     static std::optional<float> lastDlssgCameraNear {};
     static std::optional<float> lastDlssgCameraFar {};
@@ -1357,27 +1360,29 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 DlssNr::FgLifecycle::Read().generation, preFg ? preFg->diagnosticClaim.generation : 0,
                 preFg ? preFg->providerGeneration : 0);
         }
-        evalWithoutFG = 0;
-
         int frameCount = 0;
         InParameters->Get("DLSSG.MultiFrameCount", &frameCount);
-        State::Instance().dlssgDetectedInterpolationCount = frameCount;
-        ReflexHooks::setDlssgFrameCount(frameCount);
-
         float dlssgCameraNear = 0.0f;
         float dlssgCameraFar = 0.0f;
-
-        if (InParameters->Get("DLSSG.CameraNear", &dlssgCameraNear) == NVSDK_NGX_Result_Success)
-            lastDlssgCameraNear = dlssgCameraNear;
-
-        if (InParameters->Get("DLSSG.CameraFar", &dlssgCameraFar) == NVSDK_NGX_Result_Success)
-            lastDlssgCameraFar = dlssgCameraFar;
+        const bool haveNear = InParameters->Get("DLSSG.CameraNear", &dlssgCameraNear) == NVSDK_NGX_Result_Success;
+        const bool haveFar = InParameters->Get("DLSSG.CameraFar", &dlssgCameraFar) == NVSDK_NGX_Result_Success;
+        {
+            std::lock_guard lock(fgObservationMutex);
+            evalWithoutFG = 0;
+            if (haveNear) lastDlssgCameraNear = dlssgCameraNear;
+            if (haveFar) lastDlssgCameraFar = dlssgCameraFar;
+        }
+        State::Instance().dlssgDetectedInterpolationCount = frameCount;
+        ReflexHooks::setDlssgFrameCount(frameCount);
     }
     else if (fgCreated)
     {
-        evalWithoutFG++;
-
-        if (evalWithoutFG == 6)
+        bool reportDisabled = false;
+        {
+            std::lock_guard lock(fgObservationMutex);
+            if (evalWithoutFG < 6) reportDisabled = ++evalWithoutFG == 6;
+        }
+        if (reportDisabled)
         {
             // Report FG as disabled
             State::Instance().dlssgDetectedInterpolationCount = 0;
@@ -1469,11 +1474,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         return Nvngx_FG::D3D12_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
     }
 
-    if (lastDlssgCameraNear.has_value())
-        InParameters->Set("DLSSG.CameraNear", lastDlssgCameraNear.value());
-
-    if (lastDlssgCameraFar.has_value())
-        InParameters->Set("DLSSG.CameraFar", lastDlssgCameraFar.value());
+    std::optional<float> cameraNear, cameraFar;
+    {
+        std::lock_guard lock(fgObservationMutex);
+        cameraNear = lastDlssgCameraNear;
+        cameraFar = lastDlssgCameraFar;
+    }
+    if (cameraNear) InParameters->Set("DLSSG.CameraNear", *cameraNear);
+    if (cameraFar) InParameters->Set("DLSSG.CameraFar", *cameraFar);
 
     // OptiScaler internal handling
     if (isSuperResolution && nrSettings)

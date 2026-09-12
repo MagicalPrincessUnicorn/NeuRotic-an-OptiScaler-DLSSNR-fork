@@ -140,5 +140,21 @@ require('ClaimCompletion(nativeBackbuffer' in ngx_dx12 and
 require('queue->Wait(dependency->fence.Get(), dependency->value)' in gpu_safety and
         'nr-fg-wait-applied' in gpu_safety and 'externalWaitGuid' in gpu_safety,
         'provider submission applies the explicit GPU wait and command-list lifetime cookie')
+require('!identity.copybackSubmitted' in streamline_prefg and
+        'unsafeHandoff ? E_FAIL : forward()' in streamline_prefg,
+        'submitted copybacks cannot be canceled or forwarded without a published dependency')
+require('if (!requested) ResetCompletions();' in streamline_prefg and
+        streamline_prefg.index('if (!requested) ResetCompletions();') <
+        streamline_prefg.index('auto identity = EvaluatePresentImageOnly('),
+        'NR Off and Native route retire prior handoffs before forwarding the next Present')
+require('ComPtr<ID3D12Fence> completionFence' in source('OptiScaler/dlssnr/DlssNr_Present.h'),
+        'completion fence ownership crosses the Present mutex boundary')
+require(present.index('copyback command list could not close') <
+        present.index('!preFgFrame->prepareInputs(*preFgFrame)') <
+        present.index('queue->ExecuteCommandLists(1, compositeLists)'),
+        'game FG tags change only after copyback recording and Close succeed')
+require('NativeFeatureRegistry<NVSDK_NGX_Feature>' in ngx_dx12 and
+        'HandleToFeature.Released(handleId, featureSnapshot, result == NVSDK_NGX_Result_Success)' in ngx_dx12,
+        'native feature classification is synchronized and failed releases retain their identity')
 require('dlssnr_call_probe_d3d12' in source('OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp'), 'direct Feature 18 capability probe retained')
 print('PASS: integration source contracts; runtime evidence remains required')

@@ -174,13 +174,28 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
                  SUCCEEDED(queue->GetDevice(IID_PPV_ARGS(&consumerDevice))) &&
                  NativeObject(producerDevice.Get()) == NativeObject(consumerDevice.Get());
         const HRESULT waitResult = ok ? queue->Wait(dependency->fence.Get(), dependency->value) : E_INVALIDARG;
-        ok = ok && SUCCEEDED(waitResult) &&
-             SUCCEEDED(list->SetPrivateDataInterface(externalWaitGuid, nullptr));
+        ok = ok && SUCCEEDED(waitResult);
+        // Keep every dependency until successful Reset/destruction. If a later
+        // list's wait fails, a retry of this batch still needs the earlier waits;
+        // clearing cookies piecemeal would let a retry on another queue bypass them.
         NR_FRAME_TRACE("nr-fg-wait-applied", "queue={:p} list={:p} fence={:p} value={} token={} "
             "sequence={} result={} ok={}", static_cast<void*>(queue), static_cast<void*>(list),
             static_cast<void*>(dependency->fence.Get()), dependency->value, dependency->token,
             dependency->sequence, static_cast<unsigned int>(waitResult), ok);
-        if (!ok) s.failed = true;
+        if (!ok)
+        {
+            // Never submit provider work after its required ordering failed. This
+            // API has no HRESULT: retain the dependency and pin affected tickets.
+            s.failed = true;
+            for (auto& ticket : uses) ticket->failed = true;
+#ifndef NR_GPU_SAFETY_TEST
+            static std::atomic_flag reported {};
+            if (!reported.test_and_set())
+                LOG_ERROR("NR-to-FG GPU wait failed; dependent submission refused (HRESULT={:X})",
+                          static_cast<unsigned int>(waitResult));
+#endif
+            return;
+        }
     }
 
     auto timeline = uses.empty() ? std::shared_ptr<Timeline>{} : Get<Timeline>(queue, timelineGuid);
@@ -337,7 +352,7 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
 bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
                       UINT64 producerValue, UINT64 token, UINT64 sequence)
 {
-    if (!list || !producerFence || !producerValue ||
+    if (!list || !producerFence || !producerValue || producerValue == UINT64_MAX ||
         list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
     list = NativeObject(list);
     producerFence = NativeObject(producerFence);

@@ -10,6 +10,7 @@
 #include <set>
 #include <deque>
 #include <mutex>
+#include <atomic>
 #include <sl_dlss_g.h>
 #include <vulkan/vulkan.h>
 #include <ankerl/unordered_dense.h>
@@ -218,8 +219,8 @@ class State
     bool WAR_xefgRequestFGToggle = false;
 
     bool dlssgGameDMFGSupported = false;
-    sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
-    int dlssgDetectedInterpolationCount = 0;
+    std::atomic<sl::DLSSGMode> dlssgLastSetMode {sl::DLSSGMode::eOff};
+    std::atomic<int> dlssgDetectedInterpolationCount {0};
 
     // DLSS
     bool dlssPresetsOverriddenExternally = false;

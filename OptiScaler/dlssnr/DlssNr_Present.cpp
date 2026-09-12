@@ -1179,9 +1179,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
-    const bool providerReady = !preFgFrame || !preFgFrame->prepareInputs ||
-        preFgFrame->prepareInputs(*preFgFrame);
-    if (!providerReady || FAILED(slot.compositeAllocator->Reset()) ||
+    if (FAILED(slot.compositeAllocator->Reset()) ||
         FAILED(g_present.list->Reset(slot.compositeAllocator.Get(), nullptr)))
     {
         const UINT64 signal = g_present.nextFence++;
@@ -1193,8 +1191,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         }
         else
             g_present.completionUntrackable = true;
-        SetFallback(api, providerReady ? "copyback command list could not be reset" :
-            "Could not establish full-frame FG input policy for this token", true);
+        SetFallback(api, "copyback command list could not be reset", true);
         return identity;
     }
     bool outputPrepared = true;
@@ -1267,8 +1264,24 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "copyback command list could not close", true);
         return identity;
     }
+    // Do not alter the game's FG tags until copyback recording and Close succeed.
+    // Earlier failures must leave both its image and its original HUD policy intact.
+    if (preFgFrame && preFgFrame->prepareInputs && !preFgFrame->prepareInputs(*preFgFrame))
+    {
+        const UINT64 modelSignal = g_present.nextFence++;
+        if (SUCCEEDED(queue->Signal(g_present.fence.Get(), modelSignal)))
+        {
+            slot.completion = modelSignal;
+            slot.completionObserved = false;
+            RecordSubmission(modelSignal);
+        }
+        else g_present.completionUntrackable = true;
+        SetFallback(api, "Could not establish full-frame FG input policy for this token", true);
+        return identity;
+    }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };
     queue->ExecuteCommandLists(1, compositeLists);
+    identity.copybackSubmitted = true;
     NR_FRAME_TRACE("nr-copyback-submitted", "attempt={} list={:p} queue={:p} output={:p} "
         "generation={} claimGeneration={} claimInstance={} providerGeneration={}",
         identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),

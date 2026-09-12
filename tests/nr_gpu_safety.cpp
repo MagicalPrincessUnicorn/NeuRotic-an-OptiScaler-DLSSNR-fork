@@ -39,10 +39,15 @@ int main()
     ComPtr<ID3D12Fence> externalProducer, externalConsumer;
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&externalProducer)));
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&externalConsumer)));
+    assert(!Safety::BindExternalWait(nullptr, externalProducer.Get(), 1, 41, 42));
+    assert(!Safety::BindExternalWait(list.Get(), nullptr, 1, 41, 42));
+    assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 0, 41, 42));
+    assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), UINT64_MAX, 41, 42));
     assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 41, 42));
     assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 43, 44));
     Check(list->Close());
     submit(otherQueue.Get());
+    assert(Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid));
     Check(otherQueue->Signal(externalConsumer.Get(), 1));
     assert(externalConsumer->GetCompletedValue() == 0);
     Check(externalProducer->Signal(1));
@@ -52,6 +57,7 @@ int main()
     assert(WaitForSingleObject(externalDone, 5000) == WAIT_OBJECT_0);
     CloseHandle(externalDone);
     Check(list->Reset(allocator.Get(), nullptr));
+    assert(!Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid));
 
     // Reset before submission cancels the borrowed dependency.
     ComPtr<ID3D12Fence> canceledProducer;
@@ -300,6 +306,30 @@ int main()
             }
         }
     }
+
+    // An invalid consumer queue must not execute the dependent batch, or report
+    // its recording complete. Exercise the real hook with an intercepted trampoline
+    // so the intentionally wrong queue/list pairing never reaches the GPU.
+    ComPtr<ID3D12GraphicsCommandList> refusedList;
+    Check(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr,
+                                   IID_PPV_ARGS(&refusedList)));
+    auto refusedTicket = Safety::Record(refusedList.Get());
+    assert(refusedTicket);
+    assert(Safety::BindExternalWait(refusedList.Get(), externalProducer.Get(), 2, 47, 48));
+    Check(refusedList->Close());
+    ComPtr<ID3D12CommandQueue> computeQueue;
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+    Check(device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&computeQueue)));
+    static unsigned int forwarded = 0;
+    const auto savedExecute = Safety::originalExecute;
+    Safety::originalExecute = [](ID3D12CommandQueue*, UINT, ID3D12CommandList* const*) { ++forwarded; };
+    ID3D12CommandList* refusedBatch[] = {refusedList.Get()};
+    Safety::Execute(computeQueue.Get(), 1, refusedBatch);
+    Safety::originalExecute = savedExecute;
+    assert(forwarded == 0 && Safety::State().failed && refusedTicket->failed);
+    assert(Safety::Get<Safety::ExternalWait>(refusedList.Get(), Safety::externalWaitGuid));
+    assert(!Safety::Reusable(refusedTicket) && !Safety::Readable(refusedTicket));
+    refusedList.Reset();
 
     // Fence failure is a permanent failure, never mistaken for permission to reclaim.
     auto failed = std::make_shared<Safety::Recording>();

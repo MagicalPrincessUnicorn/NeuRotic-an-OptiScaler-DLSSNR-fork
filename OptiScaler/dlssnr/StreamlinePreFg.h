@@ -157,6 +157,10 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
     const unsigned int route = config->DlssNrRoute.value_or_default();
     const bool requested = runtime.enabled && route != 0;
+    // NR Off (or Native route) stops replacing the backbuffer. Retire prior
+    // handoffs so their claim-once markers cannot reject ordinary FG forever.
+    // Reset retains unfinished producers until their real GPU fence completes.
+    if (!requested) ResetCompletions();
     if (!requested || !fg || route != owner->startupRoute || runtime.resumeGeneration != owner->startupResume)
         owner->startup.Reset();
     owner->startupRoute = route;
@@ -200,7 +204,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     // FG off uses the existing admission contract. Native mode still performs no Present model work.
     auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, fg ? &frame : nullptr);
-    if (frame.completionReservation && !identity.completedOutput)
+    if (frame.completionReservation && !identity.copybackSubmitted)
         CancelCompletion(frame.completionReservation);
     bool completionPublished = false;
     if (identity.completedOutput && frame.completionReservation)
@@ -208,14 +212,15 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         const auto nativeOutput = NativeIdentity::Resolve<ID3D12Resource>(identity.outputResource);
         completionPublished = nativeOutput.object.Get() == frame.outputResource &&
             CommitCompletion(frame.completionReservation, frame.outputResource,
-                             identity.completionFence, identity.completionValue);
+                             identity.completionFence.Get(), identity.completionValue);
     }
-    frame.outputSubmitted = identity.completedOutput && completionPublished;
-    if (identity.completedOutput && !completionPublished)
+    frame.outputSubmitted = identity.completedOutput && (!fg || completionPublished);
+    const bool unsafeHandoff = fg && identity.copybackSubmitted && !completionPublished;
+    if (unsafeHandoff)
         NR_FRAME_TRACE("nr-fg-handoff-refused", "reason=completion-publish-failed token={} sequence={} "
             "resource={:p} identityResource={:p} fence={:p} value={}", frame.key, frame.sequence,
             static_cast<void*>(frame.outputResource), static_cast<void*>(identity.outputResource),
-            static_cast<void*>(identity.completionFence), identity.completionValue);
+            static_cast<void*>(identity.completionFence.Get()), identity.completionValue);
     if (identity.completedOutput)
         FgLifecycle::Output(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get());
     const double beforeProvider = Util::MillisecondsNow();
@@ -229,7 +234,9 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     // claims the exact-backbuffer completion fence and binds it to its provider
     // command list before that list reaches the provider-owned queue.
     ForwardFrame providerScope(frame);
-    const HRESULT result = forward();
+    // Copyback may already be on the GPU even if its signal/publication failed.
+    // Do not enter a provider Present with an unorderable modified input.
+    const HRESULT result = unsafeHandoff ? E_FAIL : forward();
     FgLifecycle::Present(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get(),
         frame.outputSubmitted, result);
     if (DredDiagnostics::Enabled() && FAILED(result) && owner->queue)

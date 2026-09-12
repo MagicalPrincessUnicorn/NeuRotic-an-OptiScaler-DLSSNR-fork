@@ -4153,7 +4153,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
         ImGui::Text("Current DLSSG state:");
         ImGui::SameLine();
-        if (auto count = state.dlssgDetectedInterpolationCount; count > 0)
+        if (auto count = state.dlssgDetectedInterpolationCount.load(); count > 0)
         {
             ImGui::TextColored(toneMapColor(ImVec4(0.f, 1.f, 0.25f, 1.f)), std::format("ON {}x", count + 1).c_str());
         }
@@ -4608,7 +4608,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             {
                 ImGui::Text("Current DLSSG state:");
                 ImGui::SameLine();
-                if (auto count = state.dlssgDetectedInterpolationCount; count > 0)
+                if (auto count = state.dlssgDetectedInterpolationCount.load(); count > 0)
                 {
                     ImGui::TextColored(toneMapColor(ImVec4(0.f, 1.f, 0.25f, 1.f)),
                                        std::format("ON {}x", count + 1).c_str());
