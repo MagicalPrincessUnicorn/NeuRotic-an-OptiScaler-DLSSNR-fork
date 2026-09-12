@@ -41,6 +41,19 @@ int main()
         }
     assert(attempts == 523 && published == 421 && transitions == 1);
     Ledger ledger;
+    // Reproduce overlapping producer tokens without changing control admission.
+    // Inspect must explain both mismatch and consumed-on-refusal, with no side effects.
+    ledger.Constants(9596, 0); ledger.Tags(9596, 0);
+    assert(ledger.Claim().valid);
+    ledger.Constants(9597, 0);
+    auto snapshot = ledger.Inspect();
+    assert(snapshot.constants == 9598 && snapshot.tags == 9597 && snapshot.consumed == 9597);
+    assert(!ledger.Claim().valid);
+    ledger.Tags(9597, 0);
+    snapshot = ledger.Inspect();
+    assert(snapshot.constants == snapshot.tags && snapshot.consumed == 9598);
+    assert(!ledger.Claim().valid); // diagnostic child preserves the control's refusal
+    ledger.Reset();
     assert(!ledger.Claim().valid);
     ledger.Constants(0, 0);
     assert(ledger.Current() == 1);

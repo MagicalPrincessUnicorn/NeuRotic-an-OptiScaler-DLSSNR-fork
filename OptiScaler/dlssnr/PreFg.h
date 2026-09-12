@@ -58,6 +58,12 @@ class Ledger
     bool foreignConstants = false, foreignTags = false;
     bool legacy = false;
   public:
+    struct Snapshot
+    {
+        uint64_t constants, tags, consumed, sequence;
+        bool foreignConstants, foreignTags, legacy;
+    };
+    Snapshot Inspect() const { return {constants, tags, consumed, sequence, foreignConstants, foreignTags, legacy}; }
     void Constants(uint32_t frame, uint32_t viewport)
     {
         const uint64_t key = uint64_t(frame) + 1;
@@ -110,6 +116,14 @@ struct Registry
     std::atomic<uint64_t> realCalls {0}, submitted {0}, bypassed {0}, rejected {0};
 };
 inline Registry& State() { static auto* state = new Registry; return *state; }
+// Optional scalar observer called under the existing ledger lock. It cannot affect Claim.
+using LedgerObserver = void(*)(const char*, uint32_t, uint32_t, Ledger::Snapshot, Ledger::Snapshot) noexcept;
+inline std::atomic<LedgerObserver> ledgerObserver {nullptr};
+inline void ObserveLedger(const char* operation, uint32_t frame, uint32_t viewport, Ledger::Snapshot before)
+{
+    if (auto observer = ledgerObserver.load(std::memory_order_relaxed))
+        observer(operation, frame, viewport, before, State().ledger.Inspect());
+}
 inline void PublishProvider(bool enabled, bool supported)
 {
     std::lock_guard lock(State().mutex);
@@ -132,23 +146,31 @@ inline uint64_t CurrentFrame()
 inline void ObserveConstants(uint32_t frame, uint32_t viewport)
 {
     std::lock_guard lock(State().mutex);
+    const auto before = State().ledger.Inspect();
     State().ledger.Constants(frame, viewport);
+    ObserveLedger("constants", frame, viewport, before);
 }
 inline void ObserveTags(uint32_t frame, uint32_t viewport)
 {
     std::lock_guard lock(State().mutex);
+    const auto before = State().ledger.Inspect();
     State().ledger.Tags(frame, viewport);
+    ObserveLedger("tags", frame, viewport, before);
 }
 inline void ObserveLegacyTags(uint32_t viewport)
 {
     std::lock_guard lock(State().mutex);
+    const auto before = State().ledger.Inspect();
     State().ledger.LegacyTags(viewport);
+    ObserveLedger("legacy-tags", 0, viewport, before);
 }
 inline Frame Claim()
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
+    const auto before = state.ledger.Inspect();
     auto frame = state.ledger.Claim();
+    ObserveLedger("claim", 0, 0, before);
     if (state.swapchains != 1)
     {
         frame.valid = false;

@@ -12,6 +12,7 @@ struct Session
     LONGLONG frequency = 0;
     bool armed = false;
     bool waitForEnable = false;
+    bool association = false;
     std::atomic<bool> capturing {false};
     std::atomic<bool> waitingReported {false};
     Budget budget;
@@ -20,15 +21,20 @@ struct Session
         const DWORD length = GetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_SESSION", id, sizeof(id));
         char trigger[16] {};
         const DWORD triggerLength = GetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_TRIGGER", trigger, sizeof(trigger));
+        char profile[32] {};
+        const DWORD profileLength = GetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_PROFILE", profile, sizeof(profile));
+        association = profileLength == 17 && std::string_view(profile, 17) == "frame-association";
         waitForEnable = triggerLength == 9 && std::string_view(trigger, 9) == "nr-enable";
         LARGE_INTEGER f {};
         armed = length == 32 && ValidSession(std::string_view(id, 32)) &&
-                (triggerLength == 0 || waitForEnable) && QueryPerformanceFrequency(&f) && f.QuadPart > 0;
+                (triggerLength == 0 || waitForEnable) && (profileLength == 0 || association) &&
+                QueryPerformanceFrequency(&f) && f.QuadPart > 0;
         frequency = f.QuadPart;
         capturing.store(armed && !waitForEnable, std::memory_order_relaxed);
     }
 };
 inline Session& Current() { static Session session; return session; }
+inline bool AssociationRequested() noexcept { return Current().armed && Current().association; }
 inline bool Armed() noexcept
 {
     auto& session = Current();
@@ -52,6 +58,11 @@ inline bool Armed() noexcept
     return false;
 }
 
+inline bool Accepts(const char* kind) noexcept
+{
+    return Armed() && (!Current().association || AssociationEvent(kind));
+}
+
 // Scalars/addresses only; this observer never retains or queries game COM resources, creates
 // GPU work, waits, changes configuration, or decides whether an evaluation is allowed.
 // Existing logger routing/level still applies. An absent/filtered record is NOT evidence.
@@ -59,7 +70,7 @@ template<typename... Args>
 uint64_t Event(const char* kind, spdlog::format_string_t<Args...> format, Args&&... args) noexcept
 {
     auto& session = Current();
-    if (!Armed()) return 0;
+    if (!Accepts(kind)) return 0;
     const auto sequence = session.budget.Take();
     if (!sequence) return 0;
     LARGE_INTEGER qpc {};
@@ -88,10 +99,11 @@ inline void OnNrEnable(bool wasEnabled, bool enabled) noexcept
     if (!session.armed || !session.waitForEnable) return;
     bool expected = false;
     if (session.capturing.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
-        Event("trace-started", "trigger=nr-enable previousEnabled=false enabled=true");
+        Event("trace-started", "trigger=nr-enable previousEnabled=false enabled=true profile={}",
+            session.association ? "frame-association" : "full");
 }
 }
 
 // Avoid even evaluating diagnostic arguments on the unarmed path.
 #define NR_FRAME_TRACE(kind, ...) \
-    do { if (::DlssNr::FrameTrace::Armed()) ::DlssNr::FrameTrace::Event(kind, __VA_ARGS__); } while (false)
+    do { if (::DlssNr::FrameTrace::Accepts(kind)) ::DlssNr::FrameTrace::Event(kind, __VA_ARGS__); } while (false)
