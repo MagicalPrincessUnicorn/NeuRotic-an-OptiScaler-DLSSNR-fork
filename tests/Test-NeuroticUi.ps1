@@ -107,7 +107,10 @@ Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
 Assert-Ui ($nr.IndexOf('EmphasizedCheckbox("Enable Neural Rendering", &enabled)') -lt $nr.IndexOf('StageUi::RenderControls(*config,')) 'enable lives above the NR injection sentence'
 Assert-Ui ($nr.IndexOf('Checkbox("Apply the model", &applyModel)') -lt $nr.IndexOf('StageUi::RenderControls(*config,') -and
-           $nr.IndexOf('Checkbox("Apply the model", &applyModel)') -lt $nr.IndexOf('renderReadouts(false);')) 'Apply remains fixed beside or below Enable and precedes changing status text'
+           $nr.IndexOf('Checkbox("Apply the model", &applyModel)') -lt $nr.IndexOf('RenderLiveReadouts(config,')) 'Apply remains fixed beside or below Enable and precedes changing status text'
+Assert-Ui ($nr.IndexOf('RenderLiveReadouts(config,') -lt $nr.IndexOf('StageUi::RenderControls(*config,') -and
+           $nr.Contains('NR processing: %.2f ms per frame') -and
+           $nr.Contains('Native Temporal is active.')) 'essential timing and route state render directly above the injection sentence'
 Assert-Ui ($nrControls.Contains('enabled ? ImVec4(0.25f, 0.90f, 0.38f, 1.0f)') -and
            $nrControls.Contains('ImVec4(0.95f, 0.25f, 0.22f, 1.0f)') -and
            $nrControls.Contains('return ImVec4(1.0f, 0.72f, 0.18f, 1.0f);') -and
@@ -127,11 +130,19 @@ Assert-Ui ($nr.Contains('Shared Model Resolution (All Passes)') -and
 Assert-Ui ($nr -match '(?s)TextUnformatted\(title\);\s*if \(hint\) HelpMarker\(hint\);.*?ResponsiveBasicResolutionWidth' -and
            $nrControls.Contains('preferredWidth * menuScale') -and
            $nr.Contains('"saved main settings.", 320.0f);')) 'Basic resolution help stays beside its title and its slider uses the shorter responsive width'
+Assert-Ui ($nrControls.Contains('CumulativeStrengthWidthFraction') -and
+           $nrControls.Contains('ResponsiveCumulativeStrengthWidth') -and
+           $nr.Contains('DrawCumulativePassSegments') -and
+           $nr.Contains('cumulativePasses > 0 ? &sliderMin') -and
+           $nr.Contains('Five to ten passes keep the full width')) 'Basic cumulative sliders grow through four passes and show denser coloured pass segments through ten'
 Assert-Ui ($nr.Contains('std::string("Reset###Reset##") + (stableLabel + 3)')) 'capitalized deferred sliders preserve their reset identifiers'
 $diagnostics = $nr.IndexOf('ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced")')
-Assert-Ui ($diagnostics -gt $nr.IndexOf('renderReadouts(false);') -and
+Assert-Ui ($diagnostics -gt $nr.IndexOf('RenderLiveReadouts(config,') -and
            $diagnostics -gt $nr.IndexOf('Checkbox("Apply the model"') -and
-           $diagnostics -lt $nr.IndexOf('renderReadouts(true);')) 'basic readouts and Apply precede the final collapsed advanced settings'
+           $diagnostics -lt $nr.IndexOf('renderReadouts(true);') -and
+           -not $nr.Contains('renderReadouts(false);') -and
+           $nr.IndexOf('Automatic uses 100% of the game render input; Manual scales that input.',
+                       $nr.IndexOf('if (detailed)')) -lt $nr.IndexOf('const auto guides = PresentGuides::Instance().Inspect();')) 'live readouts precede controls while policy and dimensions render only through collapsed diagnostics'
 Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $stage.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
 Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 1 }') -and
            $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'fresh preview Automatic defaults do not enable NR or file logging'

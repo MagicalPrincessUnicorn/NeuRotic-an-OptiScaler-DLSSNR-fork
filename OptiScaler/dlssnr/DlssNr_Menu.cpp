@@ -108,7 +108,8 @@ static void CancelNrEdits()
 }
 
 static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<float>*>& targets,
-                             float mn, float mx, float def, const char* fmt, bool percent = false)
+                             float mn, float mx, float def, const char* fmt, bool percent = false,
+                             ImVec2* sliderMin = nullptr, ImVec2* sliderMax = nullptr)
 {
     auto& edit = pendingNrEdits[label];
     edit.Prepare(targets, ImGui::GetFrameCount());
@@ -123,6 +124,8 @@ static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<flo
     }
     else if (ImGui::SliderFloat(label, &value, mn, mx, fmt, ImGuiSliderFlags_AlwaysClamp))
         edit.Preview(value);
+    if (sliderMin) *sliderMin = ImGui::GetItemRectMin();
+    if (sliderMax) *sliderMax = ImGui::GetItemRectMax();
     if (ImGui::IsItemDeactivatedAfterEdit()) changed = edit.Commit(mn, mx);
     edit.Finish(ImGui::IsItemActive());
     ImGui::SameLine();
@@ -136,6 +139,32 @@ static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<flo
         changed = true;
     }
     return changed;
+}
+
+static void DrawCumulativePassSegments(const ImVec2& sliderMin, const ImVec2& sliderMax,
+                                       unsigned int maximumPasses, float menuResScale)
+{
+    static const ImVec4 palette[] = {
+        { 0.95f, 0.30f, 0.28f, 0.95f }, { 0.26f, 0.82f, 0.38f, 0.95f },
+        { 0.28f, 0.55f, 0.98f, 0.95f }, { 1.00f, 0.72f, 0.18f, 0.95f },
+        { 0.80f, 0.36f, 0.92f, 0.95f }, { 0.18f, 0.78f, 0.86f, 0.95f },
+        { 1.00f, 0.48f, 0.16f, 0.95f }, { 0.55f, 0.42f, 0.94f, 0.95f },
+        { 0.60f, 0.86f, 0.22f, 0.95f }, { 0.18f, 0.68f, 0.60f, 0.95f }
+    };
+    const unsigned int count = (std::clamp)(maximumPasses, 1u, 10u);
+    const float width = sliderMax.x - sliderMin.x;
+    const float underline = (std::max)(2.0f, 2.0f * menuResScale);
+    auto* draw = ImGui::GetWindowDrawList();
+    for (unsigned int index = 0; index < count; ++index)
+    {
+        const float left = sliderMin.x + width * float(index) / float(count);
+        const float right = sliderMin.x + width * float(index + 1) / float(count);
+        draw->AddRectFilled({ left, sliderMax.y - underline }, { right, sliderMax.y },
+                            ImGui::GetColorU32(palette[index]), 0.0f);
+        if (index > 0)
+            draw->AddLine({ left, sliderMin.y + underline }, { left, sliderMax.y },
+                          ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.55f)), 1.0f);
+    }
 }
 
 static bool DeferredSlider(const char* label, NrOptional<float>* opt, float mn, float mx,
@@ -166,6 +195,88 @@ static unsigned int RenderPassCountSelector(Config* config)
 
 static void RenderMultipassMenu(Config* config, float menuResScale);
 
+static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig, bool enabled,
+                               bool basicOwnsMain,
+                               const std::optional<MenuStatus::RuntimeStatus>& status)
+{
+    if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
+    const auto nrTelemetry = DlssNr::Telemetry();
+    const auto presentTelemetry = DlssNr::PresentTelemetry();
+    const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
+    const int route = std::clamp((int) uiConfig.DlssNrRoute.value_or_default(), 0, 2);
+    const int renderMode = std::clamp(uiConfig.DlssNrRenderingMode.value_or_default(), 0, 1);
+    const bool presentRoute = route != 0;
+    const ImVec4 green(0.4f, 0.9f, 0.5f, 1.0f);
+    const ImVec4 yellow(1.0f, 0.72f, 0.25f, 1.0f);
+    const ImVec4 red(1.0f, 0.4f, 0.35f, 1.0f);
+
+    static MenuStatus::SelectionObservation observation;
+    const auto selection = (PresentResolution::CaptureKey(uiConfig) << 1) | (enabled ? 1ull : 0ull);
+    const bool fresh = observation.Fresh(selection,
+        presentTelemetry.presentAttempts + presentTelemetry.skippedFrames);
+    const auto policy = PresentResolution::Selected(uiConfig);
+    const bool presentMatches = fresh && presentTelemetry.requested &&
+        presentTelemetry.requestedPlacement == (route == 2 ? "Present Enhanced" : "Present Image-Only");
+    const bool presentActive = presentMatches && presentTelemetry.active &&
+        presentTelemetry.resolution == policy.mode && presentTelemetry.workload == policy.scale;
+    static MenuStatus::SelectionObservation nativeObservation;
+    const auto nativeSelection = selection ^ (uint64_t(renderMode) << 20) ^
+        (uint64_t(std::bit_cast<uint32_t>(uiConfig.DlssNrWorkingScale.value_or_default())) << 24);
+    const bool nativeFresh = nativeObservation.Fresh(nativeSelection, nrTelemetry.frames);
+    const bool nativeOutput = enabled && !presentRoute && !vulkan && nativeFresh &&
+        nrTelemetry.running && !nrTelemetry.outputQuarantined && !nrTelemetry.transitionPending &&
+        (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+
+    if (enabled && nativeOutput && nrTelemetry.totalGpuMs)
+        ImGui::TextColored(green, "NR processing: %.2f ms per frame", *nrTelemetry.totalGpuMs);
+
+    if (!enabled)
+        ImGui::TextColored(yellow, "Neural Rendering is off.");
+    else if (basicOwnsMain && BasicMultipass::Count(uiConfig.DlssNrBasicMultipass.value_or_default()) == 0)
+        ImGui::TextColored(yellow, "Basic Multipass totals are zero. Image unchanged; loaded resources retained.");
+    else if (StageUi::RenderRuntimeStatus(status))
+    {
+        // A caller may supply verified telemetry; the UI does not produce frame identity.
+    }
+    else if (presentRoute)
+    {
+        if (presentActive)
+            ImGui::TextColored(green, "%s is active.", StageUi::Methods[route]);
+        else if (presentMatches && !presentTelemetry.failure.empty())
+            ImGui::TextColored(red, "Image unchanged. %s", presentTelemetry.failure.c_str());
+        else if (presentMatches && !presentTelemetry.fallbackReason.empty())
+            ImGui::TextColored(yellow, "Image unchanged. %s", presentTelemetry.fallbackReason.c_str());
+        else
+            ImGui::TextColored(yellow, "Waiting for the selected route. Image unchanged.");
+    }
+    else
+    {
+        const char* vkReason = DlssNr::FailureReasonVk();
+        const char* reason = vulkan ? vkReason : nrTelemetry.failureReason;
+        const bool nativeActive = vulkan ? DlssNr::IsRunningVk() : nativeOutput;
+        if (reason[0])
+        {
+            ImGui::TextColored(red, "Neural Rendering unavailable: %s", reason);
+            if (nrTelemetry.retryAllowed && !vkReason[0] && ImGui::SmallButton("Retry"))
+                DlssNr::RetryAfterFailure();
+        }
+        else if (nativeActive)
+            ImGui::TextColored(green, "Native Temporal is active.");
+        else
+            ImGui::TextColored(yellow, "Waiting for Native Temporal. Image unchanged.");
+    }
+
+    if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
+        ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
+    if (enabled && !config->DlssNrApplyModel.value_or_default())
+        ImGui::TextColored(yellow, "Model effect hidden. Enable Apply the model to show it.");
+    if (route == 2)
+    {
+        ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
+        HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
+    }
+}
+
 void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status)
 {
     Neurotic::EnglishPreview englishPreview;
@@ -195,6 +306,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         HelpMarker("Shows the whole chain's effect. Turn off to compare with the original image while the models keep running.");
 
         const bool basicOwnsMain = BasicMultipass::Active(config->GetDlssNrConfigSnapshot()) && !IsVulkanInput();
+        RenderLiveReadouts(config, config->GetDlssNrConfigSnapshot(), enabled, basicOwnsMain, status);
         if (StageUi::RenderControls(*config, basicOwnsMain)) CancelNrEdits();
         auto uiConfig = config->GetDlssNrConfigSnapshot();
         if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
@@ -357,6 +469,44 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         if (detailed)
         {
         ScopedIndent diagnosticIndent {};
+        if (presentRoute)
+            ImGui::TextWrapped(StageUi::ResolutionSelection(uiConfig) == 2 ?
+                "Legacy follows fresh game render dimensions. Selecting Automatic or Manual adopts the new resolution policy." :
+                "Present runs after upscaling and includes the HUD. Automatic uses the final output; Manual scales it. Each method remembers its selection.");
+        else if (stage == 0)
+            ImGui::TextWrapped("Automatic uses 100% of the game render input; Manual scales that input.");
+        else
+            ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
+
+        const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
+        const auto methodLabel = Neurotic::Translate(routeNames[route]);
+        auto resolutionLabel = Neurotic::Translate(StageUi::Resolutions[StageUi::ResolutionSelection(uiConfig)]);
+        if (StageUi::ResolutionSelection(uiConfig) == 1)
+            resolutionLabel += " (" + std::to_string(StageUi::DisplayPercent(StageUi::ResolutionScale(uiConfig))) + "%)";
+        uint32_t workW = 0, workH = 0, outputW = 0, outputH = 0;
+        if (presentRoute && enabled && presentMatches)
+        {
+            outputW = presentTelemetry.backbufferWidth; outputH = presentTelemetry.backbufferHeight;
+            if (presentActive) { workW = presentTelemetry.workWidth; workH = presentTelemetry.workHeight; }
+        }
+        else if (nativeOutput)
+        {
+            workW = nrTelemetry.workWidth; workH = nrTelemetry.workHeight;
+            const bool before = renderMode != 0 && !nrTelemetry.nativeRayReconstructionActive;
+            const auto feature = State::Instance().currentFeature;
+            outputW = before ? (feature ? feature->DisplayWidth() : 0u) : nrTelemetry.frameWidth;
+            outputH = before ? (feature ? feature->DisplayHeight() : 0u) : nrTelemetry.frameHeight;
+        }
+        if (enabled && status)
+        {
+            outputW = status->outputWidth; outputH = status->outputHeight;
+            const bool active = status->state == MenuStatus::State::Active;
+            workW = active ? status->workWidth : 0u; workH = active ? status->workHeight : 0u;
+        }
+        const auto dimensions = StageUi::DimensionText(workW, workH, outputW, outputH);
+        const auto summaryResolution = resolutionLabel + " -> " + dimensions;
+        ImGui::TextWrapped("%s -> %s -> %s", stageLabel.c_str(), methodLabel.c_str(), summaryResolution.c_str());
+
         const auto guides = PresentGuides::Instance().Inspect();
         if (presentRoute)
         {
@@ -778,8 +928,6 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             config->DlssNrAutoMask = autoMask;
 
         HelpMarker("Lets the model find skin itself rather than treating the frame uniformly.");
-
-        renderReadouts(false);
 
         if (auto advanced = ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced"); advanced.IsHeaderOpen())
         {
@@ -1613,7 +1761,8 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         {
             const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
                                     float BasicMultipass::Profile::* member, float minimum, float maximum,
-                                    const char* hint = nullptr, float preferredWidth = 0.0f)
+                                    const char* hint = nullptr, float preferredWidth = 0.0f,
+                                    unsigned int cumulativePasses = 0)
             {
                 BasicMultipass::Profile original;
                 uint64_t generation;
@@ -1627,11 +1776,22 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 if (hint) HelpMarker(hint);
                 const auto& style = ImGui::GetStyle();
                 const float resetWidth = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
-                ImGui::SetNextItemWidth(preferredWidth > 0.0f ?
-                    MenuControls::ResponsiveBasicResolutionWidth(ImGui::GetContentRegionAvail().x,
-                        menuResScale, resetWidth, style.ItemSpacing.x, preferredWidth) :
-                    (std::max)(1.0f, ImGui::GetContentRegionAvail().x - resetWidth - style.ItemSpacing.x));
-                if (DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f, "%d%%", true))
+                const float available = ImGui::GetContentRegionAvail().x;
+                const float sliderWidth = cumulativePasses > 0 ?
+                    MenuControls::ResponsiveCumulativeStrengthWidth(available, resetWidth,
+                        style.ItemSpacing.x, cumulativePasses) :
+                    (preferredWidth > 0.0f ?
+                        MenuControls::ResponsiveBasicResolutionWidth(available, menuResScale,
+                            resetWidth, style.ItemSpacing.x, preferredWidth) :
+                        (std::max)(1.0f, available - resetWidth - style.ItemSpacing.x));
+                ImGui::SetNextItemWidth(sliderWidth);
+                ImVec2 sliderMin {}, sliderMax {};
+                const bool changed = DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f,
+                    "%d%%", true, cumulativePasses > 0 ? &sliderMin : nullptr,
+                    cumulativePasses > 0 ? &sliderMax : nullptr);
+                if (cumulativePasses > 0)
+                    DrawCumulativePassSegments(sliderMin, sliderMax, cumulativePasses, menuResScale);
+                if (changed)
                     if (!BasicMultipass::CommitEdit(*config, original, generation, member, preview.value_or_default()))
                         CancelNrEdits();
             };
@@ -1659,8 +1819,14 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 CancelNrEdits();
             }
             basic = config->DlssNrBasicMultipass.value_or_default();
-            slider("Model Strength", "##NrBasicModel", model, &BasicMultipass::Profile::model, 0.0f, float(basic.maximum));
-            slider("Detail Strength", "##NrBasicDetail", detail, &BasicMultipass::Profile::detail, 0.0f, float(basic.maximum));
+            const char* cumulativeHint =
+                "Each coloured segment represents one pass. The slider grows from one-quarter width "
+                "at one maximum pass to full width at four. Five to ten passes keep the full width "
+                "and add denser pass segments. Cumulative totals fill passes from left to right.";
+            slider("Model Strength", "##NrBasicModel", model, &BasicMultipass::Profile::model,
+                   0.0f, float(basic.maximum), cumulativeHint, 0.0f, basic.maximum);
+            slider("Detail Strength", "##NrBasicDetail", detail, &BasicMultipass::Profile::detail,
+                   0.0f, float(basic.maximum), cumulativeHint, 0.0f, basic.maximum);
             basic = config->DlssNrBasicMultipass.value_or_default();
             const auto requested = BasicMultipass::Count(basic);
             const auto telemetry = DlssNr::Telemetry();

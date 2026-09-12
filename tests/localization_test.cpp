@@ -303,6 +303,15 @@ int main()
               "Basic shared resolution preserves reset space at narrow widths");
         Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(1000.0f, 2.0f, 60.0f, 8.0f) - 640.0f) < 0.01f,
               "Basic shared resolution preferred width follows UI scale");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 1) - 233.0f) < 0.01f,
+              "one-pass cumulative strength uses one quarter of the safe row width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 2) - 466.0f) < 0.01f,
+              "two-pass cumulative strength uses half of the safe row width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 3) - 699.0f) < 0.01f,
+              "three-pass cumulative strength uses three quarters of the safe row width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 4) - 932.0f) < 0.01f &&
+              std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 10) - 932.0f) < 0.01f,
+              "four through ten passes use the full safe row width");
         Neurotic::SetLanguage("en");
         ImGui::GetStyle() = baseStyle;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;

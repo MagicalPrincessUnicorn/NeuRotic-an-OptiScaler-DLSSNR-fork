@@ -70,4 +70,16 @@ inline float ResponsiveBasicResolutionWidth(float available, float menuScale,
     const float safeWidth = (std::max)(1.0f, available - resetWidth - spacing);
     return (std::min)(preferredWidth * menuScale, safeWidth);
 }
+
+inline float CumulativeStrengthWidthFraction(unsigned int maximumPasses)
+{
+    return (std::min)((std::max)(maximumPasses, 1u), 4u) / 4.0f;
+}
+
+inline float ResponsiveCumulativeStrengthWidth(float available, float resetWidth,
+                                               float spacing, unsigned int maximumPasses)
+{
+    const float safeFullWidth = (std::max)(1.0f, available - resetWidth - spacing);
+    return safeFullWidth * CumulativeStrengthWidthFraction(maximumPasses);
+}
 }
