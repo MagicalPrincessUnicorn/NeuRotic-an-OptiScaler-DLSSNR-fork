@@ -115,6 +115,20 @@ int main(int argc, char** argv)
         }
         c11->Unmap(staging.Get(),0);
     };
+    auto checkRaw32 = [&](ID3D11Texture2D* texture, const std::vector<UINT>& expected)
+    {
+        D3D11_TEXTURE2D_DESC d {}; texture->GetDesc(&d); d.Usage=D3D11_USAGE_STAGING;
+        d.BindFlags=0; d.MiscFlags=0; d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        ComPtr<ID3D11Texture2D> staging; Check(d11->CreateTexture2D(&d,nullptr,&staging));
+        c11->CopyResource(staging.Get(),texture);
+        D3D11_MAPPED_SUBRESOURCE map {}; Check(c11->Map(staging.Get(),0,D3D11_MAP_READ,0,&map));
+        for(UINT y=0;y<d.Height;++y)
+        {
+            const auto* row=reinterpret_cast<const UINT*>(static_cast<const char*>(map.pData)+y*map.RowPitch);
+            for(UINT x=0;x<d.Width;++x) assert(row[x]==expected[y*d.Width+x]);
+        }
+        c11->Unmap(staging.Get(),0);
+    };
     // Native Temporal Post-SR uses a private, exact-format output carrier and returns it only
     // after the D3D12 queue signals the shared fence.
     {
@@ -136,6 +150,27 @@ int main(int argc, char** argv)
         c11->CopyResource(destination.Get(),output.shared.Get()); c11->Flush();
         checkPixels(destination.Get(),values,4,0);
         frameId=2; // keep the shared timeline monotonic for the matrix below
+    }
+    // BG3 uses packed R11G11B10_FLOAT for its native DLSS output. The exact-format
+    // carrier must preserve every packed bit; no colour reinterpretation or conversion occurs.
+    {
+        const UINT w=19,h=11;
+        std::vector<UINT> values(w*h);
+        for(UINT i=0;i<values.size();++i)
+            values[i]=((i*37u)&0x7ffu)|(((i*73u)&0x7ffu)<<11)|(((i*29u)&0x3ffu)<<22);
+        auto source=texture11(w,h,DXGI_FORMAT_R11G11B10_FLOAT,values.data(),w*4,
+            D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS);
+        auto destination=texture11(w,h,DXGI_FORMAT_R11G11B10_FLOAT,nullptr,0,
+            D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS);
+        D3D11_TEXTURE2D_DESC desc {}; source->GetDesc(&desc);
+        T::Output output; assert(output.Prepare(d11.Get(),d12.Get(),desc,reason));
+        assert(output.bytes==UINT64(w)*h*4 && output.Matches(desc));
+        c11->CopyResource(output.shared.Get(),source.Get());
+        const UINT64 ready=4; Check(c11->Signal(f11.Get(),ready)); c11->Flush(); Check(queue->Wait(f12.Get(),ready));
+        Check(queue->Signal(f12.Get(),ready+1)); Check(c11->Wait(f11.Get(),ready+1));
+        c11->CopyResource(destination.Get(),output.shared.Get()); c11->Flush();
+        checkRaw32(destination.Get(),values);
+        frameId=4;
     }
     // Every texel, including the margins outside the render rectangle, crosses the production converter.
     for (UINT w : {17u,33u,65u}) for (DXGI_FORMAT motionFormat : {DXGI_FORMAT_R16G16_FLOAT, DXGI_FORMAT_R32G32_FLOAT})

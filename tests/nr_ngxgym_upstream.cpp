@@ -178,6 +178,7 @@ struct Host
     bool  scene_pq   = false;
     Mode mode = MODE_WINDOWED;
     DXGI_FORMAT display_fmt = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    bool r11_output = false;
 
     Tex color, mv, depth, output;
     // Not a fifth slot. Most games supply none, and the four are handled
@@ -349,6 +350,7 @@ static bool Rebuild(Host &h, const char *why)
                  D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL,
                  DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_D32_FLOAT) ||
         !MakeTex(h.dev, &h.output, h.out_w, h.out_h + h.pad,
+                 h.r11_output ? DXGI_FORMAT_R11G11B10_FLOAT :
                  h.scene_pipeline ? DXGI_FORMAT_R16G16B16A16_FLOAT : h.display_fmt,
                  D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS))
     { printf("FAIL: textures\n"); return false; }
@@ -775,7 +777,8 @@ static bool RenderFrame(Host &h)
             // The region, not the resource: with padding the output allocation
             // is taller than the back buffer.
             D3D11_BOX box = { 0, 0, 0, h.out_w, h.out_h, 1 };
-            h.ctx->CopySubresourceRegion(bb, 0, 0, 0, 0, h.output.tex, 0, &box);
+            if (!h.r11_output)
+                h.ctx->CopySubresourceRegion(bb, 0, 0, 0, 0, h.output.tex, 0, &box);
         }
         else
         {
@@ -915,6 +918,10 @@ int main(int argc, char **argv)
     printf("ngxGym: scenario '%s', %d steps\n", sc.name, sc.count);
 
     Host h;
+    char r11_output[8] = {};
+    h.r11_output = GetEnvironmentVariableA("NGXGYM_R11_OUTPUT", r11_output, sizeof(r11_output)) != 0 &&
+                   r11_output[0] == '1';
+    if (h.r11_output) puts("ngxGym: native DLSS output format R11G11B10_FLOAT");
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc); wc.lpfnWndProc = WndProc;
     wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"ngxGym";
