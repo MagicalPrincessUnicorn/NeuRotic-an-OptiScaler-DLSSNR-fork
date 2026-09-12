@@ -28,7 +28,7 @@ inline bool Armed() noexcept { return Current().armed; }
 // GPU work, waits, changes configuration, or decides whether an evaluation is allowed.
 // Existing logger routing/level still applies. An absent/filtered record is NOT evidence.
 template<typename... Args>
-uint64_t Event(const char* kind, fmt::format_string<Args...> format, Args&&... args) noexcept
+uint64_t Event(const char* kind, spdlog::format_string_t<Args...> format, Args&&... args) noexcept
 {
     auto& session = Current();
     if (!session.armed) return 0;
@@ -39,7 +39,7 @@ uint64_t Event(const char* kind, fmt::format_string<Args...> format, Args&&... a
     try
     {
         const auto details = sequence == Budget::Limit ? std::string("reason=event-budget-exhausted") :
-            fmt::format(format, std::forward<Args>(args)...);
+            spdlog::fmt_lib::format(format, std::forward<Args>(args)...);
         spdlog::info("NR_FRAME_TRACE v=1 session={} pid={} tid={} qpc={} frequency={} seq={} native={} "
                      "present={} kind={} classification=unknown {}", session.id, GetCurrentProcessId(),
                      GetCurrentThreadId(), qpc.QuadPart, session.frequency, sequence,
