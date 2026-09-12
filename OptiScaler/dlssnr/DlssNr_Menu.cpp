@@ -245,6 +245,7 @@ struct AdvisorState
     unsigned int originalHeight = 0;
     unsigned long long startNativeFrames = 0;
     unsigned long long startPresentEvaluations = 0;
+    unsigned long long startGuideEvaluations = 0;
     double frameIntervalTotal = 0.0;
     unsigned int frameIntervalSamples = 0;
     std::array<AdvisorRouteResult, 3> routes;
@@ -350,8 +351,10 @@ void BeginAdvisorRoute(Config& config, int route)
     ConfigureAdvisorRoute(config, route);
     const auto native = DlssNr::Telemetry();
     const auto present = DlssNr::PresentTelemetry();
+    const auto guides = DlssNr::PresentGuides::Instance().Inspect();
     advisor.startNativeFrames = native.completedPipelineEvaluations;
     advisor.startPresentEvaluations = present.modelEvaluations;
+    advisor.startGuideEvaluations = guides.evaluated;
     advisor.frameIntervalTotal = 0.0;
     advisor.frameIntervalSamples = 0;
 }
@@ -436,7 +439,8 @@ void FinishAdvisorRoute(Config& config)
         const bool expectedRoute = present.requestedPlacement ==
             (route == 2 ? "Present Enhanced" : "Present Image-Only");
         result.succeeded = expectedRoute && present.active && !present.failed &&
-            present.modelEvaluations > advisor.startPresentEvaluations && (route != 2 || guides.evaluated > 0);
+            present.modelEvaluations > advisor.startPresentEvaluations &&
+            (route != 2 || guides.evaluated > advisor.startGuideEvaluations);
         if (result.succeeded)
             result.detail = route == 2 ? "Verified depth and motion guides" : "Verified final-image compatibility path";
         else if (!present.failure.empty()) result.detail = present.failure;
@@ -831,8 +835,10 @@ void TickAdvisor(Config* config)
     if (advisor.phase == AdvisorPhase::Warmup && elapsed >= 1.0)
     {
         const auto native = DlssNr::Telemetry();
+        const auto guides = DlssNr::PresentGuides::Instance().Inspect();
         advisor.startNativeFrames = native.completedPipelineEvaluations;
         advisor.startPresentEvaluations = present.modelEvaluations;
+        advisor.startGuideEvaluations = guides.evaluated;
         advisor.phase = AdvisorPhase::Sample;
         advisor.phaseStarted = AdvisorNow();
     }
