@@ -1,6 +1,8 @@
 #include "../OptiScaler/dlssnr/DlssNr_PresentResolution.h"
 #include "../OptiScaler/dlssnr/DlssNr_PresentHistory.h"
 #include "../OptiScaler/dlssnr/DlssNr_MenuStatus.h"
+#include "../OptiScaler/dlssnr/DlssNr_StageUi.h"
+#include "../OptiScaler/dlssnr/DlssNr_BasicMultipass.h"
 #include "../OptiScaler/shaders/dlssnr/DlssNr_Common.h"
 #include "../OptiScaler/NrConfigState.h"
 #include "../OptiScaler/CustomOptional.h"
@@ -13,6 +15,10 @@
 namespace R = DlssNr::PresentResolution;
 struct Config
 {
+    NrOptional<uint32_t> DlssNrUiAfterMethod {0};
+    NrOptional<int32_t> DlssNrRenderingMode {1};
+    NrOptional<bool> DlssNrRunBeforeSr {false}, DlssNrUiManualResolution {false};
+    NrOptional<float> DlssNrWorkingScale {1.0f}, DlssNrUiManualScale {1.0f};
     NrOptional<uint32_t> DlssNrRoute {2};
     NrOptional<uint32_t> DlssNrPresentResolution {1}, DlssNrPresentCustomScale {0};
     NrOptional<uint32_t> DlssNrEnhancedResolution {0}, DlssNrEnhancedCustomScale {0};
@@ -27,6 +33,98 @@ void Load(CSimpleIniA& ini, Config& cfg)
 }
 int main()
 {
+    namespace U = DlssNr::StageUi;
+    for (bool advanced : {false, true})
+    {
+        DlssNr::BasicMultipass::Profile profile {advanced, 4, 1.25f, 6, 2.3f, 1.5f};
+        CSimpleIniA ini;
+        ini.SetValue("DlssNrLayer2", "Intensity", "0.45");
+        ini.SetValue("FutureSection", "Keep", "verbatim");
+        DlssNr::BasicMultipass::Save(ini, profile);
+        std::string bytes; assert(ini.Save(bytes) >= 0);
+        CSimpleIniA copy; assert(copy.LoadData(bytes) >= 0);
+        const auto loaded = DlssNr::BasicMultipass::Load([&](const char* key) -> std::optional<float> {
+            if (!copy.GetValue("DlssNrBasic", key)) return {};
+            return float(copy.GetDoubleValue("DlssNrBasic", key));
+        }, true);
+        assert(loaded == profile);
+        assert(std::string(copy.GetValue("DlssNrLayer2", "Intensity")) == "0.45");
+        assert(std::string(copy.GetValue("FutureSection", "Keep")) == "verbatim");
+    }
+    // Continuous preview policy preserves old stored profiles and independent method memory.
+    Config preview;
+    R::LoadConfig(preview, [](const char*) -> std::optional<uint32_t> { return {}; }, false);
+    assert(R::Selected(preview).mode == R::FullOutput);
+    for (int route : {1, 2})
+    for (uint32_t percent : {25u, 67u, 100u, 125u, 200u})
+    {
+        U::SelectMethod(preview, route);
+        U::SelectResolutionScale(preview, percent / 100.0f);
+        assert(U::ResolutionSelection(preview) == 1);
+        assert(R::Selected(preview).scale == percent);
+        for (auto output : {std::pair{1920u, 1080u}, std::pair{3840u, 2160u}})
+        {
+            const auto raster = R::Resolve(R::Selected(preview), output.first, output.second);
+            assert(!raster.reason);
+            assert(std::abs(double(raster.width) - double(output.first) * percent / 100) <= 4.5);
+            assert(std::abs(double(raster.height) - double(output.second) * percent / 100) <= 4.5);
+            const auto motion = DlssNrWorkingMotionScale(output.first, output.second, raster.width, raster.height);
+            assert(std::abs(motion.x * output.first - raster.width) < 0.001f);
+        }
+        U::SelectResolution(preview, 0);
+        assert(U::ResolutionSelection(preview) == 0);
+        const auto automatic = R::Resolve(R::Selected(preview), 3840, 2160, 1920, 1080);
+        assert(automatic.width == 3840 && automatic.height == 2160);
+        CSimpleIniA ini;
+        R::SaveConfig(ini, preview);
+        Config reloaded; Load(ini, reloaded); reloaded.DlssNrRoute = uint32_t(route);
+        U::SelectResolution(reloaded, 1);
+        assert(R::Selected(reloaded).scale == percent);
+    }
+    U::SelectMethod(preview, 1); U::SelectResolutionScale(preview, 0.67f);
+    U::SelectMethod(preview, 2); U::SelectResolutionScale(preview, 1.25f);
+    U::SelectMethod(preview, 1); assert(R::Selected(preview).scale == 67);
+    U::SelectMethod(preview, 2); assert(R::Selected(preview).scale == 125);
+    preview.DlssNrEnhancedResolution = R::FollowNative;
+    assert(U::ResolutionSelection(preview) == 2);
+    U::SelectResolution(preview, 0); assert(U::ResolutionSelection(preview) == 0);
+    assert(R::Resolve({R::Manual, 200}, 8192, 4320).reason);
+    assert(R::Resolve({R::Manual, 201}, 1920, 1080).reason);
+    assert(R::Resolve({R::Manual, 24}, 1920, 1080).reason);
+    assert(R::CaptureKey(preview) != 0);
+    for (int method = 0; method < 3; ++method)
+    for (int preset = 0; preset < 7; ++preset)
+    for (float working : {0.25f, 0.67f, 1.0f, 1.75f, 2.0f})
+    for (bool manual : {false, true})
+    {
+        Config original;
+        U::SelectMethod(original, 1); U::SelectPreset(original, preset);
+        U::SelectMethod(original, 2); U::SelectPreset(original, (preset + 3) % 7);
+        U::SelectMethod(original, method); U::SelectScale(original, working);
+        if (!manual) U::SelectManual(original, false);
+        CSimpleIniA ini;
+        ini.SetValue("FutureSection", "UnknownKey", "preserve-me");
+        R::SaveConfig(ini, original); U::SaveHints(ini, original);
+        ini.SetLongValue("DlssNr", "Route", original.DlssNrRoute.value_or_default());
+        ini.SetDoubleValue("DlssNr", "WorkingScale", original.DlssNrWorkingScale.value_or_default());
+        std::string bytes; assert(ini.Save(bytes) >= 0);
+        CSimpleIniA reloaded; assert(reloaded.LoadData(bytes) >= 0);
+        Config restored; Load(reloaded, restored);
+        restored.DlssNrRoute = uint32_t(reloaded.GetLongValue("DlssNr", "Route"));
+        restored.DlssNrWorkingScale = float(reloaded.GetDoubleValue("DlssNr", "WorkingScale"));
+        U::LoadHints(restored, reloaded.GetBoolValue("DlssNr", "UiManualResolution"),
+            float(reloaded.GetDoubleValue("DlssNr", "UiManualScale")),
+            uint32_t(reloaded.GetLongValue("DlssNr", "UiAfterMethod")));
+        assert(U::Manual(restored) == U::Manual(original));
+        assert(restored.DlssNrWorkingScale.value_or_default() == original.DlssNrWorkingScale.value_or_default());
+        assert(restored.DlssNrPresentResolution.value_or_default() == original.DlssNrPresentResolution.value_or_default());
+        assert(restored.DlssNrPresentCustomScale.value_or_default() == original.DlssNrPresentCustomScale.value_or_default());
+        assert(restored.DlssNrEnhancedResolution.value_or_default() == original.DlssNrEnhancedResolution.value_or_default());
+        assert(restored.DlssNrEnhancedCustomScale.value_or_default() == original.DlssNrEnhancedCustomScale.value_or_default());
+        assert(std::string(reloaded.GetValue("FutureSection", "UnknownKey")) == "preserve-me");
+        U::SelectManual(restored, true);
+        assert(restored.DlssNrWorkingScale.value_or_default() == working);
+    }
     for (const char* path : {"OptiScaler.ini", "integration/OptiScaler.ini"})
     {
         CSimpleIniA ini;

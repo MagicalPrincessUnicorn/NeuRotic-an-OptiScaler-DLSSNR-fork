@@ -576,7 +576,7 @@ std::string TuningStatusVk()
 void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
                             VkPhysicalDevice physicalDevice, VkDevice device)
 {
-    const auto settings = TryNrConfigSnapshot(*Config::Instance());
+    const auto settings = TryNrConfigSnapshot(*Config::Instance(), false);
     if (!settings) return;
     const auto& cfg = *settings;
 

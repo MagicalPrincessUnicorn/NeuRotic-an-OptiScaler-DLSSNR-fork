@@ -195,6 +195,7 @@ class Config
     // Multipass is a separate opt-in. A count of one is deliberately valid and behaves exactly like
     // the established single-pass route; up to nine later passes own independent sessions/history.
     NrOptional<bool> DlssNrMultipassEnabled { false };
+    NrOptional<DlssNr::BasicMultipass::Profile> DlssNrBasicMultipass { {} };
     // Experimental D3D12-only second composed NR layer. Off preserves the established single-pass
     // route exactly. Profiles created before these keys existed are seeded once from layer 1 during
     // load, then remain independent.
@@ -226,10 +227,15 @@ class Config
     NrConfigSnapshot<Config> GetDlssNrConfigSnapshot() const;
     // 0 = Native Temporal; 1 = Present Image Only; 2 = Present Enhanced (default).
     NrOptional<uint32_t> DlssNrRoute { 2 };
-    // Independent Present policies: 0 follow native, 1 full output, 2 custom.
+    // UI memory only; legacy route/placement/working scale remain authoritative.
+    NrOptional<bool> DlssNrUiManualResolution { false };
+    NrOptional<float> DlssNrUiManualScale { 1.0f };
+    NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
+    // Independent Present policies: 0 legacy native, 1 output, 2 fixed preset,
+    // 3 continuous Manual, 4 Automatic with remembered Manual percentage.
     NrOptional<uint32_t> DlssNrPresentResolution { 1 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
     NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     // 0 = Quality (post-SR), 1 = Performance (pre-SR).

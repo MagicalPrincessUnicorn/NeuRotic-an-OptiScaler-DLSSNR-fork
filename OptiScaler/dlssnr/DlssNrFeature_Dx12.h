@@ -4,6 +4,7 @@
 
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <nvsdk_ngx.h>
+#include "DlssNr_MenuStatus.h"
 
 // DLSS 5 Neural Rendering, run over the upscaler's output.
 //
@@ -53,7 +54,8 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
                                   ID3D12Resource* frame, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
                                   unsigned int workHeight, bool resetHistory,
-                                  const DlssNrFrameInfo* nativeGuideFrame = nullptr);
+                                  const DlssNrFrameInfo* nativeGuideFrame = nullptr,
+                                  const NrConfigSnapshot<Config>* settings = nullptr);
 
 
 
@@ -64,7 +66,15 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
 
 
 // The settings panel, drawn inside OptiScaler's menu.
-void RenderMenu(::Config* config, float menuResScale);
+void RenderMenu(::Config* config, float menuResScale,
+                const std::optional<MenuStatus::RuntimeStatus>& status = std::nullopt,
+                const char* gpuName = "");
+
+// The Advisor temporarily exercises each route while its explicit analysis is running.  These
+// hooks keep the state machine moving even when another top-level page is selected and guarantee
+// that closing the menu restores the exact settings captured at the start of the analysis.
+void TickAdvisor(::Config* config);
+void CancelAdvisorAnalysis(::Config* config, const char* reason = "Analysis cancelled; original settings restored.");
 
 // Clears the session failure latch and bounded transition circuits, so transient failure does not
 // require a restart.

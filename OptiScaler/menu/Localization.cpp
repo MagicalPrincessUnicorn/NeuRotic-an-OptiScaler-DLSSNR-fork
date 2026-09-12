@@ -116,6 +116,7 @@ struct Context
     std::deque<std::string> order;
 };
 thread_local Context context;
+thread_local unsigned int englishPreviewDepth = 0;
 
 std::string TranslateNormalized(const std::string& source, int recursion)
 {
@@ -186,7 +187,7 @@ void SetLanguage(std::string_view code)
 
 std::string Translate(std::string_view source)
 {
-    if (context.language == 0 || source.empty())
+    if (englishPreviewDepth || context.language == 0 || source.empty())
         return std::string(source);
     const auto key = Normalize(source);
     auto found = context.cache.find(key);
@@ -213,7 +214,7 @@ std::string Translate(std::string_view source)
 
 LocalizedRange::LocalizedRange(const char*& begin, const char*& end)
 {
-    if (!begin || context.language == 0 || context.depth != 0)
+    if (!begin || englishPreviewDepth || context.language == 0 || context.depth != 0)
         return;
     text = Translate(end ? std::string_view(begin, end - begin) : std::string_view(begin));
     begin = text.c_str();
@@ -227,4 +228,6 @@ LocalizedRange::~LocalizedRange()
     if (scoped)
         --context.depth;
 }
+EnglishPreview::EnglishPreview() { ++englishPreviewDepth; }
+EnglishPreview::~EnglishPreview() { --englishPreviewDepth; }
 } // namespace Neurotic

@@ -600,6 +600,7 @@ unsigned long long g_layer2FeatureBuilds = 0;
 unsigned long long g_layer2FeatureRetires = 0;
 unsigned long long g_layer2EvaluateFailures = 0;
 unsigned int g_lastLayerCount = 0;
+const char* g_resolutionRefusal = "";
 
 constexpr uint32_t kTransitionFailureLimit = 4;
 
@@ -897,6 +898,8 @@ struct NrPassSettings
 static unsigned int RequestedPassCount(const NrConfigSnapshot<Config>& cfg)
 {
     if (!cfg.DlssNrMultipassEnabled.value_or_default()) return 1;
+    if (DlssNr::BasicMultipass::Active(cfg))
+        return DlssNr::BasicMultipass::Count(cfg.DlssNrBasicMultipass.value_or_default());
     return std::clamp(cfg.DlssNrPasses.value_or_default(), 1u, 10u);
 }
 
@@ -1960,6 +1963,23 @@ void RecordAdditionalLayerTuning(const NrConfigSnapshot<Config>& cfg, size_t ind
 // cost is a CPU-side lock on a path that already records command lists.
 std::mutex g_nrMutex;
 
+static bool BypassZeroBasic(const NrConfigSnapshot<Config>& cfg)
+{
+    if (!DlssNr::BasicMultipass::Active(cfg) || RequestedPassCount(cfg) != 0) return false;
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    // Retain every allocation/session, but require fresh temporal history on resume.
+    g_nr.reset = true;
+    g_nr.preSrScratchPrimed = false;
+    g_nr.preSrAwaitingEvaluation = true;
+    g_lastLayerCount = 0;
+    for (size_t index = 0; index < 9; ++index)
+    {
+        AdditionalLayer(index).reset = true;
+        AdditionalLayer(index).ready = false;
+    }
+    return true;
+}
+
 // Runs the pass inside the same state envelope every other OptiScaler compute pass runs in.
 //
 // The upscaler's own evaluate is wrapped like this by TryEvaluateOptiFeature: root-signature tracking
@@ -2194,6 +2214,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
     const unsigned int requestedPassCount = RequestedPassCount(cfg);
     const bool secondLayerRequested = requestedPassCount > 1;
+    g_resolutionRefusal = "";
 
     if (!runtime.enabled || g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr ||
         motion == nullptr || output == nullptr)
@@ -2565,8 +2586,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     float layer2WorkScale = cfg.DlssNrSecondLayerWorkingScale.value_or_default();
     layer2WorkScale = layer2WorkScale < 0.25f ? 0.25f : (layer2WorkScale > 2.0f ? 2.0f : layer2WorkScale);
-    const unsigned int layer2WorkWidth = std::max(8u, (unsigned int) (width * layer2WorkScale + 0.5f) & ~7u);
-    const unsigned int layer2WorkHeight = std::max(8u, (unsigned int) (height * layer2WorkScale + 0.5f) & ~7u);
+    const bool sharedBasicRaster = DlssNr::BasicMultipass::Active(cfg);
+    const unsigned int layer2WorkWidth = sharedBasicRaster ? workWidth :
+        std::max(8u, (unsigned int) (width * layer2WorkScale + 0.5f) & ~7u);
+    const unsigned int layer2WorkHeight = sharedBasicRaster ? workHeight :
+        std::max(8u, (unsigned int) (height * layer2WorkScale + 0.5f) & ~7u);
     const bool layer2Reduced = layer2WorkWidth != width || layer2WorkHeight != height;
     std::array<float, 9> additionalWorkScale {};
     std::array<unsigned int, 9> additionalWorkWidth {};
@@ -2577,12 +2601,24 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         float scale = PassSettings(cfg, static_cast<unsigned int>(index + 1)).workingScale;
         scale = std::clamp(scale, 0.25f, 2.0f);
         additionalWorkScale[index] = scale;
-        additionalWorkWidth[index] =
+        additionalWorkWidth[index] = sharedBasicRaster ? workWidth :
             std::max(8u, (unsigned int) (width * scale + 0.5f) & ~7u);
-        additionalWorkHeight[index] =
+        additionalWorkHeight[index] = sharedBasicRaster ? workHeight :
             std::max(8u, (unsigned int) (height * scale + 0.5f) & ~7u);
         additionalReduced[index] =
             additionalWorkWidth[index] != width || additionalWorkHeight[index] != height;
+    }
+
+    const auto supported = [](unsigned int w, unsigned int h) { return w >= 8 && h >= 8 && w <= 8192 && h <= 8192; };
+    bool dimensionsSupported = supported(workWidth, workHeight);
+    for (size_t index = 0; index + 1 < healthyPassCount; ++index)
+        dimensionsSupported = dimensionsSupported && supported(additionalWorkWidth[index], additionalWorkHeight[index]);
+    if (!dimensionsSupported)
+    {
+        g_resolutionRefusal = "Requested model dimensions are outside the 8-to-8192-pixel NR resource limit";
+        g_nr.reset = true;
+        ReportSkipOnce(g_resolutionRefusal);
+        return;
     }
 
     // Prepare every size-dependent surface before publishing any replacement or retiring a feature.
@@ -4396,6 +4432,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     if (settings == nullptr && !localSettings) return nullptr;
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
 
+    if (BypassZeroBasic(cfg)) return nullptr;
     if (cfg.DlssNrRoute.value_or_default() != 0 || !cfg.GetDlssNrRuntimeSnapshot().enabled ||
         !cfg.DlssNrRunBeforeSr.value_or_default() ||
         cmdList == nullptr || params == nullptr)
@@ -4766,6 +4803,13 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                  observedWidth, observedHeight, observedOutWidth, observedOutHeight);
     }
 
+    // Models/history have advanced; retain the game's exact input when the whole effect is hidden.
+    if (!cfg.DlssNrApplyModel.value_or_default())
+    {
+        device->Release();
+        return nullptr;
+    }
+
     float jitterX = 0.0f, jitterY = 0.0f;
     int originalReset = 0;
 
@@ -4945,6 +4989,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                                                    : std::optional<NrConfigSnapshot<Config>>{};
     if (settings == nullptr && !localSettings) return;
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
+    if (BypassZeroBasic(cfg)) return;
     const bool enhanced = cfg.DlssNrRoute.value_or_default() == 2;
     const bool observeNative = enhanced || (cfg.DlssNrRoute.value_or_default() == 1 &&
         PresentResolution::Selected(cfg).mode == PresentResolution::FollowNative);
@@ -5324,7 +5369,8 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
                                   ID3D12Resource* frameResource, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
                                   unsigned int workHeight, bool resetHistory,
-                                  const DlssNrFrameInfo* nativeGuideFrame)
+                                  const DlssNrFrameInfo* nativeGuideFrame,
+                                  const NrConfigSnapshot<Config>* capturedSettings)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
@@ -5332,11 +5378,15 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
         workWidth == 0 || workHeight == 0)
         return false;
 
-    auto settings = TryNrConfigSnapshot(*Config::Instance());
+    const auto localSettings = capturedSettings == nullptr ? TryNrConfigSnapshot(*Config::Instance())
+                                                          : std::nullopt;
+    const auto* settings = capturedSettings ? capturedSettings : (localSettings ? &*localSettings : nullptr);
     if (!settings || settings->DlssNrRoute.value_or_default() == 0 ||
         (settings->DlssNrRoute.value_or_default() == 2) != (nativeGuideFrame != nullptr) ||
         !settings->GetDlssNrRuntimeSnapshot().enabled)
         return false;
+
+    if (BypassZeroBasic(*settings)) return false;
 
     ID3D12Device* device = nullptr;
     if (FAILED(frameResource->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
@@ -5560,6 +5610,7 @@ const char* FailureReason()
         return "shutdown could not safely complete; restart the process";
     if (g_nr.failed)
         return g_nr.reason;
+    if (g_resolutionRefusal[0]) return g_resolutionRefusal;
     if (TransitionCircuitOpen(g_nr.preSrFailureCircuit))
         return "Pre-SR resources or feature failed repeatedly for this configuration";
     if (TransitionCircuitOpen(g_nr.preDlaaFailureCircuit))
@@ -5608,9 +5659,14 @@ TelemetrySnapshot Telemetry()
     t.workHeight = g_nr.workHeight;
     t.guideWidth = g_nr.guideWidth;
     t.guideHeight = g_nr.guideHeight;
-    t.runBeforeSr = Config::Instance()->DlssNrRunBeforeSr.value_or_default();
-    t.layer2Requested = Config::Instance()->DlssNrMultipassEnabled.value_or_default() &&
-                        Config::Instance()->DlssNrPasses.value_or_default() > 1;
+    {
+        NrConfigSynchronization::Transaction transaction;
+        const auto* config = Config::Instance();
+        t.runBeforeSr = config->DlssNrRoute.value_or_default() == 0 && config->DlssNrRunBeforeSr.value_or_default();
+        const auto basic = config->DlssNrBasicMultipass.value_or_default();
+        const auto passes = basic.advanced ? config->DlssNrPasses.value_or_default() : BasicMultipass::Count(basic);
+        t.layer2Requested = config->DlssNrMultipassEnabled.value_or_default() && passes > 1;
+    }
     t.layer2Loaded = g_nr.layer2.feature != nullptr;
     t.layer2Ready = g_nr.layer2.ready && t.layer2Loaded && !g_nr.layer2.failed;
     t.layer2Retiring = g_nr.layer2.featureAwaitingRelease != nullptr;
@@ -5626,6 +5682,7 @@ TelemetrySnapshot Telemetry()
     t.retryAllowed = t.failed && !g_sessionClosed && !g_shutdownFailed;
     t.failureReason = g_shutdownFailed ? "shutdown could not safely complete; restart the process"
                       : g_nr.failed ? g_nr.reason
+                      : g_resolutionRefusal[0] ? g_resolutionRefusal
                       : TransitionCircuitOpen(g_nr.preSrFailureCircuit)
                           ? "Pre-SR resources or feature failed repeatedly for this configuration"
                       : TransitionCircuitOpen(g_nr.preDlaaFailureCircuit)

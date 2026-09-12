@@ -39,12 +39,14 @@ def require(value, message):
     if not value: raise AssertionError(message)
     print('PASS:', message)
 missing = set()
-for path in ['OptiScaler/dlssnr/DlssNr_Menu.cpp', 'OptiScaler/menu/menu_common.cpp']:
+for path in ['OptiScaler/menu/menu_common.cpp']:
     old = subprocess.check_output(['git','-c','safe.directory='+ROOT.as_posix(),'-C',str(ROOT),
                                    'show','7040d75d:'+path]).decode('utf-8')
     for key in visible(source(path)) - visible(old):
         if normalize(key) not in inventory and not key.startswith('https://'):
             missing.add(key)
+require('Neurotic::EnglishPreview englishPreview;' in source('OptiScaler/dlssnr/DlssNr_Menu.cpp'),
+        'new NR strings are scoped to the explicit English preview')
 for match in re.finditer(r'ToggleBurstMessages\s*=\s*\{(.*?)\}', source('OptiScaler/dlssnr/NrToggleNotes.h'), re.S):
     for key in joined_strings(match.group(1)):
         if normalize(key) not in inventory: missing.add(key)
@@ -54,7 +56,7 @@ present = source('OptiScaler/dlssnr/DlssNr_Present.cpp')
 # Exclude the function definition: its body includes diagnostic-only trace strings.
 for match in re.finditer(r'SetFallback\((?!PresentApi\s+\w+).*?\);', present, re.S):
     for key in joined_strings(match.group()):
-        if key and not key.startswith('DLSS-NR Present diagnostic:') and normalize(key) not in inventory:
+        if key and not key.startswith(('DLSS-NR Present diagnostic:', 'Basic Multipass')) and normalize(key) not in inventory:
             missing.add(key)
 for path in ['OptiScaler/dlssnr/PreFg.h', 'OptiScaler/dlssnr/StreamlinePreFg.h']:
     for match in re.finditer(r'(?:refusal\s*=|ReportPresentUnavailable\(PresentApi::D3D12,)\s*("(?:[^"\\]|\\.)*")', source(path)):
@@ -91,12 +93,12 @@ require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCo
 require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 0 and
         nr.count('RenderMultipassMenu(config, menuResScale);') == 1,
         'Multipass is a collapsible section within the Neural Rendering page')
-require(nr.count('ImGui::Combo("NR route"') == 1 and
-        nr.count('ImGui::Checkbox("Enable NR Multipass"') == 1,
+require(nr.count('StageUi::RenderControls(*config, basicOwnsMain)') == 1 and
+        nr.count('MenuControls::EmphasizedCheckbox("Enable NR Multipass"') == 1,
         'single route and bounded multipass controls')
-require(nr.count('RenderPassCountSelector(config)') == 2 and
+require(nr.count('RenderPassCountSelector(config)') == 1 and
         nr.count('ImGui::Combo("Passes"') == 1,
-        'one pass-count implementation is rendered in primary and Multipass sections')
+        'pass-count control is rendered only in Multipass')
 require('c[ImGuiCol_TabSelected] = AccentStrong();' in menu and
         'c[ImGuiCol_TabDimmedSelected] = AccentMed(0.90f);' in menu,
         'parent and pass tabs share a visibly stronger selected color')

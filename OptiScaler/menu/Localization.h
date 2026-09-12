@@ -23,6 +23,16 @@ void SetLanguage(std::string_view code);
 std::string Translate(std::string_view source);
 void AddLanguageFonts(ImFontAtlas* atlas, float size);
 
+// Presentation-only override; the saved menu language is never modified.
+class EnglishPreview
+{
+  public:
+    EnglishPreview();
+    ~EnglishPreview();
+    EnglishPreview(const EnglishPreview&) = delete;
+    EnglishPreview& operator=(const EnglishPreview&) = delete;
+};
+
 // Only presentation ranges are translated. Original ImGui labels/IDs and printf
 // format strings never change. Nested measure/draw calls reuse the same text.
 class LocalizedRange

@@ -6,6 +6,23 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include "dlssnr/DlssNr_StageControls.h"
+#include "dlssnr/DlssNr_MenuControls.h"
+
+struct StageUiFixture
+{
+    NrOptional<uint32_t> DlssNrRoute {2}, DlssNrUiAfterMethod {0};
+    NrOptional<int32_t> DlssNrRenderingMode {1};
+    NrOptional<bool> DlssNrRunBeforeSr {false}, DlssNrUiManualResolution {false};
+    NrOptional<float> DlssNrWorkingScale {1.0f}, DlssNrUiManualScale {1.0f};
+    NrOptional<uint32_t> DlssNrPresentResolution {1}, DlssNrPresentCustomScale {0};
+    NrOptional<uint32_t> DlssNrEnhancedResolution {0}, DlssNrEnhancedCustomScale {0};
+    StageUiFixture GetDlssNrConfigSnapshot() const
+    {
+        NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+        return *this;
+    }
+};
 
 struct CatalogEntry
 {
@@ -29,6 +46,15 @@ int main()
     {
         Check(Neurotic::LanguageIndex("invalid") == 0, "unknown language falls back to English");
         Check(Neurotic::LanguageIndex("PT-BR") == 4, "Portuguese alias");
+        Neurotic::SetLanguage("fr");
+        const auto savedFrench = Neurotic::Translate("Automatic");
+        {
+            Neurotic::EnglishPreview preview;
+            Check(Neurotic::Translate("Automatic") == "Automatic", "NR preview is English");
+            { Neurotic::EnglishPreview nested; Check(Neurotic::Translate("Manual") == "Manual", "nested English preview"); }
+            Check(Neurotic::Translate("Automatic") == "Automatic", "outer override survives nested scope");
+        }
+        Check(Neurotic::Translate("Automatic") == savedFrench, "preview restores prior language without rewriting preference");
         for (int language = 0; language < Neurotic::LanguageCount; ++language)
         {
             Neurotic::SetLanguage(Neurotic::Languages[language].code);
@@ -140,6 +166,18 @@ int main()
                 Check(ImGui::GetItemRectMax().x < 900 * scale, "action and language row fits");
                 bool showGraphs = true;
                 ImGui::Checkbox("Show Graphs", &showGraphs);
+                bool nrEnabled = false;
+                const ImGuiID emphasizedId = ImGui::GetID("Enable Neural Rendering");
+                DlssNr::MenuControls::EmphasizedCheckbox("Enable Neural Rendering", &nrEnabled);
+                Check(emphasizedId == ImGui::GetID("Enable Neural Rendering"),
+                      "emphasized checkbox preserves its stable ID");
+                Check(ImGui::GetItemRectMax().x < 900 * scale,
+                      "emphasized checkbox fits both themes at every UI scale");
+                const auto off = DlssNr::MenuControls::EmphasizedToggleStateColor(false);
+                const auto on = DlssNr::MenuControls::EmphasizedToggleStateColor(true);
+                const auto focus = DlssNr::MenuControls::EmphasizedToggleFocusColor();
+                Check(off.x > off.y && on.y > on.x && focus.x > 0.9f && focus.y > 0.6f,
+                      "emphasized checkbox has red off, green on and gold focus states");
                 ImGui::Text("3840x2160 -> 1920x1080 (2.0) [3840x2160 (1.0)]");
                 ImGui::SameLine(0, 10 * scale);
                 ImGui::Text("GPU: %s", "Test GPU");
@@ -163,7 +201,7 @@ int main()
                                                "Advanced", "Tools", "Diagnostics" })
                         if (ImGui::BeginTabItem(label))
                         {
-                            ImGui::Text("Running: %.2f ms", 3.25);
+                ImGui::Text("Running: %.2f ms", 3.25);
                             ImGui::EndTabItem();
                         }
                     ImGui::EndTabBar();
@@ -196,6 +234,51 @@ int main()
                 ImGui::End();
                 ImGui::PopFont();
                 ImGui::Render();
+                // Exercise the actual production controls for every valid stage/method/preset.
+                for (int choice = 0; choice < 18; ++choice)
+                {
+                    Neurotic::EnglishPreview preview;
+                    StageUiFixture cfg;
+                    if (choice < 4)
+                    {
+                        DlssNr::StageUi::SelectMethod(cfg, 0);
+                        if (choice < 2) DlssNr::StageUi::SelectStage(cfg, 0);
+                        DlssNr::StageUi::SelectManual(cfg, choice % 2 != 0);
+                    }
+                    else
+                    {
+                        DlssNr::StageUi::SelectMethod(cfg, choice < 11 ? 1 : 2);
+                        DlssNr::StageUi::SelectPreset(cfg, (choice - 4) % 7);
+                    }
+                    const auto before = cfg.GetDlssNrConfigSnapshot();
+                    ImGui::NewFrame();
+                    ImGui::PushFont(nullptr, 16.0f * scale);
+                    ImGui::SetNextWindowPos(ImVec2(0, 0));
+                    ImGui::SetNextWindowSize(ImVec2((choice % 2 ? 360 : 820) * scale, 650 * scale));
+                    ImGui::Begin("Stage-first test###stage");
+                    bool enabled = true;
+                    ImGui::Checkbox("Enable Neural Rendering", &enabled);
+                    const auto top = ImGui::GetCursorScreenPos();
+                    const auto right = top.x + ImGui::GetContentRegionAvail().x;
+                    Check(!DlssNr::StageUi::RenderControls(cfg), "drawing stage controls is read-only");
+                    Check(ImGui::GetItemRectMax().x <= right + 1, "primary controls fit every language and scale");
+                    Check(ImGui::GetItemRectMin().y > top.y, "primary rows retain vertical order");
+                    Check(cfg.DlssNrRoute.value_or_default() == before.DlssNrRoute.value_or_default() &&
+                          cfg.DlssNrWorkingScale.value_or_default() == before.DlssNrWorkingScale.value_or_default(),
+                          "layout never mutates rendering choices");
+                    Check(!DlssNr::StageUi::RenderRuntimeStatus(std::nullopt), "absent provider snapshot retains generic status");
+                    DlssNr::MenuStatus::RuntimeStatus status;
+                    status.state = DlssNr::MenuStatus::State(choice % 7);
+                    status.realFrame = 1842;
+                    status.workWidth = 1712; status.workHeight = 960;
+                    status.outputWidth = 2560; status.outputHeight = 1440;
+                    std::snprintf(status.reason.data(), status.reason.size(), "fixture reason");
+                    Check(DlssNr::StageUi::RenderRuntimeStatus(status), "bounded read-only state snapshot rendered");
+                    Check(status.realFrame == 1842, "status rendering does not mutate telemetry");
+                    ImGui::End();
+                    ImGui::PopFont();
+                    ImGui::Render();
+                }
                 Check(ImGui::GetDrawData()->TotalVtxCount > 0, "translated draw data emitted");
                 for (auto* texture : io.Fonts->TexList)
                 {
@@ -207,6 +290,66 @@ int main()
                 }
             }
         }
+        // Real keyboard/controller events through the same production controls.
+        Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(1000.0f, 1.0f, 60.0f, 20.0f, 8.0f) - 440.0f) < 0.01f,
+              "main tuning slider reaches doubled preferred width when space permits");
+        Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(300.0f, 1.0f, 60.0f, 20.0f, 8.0f) - 204.0f) < 0.01f,
+              "main tuning slider reserves reset, help and spacing at narrow widths");
+        Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(1000.0f, 2.0f, 60.0f, 20.0f, 8.0f) - 880.0f) < 0.01f,
+              "main tuning slider preferred width follows UI scale");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(700.0f, 1.0f, 60.0f, 8.0f) - 320.0f) < 0.01f,
+              "Basic shared resolution uses its shorter preferred width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(260.0f, 1.0f, 60.0f, 8.0f) - 192.0f) < 0.01f,
+              "Basic shared resolution preserves reset space at narrow widths");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(1000.0f, 2.0f, 60.0f, 8.0f) - 640.0f) < 0.01f,
+              "Basic shared resolution preferred width follows UI scale");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 1) - 233.0f) < 0.01f,
+              "one-pass cumulative strength uses one quarter of the safe row width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 2) - 466.0f) < 0.01f,
+              "two-pass cumulative strength uses half of the safe row width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 3) - 699.0f) < 0.01f,
+              "three-pass cumulative strength uses three quarters of the safe row width");
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 4) - 932.0f) < 0.01f &&
+              std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 10) - 932.0f) < 0.01f,
+              "four through ten passes use the full safe row width");
+        Neurotic::SetLanguage("en");
+        ImGui::GetStyle() = baseStyle;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+        io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+        StageUiFixture navigation;
+        DlssNr::StageUi::SelectMethod(navigation, 0);
+        DlssNr::StageUi::SelectStage(navigation, 0);
+        ImGuiID stageId = 0, resolutionId = 0, methodId = 0;
+        const auto navFrame = [&](bool focus = false) {
+            ImGui::NewFrame();
+            ImGui::SetNextWindowPos(ImVec2(0, 0));
+            ImGui::SetNextWindowSize(ImVec2(820, 480));
+            ImGui::Begin("Navigation###stage-nav");
+            stageId = ImGui::GetID("##NrStage");
+            methodId = ImGui::GetID("##NrMethod");
+            resolutionId = ImGui::GetID("##NrResolution");
+            if (focus) ImGui::SetKeyboardFocusHere();
+            DlssNr::StageUi::RenderControls(navigation);
+            ImGui::End();
+            ImGui::Render();
+        };
+        const auto key = [&](ImGuiKey k) {
+            io.AddKeyEvent(k, true); navFrame();
+            io.AddKeyEvent(k, false); navFrame(); navFrame();
+        };
+        navFrame(true); navFrame();
+        Check(GImGui->NavId == stageId, "keyboard focus starts on stage selector");
+        key(ImGuiKey_Tab);
+        // SetKeyboardFocusHere deliberately keeps the nav cursor hidden; the first Tab
+        // enters keyboard navigation on that item, the next advances to the next control.
+        key(ImGuiKey_Tab);
+        Check(GImGui->NavId == resolutionId, "Tab skips the fixed Before-stage method");
+        navFrame(true); navFrame();
+        key(ImGuiKey_Enter); key(ImGuiKey_DownArrow); key(ImGuiKey_Enter);
+        Check(DlssNr::StageUi::Stage(navigation) == 1, "keyboard selects After stage");
+        navFrame(true); navFrame();
+        key(ImGuiKey_GamepadDpadDown);
+        Check(GImGui->NavId == methodId, "controller navigation reaches the After-stage method");
         ImGui::DestroyContext();
         const auto ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();

@@ -7,6 +7,8 @@
 #include "DlssNr_Present.h"
 #include "DlssNr_PresentGuides.h"
 #include "DlssNr_MenuStatus.h"
+#include "DlssNr_StageControls.h"
+#include "DlssNr_MenuControls.h"
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
@@ -26,6 +28,9 @@
 #include <cmath>
 #include <cstdio>
 #include <chrono>
+#include <bit>
+#include <array>
+#include <optional>
 
 namespace DlssNr
 {
@@ -74,7 +79,9 @@ class ScopedNestedTextWrap
 // The "(?)" marker every control carries, matching the rest of the menu.
 static void HelpMarker(const char* tip)
 {
-    ImGui::SameLine();
+    const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    if (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize("(?)").x <= right)
+        ImGui::SameLine();
     ImGui::TextDisabled("(?)");
 
     if (ImGui::IsItemHovered())
@@ -103,7 +110,8 @@ static void CancelNrEdits()
 }
 
 static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<float>*>& targets,
-                             float mn, float mx, float def, const char* fmt, bool percent = false)
+                             float mn, float mx, float def, const char* fmt, bool percent = false,
+                             ImVec2* sliderMin = nullptr, ImVec2* sliderMax = nullptr)
 {
     auto& edit = pendingNrEdits[label];
     edit.Prepare(targets, ImGui::GetFrameCount());
@@ -118,10 +126,14 @@ static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<flo
     }
     else if (ImGui::SliderFloat(label, &value, mn, mx, fmt, ImGuiSliderFlags_AlwaysClamp))
         edit.Preview(value);
+    if (sliderMin) *sliderMin = ImGui::GetItemRectMin();
+    if (sliderMax) *sliderMax = ImGui::GetItemRectMax();
     if (ImGui::IsItemDeactivatedAfterEdit()) changed = edit.Commit(mn, mx);
     edit.Finish(ImGui::IsItemActive());
     ImGui::SameLine();
-    const std::string resetId = std::string("Reset##") + label;
+    const char* stableLabel = strstr(label, "###");
+    const std::string resetId = stableLabel ?
+        std::string("Reset###Reset##") + (stableLabel + 3) : std::string("Reset##") + label;
     if (ImGui::SmallButton(resetId.c_str()))
     {
         edit.Reset(def);
@@ -129,6 +141,32 @@ static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<flo
         changed = true;
     }
     return changed;
+}
+
+static void DrawCumulativePassSegments(const ImVec2& sliderMin, const ImVec2& sliderMax,
+                                       unsigned int maximumPasses, float menuResScale)
+{
+    static const ImVec4 palette[] = {
+        { 0.95f, 0.30f, 0.28f, 0.95f }, { 0.26f, 0.82f, 0.38f, 0.95f },
+        { 0.28f, 0.55f, 0.98f, 0.95f }, { 1.00f, 0.72f, 0.18f, 0.95f },
+        { 0.80f, 0.36f, 0.92f, 0.95f }, { 0.18f, 0.78f, 0.86f, 0.95f },
+        { 1.00f, 0.48f, 0.16f, 0.95f }, { 0.55f, 0.42f, 0.94f, 0.95f },
+        { 0.60f, 0.86f, 0.22f, 0.95f }, { 0.18f, 0.68f, 0.60f, 0.95f }
+    };
+    const unsigned int count = (std::clamp)(maximumPasses, 1u, 10u);
+    const float width = sliderMax.x - sliderMin.x;
+    const float underline = (std::max)(2.0f, 2.0f * menuResScale);
+    auto* draw = ImGui::GetWindowDrawList();
+    for (unsigned int index = 0; index < count; ++index)
+    {
+        const float left = sliderMin.x + width * float(index) / float(count);
+        const float right = sliderMin.x + width * float(index + 1) / float(count);
+        draw->AddRectFilled({ left, sliderMax.y - underline }, { right, sliderMax.y },
+                            ImGui::GetColorU32(palette[index]), 0.0f);
+        if (index > 0)
+            draw->AddLine({ left, sliderMin.y + underline }, { left, sliderMax.y },
+                          ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.55f)), 1.0f);
+    }
 }
 
 static bool DeferredSlider(const char* label, NrOptional<float>* opt, float mn, float mx,
@@ -145,6 +183,7 @@ static unsigned int RenderPassCountSelector(Config* config)
     int passCountIndex = std::clamp((int) config->DlssNrPasses.value_or_default(), 1, 10) - 1;
     if (ImGui::Combo("Passes", &passCountIndex, passCounts, IM_ARRAYSIZE(passCounts)))
     {
+        NrConfigSynchronization::Transaction transaction;
         config->DlssNrPasses = (uint32_t) (passCountIndex + 1);
         // Retain the old field as an in-memory compatibility hint. The persisted alias remains
         // derived from the Multipass switch, so choosing a count alone never activates it.
@@ -158,84 +197,852 @@ static unsigned int RenderPassCountSelector(Config* config)
 
 static void RenderMultipassMenu(Config* config, float menuResScale);
 
-void RenderMenu(Config* config, float menuResScale)
+namespace
 {
+enum class AdvisorPhase { Idle, Warmup, Sample };
+enum class AdvisorResultLevel { Unknown, Analyzing, Available, Unavailable, Recommended };
 
+struct AdvisorRouteResult
+{
+    AdvisorResultLevel level = AdvisorResultLevel::Unknown;
+    bool succeeded = false;
+    double fps = 0.0;
+    double frameMs = 0.0;
+    double modelMs = 0.0;
+    unsigned int modelSamples = 0;
+    std::string detail = "Not measured";
+};
+
+struct AdvisorOriginalSettings
+{
+    bool captured = false;
+    std::optional<bool> enabled;
+    std::optional<bool> applyModel;
+    std::optional<bool> multipass;
+    std::optional<bool> secondLayer;
+    std::optional<uint32_t> passes;
+    std::optional<uint32_t> route;
+    std::optional<int32_t> renderingMode;
+    std::optional<bool> runBefore;
+    std::optional<bool> manualResolution;
+    std::optional<float> workingScale;
+    std::optional<uint32_t> presentResolution;
+    std::optional<uint32_t> presentScale;
+    std::optional<uint32_t> enhancedResolution;
+    std::optional<uint32_t> enhancedScale;
+};
+
+struct AdvisorState
+{
+    AdvisorPhase phase = AdvisorPhase::Idle;
+    bool running = false;
+    bool analyzed = false;
+    int appliedRoute = -1;
+    int targetIndex = 2; // 60 FPS
+    int goalIndex = 1;   // balanced
+    int routeIndex = 0;
+    int recommendation = -1;
+    double phaseStarted = 0.0;
+    unsigned int originalWidth = 0;
+    unsigned int originalHeight = 0;
+    unsigned long long startNativeFrames = 0;
+    unsigned long long startPresentEvaluations = 0;
+    unsigned long long startGuideEvaluations = 0;
+    unsigned long long lastNativeGpuFrame = 0;
+    unsigned long long lastPresentGpuSample = 0;
+    double frameIntervalTotal = 0.0;
+    unsigned int frameIntervalSamples = 0;
+    double modelGpuTotal = 0.0;
+    unsigned int modelGpuSamples = 0;
+    std::array<AdvisorRouteResult, 3> routes;
+    AdvisorOriginalSettings original;
+    std::string status = "Choose a target and analyze the current game scene.";
+    std::string reason = "No settings change until you choose an available route.";
+    std::string gpuName = "Detecting graphics card...";
+};
+
+AdvisorState& Advisor()
+{
+    static AdvisorState state;
+    return state;
+}
+
+double AdvisorNow()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+void CaptureAdvisorSettings(Config& config, AdvisorOriginalSettings& out)
+{
+    NrConfigSynchronization::Transaction transaction;
+    out.enabled = config.DlssNrEnabled.snapshot();
+    out.applyModel = config.DlssNrApplyModel.snapshot();
+    out.multipass = config.DlssNrMultipassEnabled.snapshot();
+    out.secondLayer = config.DlssNrSecondLayer.snapshot();
+    out.passes = config.DlssNrPasses.snapshot();
+    out.route = config.DlssNrRoute.snapshot();
+    out.renderingMode = config.DlssNrRenderingMode.snapshot();
+    out.runBefore = config.DlssNrRunBeforeSr.snapshot();
+    out.manualResolution = config.DlssNrUiManualResolution.snapshot();
+    out.workingScale = config.DlssNrWorkingScale.snapshot();
+    out.presentResolution = config.DlssNrPresentResolution.snapshot();
+    out.presentScale = config.DlssNrPresentCustomScale.snapshot();
+    out.enhancedResolution = config.DlssNrEnhancedResolution.snapshot();
+    out.enhancedScale = config.DlssNrEnhancedCustomScale.snapshot();
+    out.captured = true;
+}
+
+void RestoreAdvisorSettings(Config& config, AdvisorOriginalSettings& original)
+{
+    if (!original.captured) return;
+    NrConfigSynchronization::Transaction transaction;
+    const bool enabled = original.enabled.value_or(false);
+    config.SetDlssNrEnabled(enabled);
+    config.DlssNrEnabled = original.enabled;
+    config.DlssNrApplyModel = original.applyModel;
+    config.DlssNrMultipassEnabled = original.multipass;
+    config.DlssNrSecondLayer = original.secondLayer;
+    config.DlssNrPasses = original.passes;
+    config.DlssNrRoute = original.route;
+    config.DlssNrRenderingMode = original.renderingMode;
+    config.DlssNrRunBeforeSr = original.runBefore;
+    config.DlssNrUiManualResolution = original.manualResolution;
+    config.DlssNrWorkingScale = original.workingScale;
+    config.DlssNrPresentResolution = original.presentResolution;
+    config.DlssNrPresentCustomScale = original.presentScale;
+    config.DlssNrEnhancedResolution = original.enhancedResolution;
+    config.DlssNrEnhancedCustomScale = original.enhancedScale;
+    original.captured = false;
+}
+
+void ConfigureAdvisorRoute(Config& config, int route)
+{
+    NrConfigSynchronization::Transaction transaction;
+    config.SetDlssNrEnabled(true);
+    config.DlssNrApplyModel = false;
+    config.DlssNrMultipassEnabled = false;
+    config.DlssNrSecondLayer = false;
+    config.DlssNrPasses = 1u;
+    config.DlssNrRoute = uint32_t(std::clamp(route, 0, 2));
+    if (route == 0)
+    {
+        config.DlssNrRenderingMode = 1;
+        config.DlssNrRunBeforeSr = true;
+        config.DlssNrUiManualResolution = false;
+        config.DlssNrWorkingScale = 1.0f;
+    }
+    else
+    {
+        config.DlssNrRenderingMode = 0;
+        config.DlssNrRunBeforeSr = false;
+        if (route == 1)
+        {
+            config.DlssNrPresentResolution = PresentResolution::Automatic;
+            config.DlssNrPresentCustomScale = 100u;
+        }
+        else
+        {
+            config.DlssNrEnhancedResolution = PresentResolution::Automatic;
+            config.DlssNrEnhancedCustomScale = 100u;
+        }
+    }
+}
+
+void BeginAdvisorRoute(Config& config, int route)
+{
+    auto& advisor = Advisor();
+    advisor.routeIndex = route;
+    advisor.phase = AdvisorPhase::Warmup;
+    advisor.phaseStarted = AdvisorNow();
+    ConfigureAdvisorRoute(config, route);
+    const auto native = DlssNr::Telemetry();
+    const auto present = DlssNr::PresentTelemetry();
+    const auto guides = DlssNr::PresentGuides::Instance().Inspect();
+    advisor.startNativeFrames = native.completedPipelineEvaluations;
+    advisor.startPresentEvaluations = present.modelEvaluations;
+    advisor.startGuideEvaluations = guides.evaluated;
+    advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
+    advisor.lastPresentGpuSample = present.presentGpuSamples;
+    advisor.frameIntervalTotal = 0.0;
+    advisor.frameIntervalSamples = 0;
+    advisor.modelGpuTotal = 0.0;
+    advisor.modelGpuSamples = 0;
+}
+
+double AdvisorTargetFps(const AdvisorState& advisor)
+{
+    static constexpr double values[] = { 30.0, 45.0, 60.0, 90.0, 120.0, 144.0 };
+    return values[std::clamp(advisor.targetIndex, 0, 5)];
+}
+
+void ChooseAdvisorRecommendation(AdvisorState& advisor)
+{
+    const double target = AdvisorTargetFps(advisor);
+    const auto meets = [&](int route, double margin)
+    {
+        const auto& result = advisor.routes[route];
+        return result.succeeded && (result.fps <= 0.0 || result.fps >= target * margin);
+    };
+
+    int selected = -1;
+    if (advisor.goalIndex == 0) // quality
+    {
+        for (int route : { 2, 1, 0 }) if (selected < 0 && meets(route, 0.90)) selected = route;
+    }
+    else if (advisor.goalIndex == 1) // balanced
+    {
+        for (int route : { 2, 1, 0 }) if (selected < 0 && meets(route, 1.0)) selected = route;
+    }
+    else // performance
+    {
+        double fastest = -1.0;
+        for (int route : { 0, 1, 2 })
+            if (advisor.routes[route].succeeded && advisor.routes[route].fps > fastest)
+                selected = route, fastest = advisor.routes[route].fps;
+    }
+    if (selected < 0)
+    {
+        double fastest = -1.0;
+        for (int route : { 0, 1, 2 })
+            if (advisor.routes[route].succeeded && advisor.routes[route].fps > fastest)
+                selected = route, fastest = advisor.routes[route].fps;
+    }
+
+    advisor.recommendation = selected;
+    for (int route = 0; route < 3; ++route)
+        advisor.routes[route].level = !advisor.routes[route].succeeded ? AdvisorResultLevel::Unavailable :
+            route == selected ? AdvisorResultLevel::Recommended : AdvisorResultLevel::Available;
+
+    advisor.analyzed = true;
+    advisor.appliedRoute = -1;
+    if (selected < 0)
+    {
+        advisor.status = "No verified Neural Rendering route was available.";
+        advisor.reason = "The original image was preserved. Review the route reasons below and try another scene.";
+    }
+    else
+    {
+        static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+        advisor.status = std::string("Recommended: ") + names[selected];
+        const bool targetMet = advisor.routes[selected].fps <= 0.0 || advisor.routes[selected].fps >= target;
+        advisor.reason = targetMet
+            ? "Verified at 100% model resolution and one pass for the selected target."
+            : "No verified 100% route met the target; the fastest verified route is recommended.";
+    }
+}
+
+void FinishAdvisorRoute(Config& config)
+{
+    auto& advisor = Advisor();
+    const int route = advisor.routeIndex;
+    auto& result = advisor.routes[route];
+    const auto native = DlssNr::Telemetry();
+    const auto present = DlssNr::PresentTelemetry();
+    const auto guides = DlssNr::PresentGuides::Instance().Inspect();
+    if (advisor.frameIntervalSamples != 0 && advisor.frameIntervalTotal > 0.0)
+    {
+        result.frameMs = advisor.frameIntervalTotal / advisor.frameIntervalSamples;
+        result.fps = 1000.0 / result.frameMs;
+    }
+    if (advisor.modelGpuSamples != 0)
+    {
+        result.modelMs = advisor.modelGpuTotal / advisor.modelGpuSamples;
+        result.modelSamples = advisor.modelGpuSamples;
+    }
+    if (route == 0)
+    {
+        result.succeeded = native.running && !native.failed && !native.outputQuarantined &&
+            native.completedPipelineEvaluations > advisor.startNativeFrames;
+        result.detail = result.succeeded ? "Verified at 100% before upscaling" :
+            (native.failureReason && native.failureReason[0] ? native.failureReason : "Native model output was not verified");
+    }
+    else
+    {
+        const bool expectedRoute = present.requestedPlacement ==
+            (route == 2 ? "Present Enhanced" : "Present Image-Only");
+        result.succeeded = expectedRoute && present.active && !present.failed &&
+            present.modelEvaluations > advisor.startPresentEvaluations &&
+            (route != 2 || guides.evaluated > advisor.startGuideEvaluations);
+        if (result.succeeded)
+            result.detail = route == 2 ? "Verified depth and motion guides" : "Verified final-image compatibility path";
+        else if (!present.failure.empty()) result.detail = present.failure;
+        else if (!present.fallbackReason.empty()) result.detail = present.fallbackReason;
+        else if (route == 2 && !guides.status.empty()) result.detail = guides.status;
+        else result.detail = "Present output was not verified";
+    }
+
+    if (route < 2)
+        BeginAdvisorRoute(config, route + 1);
+    else
+    {
+        RestoreAdvisorSettings(config, advisor.original);
+        advisor.running = false;
+        advisor.phase = AdvisorPhase::Idle;
+        ChooseAdvisorRecommendation(advisor);
+    }
+}
+
+void StartAdvisorAnalysis(Config& config)
+{
+    auto& advisor = Advisor();
+    if (advisor.running) return;
+    advisor.routes = {};
+    for (auto& route : advisor.routes)
+    {
+        route.level = AdvisorResultLevel::Analyzing;
+        route.detail = "Analyzing...";
+    }
+    advisor.recommendation = -1;
+    advisor.analyzed = false;
+    advisor.appliedRoute = -1;
+    advisor.status = "Testing available routes...";
+    advisor.reason = "Model effect hidden; 100% resolution and one pass. Original settings will be restored.";
+    CaptureAdvisorSettings(config, advisor.original);
+    const auto present = DlssNr::PresentTelemetry();
+    advisor.originalWidth = present.backbufferWidth;
+    advisor.originalHeight = present.backbufferHeight;
+    advisor.running = true;
+    BeginAdvisorRoute(config, 0);
+}
+
+void ApplyAdvisorRoute(Config& config, int route)
+{
+    auto& advisor = Advisor();
+    if (advisor.running || route < 0 || route >= static_cast<int>(advisor.routes.size()) ||
+        !advisor.routes[route].succeeded)
+        return;
+    NrConfigSynchronization::Transaction transaction;
+    config.DlssNrRoute = uint32_t(route);
+    config.DlssNrUiAfterMethod = uint32_t(route == 0 ?
+        config.DlssNrUiAfterMethod.value_or_default() : route);
+    if (route == 0)
+    {
+        config.DlssNrRenderingMode = 1;
+        config.DlssNrRunBeforeSr = true;
+        config.DlssNrUiManualResolution = false;
+        config.DlssNrWorkingScale = 1.0f;
+    }
+    else
+    {
+        config.DlssNrRenderingMode = 0;
+        config.DlssNrRunBeforeSr = false;
+        auto& mode = route == 2 ? config.DlssNrEnhancedResolution : config.DlssNrPresentResolution;
+        auto& scale = route == 2 ? config.DlssNrEnhancedCustomScale : config.DlssNrPresentCustomScale;
+        mode = PresentResolution::Automatic;
+        scale = 100u;
+    }
+    static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+    advisor.appliedRoute = route;
+    advisor.status = std::string("Applied: ") + names[route];
+    advisor.reason = "Stage, method, and 100% resolution policy were applied atomically. Model tuning and Multipass were unchanged.";
+}
+
+ImVec4 AdvisorColor(AdvisorResultLevel level)
+{
+    switch (level)
+    {
+    case AdvisorResultLevel::Recommended: return { 0.25f, 0.90f, 0.38f, 1.0f };
+    case AdvisorResultLevel::Available: return { 1.00f, 0.66f, 0.20f, 1.0f };
+    case AdvisorResultLevel::Unavailable: return { 0.95f, 0.30f, 0.28f, 1.0f };
+    case AdvisorResultLevel::Analyzing: return { 0.30f, 0.68f, 1.00f, 1.0f };
+    default: return ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    }
+}
+
+const char* AdvisorLevelName(AdvisorResultLevel level)
+{
+    switch (level)
+    {
+    case AdvisorResultLevel::Recommended: return "Recommended";
+    case AdvisorResultLevel::Available: return "Available";
+    case AdvisorResultLevel::Unavailable: return "Unavailable";
+    case AdvisorResultLevel::Analyzing: return "Analyzing...";
+    default: return "Not measured";
+    }
+}
+
+void AdvisorSignal(const char* label, const std::string& value, const ImVec4& color)
+{
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextDisabled("%s", label);
+    ImGui::TableSetColumnIndex(1);
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::TextWrapped("%s", value.c_str());
+    ImGui::PopStyleColor();
+}
+
+const char* BackbufferFormatName(DXGI_FORMAT format)
+{
+    switch (format)
+    {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return "RGBA8 SDR";
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return "RGBA8 sRGB";
+    case DXGI_FORMAT_R10G10B10A2_UNORM: return "RGB10A2 HDR/SDR";
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: return "RGBA16F HDR";
+    default: return "Waiting for output format";
+    }
+}
+
+void RenderAdvisorRouteCard(Config& config, int route, float height)
+{
+    static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+    auto& advisor = Advisor();
+    auto& result = advisor.routes[route];
+    const ImVec4 color = AdvisorColor(result.level);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(color.x, color.y, color.z, 0.07f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(color.x, color.y, color.z, 0.70f));
+    if (ImGui::BeginChild((std::string("##AdvisorRoute") + std::to_string(route)).c_str(),
+                          ImVec2(0.0f, height), ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImGui::TextColored(color, "%s", names[route]);
+        ImGui::SameLine();
+        ImGui::TextColored(color, "- %s", AdvisorLevelName(result.level));
+        ImGui::TextWrapped("%s", result.detail.c_str());
+        if (result.fps > 0.0)
+        {
+            ImGui::TextDisabled("Measured %.0f FPS | Frame %.2f ms", result.fps, result.frameMs);
+            if (result.modelMs > 0.0)
+                ImGui::TextDisabled("NR route GPU %.2f ms | %u samples", result.modelMs, result.modelSamples);
+            else if (result.succeeded)
+                ImGui::TextDisabled("NR route GPU timing unavailable");
+        }
+        ImGui::SetCursorPosY((std::max)(ImGui::GetCursorPosY(), height - ImGui::GetFrameHeightWithSpacing() -
+            ImGui::GetStyle().WindowPadding.y));
+        const bool canApply = advisor.analyzed && result.succeeded && !advisor.running;
+        ImGui::BeginDisabled(!canApply);
+        if (canApply)
+        {
+            const ImVec4 button = color;
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(button.x, button.y, button.z, 0.50f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(button.x, button.y, button.z, 0.75f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(button.x, button.y, button.z, 0.95f));
+        }
+        const std::string buttonLabel = advisor.appliedRoute == route
+            ? std::string("Applied##AdvisorApply") + std::to_string(route)
+            : std::string("Use ") + names[route] + "##AdvisorApply" + std::to_string(route);
+        if (ImGui::Button(buttonLabel.c_str(), ImVec2(-1.0f, 0.0f)))
+            ApplyAdvisorRoute(config, route);
+        if (canApply) ImGui::PopStyleColor(3);
+        ImGui::EndDisabled();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+}
+
+void RenderAdvisor(Config* config, float menuResScale)
+{
+    auto& advisor = Advisor();
+    const auto native = DlssNr::Telemetry();
+    const auto present = DlssNr::PresentTelemetry();
+    const auto guides = DlssNr::PresentGuides::Instance().Inspect();
+    const auto& host = State::Instance();
+    const bool fg = host.activeFgInput != FGInput::NoFG && host.activeFgOutput != FGOutput::NoFG;
+    const ImVec4 green(0.40f, 0.90f, 0.50f, 1.0f);
+    const ImVec4 orange(1.00f, 0.72f, 0.25f, 1.0f);
+    const ImVec4 muted = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    const float width = ImGui::GetContentRegionAvail().x;
+    const bool wide = width >= 700.0f * menuResScale;
+
+    ImGui::Spacing();
+    auto header = ScopedCollapsingHeader("Neural Rendering Advisor", ImGuiTreeNodeFlags_DefaultOpen);
+    if (!header.IsHeaderOpen()) return;
+    ScopedIndent indent {};
+    ImGui::Spacing();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.12f, 0.18f, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.60f, 0.90f, 0.55f));
+    if (ImGui::BeginChild("##AdvisorSummary", ImVec2(0.0f, 68.0f * menuResScale),
+                          ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+    {
+        ImGui::TextColored(advisor.running ? AdvisorColor(AdvisorResultLevel::Analyzing) : green,
+                           "%s", advisor.status.c_str());
+        ImGui::TextWrapped("%s", advisor.reason.c_str());
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::Spacing();
+
+    const auto renderSignals = [&]()
+    {
+        ImGui::TextDisabled("WHAT OPTISCALER SEES");
+        if (ImGui::BeginTable("##AdvisorSignals", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Signal", ImGuiTableColumnFlags_WidthStretch, 0.44f);
+            ImGui::TableSetupColumn("Reading", ImGuiTableColumnFlags_WidthStretch, 0.56f);
+            AdvisorSignal("Graphics path", ApiUpscalerInputName(host.currentInputApiName), muted);
+            AdvisorSignal("Graphics card", advisor.gpuName, muted);
+            const unsigned int outputW = present.backbufferWidth ? present.backbufferWidth : native.frameWidth;
+            const unsigned int outputH = present.backbufferHeight ? present.backbufferHeight : native.frameHeight;
+            char outputText[128] = "Waiting for a rendered frame";
+            if (outputW && outputH)
+                std::snprintf(outputText, sizeof(outputText), "%u x %u | %s", outputW, outputH,
+                              BackbufferFormatName(present.backbufferFormat));
+            AdvisorSignal("Present output", outputText, outputW && outputH ? green : orange);
+            const bool verifiedGuides = guides.evaluated > 0 || guides.matched > 0;
+            AdvisorSignal("Depth guide", verifiedGuides ? "Captured and matched" : "Not yet verified",
+                          verifiedGuides ? green : orange);
+            AdvisorSignal("Motion guide", verifiedGuides ? "Captured and matched" : "Not yet verified",
+                          verifiedGuides ? green : orange);
+            AdvisorSignal("Guide matching", guides.status, verifiedGuides ? green : orange);
+            AdvisorSignal("Frame generation", fg ? "Active - native FPS estimate limited" : "Off",
+                          fg ? orange : muted);
+            ImGui::EndTable();
+        }
+    };
+
+    const auto renderRecommendation = [&]()
+    {
+        ImGui::TextDisabled("RECOMMENDED SETUP");
+        if (advisor.recommendation >= 0)
+        {
+            static constexpr const char* routeNames[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+            ImGui::TextColored(green, "%s", routeNames[advisor.recommendation]);
+            ImGui::Text("Automatic | 100%% | 1 pass");
+            ImGui::TextWrapped("%s", advisor.reason.c_str());
+        }
+        else
+        {
+            ImGui::TextColored(advisor.running ? AdvisorColor(AdvisorResultLevel::Analyzing) : muted,
+                               "%s", advisor.running ? "Testing available routes..." : "Analysis required");
+            ImGui::TextWrapped("OptiScaler will test each route without displaying the model effect, then restore your current setup.");
+        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Confidence: %s", fg ? "Limited while Frame Generation is active" :
+            advisor.analyzed ? "Based on current-session measurements" : "Not measured");
+    };
+
+    if (wide && ImGui::BeginTable("##AdvisorOverview", 2,
+        ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV))
+    {
+        ImGui::TableNextColumn(); renderSignals();
+        ImGui::TableNextColumn(); renderRecommendation();
+        ImGui::EndTable();
+    }
+    else
+    {
+        renderSignals(); ImGui::Separator(); renderRecommendation();
+    }
+
+    ImGui::Spacing();
+    if (wide && ImGui::BeginTable("##AdvisorRoutes", 3, ImGuiTableFlags_SizingStretchSame))
+    {
+        for (int route = 0; route < 3; ++route) { ImGui::TableNextColumn(); RenderAdvisorRouteCard(*config, route, 126.0f * menuResScale); }
+        ImGui::EndTable();
+    }
+    else
+        for (int route = 0; route < 3; ++route) RenderAdvisorRouteCard(*config, route, 116.0f * menuResScale);
+
+    ImGui::TextDisabled("Green recommended  |  Orange available  |  Red unavailable  |  Grey not measured");
+    ImGui::Spacing();
+    static constexpr const char* targets[] = { "30 FPS", "45 FPS", "60 FPS", "90 FPS", "120 FPS", "144 FPS" };
+    static constexpr const char* goals[] = { "Prioritize quality", "Balance quality and performance", "Prioritize performance" };
+    const float comboWidth = wide ? 230.0f * menuResScale : (std::max)(120.0f, width * 0.62f);
+    const auto clearAnalysis = [&](const char* status)
+    {
+        advisor.analyzed = false; advisor.recommendation = -1; advisor.appliedRoute = -1;
+        advisor.status = status;
+        advisor.reason = "No settings change until you choose an available route.";
+        advisor.routes = {};
+    };
+    const auto renderTarget = [&]()
+    {
+        ImGui::TextUnformatted("Target native framerate");
+        HelpMarker("The target is real rendered-frame cadence. When Frame Generation is active, confidence remains limited until a verified native cadence is available.");
+        ImGui::SetNextItemWidth(comboWidth);
+        if (ImGui::Combo("##AdvisorTargetFps", &advisor.targetIndex, targets, IM_ARRAYSIZE(targets)))
+            clearAnalysis("Target changed - analyze again.");
+    };
+    const auto renderGoal = [&]()
+    {
+        ImGui::TextUnformatted("Optimization goal");
+        HelpMarker("Quality prefers verified Present Enhanced. Balanced requires the target at 100%. Performance always chooses the fastest verified route.");
+        ImGui::SetNextItemWidth(comboWidth);
+        if (ImGui::Combo("##AdvisorGoal", &advisor.goalIndex, goals, IM_ARRAYSIZE(goals)))
+            clearAnalysis("Optimization goal changed - analyze again.");
+    };
+    ImGui::BeginDisabled(advisor.running);
+    if (wide && ImGui::BeginTable("##AdvisorPreferences", 2, ImGuiTableFlags_SizingStretchSame))
+    {
+        ImGui::TableNextColumn(); renderTarget();
+        ImGui::TableNextColumn(); renderGoal();
+        ImGui::EndTable();
+    }
+    else
+    {
+        renderTarget();
+        renderGoal();
+    }
+    ImGui::EndDisabled();
+    ImGui::Spacing();
+    ImGui::TextColored(orange, "Analyze temporarily turns Neural Rendering on to test each route.");
+    ImGui::TextWrapped("The model effect stays hidden, and your current settings are restored when analysis ends or is cancelled.");
+    if (advisor.running)
+    {
+        if (ImGui::Button("Cancel Analysis")) CancelAdvisorAnalysis(config);
+    }
+    else if (ImGui::Button("Analyze This Game"))
+        StartAdvisorAnalysis(*config);
+    ImGui::TextDisabled("Analysis never tests below 100%% and never changes presets, strengths, Multipass, or Advanced settings.");
+}
+} // namespace
+
+static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig, bool enabled,
+                               bool basicOwnsMain,
+                               const std::optional<MenuStatus::RuntimeStatus>& status)
+{
+    if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
+    const auto nrTelemetry = DlssNr::Telemetry();
+    const auto presentTelemetry = DlssNr::PresentTelemetry();
+    const bool vulkan = DlssNr::IsRunningVk() || IsVulkanInput();
+    const int route = std::clamp((int) uiConfig.DlssNrRoute.value_or_default(), 0, 2);
+    const int renderMode = std::clamp(uiConfig.DlssNrRenderingMode.value_or_default(), 0, 1);
+    const bool presentRoute = route != 0;
+    const ImVec4 green(0.4f, 0.9f, 0.5f, 1.0f);
+    const ImVec4 yellow(1.0f, 0.72f, 0.25f, 1.0f);
+    const ImVec4 red(1.0f, 0.4f, 0.35f, 1.0f);
+
+    static MenuStatus::SelectionObservation observation;
+    const auto selection = (PresentResolution::CaptureKey(uiConfig) << 1) | (enabled ? 1ull : 0ull);
+    const bool fresh = observation.Fresh(selection,
+        presentTelemetry.presentAttempts + presentTelemetry.skippedFrames);
+    const auto policy = PresentResolution::Selected(uiConfig);
+    const bool presentMatches = fresh && presentTelemetry.requested &&
+        presentTelemetry.requestedPlacement == (route == 2 ? "Present Enhanced" : "Present Image-Only");
+    const bool presentActive = presentMatches && presentTelemetry.active &&
+        presentTelemetry.resolution == policy.mode && presentTelemetry.workload == policy.scale;
+    static MenuStatus::SelectionObservation nativeObservation;
+    const auto nativeSelection = selection ^ (uint64_t(renderMode) << 20) ^
+        (uint64_t(std::bit_cast<uint32_t>(uiConfig.DlssNrWorkingScale.value_or_default())) << 24);
+    const bool nativeFresh = nativeObservation.Fresh(nativeSelection, nrTelemetry.frames);
+    const bool nativeOutput = enabled && !presentRoute && !vulkan && nativeFresh &&
+        nrTelemetry.running && !nrTelemetry.outputQuarantined && !nrTelemetry.transitionPending &&
+        (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+
+    if (enabled && nativeOutput && nrTelemetry.totalGpuMs)
+        ImGui::TextColored(green, "NR processing: %.2f ms per frame", *nrTelemetry.totalGpuMs);
+    else if (enabled && presentActive && presentTelemetry.presentGpuSamples != 0 &&
+             presentTelemetry.presentGpuRoute == (route == 2
+                 ? PresentPacing::Route::PresentEnhanced
+                 : PresentPacing::Route::PresentImageOnly))
+        ImGui::TextColored(green, "NR processing: %.2f ms per frame", presentTelemetry.presentGpuMs);
+
+    if (!enabled)
+        ImGui::TextColored(yellow, "Neural Rendering is off.");
+    else if (basicOwnsMain && BasicMultipass::Count(uiConfig.DlssNrBasicMultipass.value_or_default()) == 0)
+        ImGui::TextColored(yellow, "Basic Multipass totals are zero. Image unchanged; loaded resources retained.");
+    else if (StageUi::RenderRuntimeStatus(status))
+    {
+        // A caller may supply verified telemetry; the UI does not produce frame identity.
+    }
+    else if (presentRoute)
+    {
+        if (presentActive)
+            ImGui::TextColored(green, "%s is active.", StageUi::Methods[route]);
+        else if (presentMatches && !presentTelemetry.failure.empty())
+            ImGui::TextColored(red, "Image unchanged. %s", presentTelemetry.failure.c_str());
+        else if (presentMatches && !presentTelemetry.fallbackReason.empty())
+            ImGui::TextColored(yellow, "Image unchanged. %s", presentTelemetry.fallbackReason.c_str());
+        else
+            ImGui::TextColored(yellow, "Waiting for the selected route. Image unchanged.");
+    }
+    else
+    {
+        const char* vkReason = DlssNr::FailureReasonVk();
+        const char* reason = vulkan ? vkReason : nrTelemetry.failureReason;
+        const bool nativeActive = vulkan ? DlssNr::IsRunningVk() : nativeOutput;
+        if (reason[0])
+        {
+            ImGui::TextColored(red, "Neural Rendering unavailable: %s", reason);
+            if (nrTelemetry.retryAllowed && !vkReason[0] && ImGui::SmallButton("Retry"))
+                DlssNr::RetryAfterFailure();
+        }
+        else if (nativeActive)
+            ImGui::TextColored(green, "Native Temporal is active.");
+        else
+            ImGui::TextColored(yellow, "Waiting for Native Temporal. Image unchanged.");
+    }
+
+    if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
+        ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
+    if (enabled && !config->DlssNrApplyModel.value_or_default())
+        ImGui::TextColored(yellow, "Model effect hidden. Enable Apply the model to show it.");
+    if (route == 2)
+    {
+        ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
+        HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
+    }
+}
+
+void TickAdvisor(Config* config)
+{
+    auto& advisor = Advisor();
+    if (!advisor.running || config == nullptr) return;
+    const auto present = DlssNr::PresentTelemetry();
+    if ((advisor.originalWidth && present.backbufferWidth && advisor.originalWidth != present.backbufferWidth) ||
+        (advisor.originalHeight && present.backbufferHeight && advisor.originalHeight != present.backbufferHeight))
+    {
+        CancelAdvisorAnalysis(config, "Output size changed; analysis stopped and original settings were restored.");
+        return;
+    }
+    if (State::Instance().isShuttingDown)
+    {
+        CancelAdvisorAnalysis(config, "Rendering device is shutting down; original settings were restored.");
+        return;
+    }
+    const double elapsed = AdvisorNow() - advisor.phaseStarted;
+    if (advisor.phase == AdvisorPhase::Warmup && elapsed >= 1.0)
+    {
+        const auto native = DlssNr::Telemetry();
+        const auto guides = DlssNr::PresentGuides::Instance().Inspect();
+        advisor.startNativeFrames = native.completedPipelineEvaluations;
+        advisor.startPresentEvaluations = present.modelEvaluations;
+        advisor.startGuideEvaluations = guides.evaluated;
+        advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
+        advisor.lastPresentGpuSample = present.presentGpuSamples;
+        advisor.frameIntervalTotal = 0.0;
+        advisor.frameIntervalSamples = 0;
+        advisor.modelGpuTotal = 0.0;
+        advisor.modelGpuSamples = 0;
+        advisor.phase = AdvisorPhase::Sample;
+        advisor.phaseStarted = AdvisorNow();
+    }
+    else if (advisor.phase == AdvisorPhase::Sample)
+    {
+        if (std::isfinite(present.frameIntervalMs) && present.frameIntervalMs > 0.0 &&
+            present.frameIntervalMs < 1000.0)
+        {
+            advisor.frameIntervalTotal += present.frameIntervalMs;
+            ++advisor.frameIntervalSamples;
+        }
+
+        if (advisor.routeIndex == 0)
+        {
+            const auto native = DlssNr::Telemetry();
+            if (native.completedPipelineEvaluations > advisor.lastNativeGpuFrame)
+            {
+                advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
+                if (native.totalGpuMs && std::isfinite(*native.totalGpuMs) && *native.totalGpuMs >= 0.0)
+                {
+                    advisor.modelGpuTotal += *native.totalGpuMs;
+                    ++advisor.modelGpuSamples;
+                }
+            }
+        }
+        else if (present.presentGpuSamples > advisor.lastPresentGpuSample)
+        {
+            advisor.lastPresentGpuSample = present.presentGpuSamples;
+            const auto expectedRoute = advisor.routeIndex == 2
+                ? DlssNr::PresentPacing::Route::PresentEnhanced
+                : DlssNr::PresentPacing::Route::PresentImageOnly;
+            if (present.presentGpuRoute == expectedRoute && std::isfinite(present.presentGpuMs) &&
+                present.presentGpuMs >= 0.0)
+            {
+                advisor.modelGpuTotal += present.presentGpuMs;
+                ++advisor.modelGpuSamples;
+            }
+        }
+
+        if (elapsed >= 2.0)
+            FinishAdvisorRoute(*config);
+    }
+}
+
+void CancelAdvisorAnalysis(Config* config, const char* reason)
+{
+    auto& advisor = Advisor();
+    if (!advisor.running || config == nullptr) return;
+    RestoreAdvisorSettings(*config, advisor.original);
+    advisor.running = false;
+    advisor.phase = AdvisorPhase::Idle;
+    advisor.analyzed = false;
+    advisor.recommendation = -1;
+    advisor.appliedRoute = -1;
+    advisor.routes = {};
+    advisor.status = reason != nullptr ? reason : "Analysis cancelled; original settings restored.";
+    advisor.reason = "No recommendation was applied.";
+}
+
+void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status,
+                const char* gpuName)
+{
+    Neurotic::EnglishPreview englishPreview;
+    Advisor().gpuName = gpuName != nullptr && gpuName[0] != 0 ? gpuName : "Detecting graphics card...";
+    RenderAdvisor(config, menuResScale);
     // DLSS Neural Rendering -----------------------------
     ImGui::Spacing();
-    if (auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen); ch.IsHeaderOpen())
+    {
+    bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+    auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ImGui::Spacing();
         ImGui::PushTextWrapPos(0.0f);
 
-        bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
-        const auto padding = ImGui::GetStyle().FramePadding;
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding.x, padding.y + 2.0f * menuResScale));
-        if (ImGui::Checkbox("Enable Neural Rendering", &enabled))
+        if (MenuControls::EmphasizedCheckbox("Enable Neural Rendering", &enabled))
         {
             config->SetDlssNrEnabled(enabled);
             NoteNrUserToggle();
         }
-        ImGui::PopStyleVar();
-        HelpMarker("Enables Neural Rendering on the selected route. Requires NVIDIA's nvngx_dlssnr.dll model "
-                   "and the nvngx.dll_dlssnr.dll forwarder supplied with this package.");
-        ImGui::Spacing();
+        const bool applyInline = MenuControls::LastItemHasInlineRoom(
+            MenuControls::CheckboxWithHelpWidth("Apply the model"));
+        if (applyInline)
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x + ImGui::GetStyle().FramePadding.x);
+        bool applyModel = config->DlssNrApplyModel.value_or_default();
+        if (ImGui::Checkbox("Apply the model", &applyModel))
+            config->DlssNrApplyModel = applyModel;
+        HelpMarker("Shows the whole chain's effect. Turn off to compare with the original image while the models keep running.");
 
-        static const char* routeNames[] = { "Native Temporal", "Present Image Only", "Present Enhanced" };
-        int route = std::clamp((int) config->DlssNrRoute.value_or_default(), 0, 2);
-        if (ImGui::Combo("NR route", &route, routeNames, IM_ARRAYSIZE(routeNames)))
-        {
-            config->DlssNrRoute = (uint32_t) route;
-            LOG_INFO("DLSS-NR route requested: {}", routeNames[route]);
-        }
-        HelpMarker("Native Temporal runs with the game's upscaler. Present Image Only processes the final image. "
-                   "Present Enhanced also uses captured game depth and motion. Both Present routes include the HUD.");
-        const bool presentRoute = route != 0;
-
-        if (presentRoute)
-        {
-            auto& resolutionOption = route == 2 ? config->DlssNrEnhancedResolution : config->DlssNrPresentResolution;
-            auto& scaleOption = route == 2 ? config->DlssNrEnhancedCustomScale : config->DlssNrPresentCustomScale;
-            int resolution = std::clamp((int) resolutionOption.value_or_default(), 0, 2);
-            float resolutionWidth = 0.0f;
-            for (const char* name : PresentResolution::Names)
-                resolutionWidth = std::max(resolutionWidth, ImGui::CalcTextSize(name).x);
-            const float labelWidth = ImGui::CalcTextSize("NR resolution").x + ImGui::GetStyle().ItemInnerSpacing.x;
-            ImGui::SetNextItemWidth(std::min(resolutionWidth + ImGui::GetFrameHeight() + padding.x * 2.0f,
-                std::max(120.0f * menuResScale, ImGui::GetContentRegionAvail().x - labelWidth)));
-            if (ImGui::Combo("NR resolution", &resolution, PresentResolution::Names, 3))
-                resolutionOption = (uint32_t) resolution;
-            HelpMarker("Follow Native Render Resolution uses the game's current render dimensions. "
-                "Always Follow Output Resolution uses the full output size. Custom Scale uses a percentage of output size. "
-                "Each Present route remembers its own settings.");
-            if (resolution == PresentResolution::Custom)
-            {
-                static const char* scales[] = { "100%", "77%", "67%", "58%", "50%", "33%" };
-                int scale = std::clamp((int) scaleOption.value_or_default(), 0, 5);
-                if (ImGui::Combo("Custom Scale", &scale, scales, IM_ARRAYSIZE(scales)))
-                    scaleOption = (uint32_t) scale;
-            }
-        }
-
+        const bool basicOwnsMain = BasicMultipass::Active(config->GetDlssNrConfigSnapshot()) && !IsVulkanInput();
+        RenderLiveReadouts(config, config->GetDlssNrConfigSnapshot(), enabled, basicOwnsMain, status);
+        if (StageUi::RenderControls(*config, basicOwnsMain)) CancelNrEdits();
+        auto uiConfig = config->GetDlssNrConfigSnapshot();
+        if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
+        const auto& routeNames = StageUi::Methods;
+        const int route = std::clamp((int) uiConfig.DlssNrRoute.value_or_default(), 0, 2);
+        const int stage = StageUi::Stage(uiConfig);
+        const int renderMode = std::clamp(uiConfig.DlssNrRenderingMode.value_or_default(), 0, 1);
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
-        int renderMode = std::clamp(config->DlssNrRenderingMode.value_or_default(), 0, 1);
-        if (!presentRoute)
+        const bool presentRoute = route != 0;
+        if (basicOwnsMain)
+            ImGui::TextWrapped("Basic Multipass controls resolution, downscaler and strengths for every pass. These controls show Pass 1; edit them in Multipass below.");
+        ImGui::BeginDisabled(basicOwnsMain);
+        if (StageUi::ResolutionSelection(uiConfig) == 1)
         {
-            if (ImGui::Combo("Rendering mode", &renderMode, renderModeNames, IM_ARRAYSIZE(renderModeNames)))
+            static NrOptional<float> scalePreview { 1.0f };
+            static uint64_t previousSelection = 0;
+            const auto selection = PresentResolution::CaptureKey(uiConfig) * 4 + stage;
+            if (selection != previousSelection) CancelNrEdits();
+            previousSelection = selection;
+            const auto editGeneration = NrConfigSynchronization::ProfileGeneration();
+            const float originalScale = StageUi::ResolutionScale(uiConfig);
+            scalePreview = originalScale;
+            ImGui::TextUnformatted("Manual resolution");
+            HelpMarker("Sets the Neural Rendering working resolution as a percentage of the selected "
+                       "stage: the game's render input Before upscaling, or the final upscaled output "
+                       "After. Lower values reduce model cost and fine detail. Values above 100% "
+                       "supersample, increase cost roughly with image area, and reveal the downscaler. "
+                       "Reset restores 100%.");
+            ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
+                ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
+            if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
             {
-                config->SetDlssNrRenderingMode(renderMode);
-                LOG_INFO("DLSS-NR rendering mode applied: {} (Super Resolution placement only; native RR remains RR -> NR)",
-                         renderModeNames[renderMode]);
+                NrConfigSynchronization::Transaction transaction;
+                const auto current = config->GetDlssNrConfigSnapshot();
+                if (editGeneration == NrConfigSynchronization::ProfileGeneration() &&
+                    selection == PresentResolution::CaptureKey(current) * 4 + StageUi::Stage(current) &&
+                    originalScale == StageUi::ResolutionScale(current))
+                    StageUi::SelectResolutionScale(*config, scalePreview.value_or_default());
+                else CancelNrEdits();
             }
-
-            HelpMarker("Quality keeps NR after native DLSS Super Resolution. Performance runs NR before "
-                       "native DLSS Super Resolution. Ray Reconstruction already denoises and reconstructs "
-                       "to the final output in one mode-aware pass, so NR remains after RR in both modes.");
+            uiConfig = config->GetDlssNrConfigSnapshot();
+            if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
         }
-
-        RenderPassCountSelector(config);
-
+        ImGui::EndDisabled();
+        const auto renderReadouts = [&](bool detailed)
+        {
         // The setting requests Pre-SR. It is deliberately not described as active until the
         // replacement-resource, reset, seed, and display-ready checks have all passed.
         const auto nrTelemetry = DlssNr::Telemetry();
@@ -247,17 +1054,73 @@ void RenderMenu(Config* config, float menuResScale)
         const ImVec4 yellow(1.0f, 0.72f, 0.25f, 1.0f);
         const ImVec4 red(1.0f, 0.4f, 0.35f, 1.0f);
         static MenuStatus::SelectionObservation observation;
-        const auto selection = (PresentResolution::CaptureKey(*config) << 1) | (enabled ? 1ull : 0ull);
+        const auto selection = (PresentResolution::CaptureKey(uiConfig) << 1) | (enabled ? 1ull : 0ull);
         const bool fresh = observation.Fresh(selection, presentTelemetry.presentAttempts + presentTelemetry.skippedFrames);
-        const auto policy = PresentResolution::Selected(*config);
+        const auto policy = PresentResolution::Selected(uiConfig);
         const bool presentMatches = fresh && presentTelemetry.requested &&
             presentTelemetry.requestedPlacement == (route == 2 ? "Present Enhanced" : "Present Image-Only");
         const bool presentActive = presentMatches && presentTelemetry.active &&
             presentTelemetry.resolution == policy.mode &&
-            (policy.mode != PresentResolution::Custom || presentTelemetry.workload == policy.scale);
+            presentTelemetry.workload == policy.scale;
+        static MenuStatus::SelectionObservation nativeObservation;
+        const auto nativeSelection = selection ^ (uint64_t(renderMode) << 20) ^
+            (uint64_t(std::bit_cast<uint32_t>(uiConfig.DlssNrWorkingScale.value_or_default())) << 24);
+        const bool nativeFresh = nativeObservation.Fresh(nativeSelection, nrTelemetry.frames);
+        const bool nativeOutput = enabled && !presentRoute && !vulkan && nativeFresh &&
+            nrTelemetry.running && !nrTelemetry.outputQuarantined && !nrTelemetry.transitionPending &&
+            (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+        if (!detailed)
+        {
+        if (presentRoute)
+            ImGui::TextWrapped(StageUi::ResolutionSelection(uiConfig) == 2 ?
+                "Legacy follows fresh game render dimensions. Selecting Automatic or Manual adopts the new resolution policy." :
+                "Present runs after upscaling and includes the HUD. Automatic uses the final output; Manual scales it. Each method remembers its selection.");
+        else if (stage == 0)
+            ImGui::TextWrapped("Automatic uses 100% of the game render input; Manual scales that input.");
+        else
+            ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
+        if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
+            ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
+        const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
+        const auto methodLabel = Neurotic::Translate(routeNames[route]);
+        auto resolutionLabel = Neurotic::Translate(StageUi::Resolutions[StageUi::ResolutionSelection(uiConfig)]);
+        if (StageUi::ResolutionSelection(uiConfig) == 1)
+            resolutionLabel += " (" + std::to_string(StageUi::DisplayPercent(StageUi::ResolutionScale(uiConfig))) + "%)";
+        uint32_t workW = 0, workH = 0, outputW = 0, outputH = 0;
+        if (presentRoute && enabled && presentMatches)
+        {
+            outputW = presentTelemetry.backbufferWidth; outputH = presentTelemetry.backbufferHeight;
+            if (presentActive) { workW = presentTelemetry.workWidth; workH = presentTelemetry.workHeight; }
+        }
+        else if (nativeOutput)
+        {
+            workW = nrTelemetry.workWidth; workH = nrTelemetry.workHeight;
+            // Frame is the NR stage raster. Before SR it is not the final upscaled output.
+            const bool before = renderMode != 0 && !nrTelemetry.nativeRayReconstructionActive;
+            const auto feature = State::Instance().currentFeature;
+            outputW = before ? (feature ? feature->DisplayWidth() : 0u) : nrTelemetry.frameWidth;
+            outputH = before ? (feature ? feature->DisplayHeight() : 0u) : nrTelemetry.frameHeight;
+        }
+        if (enabled && status)
+        {
+            outputW = status->outputWidth; outputH = status->outputHeight;
+            const bool active = status->state == MenuStatus::State::Active;
+            workW = active ? status->workWidth : 0u; workH = active ? status->workHeight : 0u;
+        }
+        const auto dimensions = StageUi::DimensionText(workW, workH, outputW, outputH);
+        const auto summaryResolution = resolutionLabel + " -> " + dimensions;
+        ImGui::TextWrapped("%s -> %s -> %s", stageLabel.c_str(), methodLabel.c_str(), summaryResolution.c_str());
+        if (enabled && nativeOutput && nrTelemetry.totalGpuMs)
+            ImGui::TextColored(green, "NR processing: %.2f ms per frame", *nrTelemetry.totalGpuMs);
 
         if (!enabled)
             ImGui::TextColored(yellow, "Neural Rendering is off.");
+        else if (basicOwnsMain && BasicMultipass::Count(uiConfig.DlssNrBasicMultipass.value_or_default()) == 0)
+            ImGui::TextColored(yellow, "Basic Multipass totals are zero. Image unchanged; loaded resources retained.");
+        else if (StageUi::RenderRuntimeStatus(status))
+        {
+            // A caller may supply verified telemetry; the UI does not produce frame identity.
+        }
         else if (presentRoute)
         {
             if (presentActive)
@@ -273,9 +1136,7 @@ void RenderMenu(Config* config, float menuResScale)
         {
             const char* vkReason = DlssNr::FailureReasonVk();
             const char* reason = vulkan ? vkReason : nrTelemetry.failureReason;
-            const bool nativeActive = vulkan ? DlssNr::IsRunningVk() :
-                nrTelemetry.running && !nrTelemetry.outputQuarantined &&
-                (renderMode == 0 || nrTelemetry.nativeRayReconstructionActive || nrTelemetry.preSrDisplayReady);
+            const bool nativeActive = vulkan ? DlssNr::IsRunningVk() : nativeOutput;
             if (reason[0])
             {
                 ImGui::TextColored(red, "Neural Rendering unavailable: %s", reason);
@@ -294,20 +1155,48 @@ void RenderMenu(Config* config, float menuResScale)
             ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
             HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
         }
-        if (presentRoute)
-        {
-            if (enabled && presentActive && presentTelemetry.workWidth && presentTelemetry.workHeight)
-                ImGui::Text("NR: %u x %u | Output: %u x %u", presentTelemetry.workWidth, presentTelemetry.workHeight,
-                            presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight);
-            else if (enabled && presentMatches && presentTelemetry.backbufferWidth && presentTelemetry.backbufferHeight)
-                ImGui::Text("NR: unavailable | Output: %u x %u", presentTelemetry.backbufferWidth, presentTelemetry.backbufferHeight);
-            else
-                ImGui::TextUnformatted("NR: unavailable | Output: unavailable");
         }
-
-        if (auto diagnostics = ScopedCollapsingHeader("Advanced Data / Diagnostics##NrDiagnostics"); diagnostics.IsHeaderOpen())
+        if (detailed)
         {
         ScopedIndent diagnosticIndent {};
+        if (presentRoute)
+            ImGui::TextWrapped(StageUi::ResolutionSelection(uiConfig) == 2 ?
+                "Legacy follows fresh game render dimensions. Selecting Automatic or Manual adopts the new resolution policy." :
+                "Present runs after upscaling and includes the HUD. Automatic uses the final output; Manual scales it. Each method remembers its selection.");
+        else if (stage == 0)
+            ImGui::TextWrapped("Automatic uses 100% of the game render input; Manual scales that input.");
+        else
+            ImGui::TextWrapped("Automatic uses 100% of the final upscaled output; Manual scales that output.");
+
+        const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
+        const auto methodLabel = Neurotic::Translate(routeNames[route]);
+        auto resolutionLabel = Neurotic::Translate(StageUi::Resolutions[StageUi::ResolutionSelection(uiConfig)]);
+        if (StageUi::ResolutionSelection(uiConfig) == 1)
+            resolutionLabel += " (" + std::to_string(StageUi::DisplayPercent(StageUi::ResolutionScale(uiConfig))) + "%)";
+        uint32_t workW = 0, workH = 0, outputW = 0, outputH = 0;
+        if (presentRoute && enabled && presentMatches)
+        {
+            outputW = presentTelemetry.backbufferWidth; outputH = presentTelemetry.backbufferHeight;
+            if (presentActive) { workW = presentTelemetry.workWidth; workH = presentTelemetry.workHeight; }
+        }
+        else if (nativeOutput)
+        {
+            workW = nrTelemetry.workWidth; workH = nrTelemetry.workHeight;
+            const bool before = renderMode != 0 && !nrTelemetry.nativeRayReconstructionActive;
+            const auto feature = State::Instance().currentFeature;
+            outputW = before ? (feature ? feature->DisplayWidth() : 0u) : nrTelemetry.frameWidth;
+            outputH = before ? (feature ? feature->DisplayHeight() : 0u) : nrTelemetry.frameHeight;
+        }
+        if (enabled && status)
+        {
+            outputW = status->outputWidth; outputH = status->outputHeight;
+            const bool active = status->state == MenuStatus::State::Active;
+            workW = active ? status->workWidth : 0u; workH = active ? status->workHeight : 0u;
+        }
+        const auto dimensions = StageUi::DimensionText(workW, workH, outputW, outputH);
+        const auto summaryResolution = resolutionLabel + " -> " + dimensions;
+        ImGui::TextWrapped("%s -> %s -> %s", stageLabel.c_str(), methodLabel.c_str(), summaryResolution.c_str());
+
         const auto guides = PresentGuides::Instance().Inspect();
         if (presentRoute)
         {
@@ -512,70 +1401,31 @@ void RenderMenu(Config* config, float menuResScale)
 
         }
 
-        bool applyModel = config->DlssNrApplyModel.value_or_default();
-        if (ImGui::Checkbox("Apply the model", &applyModel))
-            config->DlssNrApplyModel = applyModel;
-        HelpMarker("Shows the model's effect. Turn off to compare with the original image while the model keeps running. "
-                   "Use Enable Neural Rendering to stop processing.");
-        ImGui::Spacing();
-        ImGui::PushItemWidth(220.0f * menuResScale);
+        };
+        ImGui::PushItemWidth(std::clamp(ImGui::GetContentRegionAvail().x - 240.0f * menuResScale,
+                                      40.0f * menuResScale, 220.0f * menuResScale));
 
-        if (!presentRoute)
+        const auto mainTuningSliderWidth = [&]
         {
-        // Any percentage, rather than a handful of steps somebody chose in advance. The lower bound
-        // is 25%: below that the model is working on so little of the picture that its answer no
-        // longer survives being enlarged onto it.
-        // Applied when the handle is let go, not while it is moving.
-        //
-        // Every distinct value here is a different working size, and a different working size tears
-        // down the scratch textures and rebuilds the model. Writing it on each pixel of a drag meant
-        // dozens of rebuilds in a second, which is felt as the whole frame hitching. The slider still
-        // reads live; only the commit waits.
-        static int pendingScale = -1;
+            const auto& style = ImGui::GetStyle();
+            const float resetWidth = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
+            return StageUi::ResponsiveSliderWidth(ImGui::GetContentRegionAvail().x, menuResScale,
+                                                   resetWidth, ImGui::CalcTextSize("(?)").x,
+                                                   style.ItemSpacing.x);
+        };
 
-        int scalePercent = pendingScale >= 0
-                               ? pendingScale
-                               : (int) lroundf(config->DlssNrWorkingScale.value_or_default() * 100.0f);
-
-        if (ImGui::SliderInt("Model resolution", &scalePercent, 25, 200, "%d%%"))
-            pendingScale = scalePercent;
-
-        if (ImGui::IsItemDeactivatedAfterEdit() && pendingScale >= 0)
+        const auto renderResampling = [&]
         {
-            config->DlssNrWorkingScale = std::clamp(pendingScale, 25, 200) / 100.0f;
-            pendingScale = -1;
-        }
-
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Reset##NrModelResolution"))
+        if (auto resampling = ScopedCollapsingHeader("Advanced resampling##NrResampling"); resampling.IsHeaderOpen())
         {
-            config->DlssNrWorkingScale = 1.0f;
-            pendingScale = -1;
-            scalePercent = 100;
-        }
+        ScopedIndent resamplingIndent {};
+        ImGui::BeginDisabled(presentRoute);
+        const int scalePercent = StageUi::DisplayPercent(StageUi::ResolutionScale(uiConfig));
 
-        if (scalePercent > 100)
+        if (!presentRoute && scalePercent > 100)
             ImGui::TextDisabled("Supersampling %.2fx: the model runs ABOVE native, then\n"
                                 "is sampled back down. Experimental, and costly -- time grows with the area.",
                                 scalePercent / 100.0f);
-
-        if (scalePercent > 100)
-        {
-            static const char* dsNames[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2",
-                                             "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
-            int ds = (int) config->DlssNrScalingDownscaler.value_or_default();
-            if (ds < 0 || ds >= IM_ARRAYSIZE(dsNames))
-                ds = (int) Scaler::Lanczos3;
-
-            if (ImGui::Combo("Downscaler (NR)", &ds, dsNames, IM_ARRAYSIZE(dsNames)))
-                config->DlssNrScalingDownscaler = (Scaler) ds;
-
-            HelpMarker("The filter that averages the model's above-native answer back to display size --"
-                           "\nthis is what turns supersampling into LESS noise rather than more. Sharper"
-                           "\nfilters (Lanczos3, Kaiser3) keep the most detail; softer ones (Bicubic,"
-                           "\nCatmull-Rom) are gentler on ringing. Independent of the Output Scaling"
-                           "\ndownscaler, so the two can differ and run at the same time.");
-        }
 
         HelpMarker("What fraction of the frame the model works at. Cost falls with the square of"
                        "\nthis, so half resolution is roughly a quarter of the time."
@@ -591,7 +1441,7 @@ void RenderMenu(Config* config, float menuResScale)
         // supersampling composites its down-legged answer at native -- the residual collapses to the
         // model's own picture and the two modes are identical, so the control says so by going grey.
         {
-            const bool reduced = config->DlssNrWorkingScale.value_or_default() < 0.999f;
+            const bool reduced = StageUi::ResolutionScale(uiConfig) < 0.999f;
 
             if (!reduced)
                 ImGui::BeginDisabled();
@@ -618,24 +1468,48 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nidentical (supersampling brings its answer down to frame size before this)."
                            "\n\nFrom hhkbble's multi-pass work on this fork.");
         }
+        ImGui::EndDisabled();
+        }
+        };
+        // The ordinary downscaler sits directly below manual resolution.
+        if (StageUi::ResolutionScale(uiConfig) > 1.0f)
+        {
+            ImGui::BeginDisabled(basicOwnsMain);
+            static const char* names[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+            int downscaler = std::clamp(int(uiConfig.DlssNrScalingDownscaler.value_or_default()), 0, 7);
+            if (ImGui::Combo("Downscaler##NrDownscaler", &downscaler, names, 8))
+                config->DlssNrScalingDownscaler = (Scaler) downscaler;
+            ImGui::EndDisabled();
         }
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
         int preset = (int) config->DlssNrPreset.value_or_default();
-        if (ImGui::Combo("Model preset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
-            config->DlssNrPreset = (uint32_t) preset;
+        const auto renderModelPreset = [&]()
+        {
+            ImGui::SetNextItemWidth((std::min)(180.0f * menuResScale,
+                (std::max)(110.0f * menuResScale, ImGui::GetContentRegionAvail().x -
+                    ImGui::CalcTextSize("Model preset (?)").x - ImGui::GetStyle().ItemSpacing.x * 2.0f)));
+            if (ImGui::Combo("Model preset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
+                config->DlssNrPreset = (uint32_t) preset;
 
         HelpMarker("Default leaves the choice to the model."
                        "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
-                       "\nthe same number means something different here.");
+                       "\nthe same number means something different here."
+                       "\n\nI have no idea what this does. Seems like nothing.");
+        };
 
-        static const char* nrStyleNames[] = { "Default (standard)", "Natural", "Cinematic" };
+        static const char* nrStyleNames[] = { "Standard", "Natural", "Cinematic" };
         int style = (int) config->DlssNrStyle.value_or_default();
 
         if (style > 2)
             style = 2;
 
-        if (ImGui::Combo("Style", &style, nrStyleNames, IM_ARRAYSIZE(nrStyleNames)))
-            config->DlssNrStyle = (uint32_t) style;
+        const auto renderStyle = [&]()
+        {
+            ImGui::SetNextItemWidth((std::min)(180.0f * menuResScale,
+                (std::max)(110.0f * menuResScale, ImGui::GetContentRegionAvail().x -
+                    ImGui::CalcTextSize("Style (?)").x - ImGui::GetStyle().ItemSpacing.x * 2.0f)));
+            if (ImGui::Combo("Style", &style, nrStyleNames, IM_ARRAYSIZE(nrStyleNames)))
+                config->DlssNrStyle = (uint32_t) style;
 
         HelpMarker("The model's own processing profiles."
                    "\n\nDefault (standard): the strongest. Boosts local contrast and deepens"
@@ -646,16 +1520,42 @@ void RenderMenu(Config* config, float menuResScale)
                    "\n\nCinematic: tones down the shine and over-processing for a film-like look."
                    "\n\nRead when the model is built, so a change rebuilds it after a moment. The"
                    "\nnames come from community testing; NVIDIA ships no names in the binaries.");
+        };
 
-        ImGui::SeparatorText("How much of it lands");
+        if (ImGui::GetContentRegionAvail().x >= 520.0f * menuResScale &&
+            ImGui::BeginTable("##NrStylePresetRow", 2, ImGuiTableFlags_SizingStretchSame))
+        {
+            ImGui::TableNextColumn(); renderStyle();
+            ImGui::TableNextColumn(); renderModelPreset();
+            ImGui::EndTable();
+        }
+        else
+        {
+            renderStyle();
+            renderModelPreset();
+        }
 
-        float transfer = config->DlssNrTransferStrength.value_or_default();
-        if (ImGui::SliderFloat("Detail strength", &transfer, 0.0f, 2.0f, "%.2f"))
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        if (basicOwnsMain)
+        {
+            ImGui::BeginDisabled();
+            float strength = uiConfig.DlssNrIntensity.value_or_default();
+            ImGui::SliderFloat("Model Strength", &strength, 0.0f, 1.0f, "%.2f");
+            ImGui::EndDisabled();
+        }
+        else
+            DeferredSlider("Model Strength", &config->DlssNrIntensity, 0.0f, 2.0f, 1.0f);
+
+        ImGui::BeginDisabled(basicOwnsMain);
+        float transfer = uiConfig.DlssNrTransferStrength.value_or_default();
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        if (ImGui::SliderFloat("Detail Strength###Detail strength", &transfer, 0.0f, 2.0f, "%.2f"))
             config->DlssNrTransferStrength = transfer;
 
         ImGui::SameLine();
         if (ImGui::SmallButton("Reset##detail"))
             config->DlssNrTransferStrength = 1.0f;
+        ImGui::EndDisabled();
 
         HelpMarker("How far the frame moves toward the model's picture."
                        "\n\nThe model's answer is not added to the frame -- it is a complete picture of its"
@@ -665,11 +1565,12 @@ void RenderMenu(Config* config, float menuResScale)
                        "\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture."
                        "\n\nAbove 1 carries on past it in the same direction, which is not something the"
                        "\nmodel asked for -- use it to see what it is doing, then come back down. This"
-                       "\nis the control to push if you want more effect: Intensity belongs to the model"
+                       "\nis the control to push if you want more effect: Model Strength belongs to the model"
                        "\nand it decides what to do with it.");
 
         float colour = config->DlssNrColourStrength.value_or_default();
-        if (ImGui::SliderFloat("Colour strength", &colour, 0.0f, 4.0f, "%.2f"))
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        if (ImGui::SliderFloat("Colour Strength###Colour strength", &colour, 0.0f, 4.0f, "%.2f"))
             config->DlssNrColourStrength = colour;
 
         ImGui::SameLine();
@@ -688,6 +1589,8 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nand rolls off at the edge of what the display can show rather than clipping"
                        "\ninto a flat blown patch. 1 is the model's own colour; push past it for punch.");
 
+        const auto renderProxy = [&]
+        {
         // Experimental. 0 off (soft knee), 1 Neutwo + our composition, 2 Neutwo + pure-inverse replace,
         // 3 hybrid+composed, 4 hybrid+replace (identity midtones + unclipped highlights). Always shown.
         static const char* reversibleNames[] = { "Off (soft knee)", "Neutwo proxy + composed",
@@ -720,26 +1623,17 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nstable. If you love the Replace look but the flicker bothers you, use this."
                        "\n\nOff is byte-identical to before.");
 
-        ImGui::Spacing();
-        if (auto ch = ScopedCollapsingHeader("Model##DlssNrModelSection"); ch.IsHeaderOpen())
-        {
-        ScopedIndent indent {};
-        ImGui::Spacing();
-        ScopedNestedTextWrap nestedWrap {};
+        };
 
-        ImGui::TextUnformatted("Read when the model is built, so a change rebuilds it after a moment.");
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        DeferredSlider("Local Structure###Local structure", &config->DlssNrLocalStructure, 0.0f, 2.0f, 1.0f);
 
-        DeferredSlider("Intensity", &config->DlssNrIntensity, 0.0f, 2.0f, 1.0f);
-
-        HelpMarker("The model's own strength control, applied inside it. Distinct from detail"
-                       "\nstrength above, which scales the result afterwards.");
-
-        DeferredSlider("Local structure", &config->DlssNrLocalStructure, 0.0f, 2.0f, 1.0f);
-
-        DeferredSlider("Local tone", &config->DlssNrLocalTone, 0.0f, 2.0f, 1.0f);
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        DeferredSlider("Local Tone###Local tone", &config->DlssNrLocalTone, 0.0f, 2.0f, 1.0f);
 
 
-        DeferredSlider("Skin structure", &config->DlssNrSkinStructure, -1.0f, 2.0f, -1.0f);
+        ImGui::SetNextItemWidth(mainTuningSliderWidth());
+        DeferredSlider("Skin Structure###Skin structure", &config->DlssNrSkinStructure, -1.0f, 2.0f, -1.0f);
 
         HelpMarker("-1 means follow local structure, and is the model's own default -- it is not a"
                        "\nstrength of zero. 0 and above set skin independently of the rest of the frame.");
@@ -749,7 +1643,12 @@ void RenderMenu(Config* config, float menuResScale)
             config->DlssNrAutoMask = autoMask;
 
         HelpMarker("Lets the model find skin itself rather than treating the frame uniformly.");
-        }
+
+        if (auto advanced = ScopedCollapsingHeader("Advanced Settings / Diagnostics##NrAdvanced"); advanced.IsHeaderOpen())
+        {
+        renderReadouts(true);
+        renderResampling();
+        if (auto proxy = ScopedCollapsingHeader("Reversible proxy##NrProxy"); proxy.IsHeaderOpen()) renderProxy();
 
         ImGui::Spacing();
         if (auto ch = ScopedCollapsingHeader("Colour##DlssNrColourSection"); ch.IsHeaderOpen())
@@ -1434,8 +2333,10 @@ void RenderMenu(Config* config, float menuResScale)
                        "\ncentred on grey. A flat grey frame there means it is doing nothing.");
         }
 
+        }
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
+    }
     }
 
     // Multipass belongs to the same Neural Rendering page, but stays independently collapsible so
@@ -1549,15 +2450,118 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         const bool presentRoute = config->DlssNrRoute.value_or_default() != 0;
         static unsigned int previousPassCount = 0;
 
+        auto basic = BasicMultipass::Normalize(config->DlssNrBasicMultipass.value_or_default());
+        int editor = basic.advanced ? 1 : 0;
+        static const char* editors[] = { "Basic", "Advanced" };
+        if (StageUi::SentenceCombo("##NrMultipassEditor", "", "Neural Rendering Settings", &editor, editors, 2))
+        {
+            BasicMultipass::Update(*config, [&](auto& p) { p.advanced = editor == 1; });
+            CancelNrEdits();
+            basic = config->DlssNrBasicMultipass.value_or_default();
+        }
+
         bool enabled = config->DlssNrMultipassEnabled.value_or_default();
         if (!d3d12 && !presentRoute) ImGui::BeginDisabled();
-        if (ImGui::Checkbox("Enable NR Multipass", &enabled))
+        if (MenuControls::EmphasizedCheckbox("Enable NR Multipass", &enabled))
         {
+            NrConfigSynchronization::Transaction transaction;
             config->DlssNrMultipassEnabled = enabled;
             config->DlssNrSecondLayer = enabled && config->DlssNrPasses.value_or_default() > 1;
+            CancelNrEdits();
         }
         if (!d3d12 && !presentRoute) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
+
+        if (!basic.advanced)
+        {
+            const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
+                                    float BasicMultipass::Profile::* member, float minimum, float maximum,
+                                    const char* hint = nullptr, float preferredWidth = 0.0f,
+                                    unsigned int cumulativePasses = 0)
+            {
+                BasicMultipass::Profile original;
+                uint64_t generation;
+                {
+                    NrConfigSynchronization::Transaction transaction;
+                    original = config->DlssNrBasicMultipass.value_or_default();
+                    generation = NrConfigSynchronization::ProfileGeneration();
+                }
+                preview = original.*member;
+                ImGui::TextUnformatted(title);
+                if (hint) HelpMarker(hint);
+                const auto& style = ImGui::GetStyle();
+                const float resetWidth = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
+                const float available = ImGui::GetContentRegionAvail().x;
+                const float sliderWidth = cumulativePasses > 0 ?
+                    MenuControls::ResponsiveCumulativeStrengthWidth(available, resetWidth,
+                        style.ItemSpacing.x, cumulativePasses) :
+                    (preferredWidth > 0.0f ?
+                        MenuControls::ResponsiveBasicResolutionWidth(available, menuResScale,
+                            resetWidth, style.ItemSpacing.x, preferredWidth) :
+                        (std::max)(1.0f, available - resetWidth - style.ItemSpacing.x));
+                ImGui::SetNextItemWidth(sliderWidth);
+                ImVec2 sliderMin {}, sliderMax {};
+                const bool changed = DeferredNrSlider(id, { &preview }, minimum, maximum, 1.0f,
+                    "%d%%", true, cumulativePasses > 0 ? &sliderMin : nullptr,
+                    cumulativePasses > 0 ? &sliderMax : nullptr);
+                if (cumulativePasses > 0)
+                    DrawCumulativePassSegments(sliderMin, sliderMax, cumulativePasses, menuResScale);
+                if (changed)
+                    if (!BasicMultipass::CommitEdit(*config, original, generation, member, preview.value_or_default()))
+                        CancelNrEdits();
+            };
+            static NrOptional<float> resolution { 1.0f }, model { 1.0f }, detail { 1.0f };
+            slider("Shared Model Resolution (All Passes)", "##NrBasicResolution", resolution,
+                   &BasicMultipass::Profile::resolution, 0.25f, 2.0f,
+                   "Sets one model-raster percentage for Pass 1 and every active additional pass "
+                   "in Basic mode. The composed frame remains full resolution. Releasing commits "
+                   "the shared value and rebuilds changed models; disabling Multipass restores the "
+                   "saved main settings.", 320.0f);
+            basic = config->DlssNrBasicMultipass.value_or_default();
+            if (basic.resolution > 1.0f)
+            {
+                static const char* downscalers[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
+                int selected = int(basic.downscaler);
+                if (ImGui::Combo("Downscaler##NrBasicDownscaler", &selected, downscalers, 8))
+                    BasicMultipass::Update(*config, [&](auto& p) { p.downscaler = uint32_t(selected); });
+            }
+            static const char* maximums[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
+            int maximum = int(basic.maximum) - 1;
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+            if (ImGui::Combo("Maximum passes##NrBasicMaximum", &maximum, maximums, 10))
+            {
+                BasicMultipass::Update(*config, [&](auto& p) { p.maximum = uint32_t(maximum + 1); });
+                CancelNrEdits();
+            }
+            basic = config->DlssNrBasicMultipass.value_or_default();
+            const char* cumulativeHint =
+                "Each coloured segment represents one pass. The slider grows from one-quarter width "
+                "at one maximum pass to full width at four. Five to ten passes keep the full width "
+                "and add denser pass segments. Cumulative totals fill passes from left to right.";
+            slider("Model Strength", "##NrBasicModel", model, &BasicMultipass::Profile::model,
+                   0.0f, float(basic.maximum), cumulativeHint, 0.0f, basic.maximum);
+            slider("Detail Strength", "##NrBasicDetail", detail, &BasicMultipass::Profile::detail,
+                   0.0f, float(basic.maximum), cumulativeHint, 0.0f, basic.maximum);
+            basic = config->DlssNrBasicMultipass.value_or_default();
+            const auto requested = BasicMultipass::Count(basic);
+            const auto telemetry = DlssNr::Telemetry();
+            static MenuStatus::SelectionObservation completedObservation;
+            const uint64_t key = uint64_t(std::lround(basic.model * 100)) |
+                (uint64_t(std::lround(basic.detail * 100)) << 12) |
+                (uint64_t(StageUi::DisplayPercent(basic.resolution)) << 24) |
+                (uint64_t(enabled) << 36) | (uint64_t(config->DlssNrRoute.value_or_default()) << 37);
+            const bool fresh = completedObservation.Fresh(key, telemetry.completedPipelineEvaluations);
+            if (enabled && requested == 0)
+                ImGui::TextWrapped("0 passes requested. Effect bypassed; loaded resources retained.");
+            else if (enabled && fresh && telemetry.running)
+                ImGui::Text("%u requested | %u completed on the last frame", requested, telemetry.layerCount);
+            else
+                ImGui::Text("%u requested | completed: unavailable", requested);
+            ImGui::TextWrapped("Totals include Pass 1. 230%% means 100%% + 100%% + 30%%. Remaining settings inherit the main section.");
+            if (!d3d12 && !presentRoute)
+                ImGui::TextWrapped("Multipass requires D3D12; native Vulkan keeps its saved single-pass settings.");
+            return;
+        }
 
         const unsigned int passCount = RenderPassCountSelector(config);
         if (previousPassCount != passCount) CancelNrEdits();
@@ -1617,15 +2621,15 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
                 HelpMarker(hint);
                 if (pendingNrEdits[label].Mixed()) ImGui::TextDisabled("%s", mixedHint);
             };
-            sharedSlider("Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
+            sharedSlider("Global Pass Resolution (Passes 2–N)###Model Resolution##AdditionalPassModelResolution", &PassOptionRefs::workingScale, 0.25f, 2.0f,
                 "Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once.",
-                "Additional pass model resolutions are mixed; adjusting this slider applies one value to all of them.");
-            sharedSlider("Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
+                "Passes 2–N have mixed model resolutions; adjusting this slider applies one value to all of them.");
+            sharedSlider("Global Pass Model Strength (Passes 2–N)###Model Strength##AdditionalPassModelStrength", &PassOptionRefs::intensity, 0.0f, 2.0f,
                 "Sets internal model intensity for Pass 2 through the selected final pass. Release to apply and rebuild only changed child models. 100% is default; 0% does not disable model execution. Pass 1 is unchanged.",
-                "Additional pass model strengths are mixed; adjusting this slider applies one value to all of them.");
-            sharedSlider("Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
+                "Passes 2–N have mixed model strengths; adjusting this slider applies one value to all of them.");
+            sharedSlider("Global Pass Detail Strength (Passes 2–N)###Detail Strength##AdditionalPassDetailStrength", &PassOptionRefs::transferStrength, 0.0f, 2.0f,
                 "Sets detail blending for Pass 2 through the selected final pass. Release to apply without rebuilding models. 100% is default; 0% hides the detail edit. Pass 1 and colour strength are unchanged.",
-                "Additional pass detail strengths are mixed; adjusting this slider applies one value to all of them.");
+                "Passes 2–N have mixed detail strengths; adjusting this slider applies one value to all of them.");
         }
         else
         {

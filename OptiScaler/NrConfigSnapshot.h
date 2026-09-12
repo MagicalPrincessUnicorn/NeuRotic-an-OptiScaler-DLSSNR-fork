@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NrConfigState.h"
+#include "dlssnr/DlssNr_BasicMultipass.h"
 #include <new>
 
 // Keep every Config::DlssNr* option here. The result owns its storage, including strings.
@@ -8,6 +9,7 @@
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
     X(DlssNrMultipassEnabled) \
+    X(DlssNrBasicMultipass) \
     X(DlssNrSecondLayer) \
     X(DlssNrSecondLayerWorkingScale) \
     X(DlssNrSecondLayerScalingDownscaler) \
@@ -26,6 +28,9 @@
     X(DlssNrSecondLayerApplyModel) \
     X(DlssNrExtraLayers) \
     X(DlssNrRoute) \
+    X(DlssNrUiManualResolution) \
+    X(DlssNrUiManualScale) \
+    X(DlssNrUiAfterMethod) \
     X(DlssNrPresentResolution) \
     X(DlssNrPresentCustomScale) \
     X(DlssNrEnhancedResolution) \
@@ -104,8 +109,14 @@ template <class Source> struct NrConfigSnapshot
 
 // Allocation failure while copying an anchor string must bypass NR at the host boundary,
 // not unwind through the game's rendering callback. The transaction unlocks before this returns.
-template<class Source> std::optional<NrConfigSnapshot<Source>> TryNrConfigSnapshot(const Source& source)
+template<class Source> std::optional<NrConfigSnapshot<Source>> TryNrConfigSnapshot(const Source& source,
+                                                                               bool deriveMultipass = true)
 {
-    try { return std::optional<NrConfigSnapshot<Source>>(std::in_place, source); }
+    try
+    {
+        std::optional<NrConfigSnapshot<Source>> result(std::in_place, source);
+        DlssNr::BasicMultipass::Derive(*result, deriveMultipass);
+        return result;
+    }
     catch (const std::bad_alloc&) { return std::nullopt; }
 }

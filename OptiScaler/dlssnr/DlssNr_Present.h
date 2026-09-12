@@ -51,8 +51,15 @@ struct PresentTelemetrySnapshot
     unsigned int pendingSlots = 0;
     double adapterCpuMs = 0.0;
     double adapterCpuMaxMs = 0.0;
+    double frameIntervalMs = 0.0;
     double originalPresentMs = 0.0;
     double originalPresentMaxMs = 0.0;
+    // Latest successfully matched GPU timestamp for the route that submitted it. The monotonically
+    // increasing sample count lets UI observers consume each completion once without affecting the
+    // pacing window or the render path.
+    double presentGpuMs = 0.0;
+    unsigned long long presentGpuSamples = 0;
+    PresentPacing::Route presentGpuRoute = PresentPacing::Route::NativeTemporal;
     bool hasPacingSummary = false;
     unsigned long long unmatchedGpuTimingSamples = 0;
     PresentPacing::WindowSummary pacingSummary;

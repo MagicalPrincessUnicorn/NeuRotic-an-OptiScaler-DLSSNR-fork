@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "dlssnr/DlssNr_PresentResolution.h"
 #include "dlssnr/FrameTrace.h"
+#include "dlssnr/DlssNr_StageUi.h"
 
 #include "Util.h"
 
@@ -348,12 +349,16 @@ bool Config::Reload(std::filesystem::path iniPath)
             const auto multipassEnabled = readBool("DlssNr", "MultipassEnabled");
             DlssNrMultipassEnabled.set_from_config(multipassEnabled);
             DlssNrSecondLayer.set_from_config(readBool("DlssNr", "SecondLayer"));
+            DlssNrBasicMultipass.set_from_config(DlssNr::BasicMultipass::Load(
+                [&](const char* key) { return readFloat("DlssNrBasic", key); },
+                multipassEnabled.has_value() || DlssNrSecondLayer.has_value() ||
+                readUInt("DlssNr", "Passes").has_value() || ini.GetSectionSize("DlssNrLayer2") > 0));
             if (auto route = readUInt("DlssNr", "Route"))
                 DlssNrRoute.set_from_config(std::min(route.value(), 2u));
             else
                 DlssNrRoute.reset();
             DlssNr::PresentResolution::LoadConfig(*this,
-                [&](const char* key) { return readUInt("DlssNr", key); });
+                [&](const char* key) { return readUInt("DlssNr", key); }, ini.GetSectionSize("DlssNr") > 0);
             // PerformanceMode is the user-facing name. Keep accepting the older experimental
             // key so profiles created before Alpha 0.4 retain their selected render path.
             auto performanceMode = readBool("DlssNr", "PerformanceMode");
@@ -387,6 +392,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCompareTags.set_from_config(readBool("DlssNr", "CompareTags"));
             DlssNrTagScale.set_from_config(readFloat("DlssNr", "TagScale"));
             DlssNrWorkingScale.set_from_config(readFloat("DlssNr", "WorkingScale"));
+            DlssNr::StageUi::LoadHints(*this, readBool("DlssNr", "UiManualResolution"),
+                readFloat("DlssNr", "UiManualScale"), readUInt("DlssNr", "UiAfterMethod"));
 
             if (auto v = readEnum<Scaler>("DlssNr", "ScalingDownscaler"))
                 DlssNrScalingDownscaler.set_from_config(*v);
@@ -1423,6 +1430,8 @@ bool Config::SaveIni()
     }
     ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
     DlssNr::PresentResolution::SaveConfig(ini, *Instance());
+    DlssNr::StageUi::SaveHints(ini, *Instance());
+    DlssNr::BasicMultipass::Save(ini, Instance()->DlssNrBasicMultipass.value_or_default());
     // Persist the user-facing key and retain the legacy spelling for prior Alpha builds.
     const int renderingMode = std::clamp(Instance()->DlssNrRenderingMode.value_or_default(), 0, 1);
     ini.SetLongValue("DlssNr", "RenderingMode", static_cast<long>(renderingMode));

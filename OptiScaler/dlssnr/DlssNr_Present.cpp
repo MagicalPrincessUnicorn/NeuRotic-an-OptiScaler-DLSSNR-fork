@@ -174,6 +174,12 @@ void ReadCompletedPacingSample(PresentSlot& slot, unsigned int slotIndex, UINT64
     const UINT64 fenceAge = currentAttempt >= slot.presentAttempt ? currentAttempt - slot.presentAttempt : 0;
     if (!g_present.pacing.recordGpu(slot.pacing, gpuMs, completionMs, fenceAge))
         ++g_present.telemetry.unmatchedGpuTimingSamples;
+    else
+    {
+        g_present.telemetry.presentGpuMs = gpuMs;
+        g_present.telemetry.presentGpuRoute = slot.pacing.route;
+        ++g_present.telemetry.presentGpuSamples;
+    }
 }
 
 void RefreshCompletionTelemetry()
@@ -574,6 +580,7 @@ PresentTelemetrySnapshot PresentTelemetry()
 void ReportPresentCallTiming(const PresentCallTimingSample& sample)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
+    g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;
     if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal &&
         sample.identity.completedOutput)
     {
@@ -635,7 +642,6 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         static_cast<void*>(swapChain), static_cast<void*>(presentDevice), presentFlags);
     FrameTrace::Context traceContext(FrameTrace::presentObservation, tracePresent);
     const auto* config = Config::Instance();
-    const auto runtime = config->GetDlssNrRuntimeSnapshot();
     const auto capturedSettings = TryNrConfigSnapshot(*config);
     if (!capturedSettings)
     {
@@ -645,6 +651,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return {};
     }
     const auto& settings = *capturedSettings;
+    const auto runtime = settings.GetDlssNrRuntimeSnapshot();
     const auto resolution = PresentResolution::Selected(settings);
     const bool enhanced = settings.DlssNrRoute.value_or_default() == 2;
     const bool observeNative = enhanced || (settings.DlssNrRoute.value_or_default() == 1 &&
@@ -711,6 +718,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (preFgFrame && settings.DlssNrMultipassEnabled.value_or_default())
     {
         SetFallback(PresentApi::D3D12, "Pre-FG adapter supports native Streamline 2x with NR Multipass off");
+        return identity;
+    }
+    if (BasicMultipass::Active(settings) && BasicMultipass::Count(settings.DlssNrBasicMultipass.value_or_default()) == 0)
+    {
+        InvalidateHistory("Basic Multipass totals are zero");
+        SetFallback(PresentApi::Unknown, "Basic Multipass effect bypassed; loaded resources retained");
         return identity;
     }
 
@@ -1122,7 +1135,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
         g_present.frame.Get(), enhanced ? nativeGuides.depth.Get() : g_present.depth.Get(),
         enhanced ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
-        g_present.history.ResetForNextEvaluation(), enhanced ? &nativeGuides.frame : nullptr);
+        g_present.history.ResetForNextEvaluation(), enhanced ? &nativeGuides.frame : nullptr, &settings);
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;
@@ -1199,7 +1212,11 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
     bool outputPrepared = true;
-    if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
+    if (!settings.DlssNrApplyModel.value_or_default())
+    {
+        // Model work and fence tracking continue, but no conversion or copy touches the game image.
+    }
+    else if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
     {
         Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                    D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -1305,7 +1322,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     slot.pacingExpected = g_present.pacing.expectGpu(identity.pacing);
     RecordSubmission(signal);
 
-    if (api == PresentApi::D3D11)
+    if (api == PresentApi::D3D11 && settings.DlssNrApplyModel.value_or_default())
     {
         if (!Dx11WithDx12::SyncDx12ToDx11())
         {
