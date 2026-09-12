@@ -33,7 +33,7 @@ The correction was installed with proxy SHA256
 remained `8270B350CD82DE5CE89806872CDD6B6A9249B80836B91BBEB3573470744CC206`.
 
 Corrected session `d513ad8d15714c1080714803ab389ead` exited 0 with no DRED fault. After NR Off,
-the complete retained log records 167 native-FG evaluations and 668 successful Presents with
+the complete retained log records 164 native-FG evaluations and 664 successful Presents with
 zero native-FG evaluation failures. The user reported the transition worked. Result: Better.
 Failed pre-readiness session `f5ca6fdf26f14eb29739153b8e296797` is excluded.
 
