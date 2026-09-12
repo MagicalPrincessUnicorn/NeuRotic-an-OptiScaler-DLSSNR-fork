@@ -58,5 +58,27 @@ int main()
     ObserveConstants(25, 0); ObserveTags(25, 0);
     assert(Claim().valid);
     State().swapchains = 0;
+    assert(!Provider().known);
+    PublishProvider(true, true);
+    const auto provider = Provider();
+    assert(provider.known && provider.enabled && provider.supported && provider.generation);
+    PublishProvider(true, true);
+    assert(Provider().generation == provider.generation);
+    PublishProvider(true, false);
+    assert(Provider().generation > provider.generation && !Provider().supported);
+    PublishProvider(false, false);
+    assert(!Provider().enabled);
+    Frame outer, inner;
+    outer.key = 123; inner.key = 124;
+    assert(!forwardingFrame);
+    {
+        ForwardFrame a(outer);
+        assert(forwardingFrame->key == 123);
+        { ForwardFrame b(inner); assert(forwardingFrame->key == 124); }
+        assert(forwardingFrame->key == 123);
+        std::thread other([] { assert(!forwardingFrame); });
+        other.join();
+    }
+    assert(!forwardingFrame);
     std::puts("Pre-FG identity: missing/stale/future/duplicate/viewport/resize/wrap/concurrency PASS");
 }

@@ -1237,7 +1237,15 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
 
     state.dlssgLastSetMode = newOptions.mode;
 
-    return o_slDLSSGSetOptions(viewport, newOptions);
+    const auto result = o_slDLSSGSetOptions(viewport, newOptions);
+    if (result == sl::Result::eOk)
+        DlssNr::PreFg::PublishProvider(newOptions.mode != sl::DLSSGMode::eOff,
+            static_cast<uint32_t>(viewport) == 0 && newOptions.mode == sl::DLSSGMode::eOn &&
+            newOptions.numFramesToGenerate == 1 &&
+            newOptions.queueParallelismMode == sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue &&
+            newOptions.enableUserInterfaceRecomposition != sl::Boolean::eTrue &&
+            static_cast<uint32_t>(newOptions.flags & sl::DLSSGFlags::eShowOnlyInterpolatedFrame) == 0);
+    return result;
 }
 
 sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport, sl::DLSSGState& state,

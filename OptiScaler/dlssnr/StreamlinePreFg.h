@@ -96,6 +96,9 @@ inline sl::Result LegacyTags(const sl::ViewportHandle& viewport, const sl::Resou
 }
 inline bool PrepareFullFrame(const Frame& frame)
 {
+    const auto provider = Provider();
+    if (!provider.known || !provider.enabled || !provider.supported ||
+        provider.generation != frame.providerGeneration) return false;
     sl::ResourceTag fullFrame[] = {
         {nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent},
         {nullptr, sl::kBufferTypeUIColorAndAlpha, sl::ResourceLifecycle::eValidUntilPresent},
@@ -128,19 +131,24 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     struct ForwardScope { ForwardScope() { forwardingPresent = true; } ~ForwardScope() { forwardingPresent = false; } } scope;
     const double start = Util::MillisecondsNow();
+    const double interval = owner->previousPresentMs != 0.0 ? start - owner->previousPresentMs : 0.0;
+    owner->previousPresentMs = start;
     auto* config = Config::Instance();
-    const bool fg = ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff;
-    if (owner->lastFg != fg)
+    const auto provider = Provider();
+    const bool fg = provider.known ? provider.enabled : ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff;
+    if (owner->lastFg != fg || owner->providerGeneration != provider.generation)
     {
         std::lock_guard lock(State().mutex);
         State().ledger.Reset();
         owner->lastFg = fg;
+        owner->providerGeneration = provider.generation;
     }
     auto frame = Claim();
+    frame.providerGeneration = provider.generation;
     const bool requested = config->GetDlssNrRuntimeSnapshot().enabled && config->DlssNrRoute.value_or_default() != 0;
     if (fg)
     {
-        if (::State::Instance().activeFgOutput != FGOutput::NoFG ||
+        if (!provider.known || !provider.supported || ::State::Instance().activeFgOutput != FGOutput::NoFG ||
             ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOn ||
             ::State::Instance().dlssgDetectedInterpolationCount > 1)
         {
@@ -166,7 +174,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     ForwardFrame providerScope(frame);
     const HRESULT result = forward();
     const double end = Util::MillisecondsNow();
-    ReportPresentCallTiming({identity, 0.0, beforeProvider - start, end - start, end - beforeProvider, result});
+    ReportPresentCallTiming({identity, interval, beforeProvider - start, end - start, end - beforeProvider, result});
     if (frame.sequence <= 4 || frame.sequence % 120 == 0)
         LOG_INFO("NR pre-FG: real={} submitted={} bypassedOutputs={} rejected={} token={} source={} result={:X}",
             State().realCalls.load(), State().submitted.load(), State().bypassed.load(), State().rejected.load(),
@@ -312,6 +320,8 @@ inline void Uninstall()
         present = nullptr; present1 = nullptr; resize = nullptr; resize1 = nullptr;
         upgrade = nullptr; setTags = nullptr; setLegacyTags = nullptr; setConstants = nullptr; getToken = nullptr;
         module = nullptr; targets.clear(); Invalidate();
+        std::lock_guard stateLock(State().mutex);
+        State().provider = {};
     }
     else LOG_ERROR("NR pre-FG: could not detach Streamline adapter");
 }

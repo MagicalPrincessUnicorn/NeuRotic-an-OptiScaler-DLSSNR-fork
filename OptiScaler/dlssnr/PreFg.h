@@ -19,6 +19,7 @@ struct Frame
     const char* refusal = "No matching Streamline frame tags/constants";
     bool legacyTags = false;
     bool outputSubmitted = false;
+    uint64_t providerGeneration = 0;
     bool (*prepareInputs)(const Frame&) = nullptr;
 };
 // Present-scoped provenance only; zero outside the provider's synchronous call.
@@ -77,14 +78,33 @@ class Ledger
     }
     void Reset() { constants = tags = consumed = 0; foreignConstants = foreignTags = false; }
 };
+struct ProviderState
+{
+    bool known = false, enabled = false, supported = false;
+    uint64_t generation = 0;
+};
 struct Registry
 {
     std::mutex mutex;
     Ledger ledger;
+    ProviderState provider;
     std::atomic<unsigned int> swapchains {0};
     std::atomic<uint64_t> realCalls {0}, submitted {0}, bypassed {0}, rejected {0};
 };
 inline Registry& State() { static auto* state = new Registry; return *state; }
+inline void PublishProvider(bool enabled, bool supported)
+{
+    std::lock_guard lock(State().mutex);
+    auto& provider = State().provider;
+    if (!provider.known || provider.enabled != enabled || provider.supported != supported)
+        ++provider.generation;
+    provider.known = true; provider.enabled = enabled; provider.supported = supported;
+}
+inline ProviderState Provider()
+{
+    std::lock_guard lock(State().mutex);
+    return State().provider;
+}
 inline uint64_t CurrentFrame()
 {
     auto& state = State();
@@ -137,6 +157,8 @@ class Owner final : public IUnknown
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
     std::recursive_mutex presentationMutex;
     bool lastFg = false;
+    uint64_t providerGeneration = 0;
+    double previousPresentMs = 0.0;
     explicit Owner(ID3D12CommandQueue* value) : queue(value) { ++State().swapchains; }
     ~Owner() { --State().swapchains; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override
