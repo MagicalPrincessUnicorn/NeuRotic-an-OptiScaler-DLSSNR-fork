@@ -6,23 +6,27 @@
 
 namespace DlssNr::PresentResolution
 {
-enum Mode : uint32_t { FollowNative = 0, FullOutput = 1, Custom = 2 };
+// Values 0..2 keep their historical meaning. The preview modes store a percentage,
+// including remembered Manual percentage while Automatic is selected.
+enum Mode : uint32_t { FollowNative = 0, FullOutput = 1, Custom = 2, Manual = 3, Automatic = 4 };
 inline constexpr std::array<uint32_t, 6> Percent {100, 77, 67, 58, 50, 33};
 inline constexpr const char* Names[] = {
-    "Follow Native Render Resolution", "Always Follow Output Resolution", "Custom Scale"
+    "Legacy: Follow Native Render Resolution", "Automatic", "Manual (legacy preset)", "Manual", "Automatic"
 };
 struct Policy { uint32_t mode = FullOutput, scale = 0; };
 inline Policy Load(std::optional<uint32_t> mode, std::optional<uint32_t> scale,
                    std::optional<uint32_t> legacy = {})
 {
+    if (mode && (*mode == Manual || *mode == Automatic))
+        return {*mode, std::clamp(scale.value_or(100u), 25u, 200u)};
     const auto old = (std::min)(legacy.value_or(0), 5u);
     return {mode ? (std::min)(*mode, 2u) : (old == 0 ? FullOutput : Custom),
             scale ? (std::min)(*scale, 5u) : old};
 }
-template<class C, class Reader> void LoadConfig(C& cfg, Reader read)
+template<class C, class Reader> void LoadConfig(C& cfg, Reader read, bool existingProfile = true)
 {
     const auto image = Load(read("PresentResolution"), read("PresentCustomScale"), read("PresentWorkload"));
-    const auto enhanced = Load(read("EnhancedResolution").value_or(FollowNative), read("EnhancedCustomScale"));
+    const auto enhanced = Load(read("EnhancedResolution").value_or(existingProfile ? FollowNative : FullOutput), read("EnhancedCustomScale"));
     cfg.DlssNrPresentResolution.set_from_config(image.mode);
     cfg.DlssNrPresentCustomScale.set_from_config(image.scale);
     cfg.DlssNrEnhancedResolution.set_from_config(enhanced.mode);
@@ -45,7 +49,12 @@ template<class C> Policy Selected(const C& cfg)
 template<class C> uint64_t CaptureKey(const C& cfg)
 {
     const auto p = Selected(cfg);
-    return 1ull + cfg.DlssNrRoute.value_or_default() * 64ull + p.mode * 8ull + p.scale;
+    return 1ull + cfg.DlssNrRoute.value_or_default() * 4096ull + p.mode * 256ull + p.scale;
+}
+inline uint32_t ManualPercent(Policy policy)
+{
+    return policy.mode == Manual || policy.mode == Automatic ? std::clamp(policy.scale, 25u, 200u)
+        : Percent[(std::min)(policy.scale, 5u)];
 }
 struct Size { uint32_t width = 0, height = 0; const char* reason = nullptr; };
 inline uint32_t Scaled(uint32_t full, uint32_t scale)
@@ -59,6 +68,20 @@ inline Size Resolve(Policy policy, uint32_t outputW, uint32_t outputH,
 {
     if (outputW < 8 || outputH < 8 || outputW > 8192 || outputH > 8192)
         return {0, 0, "Output dimensions are outside supported NR bounds"};
+    if (policy.mode == Automatic) return {outputW, outputH};
+    if (policy.mode == Manual)
+    {
+        if (policy.scale < 25 || policy.scale > 200)
+            return {0, 0, "Manual NR resolution must be between 25 and 200 percent"};
+        if (policy.scale == 100) return {outputW, outputH};
+        const auto scaled = [&](uint32_t dimension) {
+            return (std::max)(8u, uint32_t(((uint64_t(dimension) * policy.scale + 50) / 100 + 4) & ~7ull));
+        };
+        const auto w = scaled(outputW), h = scaled(outputH);
+        if (w > 8192 || h > 8192)
+            return {0, 0, "Requested model dimensions exceed the 8192-pixel NR resource limit"};
+        return {w, h};
+    }
     if (policy.mode == FollowNative)
     {
         if (!nativeW || !nativeH || nativeW > outputW || nativeH > outputH)

@@ -1057,7 +1057,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
         g_present.frame.Get(), enhanced ? nativeGuides.depth.Get() : g_present.depth.Get(),
         enhanced ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
-        g_present.history.ResetForNextEvaluation(), enhanced ? &nativeGuides.frame : nullptr);
+        g_present.history.ResetForNextEvaluation(), enhanced ? &nativeGuides.frame : nullptr, &settings);
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;

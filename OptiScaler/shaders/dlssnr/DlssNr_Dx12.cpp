@@ -5286,7 +5286,8 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
                                   ID3D12Resource* frameResource, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
                                   unsigned int workHeight, bool resetHistory,
-                                  const DlssNrFrameInfo* nativeGuideFrame)
+                                  const DlssNrFrameInfo* nativeGuideFrame,
+                                  const NrConfigSnapshot<Config>* capturedSettings)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
@@ -5294,7 +5295,9 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
         workWidth == 0 || workHeight == 0)
         return false;
 
-    auto settings = TryNrConfigSnapshot(*Config::Instance());
+    const auto localSettings = capturedSettings == nullptr ? TryNrConfigSnapshot(*Config::Instance())
+                                                          : std::nullopt;
+    const auto* settings = capturedSettings ? capturedSettings : (localSettings ? &*localSettings : nullptr);
     if (!settings || settings->DlssNrRoute.value_or_default() == 0 ||
         (settings->DlssNrRoute.value_or_default() == 2) != (nativeGuideFrame != nullptr) ||
         !settings->GetDlssNrRuntimeSnapshot().enabled)

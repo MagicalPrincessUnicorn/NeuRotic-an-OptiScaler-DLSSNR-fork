@@ -351,7 +351,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             else
                 DlssNrRoute.reset();
             DlssNr::PresentResolution::LoadConfig(*this,
-                [&](const char* key) { return readUInt("DlssNr", key); });
+                [&](const char* key) { return readUInt("DlssNr", key); }, ini.GetSectionSize("DlssNr") > 0);
             // PerformanceMode is the user-facing name. Keep accepting the older experimental
             // key so profiles created before Alpha 0.4 retain their selected render path.
             auto performanceMode = readBool("DlssNr", "PerformanceMode");

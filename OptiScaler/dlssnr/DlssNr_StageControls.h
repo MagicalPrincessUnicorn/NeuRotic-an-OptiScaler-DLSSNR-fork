@@ -93,23 +93,12 @@ template<class C> bool RenderControls(C& config)
         ImGui::EndTooltip();
     }
     snapshot = config.GetDlssNrConfigSnapshot();
-    if (method == 0)
+    int resolution = ResolutionSelection(snapshot);
+    if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &resolution, Resolutions,
+                      resolution == 2 ? 3 : 2))
     {
-        int manual = Manual(snapshot) ? 1 : 0;
-        if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &manual, NativeResolutions, 2))
-        {
-            SelectManual(config, manual != 0);
-            changed = true;
-        }
-    }
-    else
-    {
-        int preset = Preset(PresentResolution::Selected(snapshot));
-        if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &preset, PresentPresets, 7))
-        {
-            SelectPreset(config, preset);
-            changed = true;
-        }
+        SelectResolution(config, resolution);
+        changed = true;
     }
     return changed;
 }

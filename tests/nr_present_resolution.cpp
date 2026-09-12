@@ -33,6 +33,47 @@ void Load(CSimpleIniA& ini, Config& cfg)
 int main()
 {
     namespace U = DlssNr::StageUi;
+    // Continuous preview policy preserves old stored profiles and independent method memory.
+    Config preview;
+    R::LoadConfig(preview, [](const char*) -> std::optional<uint32_t> { return {}; }, false);
+    assert(R::Selected(preview).mode == R::FullOutput);
+    for (int route : {1, 2})
+    for (uint32_t percent : {25u, 67u, 100u, 125u, 200u})
+    {
+        U::SelectMethod(preview, route);
+        U::SelectResolutionScale(preview, percent / 100.0f);
+        assert(U::ResolutionSelection(preview) == 1);
+        assert(R::Selected(preview).scale == percent);
+        for (auto output : {std::pair{1920u, 1080u}, std::pair{3840u, 2160u}})
+        {
+            const auto raster = R::Resolve(R::Selected(preview), output.first, output.second);
+            assert(!raster.reason);
+            assert(std::abs(double(raster.width) - double(output.first) * percent / 100) <= 4.5);
+            assert(std::abs(double(raster.height) - double(output.second) * percent / 100) <= 4.5);
+            const auto motion = DlssNrWorkingMotionScale(output.first, output.second, raster.width, raster.height);
+            assert(std::abs(motion.x * output.first - raster.width) < 0.001f);
+        }
+        U::SelectResolution(preview, 0);
+        assert(U::ResolutionSelection(preview) == 0);
+        const auto automatic = R::Resolve(R::Selected(preview), 3840, 2160, 1920, 1080);
+        assert(automatic.width == 3840 && automatic.height == 2160);
+        CSimpleIniA ini;
+        R::SaveConfig(ini, preview);
+        Config reloaded; Load(ini, reloaded); reloaded.DlssNrRoute = uint32_t(route);
+        U::SelectResolution(reloaded, 1);
+        assert(R::Selected(reloaded).scale == percent);
+    }
+    U::SelectMethod(preview, 1); U::SelectResolutionScale(preview, 0.67f);
+    U::SelectMethod(preview, 2); U::SelectResolutionScale(preview, 1.25f);
+    U::SelectMethod(preview, 1); assert(R::Selected(preview).scale == 67);
+    U::SelectMethod(preview, 2); assert(R::Selected(preview).scale == 125);
+    preview.DlssNrEnhancedResolution = R::FollowNative;
+    assert(U::ResolutionSelection(preview) == 2);
+    U::SelectResolution(preview, 0); assert(U::ResolutionSelection(preview) == 0);
+    assert(R::Resolve({R::Manual, 200}, 8192, 4320).reason);
+    assert(R::Resolve({R::Manual, 201}, 1920, 1080).reason);
+    assert(R::Resolve({R::Manual, 24}, 1920, 1080).reason);
+    assert(R::CaptureKey(preview) != 0);
     for (int method = 0; method < 3; ++method)
     for (int preset = 0; preset < 7; ++preset)
     for (float working : {0.25f, 0.67f, 1.0f, 1.75f, 2.0f})

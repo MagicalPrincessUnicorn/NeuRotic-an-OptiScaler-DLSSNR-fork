@@ -230,10 +230,11 @@ class Config
     NrOptional<bool> DlssNrUiManualResolution { false };
     NrOptional<float> DlssNrUiManualScale { 1.0f };
     NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
-    // Independent Present policies: 0 follow native, 1 full output, 2 custom.
+    // Independent Present policies: 0 legacy native, 1 output, 2 fixed preset,
+    // 3 continuous Manual, 4 Automatic with remembered Manual percentage.
     NrOptional<uint32_t> DlssNrPresentResolution { 1 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
     NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     // 0 = Quality (post-SR), 1 = Performance (pre-SR).

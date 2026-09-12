@@ -189,14 +189,25 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         const int renderMode = std::clamp(uiConfig.DlssNrRenderingMode.value_or_default(), 0, 1);
         static const char* renderModeNames[] = { "Quality", "Performance (Default)" };
         const bool presentRoute = route != 0;
-        if (!presentRoute && StageUi::Manual(uiConfig))
+        if (StageUi::ResolutionSelection(uiConfig) == 1)
         {
-            DeferredNrSlider("Manual scale##NrManualScale", { &config->DlssNrWorkingScale },
-                             0.25f, 2.0f, 1.0f, "%d%%", true);
+            static NrOptional<float> scalePreview { 1.0f };
+            static uint64_t previousSelection = 0;
+            const auto selection = PresentResolution::CaptureKey(uiConfig) * 4 + stage;
+            if (selection != previousSelection) CancelNrEdits();
+            previousSelection = selection;
+            scalePreview = StageUi::ResolutionScale(uiConfig);
+            ImGui::TextUnformatted("Manual resolution");
+            ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
+                ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
+            if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
+                StageUi::SelectResolutionScale(*config, scalePreview.value_or_default());
             uiConfig = config->GetDlssNrConfigSnapshot();
         }
         if (presentRoute)
-            ImGui::TextWrapped("Present always runs after game upscaling and includes the HUD. Presets change model resolution only; each method remembers its selection.");
+            ImGui::TextWrapped(StageUi::ResolutionSelection(uiConfig) == 2 ?
+                "Legacy follows fresh game render dimensions. Selecting Automatic or Manual adopts the new resolution policy." :
+                "Present runs after upscaling and includes the HUD. Automatic uses the final output; Manual scales it. Each method remembers its selection.");
         else if (stage == 0)
             ImGui::TextWrapped("Only Native Temporal runs before game upscaling. Automatic follows 100% of the game render input; Manual scales that input.");
         else
@@ -222,7 +233,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             presentTelemetry.requestedPlacement == (route == 2 ? "Present Enhanced" : "Present Image-Only");
         const bool presentActive = presentMatches && presentTelemetry.active &&
             presentTelemetry.resolution == policy.mode &&
-            (policy.mode != PresentResolution::Custom || presentTelemetry.workload == policy.scale);
+            presentTelemetry.workload == policy.scale;
         static MenuStatus::SelectionObservation nativeObservation;
         const auto nativeSelection = selection ^ (uint64_t(renderMode) << 20) ^
             (uint64_t(std::bit_cast<uint32_t>(uiConfig.DlssNrWorkingScale.value_or_default())) << 24);
@@ -236,10 +247,9 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
         const auto stageLabel = Neurotic::Translate(StageUi::Stages[stage]);
         const auto methodLabel = Neurotic::Translate(routeNames[route]);
-        auto resolutionLabel = Neurotic::Translate(presentRoute ? StageUi::PresentPresets[StageUi::Preset(policy)] :
-            StageUi::Manual(uiConfig) ? "Manual" : "Automatic");
-        if (!presentRoute && StageUi::Manual(uiConfig))
-            resolutionLabel += " (" + std::to_string(StageUi::DisplayPercent(uiConfig.DlssNrWorkingScale.value_or_default())) + "%)";
+        auto resolutionLabel = Neurotic::Translate(StageUi::Resolutions[StageUi::ResolutionSelection(uiConfig)]);
+        if (StageUi::ResolutionSelection(uiConfig) == 1)
+            resolutionLabel += " (" + std::to_string(StageUi::DisplayPercent(StageUi::ResolutionScale(uiConfig))) + "%)";
         uint32_t workW = 0, workH = 0, outputW = 0, outputH = 0;
         if (presentRoute && enabled && presentMatches)
         {
@@ -592,7 +602,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         }
         };
         // The ordinary downscaler sits directly below manual resolution.
-        if (!presentRoute && config->DlssNrWorkingScale.value_or_default() > 1.0f)
+        if (StageUi::ResolutionScale(uiConfig) > 1.0f)
         {
             static const char* names[] = { "FSR1", "Bicubic", "Catmull-Rom", "Lanczos2", "Lanczos3", "Kaiser2", "Kaiser3", "MAGIC" };
             int downscaler = std::clamp(int(config->DlssNrScalingDownscaler.value_or_default()), 0, 7);

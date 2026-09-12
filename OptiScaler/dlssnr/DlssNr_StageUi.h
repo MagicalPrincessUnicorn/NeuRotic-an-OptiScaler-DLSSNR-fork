@@ -13,6 +13,7 @@ inline int DisplayPercent(float scale)
 inline constexpr const char* Stages[] = { "Before", "After" };
 inline constexpr const char* Methods[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
 inline constexpr const char* NativeResolutions[] = { "Automatic", "Manual" };
+inline constexpr const char* Resolutions[] = { "Automatic", "Manual", "Legacy" };
 inline constexpr const char* PresentPresets[] = {
     "Follow Game Render Resolution (Automatic)", "Full Output (100%)", "Ultra Quality (77%)",
     "Quality (67%)", "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
@@ -77,6 +78,37 @@ template<class C> void SelectPreset(C& c, int preset)
     mode = preset == 0 ? PresentResolution::FollowNative :
         preset == 1 ? PresentResolution::FullOutput : PresentResolution::Custom;
     if (preset > 1) scale = uint32_t(preset - 1);
+}
+template<class C> int ResolutionSelection(const C& c)
+{
+    if (c.DlssNrRoute.value_or_default() == 0) return Manual(c) ? 1 : 0;
+    const auto p = PresentResolution::Selected(c);
+    return p.mode == PresentResolution::FollowNative ? 2 :
+        p.mode == PresentResolution::Custom || p.mode == PresentResolution::Manual ? 1 : 0;
+}
+template<class C> float ResolutionScale(const C& c)
+{
+    if (c.DlssNrRoute.value_or_default() == 0) return c.DlssNrWorkingScale.value_or_default();
+    return ResolutionSelection(c) == 1 ? PresentResolution::ManualPercent(PresentResolution::Selected(c)) / 100.0f : 1.0f;
+}
+template<class C> void SelectResolution(C& c, int selection)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    if (c.DlssNrRoute.value_or_default() == 0) { SelectManual(c, selection == 1); return; }
+    const auto p = PresentResolution::Selected(c);
+    auto& mode = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedResolution : c.DlssNrPresentResolution;
+    auto& scale = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedCustomScale : c.DlssNrPresentCustomScale;
+    scale = PresentResolution::ManualPercent(p);
+    mode = selection == 1 ? PresentResolution::Manual : PresentResolution::Automatic;
+}
+template<class C> void SelectResolutionScale(C& c, float value)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    if (c.DlssNrRoute.value_or_default() == 0) { SelectScale(c, value); return; }
+    auto& mode = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedResolution : c.DlssNrPresentResolution;
+    auto& scale = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedCustomScale : c.DlssNrPresentCustomScale;
+    scale = uint32_t(DisplayPercent(value));
+    mode = PresentResolution::Manual;
 }
 template<class C> void LoadHints(C& c, std::optional<bool> manual, std::optional<float> scale,
                                   std::optional<uint32_t> afterMethod)

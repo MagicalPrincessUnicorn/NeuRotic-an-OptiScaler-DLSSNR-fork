@@ -54,7 +54,8 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
                                   ID3D12Resource* frame, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
                                   unsigned int workHeight, bool resetHistory,
-                                  const DlssNrFrameInfo* nativeGuideFrame = nullptr);
+                                  const DlssNrFrameInfo* nativeGuideFrame = nullptr,
+                                  const NrConfigSnapshot<Config>* settings = nullptr);
 
 
 
