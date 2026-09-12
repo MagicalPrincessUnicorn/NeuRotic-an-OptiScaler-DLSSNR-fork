@@ -1,5 +1,27 @@
 # Present FG/RR: Phase A observation checkpoint
 
+## September 12: defer trace until user enables NR
+
+The initial Steam capture verified session propagation but exhausted its 65536
+event budget during startup. Set `NEUROTIC_FRAME_TRACE_TRIGGER=nr-enable` alongside
+the session ID to defer budgeted observations until a user off-to-on NR toggle.
+The existing enable setter publishes its unchanged state before notifying the
+diagnostic gate. Config loading does not trigger capture. If NR is already enabled,
+turn it off and then on after loading gameplay. The mode-selection and subsequent
+disable transitions remain inside the same one-shot capture; toggles never reset
+or enlarge the budget. Missing trigger preserves immediate tracing; an invalid
+nonempty trigger refuses capture. Without a valid session all tracing stays off.
+
+One unbudgeted `NR_FRAME_TRACE_CONTROL` record announces waiting-for-nr-enable,
+allowing the Steam launcher to verify setup without claiming active capture.
+`trace-started` marks the winning trigger; concurrent render observations may
+receive an earlier event ID, so do not infer ordering from that marker alone.
+Startup attempts do not consume event IDs or evaluate macro arguments. This is
+a diagnostics-only continuation from `634edbe594ae602bd422a0bb8d6e2151704fdc48`;
+resource ownership, queue synchronization, presets, INI, NR history and rendering
+behavior are unchanged. Full compatibility and the silent shutdown fault remain
+unresolved. The historical initial checkpoint below predates deployment.
+
 This is an incomplete implementation of the enhancement story, held at its mandatory
 runtime gate. It adds observations only. No real-frame packet, generated-frame
 classifier, provider ordering adapter, exposure handoff, or compatibility claim is

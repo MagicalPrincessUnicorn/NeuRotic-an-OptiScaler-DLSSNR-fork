@@ -2,6 +2,7 @@
 
 #include "Config.h"
 #include "dlssnr/DlssNr_PresentResolution.h"
+#include "dlssnr/FrameTrace.h"
 
 #include "Util.h"
 
@@ -49,7 +50,9 @@ Config::Config()
 
 void Config::SetDlssNrEnabled(bool enabled)
 {
+    const bool wasEnabled = _dlssNrState.Snapshot().enabled;
     _dlssNrState.SetEnabled(DlssNrEnabled, enabled);
+    DlssNr::FrameTrace::OnNrEnable(wasEnabled, enabled);
 }
 
 Config::DlssNrRuntimeSnapshot Config::GetDlssNrRuntimeSnapshot() const noexcept

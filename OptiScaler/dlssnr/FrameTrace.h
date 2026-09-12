@@ -11,18 +11,46 @@ struct Session
     char id[33] {};
     LONGLONG frequency = 0;
     bool armed = false;
+    bool waitForEnable = false;
+    std::atomic<bool> capturing {false};
+    std::atomic<bool> waitingReported {false};
     Budget budget;
     Session() noexcept
     {
         const DWORD length = GetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_SESSION", id, sizeof(id));
+        char trigger[16] {};
+        const DWORD triggerLength = GetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_TRIGGER", trigger, sizeof(trigger));
+        waitForEnable = triggerLength == 9 && std::string_view(trigger, 9) == "nr-enable";
         LARGE_INTEGER f {};
         armed = length == 32 && ValidSession(std::string_view(id, 32)) &&
-                QueryPerformanceFrequency(&f) && f.QuadPart > 0;
+                (triggerLength == 0 || waitForEnable) && QueryPerformanceFrequency(&f) && f.QuadPart > 0;
         frequency = f.QuadPart;
+        capturing.store(armed && !waitForEnable, std::memory_order_relaxed);
     }
 };
 inline Session& Current() { static Session session; return session; }
-inline bool Armed() noexcept { return Current().armed; }
+inline bool Armed() noexcept
+{
+    auto& session = Current();
+    if (!session.armed) return false;
+    if (session.capturing.load(std::memory_order_acquire)) return true;
+    // One handshake outside the event budget lets the launcher distinguish a valid
+    // deferred capture from a lost environment. No logger work in the constructor.
+    if (!session.waitingReported.load(std::memory_order_relaxed) &&
+        !session.waitingReported.exchange(true, std::memory_order_relaxed))
+    {
+        LARGE_INTEGER qpc {};
+        if (QueryPerformanceCounter(&qpc))
+            try
+            {
+                spdlog::info("NR_FRAME_TRACE_CONTROL v=1 session={} pid={} qpc={} frequency={} "
+                             "state=waiting-for-nr-enable", session.id, GetCurrentProcessId(),
+                             qpc.QuadPart, session.frequency);
+            }
+            catch (...) { /* A diagnostic failure never changes rendering. */ }
+    }
+    return false;
+}
 
 // Scalars/addresses only; this observer never retains or queries game COM resources, creates
 // GPU work, waits, changes configuration, or decides whether an evaluation is allowed.
@@ -31,7 +59,7 @@ template<typename... Args>
 uint64_t Event(const char* kind, spdlog::format_string_t<Args...> format, Args&&... args) noexcept
 {
     auto& session = Current();
-    if (!session.armed) return 0;
+    if (!Armed()) return 0;
     const auto sequence = session.budget.Take();
     if (!sequence) return 0;
     LARGE_INTEGER qpc {};
@@ -48,6 +76,19 @@ uint64_t Event(const char* kind, spdlog::format_string_t<Args...> format, Args&&
     }
     catch (...) { /* Diagnostics must not change the host's result or exception path. */ }
     return sequence == Budget::Limit ? 0 : sequence;
+}
+
+// Called after the existing user enable setter publishes its state. Config loading
+// does not call this setter. Capture is one-shot: disable/route changes do not reset
+// the budget, so transitions remain in the same trace. No configuration is written.
+inline void OnNrEnable(bool wasEnabled, bool enabled) noexcept
+{
+    if (wasEnabled || !enabled) return;
+    auto& session = Current();
+    if (!session.armed || !session.waitForEnable) return;
+    bool expected = false;
+    if (session.capturing.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
+        Event("trace-started", "trigger=nr-enable previousEnabled=false enabled=true");
 }
 }
 
