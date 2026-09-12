@@ -171,6 +171,7 @@ struct Host
     bool colour_chart = false;
     bool scene_pipeline = false;
     bool scene_provider = false;
+    bool highres_motion = false;
     // What the scene is multiplied by before it is written, and whether it is
     // PQ-encoded. 1 and off for SDR and plain float; scRGB scales linear light
     // (1.0 = 80 nits) and HDR10 encodes nits.
@@ -301,7 +302,7 @@ static bool ParameterResourceUnchanged(NVSDK_NGX_Parameter *p, const char *name,
 // is a disagreement real games do have and this host should only produce on purpose.
 static unsigned int HostCreateFlags(const Host &h)
 {
-    unsigned int fl = NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
+    unsigned int fl = h.highres_motion ? 0u : NVSDK_NGX_DLSS_Feature_Flags_MVLowRes;
     if (h.hdr) fl |= NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
     if (h.scene_pipeline && h.hdr) fl |= NVSDK_NGX_DLSS_Feature_Flags_AutoExposure;
     return fl;
@@ -344,7 +345,8 @@ static bool Rebuild(Host &h, const char *why)
     if (!MakeTex(h.dev, &h.color, h.rw, h.rh + h.pad,
                  (h.dlss_on || h.scene_pipeline) ? DXGI_FORMAT_R16G16B16A16_FLOAT : h.display_fmt,
                  D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET) ||
-        !MakeTex(h.dev, &h.mv, h.rw, h.rh + h.pad, DXGI_FORMAT_R16G16_FLOAT,
+        !MakeTex(h.dev, &h.mv, h.highres_motion ? h.out_w : h.rw,
+                 (h.highres_motion ? h.out_h : h.rh) + h.pad, DXGI_FORMAT_R16G16_FLOAT,
                  D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET) ||
         !MakeTex(h.dev, &h.depth, h.rw, h.rh + h.pad, DXGI_FORMAT_R32_TYPELESS,
                  D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL,
@@ -545,7 +547,10 @@ static bool RenderFrame(Host &h)
     const float jy = h.colour_chart ? 0.0f : Halton((h.frame % 32) + 1, 3) - 0.5f;
     const float panx = static_cast<float>(h.frame) * kVelX;
     const float pany = static_cast<float>(h.frame) * kVelY;
-    const float mvsx = -static_cast<float>(h.rw), mvsy = -static_cast<float>(h.rh);
+    const float mvsx = -static_cast<float>(h.highres_motion ? h.out_w : h.rw);
+    const float mvsy = -static_cast<float>(h.highres_motion ? h.out_h : h.rh);
+    const float mvx = h.colour_chart ? 0.0f : kVelX / mvsx;
+    const float mvy = h.colour_chart ? 0.0f : kVelY / mvsy;
 
     D3D11_MAPPED_SUBRESOURCE ms = {};
     if (SUCCEEDED(h.ctx->Map(h.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &ms)))
@@ -562,16 +567,17 @@ static bool RenderFrame(Host &h)
         // The pattern pans by +kVelX per frame, so a feature now was at x + kVelX
         // last frame; DLSS wants previous-minus-current, which is +kVelX pixels.
         // Divided by MV.Scale because NGX multiplies by it.
-        c.mv_texel[0] = h.colour_chart ? 0.0f : kVelX / mvsx;
-        c.mv_texel[1] = h.colour_chart ? 0.0f : kVelY / mvsy;
+        c.mv_texel[0] = mvx;
+        c.mv_texel[1] = mvy;
         memcpy(ms.pData, &c, sizeof(c));
         h.ctx->Unmap(h.cb, 0);
     }
 
-    ID3D11RenderTargetView *rts[2] = { h.color.rtv, h.mv.rtv };
+    ID3D11RenderTargetView *rts[2] = { h.color.rtv, h.highres_motion ? nullptr : h.mv.rtv };
     const float clr[4] = { 0, 0, 0, 1 };
+    const float motionClear[4] = { mvx, mvy, 0, 0 };
     h.ctx->ClearRenderTargetView(h.color.rtv, clr);
-    h.ctx->ClearRenderTargetView(h.mv.rtv, clr);
+    h.ctx->ClearRenderTargetView(h.mv.rtv, motionClear);
     h.ctx->ClearDepthStencilView(h.depth.dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
     h.ctx->OMSetRenderTargets(2, rts, h.depth.dsv);
     h.ctx->OMSetDepthStencilState(h.dss, 0);
@@ -931,6 +937,11 @@ int main(int argc, char **argv)
     h.r11_output = GetEnvironmentVariableA("NGXGYM_R11_OUTPUT", r11_output, sizeof(r11_output)) != 0 &&
                    r11_output[0] == '1';
     if (h.r11_output) puts("ngxGym: native DLSS output format R11G11B10_FLOAT");
+    char highres_motion[8] = {};
+    h.highres_motion = GetEnvironmentVariableA("NGXGYM_HIGHRES_MV", highres_motion,
+                                                sizeof(highres_motion)) != 0 &&
+                       highres_motion[0] == '1';
+    if (h.highres_motion) puts("ngxGym: output-resolution motion vectors");
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc); wc.lpfnWndProc = WndProc;
     wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"ngxGym";
