@@ -127,7 +127,7 @@ ComPtr<ID3D11Texture2D> Texture(NVSDK_NGX_Parameter* p, const char* name)
 }
 struct Feature::State
 {
-    UINT64 id = ++nextFeature, evaluation = 0;
+    UINT64 id = ++nextFeature, evaluation = 0, submissions = 0;
     unsigned int flags = 0, width = 0, height = 0, outWidth = 0, outHeight = 0;
     int quality = 0;
     bool created = false, copyGuides = false;
@@ -354,12 +354,14 @@ void Feature::Complete(bool nativeSucceeded)
     if (FAILED(runtime.queue->Signal(runtime.completed12.Get(), slot.completed)) ||
         !GpuSafety::OrderedOn(ticket, runtime.queue.Get()))
     { runtime.failed = true; s.Reject("private capture submission completion untrackable; restart required"); return; }
-    if (!s.lastReason.empty() || s.evaluation == 1 || s.evaluation % 300 == 0)
+    const auto guides = PresentGuides::Instance().Inspect();
+    if (++s.submissions == 1 || !s.lastReason.empty() || s.evaluation % 300 == 0)
         LOG_INFO("NR native DX11 capture: feature={} evaluation={} guides={} depth={}x{} motion={}x{} render={}x{} "
-                 "output={}x{} producer={} nativeDLSS=success",
+                 "output={}x{} producer={} completed={} captures={} matched={} evaluated={} nativeDLSS=success status={}",
             s.id, s.evaluation, s.copyGuides, slot.depth.sourceDesc.Width, slot.depth.sourceDesc.Height,
             slot.motion.sourceDesc.Width, slot.motion.sourceDesc.Height, s.frame.RenderSubrectWidth,
-            s.frame.RenderSubrectHeight, s.outWidth, s.outHeight, slot.ready);
+            s.frame.RenderSubrectHeight, s.outWidth, s.outHeight, slot.ready,
+            runtime.completed12->GetCompletedValue(), guides.captures, guides.matched, guides.evaluated, guides.status);
     s.lastReason.clear();
 }
 }

@@ -12,7 +12,7 @@ pushd "%~dp0.."
 if errorlevel 1 exit /b 1
 lib /nologo /def:tests\nr_ngxgym_exports.def /machine:x64 /out:"%testOut%\ngxgym_proxy.lib" >"%testOut%\build.txt" 2>&1
 if errorlevel 1 goto failed
-cl /nologo /std:c++17 /MT /EHsc /W4 /I C:\OptiScaler-NR-Dev\artifacts\dependencies\nvidia-dlss-headers "%gym%\src\d3d11.cpp" /Fe:"%testOut%\ngxGym-d3d11.exe" /Fo:"%testOut%\\" /link "%testOut%\ngxgym_proxy.lib" d3d11.lib dxgi.lib d3dcompiler.lib user32.lib advapi32.lib shlwapi.lib >>"%testOut%\build.txt" 2>&1
+cl /nologo /std:c++17 /MT /EHsc /W4 /I OptiScaler\include /I C:\OptiScaler-NR-Dev\artifacts\dependencies\nvidia-dlss-headers /I "%gym%\src" tests\nr_ngxgym_host.cpp tests\nr_ngxgym_params.cpp /Fe:"%testOut%\ngxGym-d3d11.exe" /Fo:"%testOut%\\" /link "%testOut%\ngxgym_proxy.lib" d3d11.lib dxgi.lib d3dcompiler.lib user32.lib advapi32.lib shlwapi.lib dbghelp.lib OptiScaler\library\detours\detours.lib >>"%testOut%\build.txt" 2>&1
 if errorlevel 1 goto failed
 copy /y "%gym%\LICENSE" "%testOut%\ngxGym-MIT-LICENSE.txt" >nul
 popd
