@@ -1210,7 +1210,12 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
         {
             sl::DLSSGState localState {};
             sl::DLSSGOptions localOptions {};
-            if (o_slDLSSGGetState(viewport, localState, &localOptions) == sl::Result::eOk &&
+            const auto localResult = o_slDLSSGGetState(viewport, localState, &localOptions);
+            DlssNr::FgLifecycle::Completion(static_cast<uint32_t>(viewport), static_cast<int>(localResult),
+                localState.structVersion, localResult == sl::Result::eOk && localState.structVersion >= 3 ? localState.inputsProcessingCompletionFence : nullptr,
+                localResult == sl::Result::eOk && localState.structVersion >= 3 ? localState.lastPresentInputsProcessingCompletionFenceValue : 0,
+                localResult == sl::Result::eOk ? localState.numFramesActuallyPresented : 0);
+            if (localResult == sl::Result::eOk &&
                 localState.numFramesToGenerateMax > 0 && localState.numFramesToGenerateMax < 6)
             {
                 state.dlssgMfgMax = localState.numFramesToGenerateMax;
