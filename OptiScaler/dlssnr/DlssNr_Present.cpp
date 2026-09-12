@@ -171,6 +171,12 @@ void ReadCompletedPacingSample(PresentSlot& slot, unsigned int slotIndex, UINT64
     const UINT64 fenceAge = currentAttempt >= slot.presentAttempt ? currentAttempt - slot.presentAttempt : 0;
     if (!g_present.pacing.recordGpu(slot.pacing, gpuMs, completionMs, fenceAge))
         ++g_present.telemetry.unmatchedGpuTimingSamples;
+    else
+    {
+        g_present.telemetry.presentGpuMs = gpuMs;
+        g_present.telemetry.presentGpuRoute = slot.pacing.route;
+        ++g_present.telemetry.presentGpuSamples;
+    }
 }
 
 void RefreshCompletionTelemetry()

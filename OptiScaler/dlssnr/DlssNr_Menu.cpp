@@ -207,7 +207,9 @@ struct AdvisorRouteResult
     AdvisorResultLevel level = AdvisorResultLevel::Unknown;
     bool succeeded = false;
     double fps = 0.0;
+    double frameMs = 0.0;
     double modelMs = 0.0;
+    unsigned int modelSamples = 0;
     std::string detail = "Not measured";
 };
 
@@ -235,7 +237,7 @@ struct AdvisorState
     AdvisorPhase phase = AdvisorPhase::Idle;
     bool running = false;
     bool analyzed = false;
-    bool applied = false;
+    int appliedRoute = -1;
     int targetIndex = 2; // 60 FPS
     int goalIndex = 1;   // balanced
     int routeIndex = 0;
@@ -246,12 +248,16 @@ struct AdvisorState
     unsigned long long startNativeFrames = 0;
     unsigned long long startPresentEvaluations = 0;
     unsigned long long startGuideEvaluations = 0;
+    unsigned long long lastNativeGpuFrame = 0;
+    unsigned long long lastPresentGpuSample = 0;
     double frameIntervalTotal = 0.0;
     unsigned int frameIntervalSamples = 0;
+    double modelGpuTotal = 0.0;
+    unsigned int modelGpuSamples = 0;
     std::array<AdvisorRouteResult, 3> routes;
     AdvisorOriginalSettings original;
     std::string status = "Choose a target and analyze the current game scene.";
-    std::string reason = "No settings change until Apply Recommendation is pressed.";
+    std::string reason = "No settings change until you choose an available route.";
     std::string gpuName = "Detecting graphics card...";
 };
 
@@ -355,8 +361,12 @@ void BeginAdvisorRoute(Config& config, int route)
     advisor.startNativeFrames = native.completedPipelineEvaluations;
     advisor.startPresentEvaluations = present.modelEvaluations;
     advisor.startGuideEvaluations = guides.evaluated;
+    advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
+    advisor.lastPresentGpuSample = present.presentGpuSamples;
     advisor.frameIntervalTotal = 0.0;
     advisor.frameIntervalSamples = 0;
+    advisor.modelGpuTotal = 0.0;
+    advisor.modelGpuSamples = 0;
 }
 
 double AdvisorTargetFps(const AdvisorState& advisor)
@@ -385,13 +395,18 @@ void ChooseAdvisorRecommendation(AdvisorState& advisor)
     }
     else // performance
     {
-        double fastest = 0.0;
+        double fastest = -1.0;
         for (int route : { 0, 1, 2 })
-            if (meets(route, 1.0) && advisor.routes[route].fps >= fastest)
+            if (advisor.routes[route].succeeded && advisor.routes[route].fps > fastest)
                 selected = route, fastest = advisor.routes[route].fps;
     }
     if (selected < 0)
-        for (int route : { 2, 1, 0 }) if (selected < 0 && advisor.routes[route].succeeded) selected = route;
+    {
+        double fastest = -1.0;
+        for (int route : { 0, 1, 2 })
+            if (advisor.routes[route].succeeded && advisor.routes[route].fps > fastest)
+                selected = route, fastest = advisor.routes[route].fps;
+    }
 
     advisor.recommendation = selected;
     for (int route = 0; route < 3; ++route)
@@ -399,7 +414,7 @@ void ChooseAdvisorRecommendation(AdvisorState& advisor)
             route == selected ? AdvisorResultLevel::Recommended : AdvisorResultLevel::Available;
 
     advisor.analyzed = true;
-    advisor.applied = false;
+    advisor.appliedRoute = -1;
     if (selected < 0)
     {
         advisor.status = "No verified Neural Rendering route was available.";
@@ -412,7 +427,7 @@ void ChooseAdvisorRecommendation(AdvisorState& advisor)
         const bool targetMet = advisor.routes[selected].fps <= 0.0 || advisor.routes[selected].fps >= target;
         advisor.reason = targetMet
             ? "Verified at 100% model resolution and one pass for the selected target."
-            : "No verified 100% route met the target; this is the best available route without reducing resolution.";
+            : "No verified 100% route met the target; the fastest verified route is recommended.";
     }
 }
 
@@ -425,8 +440,15 @@ void FinishAdvisorRoute(Config& config)
     const auto present = DlssNr::PresentTelemetry();
     const auto guides = DlssNr::PresentGuides::Instance().Inspect();
     if (advisor.frameIntervalSamples != 0 && advisor.frameIntervalTotal > 0.0)
-        result.fps = 1000.0 / (advisor.frameIntervalTotal / advisor.frameIntervalSamples);
-    if (native.totalGpuMs) result.modelMs = *native.totalGpuMs;
+    {
+        result.frameMs = advisor.frameIntervalTotal / advisor.frameIntervalSamples;
+        result.fps = 1000.0 / result.frameMs;
+    }
+    if (advisor.modelGpuSamples != 0)
+    {
+        result.modelMs = advisor.modelGpuTotal / advisor.modelGpuSamples;
+        result.modelSamples = advisor.modelGpuSamples;
+    }
     if (route == 0)
     {
         result.succeeded = native.running && !native.failed && !native.outputQuarantined &&
@@ -472,7 +494,7 @@ void StartAdvisorAnalysis(Config& config)
     }
     advisor.recommendation = -1;
     advisor.analyzed = false;
-    advisor.applied = false;
+    advisor.appliedRoute = -1;
     advisor.status = "Testing available routes...";
     advisor.reason = "Model effect hidden; 100% resolution and one pass. Original settings will be restored.";
     CaptureAdvisorSettings(config, advisor.original);
@@ -483,11 +505,12 @@ void StartAdvisorAnalysis(Config& config)
     BeginAdvisorRoute(config, 0);
 }
 
-void ApplyAdvisorRecommendation(Config& config)
+void ApplyAdvisorRoute(Config& config, int route)
 {
     auto& advisor = Advisor();
-    if (advisor.running || advisor.recommendation < 0) return;
-    const int route = advisor.recommendation;
+    if (advisor.running || route < 0 || route >= static_cast<int>(advisor.routes.size()) ||
+        !advisor.routes[route].succeeded)
+        return;
     NrConfigSynchronization::Transaction transaction;
     config.DlssNrRoute = uint32_t(route);
     config.DlssNrUiAfterMethod = uint32_t(route == 0 ?
@@ -508,8 +531,9 @@ void ApplyAdvisorRecommendation(Config& config)
         mode = PresentResolution::Automatic;
         scale = 100u;
     }
-    advisor.applied = true;
-    advisor.status += " - applied";
+    static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+    advisor.appliedRoute = route;
+    advisor.status = std::string("Applied: ") + names[route];
     advisor.reason = "Stage, method, and 100% resolution policy were applied atomically. Model tuning and Multipass were unchanged.";
 }
 
@@ -560,10 +584,11 @@ const char* BackbufferFormatName(DXGI_FORMAT format)
     }
 }
 
-void RenderAdvisorRouteCard(int route, float height)
+void RenderAdvisorRouteCard(Config& config, int route, float height)
 {
     static constexpr const char* names[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
-    auto& result = Advisor().routes[route];
+    auto& advisor = Advisor();
+    auto& result = advisor.routes[route];
     const ImVec4 color = AdvisorColor(result.level);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(color.x, color.y, color.z, 0.07f));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(color.x, color.y, color.z, 0.70f));
@@ -577,11 +602,30 @@ void RenderAdvisorRouteCard(int route, float height)
         ImGui::TextWrapped("%s", result.detail.c_str());
         if (result.fps > 0.0)
         {
+            ImGui::TextDisabled("Measured %.0f FPS | Frame %.2f ms", result.fps, result.frameMs);
             if (result.modelMs > 0.0)
-                ImGui::TextDisabled("Measured %.0f FPS | %.2f ms NR", result.fps, result.modelMs);
-            else
-                ImGui::TextDisabled("Measured %.0f FPS", result.fps);
+                ImGui::TextDisabled("NR route GPU %.2f ms | %u samples", result.modelMs, result.modelSamples);
+            else if (result.succeeded)
+                ImGui::TextDisabled("NR route GPU timing unavailable");
         }
+        ImGui::SetCursorPosY((std::max)(ImGui::GetCursorPosY(), height - ImGui::GetFrameHeightWithSpacing() -
+            ImGui::GetStyle().WindowPadding.y));
+        const bool canApply = advisor.analyzed && result.succeeded && !advisor.running;
+        ImGui::BeginDisabled(!canApply);
+        if (canApply)
+        {
+            const ImVec4 button = color;
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(button.x, button.y, button.z, 0.50f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(button.x, button.y, button.z, 0.75f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(button.x, button.y, button.z, 0.95f));
+        }
+        const std::string buttonLabel = advisor.appliedRoute == route
+            ? std::string("Applied##AdvisorApply") + std::to_string(route)
+            : std::string("Use ") + names[route] + "##AdvisorApply" + std::to_string(route);
+        if (ImGui::Button(buttonLabel.c_str(), ImVec2(-1.0f, 0.0f)))
+            ApplyAdvisorRoute(config, route);
+        if (canApply) ImGui::PopStyleColor(3);
+        ImGui::EndDisabled();
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
@@ -684,51 +728,62 @@ void RenderAdvisor(Config* config, float menuResScale)
     ImGui::Spacing();
     if (wide && ImGui::BeginTable("##AdvisorRoutes", 3, ImGuiTableFlags_SizingStretchSame))
     {
-        for (int route = 0; route < 3; ++route) { ImGui::TableNextColumn(); RenderAdvisorRouteCard(route, 76.0f * menuResScale); }
+        for (int route = 0; route < 3; ++route) { ImGui::TableNextColumn(); RenderAdvisorRouteCard(*config, route, 126.0f * menuResScale); }
         ImGui::EndTable();
     }
     else
-        for (int route = 0; route < 3; ++route) RenderAdvisorRouteCard(route, 70.0f * menuResScale);
+        for (int route = 0; route < 3; ++route) RenderAdvisorRouteCard(*config, route, 116.0f * menuResScale);
 
     ImGui::TextDisabled("Green recommended  |  Orange available  |  Red unavailable  |  Grey not measured");
     ImGui::Spacing();
     static constexpr const char* targets[] = { "30 FPS", "45 FPS", "60 FPS", "90 FPS", "120 FPS", "144 FPS" };
     static constexpr const char* goals[] = { "Prioritize quality", "Balance quality and performance", "Prioritize performance" };
     const float comboWidth = wide ? 230.0f * menuResScale : (std::max)(120.0f, width * 0.62f);
+    const auto clearAnalysis = [&](const char* status)
+    {
+        advisor.analyzed = false; advisor.recommendation = -1; advisor.appliedRoute = -1;
+        advisor.status = status;
+        advisor.reason = "No settings change until you choose an available route.";
+        advisor.routes = {};
+    };
+    const auto renderTarget = [&]()
+    {
+        ImGui::TextUnformatted("Target native framerate");
+        HelpMarker("The target is real rendered-frame cadence. When Frame Generation is active, confidence remains limited until a verified native cadence is available.");
+        ImGui::SetNextItemWidth(comboWidth);
+        if (ImGui::Combo("##AdvisorTargetFps", &advisor.targetIndex, targets, IM_ARRAYSIZE(targets)))
+            clearAnalysis("Target changed - analyze again.");
+    };
+    const auto renderGoal = [&]()
+    {
+        ImGui::TextUnformatted("Optimization goal");
+        HelpMarker("Quality prefers verified Present Enhanced. Balanced requires the target at 100%. Performance always chooses the fastest verified route.");
+        ImGui::SetNextItemWidth(comboWidth);
+        if (ImGui::Combo("##AdvisorGoal", &advisor.goalIndex, goals, IM_ARRAYSIZE(goals)))
+            clearAnalysis("Optimization goal changed - analyze again.");
+    };
     ImGui::BeginDisabled(advisor.running);
-    ImGui::TextUnformatted("Target native framerate");
-    ImGui::SetNextItemWidth(comboWidth);
-    if (ImGui::Combo("##AdvisorTargetFps", &advisor.targetIndex, targets, IM_ARRAYSIZE(targets)))
+    if (wide && ImGui::BeginTable("##AdvisorPreferences", 2, ImGuiTableFlags_SizingStretchSame))
     {
-        advisor.analyzed = false; advisor.recommendation = -1; advisor.applied = false;
-        advisor.status = "Target changed - analyze again.";
-        advisor.reason = "No settings change until Apply Recommendation is pressed.";
-        advisor.routes = {};
+        ImGui::TableNextColumn(); renderTarget();
+        ImGui::TableNextColumn(); renderGoal();
+        ImGui::EndTable();
     }
-    HelpMarker("The target is real rendered-frame cadence. When Frame Generation is active, confidence remains limited until a verified native cadence is available.");
-    ImGui::TextUnformatted("Optimization goal");
-    ImGui::SetNextItemWidth(comboWidth);
-    if (ImGui::Combo("##AdvisorGoal", &advisor.goalIndex, goals, IM_ARRAYSIZE(goals)))
+    else
     {
-        advisor.analyzed = false; advisor.recommendation = -1; advisor.applied = false;
-        advisor.status = "Optimization goal changed - analyze again.";
-        advisor.reason = "No settings change until Apply Recommendation is pressed.";
-        advisor.routes = {};
+        renderTarget();
+        renderGoal();
     }
-    HelpMarker("Quality prefers verified Present Enhanced. Balanced requires the target at 100%. Performance chooses the fastest verified route that meets it.");
     ImGui::EndDisabled();
     ImGui::Spacing();
+    ImGui::TextColored(orange, "Analyze temporarily turns Neural Rendering on to test each route.");
+    ImGui::TextWrapped("The model effect stays hidden, and your current settings are restored when analysis ends or is cancelled.");
     if (advisor.running)
     {
         if (ImGui::Button("Cancel Analysis")) CancelAdvisorAnalysis(config);
     }
     else if (ImGui::Button("Analyze This Game"))
         StartAdvisorAnalysis(*config);
-    ImGui::SameLine();
-    ImGui::BeginDisabled(advisor.running || advisor.recommendation < 0 || advisor.applied);
-    if (ImGui::Button(advisor.applied ? "Recommendation Applied" : "Apply Recommendation"))
-        ApplyAdvisorRecommendation(*config);
-    ImGui::EndDisabled();
     ImGui::TextDisabled("Analysis never tests below 100%% and never changes presets, strengths, Multipass, or Advanced settings.");
 }
 } // namespace
@@ -767,6 +822,11 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
 
     if (enabled && nativeOutput && nrTelemetry.totalGpuMs)
         ImGui::TextColored(green, "NR processing: %.2f ms per frame", *nrTelemetry.totalGpuMs);
+    else if (enabled && presentActive && presentTelemetry.presentGpuSamples != 0 &&
+             presentTelemetry.presentGpuRoute == (route == 2
+                 ? PresentPacing::Route::PresentEnhanced
+                 : PresentPacing::Route::PresentImageOnly))
+        ImGui::TextColored(green, "NR processing: %.2f ms per frame", presentTelemetry.presentGpuMs);
 
     if (!enabled)
         ImGui::TextColored(yellow, "Neural Rendering is off.");
@@ -839,16 +899,53 @@ void TickAdvisor(Config* config)
         advisor.startNativeFrames = native.completedPipelineEvaluations;
         advisor.startPresentEvaluations = present.modelEvaluations;
         advisor.startGuideEvaluations = guides.evaluated;
+        advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
+        advisor.lastPresentGpuSample = present.presentGpuSamples;
+        advisor.frameIntervalTotal = 0.0;
+        advisor.frameIntervalSamples = 0;
+        advisor.modelGpuTotal = 0.0;
+        advisor.modelGpuSamples = 0;
         advisor.phase = AdvisorPhase::Sample;
         advisor.phaseStarted = AdvisorNow();
     }
-    else if (advisor.phase == AdvisorPhase::Sample && elapsed >= 2.0)
-        FinishAdvisorRoute(*config);
-    else if (advisor.phase == AdvisorPhase::Sample && std::isfinite(present.frameIntervalMs) &&
-             present.frameIntervalMs > 0.0 && present.frameIntervalMs < 1000.0)
+    else if (advisor.phase == AdvisorPhase::Sample)
     {
-        advisor.frameIntervalTotal += present.frameIntervalMs;
-        ++advisor.frameIntervalSamples;
+        if (std::isfinite(present.frameIntervalMs) && present.frameIntervalMs > 0.0 &&
+            present.frameIntervalMs < 1000.0)
+        {
+            advisor.frameIntervalTotal += present.frameIntervalMs;
+            ++advisor.frameIntervalSamples;
+        }
+
+        if (advisor.routeIndex == 0)
+        {
+            const auto native = DlssNr::Telemetry();
+            if (native.completedPipelineEvaluations > advisor.lastNativeGpuFrame)
+            {
+                advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
+                if (native.totalGpuMs && std::isfinite(*native.totalGpuMs) && *native.totalGpuMs >= 0.0)
+                {
+                    advisor.modelGpuTotal += *native.totalGpuMs;
+                    ++advisor.modelGpuSamples;
+                }
+            }
+        }
+        else if (present.presentGpuSamples > advisor.lastPresentGpuSample)
+        {
+            advisor.lastPresentGpuSample = present.presentGpuSamples;
+            const auto expectedRoute = advisor.routeIndex == 2
+                ? DlssNr::PresentPacing::Route::PresentEnhanced
+                : DlssNr::PresentPacing::Route::PresentImageOnly;
+            if (present.presentGpuRoute == expectedRoute && std::isfinite(present.presentGpuMs) &&
+                present.presentGpuMs >= 0.0)
+            {
+                advisor.modelGpuTotal += present.presentGpuMs;
+                ++advisor.modelGpuSamples;
+            }
+        }
+
+        if (elapsed >= 2.0)
+            FinishAdvisorRoute(*config);
     }
 }
 
@@ -861,6 +958,7 @@ void CancelAdvisorAnalysis(Config* config, const char* reason)
     advisor.phase = AdvisorPhase::Idle;
     advisor.analyzed = false;
     advisor.recommendation = -1;
+    advisor.appliedRoute = -1;
     advisor.routes = {};
     advisor.status = reason != nullptr ? reason : "Analysis cancelled; original settings restored.";
     advisor.reason = "No recommendation was applied.";
@@ -1385,13 +1483,19 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         }
         static const char* nrPresetNames[] = { "Default", "Preset 1", "Preset 2", "Preset 3" };
         int preset = (int) config->DlssNrPreset.value_or_default();
-        if (ImGui::Combo("Model preset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
-            config->DlssNrPreset = (uint32_t) preset;
+        const auto renderModelPreset = [&]()
+        {
+            ImGui::SetNextItemWidth((std::min)(180.0f * menuResScale,
+                (std::max)(110.0f * menuResScale, ImGui::GetContentRegionAvail().x -
+                    ImGui::CalcTextSize("Model preset (?)").x - ImGui::GetStyle().ItemSpacing.x * 2.0f)));
+            if (ImGui::Combo("Model preset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
+                config->DlssNrPreset = (uint32_t) preset;
 
         HelpMarker("Default leaves the choice to the model."
                        "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
                        "\nthe same number means something different here."
                        "\n\nI have no idea what this does. Seems like nothing.");
+        };
 
         static const char* nrStyleNames[] = { "Standard", "Natural", "Cinematic" };
         int style = (int) config->DlssNrStyle.value_or_default();
@@ -1399,8 +1503,13 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         if (style > 2)
             style = 2;
 
-        if (ImGui::Combo("Style", &style, nrStyleNames, IM_ARRAYSIZE(nrStyleNames)))
-            config->DlssNrStyle = (uint32_t) style;
+        const auto renderStyle = [&]()
+        {
+            ImGui::SetNextItemWidth((std::min)(180.0f * menuResScale,
+                (std::max)(110.0f * menuResScale, ImGui::GetContentRegionAvail().x -
+                    ImGui::CalcTextSize("Style (?)").x - ImGui::GetStyle().ItemSpacing.x * 2.0f)));
+            if (ImGui::Combo("Style", &style, nrStyleNames, IM_ARRAYSIZE(nrStyleNames)))
+                config->DlssNrStyle = (uint32_t) style;
 
         HelpMarker("The model's own processing profiles."
                    "\n\nDefault (standard): the strongest. Boosts local contrast and deepens"
@@ -1411,6 +1520,20 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                    "\n\nCinematic: tones down the shine and over-processing for a film-like look."
                    "\n\nRead when the model is built, so a change rebuilds it after a moment. The"
                    "\nnames come from community testing; NVIDIA ships no names in the binaries.");
+        };
+
+        if (ImGui::GetContentRegionAvail().x >= 520.0f * menuResScale &&
+            ImGui::BeginTable("##NrStylePresetRow", 2, ImGuiTableFlags_SizingStretchSame))
+        {
+            ImGui::TableNextColumn(); renderStyle();
+            ImGui::TableNextColumn(); renderModelPreset();
+            ImGui::EndTable();
+        }
+        else
+        {
+            renderStyle();
+            renderModelPreset();
+        }
 
         ImGui::SetNextItemWidth(mainTuningSliderWidth());
         if (basicOwnsMain)

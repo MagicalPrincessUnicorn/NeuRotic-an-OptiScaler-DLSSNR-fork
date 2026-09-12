@@ -29,8 +29,9 @@ Assert-Ui ($nr.Contains('WHAT OPTISCALER SEES') -and $nr.Contains('RECOMMENDED S
 Assert-Ui ($nr.Contains('Native Temporal') -and $nr.Contains('Present Compatibility') -and
            $nr.Contains('Present Enhanced') -and -not $nr.Contains('Prism Enhanced') -and -not $nr.Contains('Prism Compact')) 'Advisor uses the current Present route terminology'
 Assert-Ui ($nr.Contains('std::string("##AdvisorRoute") + std::to_string(route)') -and
-           $nr.Contains('for (int route = 0; route < 3; ++route)') -and $nr.Contains('Green recommended') -and
-           -not $nr.Contains('Selectable("Native Temporal')) 'route cards are informational status tiles rather than competing selectors'
+           $nr.Contains('std::string("Use ") + names[route] + "##AdvisorApply"') -and
+           $nr.Contains('ApplyAdvisorRoute(config, route);') -and
+           -not $nr.Contains('Apply Recommendation')) 'all three route cards expose stable, route-specific apply buttons'
 Assert-Ui ($nr.Contains('route.level = AdvisorResultLevel::Analyzing') -and
            $nr.Contains('advisor.routes = {};') -and $nr.Contains('Testing available routes...')) 'Analyze clears prior recommendation colors and gives all routes a neutral analyzing state'
 Assert-Ui ($nr.Contains('Target native framerate') -and $nr.Contains('Optimization goal') -and
@@ -41,8 +42,18 @@ Assert-Ui ($nr.Contains('config.DlssNrApplyModel = false;') -and
            $nr.Contains('config.DlssNrPasses = 1u;') -and
            $nr.Contains('PresentResolution::Automatic') -and
            $nr.Contains('Analysis never tests below 100%%')) 'route analysis hides the effect and fixes every trial at 100 percent and one pass'
+Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on to test each route.') -and
+           $nr.Contains('your current settings are restored when analysis ends or is cancelled.')) 'Analyze visibly discloses temporary NR activation and restoration before the action'
 Assert-Ui ($nr.Contains('present.frameIntervalMs') -and
            (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;')) 'Advisor scores each route from its current live frame interval rather than a stale completed route window'
+Assert-Ui ($nr.Contains('NR route GPU %.2f ms') -and $nr.Contains('Frame %.2f ms') -and
+           $nr.Contains('present.presentGpuRoute == expectedRoute') -and
+           (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.presentGpuRoute = slot.pacing.route;')) 'Advisor separates frame cadence from route-tagged Present GPU timing'
+Assert-Ui ($nr -match '(?s)else // performance.*?advisor\.routes\[route\]\.succeeded && advisor\.routes\[route\]\.fps > fastest' -and
+           $nr.Contains('the fastest verified route is recommended.')) 'Performance and missed-target fallbacks select the fastest verified route'
+Assert-Ui ($nr.Contains('BeginTable("##AdvisorPreferences", 2') -and
+           $nr.IndexOf('Target native framerate') -lt $nr.IndexOf('Combo("##AdvisorTargetFps"') -and
+           $nr.IndexOf('Optimization goal') -lt $nr.IndexOf('Combo("##AdvisorGoal"')) 'target and goal share a responsive two-column row with dropdowns below their labels'
 Assert-Ui ($nr.Contains('guides.evaluated > advisor.startGuideEvaluations') -and
            ([regex]::Matches($nr, 'advisor.startGuideEvaluations = guides.evaluated;')).Count -eq 2) 'Present Enhanced requires guide evaluations produced during its own warmup and sample'
 Assert-Ui ($nr.Contains('RestoreAdvisorSettings') -and $menu.Contains('CancelAdvisorAnalysis(config') -and
@@ -50,6 +61,8 @@ Assert-Ui ($nr.Contains('RestoreAdvisorSettings') -and $menu.Contains('CancelAdv
            $nr.Contains('Output size changed; analysis stopped')) 'save, close, shutdown, cancel, and resize paths restore captured settings'
 Assert-Ui ($nr.Contains('Stage, method, and 100% resolution policy were applied atomically.') -and
            $nr.Contains('Model tuning and Multipass were unchanged.')) 'Apply limits its atomic update to the recommended route and resolution policy'
+Assert-Ui ($nr.Contains('BeginTable("##NrStylePresetRow", 2') -and
+           $nr.IndexOf('ImGui::TableNextColumn(); renderStyle();') -lt $nr.IndexOf('ImGui::TableNextColumn(); renderModelPreset();')) 'Style and Model preset share a responsive row with Style first'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
 Assert-Ui ($nr.Contains('DeferredNrSlider("##NrManualScale"') -and $nr.Contains('0.25f, 2.0f, 1.0f, "%d%%", true)')) 'manual model resolution retains bounded release-to-commit and 100 percent reset'
 Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -and
