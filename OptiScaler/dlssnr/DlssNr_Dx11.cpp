@@ -59,7 +59,9 @@ struct Runtime
     ComPtr<ID3D11Fence> ready11;
     ComPtr<ID3D12Fence> ready12, completed12;
     Dx11Transport::Converter converter;
-    std::array<Slot, 8> slots;
+    // Present normally keeps three submissions pending. Four slots preserve that
+    // pipeline while bounding worst-case 4K guide storage.
+    std::array<Slot, Dx11Transport::SlotCount> slots;
     UINT64 nextReady = 0, nextCompleted = 0;
     bool failed = false;
 
@@ -293,11 +295,21 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     }
     if (selected < 0) { s.Reject("private guide transport slots are still in flight"); return; }
     auto& slot = runtime.slots[selected];
-    const UINT64 requested = UINT64(dd.Width) * dd.Height * (4 + Dx11Transport::DepthType(dd.Format).bytes) +
-        UINT64(md.Width) * md.Height * Dx11Transport::MotionBytes(md.Format) * 3;
-    constexpr UINT64 budget = 256ull * 1024 * 1024;
+    const UINT64 requested = Dx11Transport::Texture::RequiredBytes(dd, true) +
+        Dx11Transport::Texture::RequiredBytes(md, false);
+    // Four full 4K R32 depth/RG32 motion slots need just over 1 GiB when the game
+    // textures cannot be viewed directly. Refuse larger contracts before allocation.
+    constexpr UINT64 budget = Dx11Transport::BudgetBytes;
     if (s.copyGuides && (requested > budget || resident - slot.depth.bytes - slot.motion.bytes > budget - requested))
-    { s.Reject("private guide transport memory budget exceeded"); return; }
+    {
+        s.Reject("private guide transport memory budget exceeded: requested=" +
+            std::to_string(requested / (1024 * 1024)) + " MiB resident=" +
+            std::to_string(resident / (1024 * 1024)) + " MiB budget=1280 MiB depth=" +
+            std::to_string(dd.Width) + "x" + std::to_string(dd.Height) + " format=" +
+            std::to_string(dd.Format) + " motion=" + std::to_string(md.Width) + "x" +
+            std::to_string(md.Height) + " format=" + std::to_string(md.Format));
+        return;
+    }
     if (!slot.allocator)
     {
         if (FAILED(runtime.device12->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&slot.allocator))) ||
@@ -310,8 +322,8 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     { runtime.failed = true; s.Reject("private capture command reset failed"); return; }
     slot.list->Close(); // resetting seals the previous GPU-safety recording before carrier reuse
     slot.originalDepth.Reset(); slot.originalMotion.Reset();
-    if (s.copyGuides && (!slot.depth.Prepare(runtime.device11.Get(), runtime.device12.Get(), dd, true, reason) ||
-        !slot.motion.Prepare(runtime.device11.Get(), runtime.device12.Get(), md, false, reason)))
+    if (s.copyGuides && (!slot.depth.Prepare(runtime.device11.Get(), runtime.device12.Get(), dd, true, reason, depth.Get()) ||
+        !slot.motion.Prepare(runtime.device11.Get(), runtime.device12.Get(), md, false, reason, motion.Get())))
     { s.Reject(reason); return; }
     if (s.copyGuides && !runtime.converter.Copy(context, slot.depth, depth.Get(), slot.motion, motion.Get(), reason))
     { s.Reject(reason); return; }
@@ -357,10 +369,13 @@ void Feature::Complete(bool nativeSucceeded)
     const auto guides = PresentGuides::Instance().Inspect();
     if (++s.submissions == 1 || !s.lastReason.empty() || s.evaluation % 300 == 0)
         LOG_INFO("NR native DX11 capture: feature={} evaluation={} guides={} depth={}x{} motion={}x{} render={}x{} "
-                 "output={}x{} producer={} completed={} captures={} matched={} evaluated={} nativeDLSS=success status={}",
+                 "output={}x{} transport={}MiB directDepth={} directMotion={} producer={} completed={} captures={} "
+                 "matched={} evaluated={} nativeDLSS=success status={}",
             s.id, s.evaluation, s.copyGuides, slot.depth.sourceDesc.Width, slot.depth.sourceDesc.Height,
             slot.motion.sourceDesc.Width, slot.motion.sourceDesc.Height, s.frame.RenderSubrectWidth,
-            s.frame.RenderSubrectHeight, s.outWidth, s.outHeight, slot.ready,
+            s.frame.RenderSubrectHeight, s.outWidth, s.outHeight,
+            (slot.depth.bytes + slot.motion.bytes) / (1024 * 1024), slot.depth.directSource,
+            slot.motion.directSource, slot.ready,
             runtime.completed12->GetCompletedValue(), guides.captures, guides.matched, guides.evaluated, guides.status);
     s.lastReason.clear();
 }

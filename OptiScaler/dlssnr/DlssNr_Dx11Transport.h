@@ -14,6 +14,8 @@
 namespace DlssNr::Dx11Transport
 {
 using Microsoft::WRL::ComPtr;
+inline constexpr size_t SlotCount = 4;
+inline constexpr UINT64 BudgetBytes = 1280ull * 1024 * 1024;
 inline bool SameObject(IUnknown* a, IUnknown* b)
 {
     ComPtr<IUnknown> x, y;
@@ -93,15 +95,30 @@ struct Texture
     ComPtr<ID3D11UnorderedAccessView> uav;
     ComPtr<ID3D12Resource> resource12;
     UINT64 bytes = 0;
+    bool rawCopy = false, directSource = false;
 
     bool Matches(const D3D11_TEXTURE2D_DESC& d) const
     {
         return resource12 && d.Width == sourceDesc.Width && d.Height == sourceDesc.Height &&
-            d.Format == sourceDesc.Format && SupportedShape(d);
+            d.Format == sourceDesc.Format && d.BindFlags == sourceDesc.BindFlags && SupportedShape(d);
     }
     // Allocate transactionally; no old allocation is released unless its owner permitted reuse.
+    static UINT64 RequiredBytes(const D3D11_TEXTURE2D_DESC& input, bool depth)
+    {
+        const auto format = DepthType(input.Format);
+        const UINT mvBytes = MotionBytes(input.Format);
+        if ((depth && !format.bytes) || (!depth && !mvBytes)) return 0;
+        const UINT64 pixels = UINT64(input.Width) * input.Height;
+        UINT64 result = pixels * (depth ? 4 : mvBytes * 2);
+        // Admission is conservative: a resource carrying the SRV bind flag can
+        // still reject the required typed view. Actual allocation may be smaller.
+        if (!(depth && input.Format == DXGI_FORMAT_R32_FLOAT))
+            result += pixels * (depth ? format.bytes : mvBytes);
+        return result;
+    }
     bool Prepare(ID3D11Device* device11, ID3D12Device* device12,
-                 const D3D11_TEXTURE2D_DESC& input, bool depth, std::string& reason)
+                 const D3D11_TEXTURE2D_DESC& input, bool depth, std::string& reason,
+                 ID3D11Texture2D* source = nullptr)
     {
         if (!SupportedShape(input)) { reason = "guide texture shape unsupported"; return false; }
         const auto format = DepthType(input.Format);
@@ -132,38 +149,63 @@ struct Texture
         if (FAILED(hr))
         { reason = "private guide sharing failed: " + std::to_string(static_cast<unsigned int>(hr)); return false; }
         next.bytes = UINT64(d.Width) * d.Height * (depth ? 4 : mvBytes * 2);
-        if (!depth || input.Format != DXGI_FORMAT_R32_FLOAT)
+        next.rawCopy = depth && input.Format == DXGI_FORMAT_R32_FLOAT;
+        if (!next.rawCopy)
         {
-            d.MiscFlags = 0; d.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            d.Format = depth ? format.carrier : input.Format;
-            hr = device11->CreateTexture2D(&d, nullptr, &next.sourceCarrier);
             D3D11_SHADER_RESOURCE_VIEW_DESC view {};
             view.Format = depth ? format.view : input.Format; view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             view.Texture2D.MipLevels = 1;
-            if (SUCCEEDED(hr)) hr = device11->CreateShaderResourceView(next.sourceCarrier.Get(), &view, &next.srv);
+            ComPtr<ID3D11ShaderResourceView> directView;
+            if (source && (input.BindFlags & D3D11_BIND_SHADER_RESOURCE) &&
+                SUCCEEDED(device11->CreateShaderResourceView(source, &view, &directView)))
+                next.directSource = true;
+            else
+            {
+                d.MiscFlags = 0; d.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                d.Format = depth ? format.carrier : input.Format;
+                hr = device11->CreateTexture2D(&d, nullptr, &next.sourceCarrier);
+                if (SUCCEEDED(hr)) hr = device11->CreateShaderResourceView(next.sourceCarrier.Get(), &view, &next.srv);
+                next.bytes += UINT64(d.Width) * d.Height * (depth ? format.bytes : mvBytes);
+            }
             if (SUCCEEDED(hr)) hr = device11->CreateUnorderedAccessView(next.shared.Get(), nullptr, &next.uav);
             if (FAILED(hr)) { reason = "typed guide carrier/view creation failed"; return false; }
-            next.bytes += UINT64(d.Width) * d.Height * (depth ? format.bytes : mvBytes);
         }
         *this = std::move(next);
         return true;
     }
-    void Copy(ID3D11DeviceContext* context, ID3D11Texture2D* source, ID3D11ComputeShader* depthShader)
+    bool Copy(ID3D11DeviceContext* context, ID3D11Texture2D* source,
+              ID3D11ComputeShader* shader, std::string& reason)
     {
-        if (!sourceCarrier)
+        if (rawCopy)
         {
             context->CopySubresourceRegion(shared.Get(), 0, 0, 0, 0, source, 0, nullptr);
-            return;
+            return true;
         }
-        context->CopySubresourceRegion(sourceCarrier.Get(), 0, 0, 0, 0, source, 0, nullptr);
-        auto* input = srv.Get(); auto* output = uav.Get();
-        context->CSSetShader(depthShader, nullptr, 0);
+        ComPtr<ID3D11ShaderResourceView> current;
+        if (directSource)
+        {
+            const auto format = DepthType(sourceDesc.Format);
+            D3D11_SHADER_RESOURCE_VIEW_DESC view {};
+            view.Format = format.bytes ? format.view : sourceDesc.Format;
+            view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; view.Texture2D.MipLevels = 1;
+            ComPtr<ID3D11Device> device; context->GetDevice(&device);
+            if (FAILED(device->CreateShaderResourceView(source, &view, &current)))
+            { reason = "direct native guide view creation failed"; return false; }
+        }
+        else
+        {
+            context->CopySubresourceRegion(sourceCarrier.Get(), 0, 0, 0, 0, source, 0, nullptr);
+            current = srv;
+        }
+        auto* input = current.Get(); auto* output = uav.Get();
+        context->CSSetShader(shader, nullptr, 0);
         context->CSSetShaderResources(0, 1, &input);
         context->CSSetUnorderedAccessViews(0, 1, &output, nullptr);
         context->Dispatch((sourceDesc.Width + 15) / 16, (sourceDesc.Height + 15) / 16, 1);
         input = nullptr; output = nullptr;
         context->CSSetShaderResources(0, 1, &input);
         context->CSSetUnorderedAccessViews(0, 1, &output, nullptr);
+        return true;
     }
 };
 class Converter
@@ -204,9 +246,8 @@ class Converter
     {
         ContextGuard guard(context, isolated.Get());
         if (!guard) { reason = "DX11 context state isolation unavailable"; return false; }
-        depth.Copy(context, depthSource, depthShader.Get());
-        motion.Copy(context, motionSource, motionShader.Get());
-        return true;
+        return depth.Copy(context, depthSource, depthShader.Get(), reason) &&
+            motion.Copy(context, motionSource, motionShader.Get(), reason);
     }
 };
 }

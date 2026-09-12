@@ -74,11 +74,18 @@ int main(int argc, char** argv)
     ComPtr<ID3D12Fence> f12; Check(d12->OpenSharedHandle(shared, IID_PPV_ARGS(&f12))); CloseHandle(shared);
     ComPtr<ID3D12Fence> done; Check(d12->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&done)));
     UINT64 frameId = 0;
-    auto texture11 = [&](UINT w, UINT h, DXGI_FORMAT format, const void* data, UINT pitch)
+    D3D11_TEXTURE2D_DESC paddedDepth {}; paddedDepth.Width=4096; paddedDepth.Height=2160;
+    paddedDepth.MipLevels=1; paddedDepth.ArraySize=1; paddedDepth.SampleDesc.Count=1;
+    paddedDepth.Format=DXGI_FORMAT_R32_TYPELESS;
+    auto paddedMotion=paddedDepth; paddedMotion.Format=DXGI_FORMAT_R32G32_FLOAT;
+    assert(T::SlotCount*(T::Texture::RequiredBytes(paddedDepth,true)+
+        T::Texture::RequiredBytes(paddedMotion,false)) <= T::BudgetBytes);
+    auto texture11 = [&](UINT w, UINT h, DXGI_FORMAT format, const void* data, UINT pitch, UINT requestedBind=0u)
     {
         D3D11_TEXTURE2D_DESC desc {}; desc.Width=w; desc.Height=h; desc.MipLevels=1; desc.ArraySize=1;
         desc.Format=format; desc.SampleDesc.Count=1; desc.Usage=D3D11_USAGE_DEFAULT;
-        if(format==DXGI_FORMAT_D16_UNORM || format==DXGI_FORMAT_D24_UNORM_S8_UINT ||
+        if(requestedBind) desc.BindFlags=requestedBind;
+        else if(format==DXGI_FORMAT_D16_UNORM || format==DXGI_FORMAT_D24_UNORM_S8_UINT ||
            format==DXGI_FORMAT_D32_FLOAT || format==DXGI_FORMAT_D32_FLOAT_S8X24_UINT) desc.BindFlags=D3D11_BIND_DEPTH_STENCIL;
         D3D11_SUBRESOURCE_DATA init {data, pitch, 0};
         ComPtr<ID3D11Texture2D> r; Check(d11->CreateTexture2D(&desc, data ? &init : nullptr, &r)); return r;
@@ -96,6 +103,9 @@ int main(int argc, char** argv)
             const bool half = d.Format==DXGI_FORMAT_R16G16_FLOAT || d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT;
             const float actual = half ? DirectX::PackedVector::XMConvertHalfToFloat(reinterpret_cast<const unsigned short*>(row)[x]) :
                 reinterpret_cast<const float*>(row)[x];
+            if(std::abs(actual-expected[y*d.Width*components+x]) > tolerance)
+                std::fprintf(stderr,"PIXEL format=%u x=%u y=%u component=%u actual=%g expected=%g tolerance=%g\n",
+                    d.Format,x/components,y,x%components,actual,expected[y*d.Width*components+x],tolerance);
             assert(std::abs(actual-expected[y*d.Width*components+x]) <= tolerance);
         }
         c11->Unmap(staging.Get(),0);
@@ -128,15 +138,17 @@ int main(int argc, char** argv)
         const bool is64=depthFormat==DXGI_FORMAT_D32_FLOAT_S8X24_UINT || depthFormat==DXGI_FORMAT_R32G8X24_TYPELESS;
         const void* pixels=is16 ? static_cast<void*>(depth16.data()) : is24 ? static_cast<void*>(depth24.data()) :
             is64 ? static_cast<void*>(depth64.data()) : static_cast<void*>(depthValues.data());
-        auto depth=texture11(w,h,depthFormat,pixels,w*(is16?2:is64?8:4));
+        const UINT depthBind=depthFormat==DXGI_FORMAT_R32_FLOAT ? D3D11_BIND_SHADER_RESOURCE : 0;
+        auto depth=texture11(w,h,depthFormat,pixels,w*(is16?2:is64?8:4),depthBind);
         std::vector<unsigned short> motion16(motionValues.size());
         for(UINT i=0;i<motionValues.size();++i) motion16[i]=DirectX::PackedVector::XMConvertFloatToHalf(motionValues[i]);
         const bool halfMotion=motionFormat==DXGI_FORMAT_R16G16_FLOAT;
+        const UINT motionBind=halfMotion ? 0 : D3D11_BIND_SHADER_RESOURCE;
         auto motion=texture11(mw,mh,motionFormat,halfMotion ? static_cast<void*>(motion16.data()) :
-            static_cast<void*>(motionValues.data()),mw*(halfMotion?4:8));
+            static_cast<void*>(motionValues.data()),mw*(halfMotion?4:8),motionBind);
         D3D11_TEXTURE2D_DESC dd {},md {}; depth->GetDesc(&dd); motion->GetDesc(&md);
-        T::Texture td,tm; assert(td.Prepare(d11.Get(),d12.Get(),dd,true,reason));
-        const bool motionReady=tm.Prepare(d11.Get(),d12.Get(),md,false,reason);
+        T::Texture td,tm; assert(td.Prepare(d11.Get(),d12.Get(),dd,true,reason,depth.Get()));
+        const bool motionReady=tm.Prepare(d11.Get(),d12.Get(),md,false,reason,motion.Get());
         if(!motionReady)
         {
             std::printf("Motion sharing: %s\n",reason.c_str());
@@ -156,6 +168,9 @@ int main(int argc, char** argv)
             }
         }
         assert(motionReady);
+        assert((halfMotion && tm.sourceCarrier) ||
+            (!halfMotion && tm.directSource && !tm.sourceCarrier && !tm.srv));
+        assert(tm.bytes==UINT64(mw)*mh*(halfMotion?12:16));
         auto* allocation=td.shared.Get(); assert(td.Prepare(d11.Get(),d12.Get(),dd,true,reason));
         assert(td.shared.Get()==allocation);
         // Converter binds a different compute shader; the original shader and other state must survive.
