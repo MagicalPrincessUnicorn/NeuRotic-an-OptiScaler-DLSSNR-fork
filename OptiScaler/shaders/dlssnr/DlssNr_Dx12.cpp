@@ -11,6 +11,7 @@
 #include <dlssnr/DlssNr_Proxy.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/NrDispatchResources.h>
+#include <dlssnr/NrPlacementLifecycle.h>
 
 #include "DlssNr_Dx12.h"
 #include "DlssNr_ExposureGuard.h"
@@ -347,6 +348,7 @@ struct NrState
     // rather than layer 1 alone, so a layer-2 creation/failure frame cannot be published as two-layer.
     unsigned long long completedPipelineEvaluations = 0;
     bool lastEvaluationWasPreSr = false;
+    DlssNr::PrimaryPlacementGeneration primaryPlacement {};
     bool imageOnlyDomain = false;
 
     // The frame as the upscaler wrote it. The resolve adds the model's edit to this rather than
@@ -1110,6 +1112,7 @@ void ParkNrFeature(void*& feature)
     NrRetired r;
     r.feature = feature;
     feature = nullptr;
+    g_nr.primaryPlacement.Retired();
     g_nrRetired.push_back(r);
 }
 
@@ -2332,8 +2335,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return;
     }
 
-    if (g_nr.feature != nullptr && g_nr.completedPipelineEvaluations != 0 &&
-        g_nr.lastEvaluationWasPreSr != currentRouteIsPreSr)
+    // Placement belongs to the current opaque feature generation. The old global evaluation serial
+    // remains cumulative for telemetry, so using it here would retire a newly created replacement
+    // every frame after a Pre-SR/Post-SR switch.
+    if (g_nr.feature != nullptr && g_nr.primaryPlacement.RequiresRetirement(currentRouteIsPreSr))
     {
         g_nr.reset = true;
         g_nr.resumeFeatureAwaitingRelease = g_nr.feature;
@@ -2784,6 +2789,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
 
         ++g_featureBuilds;
+        g_nr.primaryPlacement.Created(currentRouteIsPreSr);
         g_nr.width = width;
         g_nr.height = height;
         g_nr.reset = true;
@@ -5810,6 +5816,7 @@ bool Shutdown()
         g_nr.release(g_nr.feature);
 
     g_nr.feature = nullptr;
+    g_nr.primaryPlacement.Retired();
 
     for (size_t index = 0; index < 9; ++index)
     {
