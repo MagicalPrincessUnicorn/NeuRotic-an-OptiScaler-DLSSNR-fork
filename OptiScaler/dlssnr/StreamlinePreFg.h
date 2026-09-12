@@ -166,7 +166,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         owner->providerGeneration = provider.generation;
         owner->startup.Reset();
     }
-    auto frame = Claim();
+    auto frame = Claim(fg);
     frame.providerGeneration = provider.generation;
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
     const unsigned int route = config->DlssNrRoute.value_or_default();

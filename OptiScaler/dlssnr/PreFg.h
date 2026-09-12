@@ -3,6 +3,7 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -54,54 +55,120 @@ class ForwardFrame
 };
 class Ledger
 {
-    uint64_t constants = 0, tags = 0, consumed = 0, sequence = 0;
-    bool foreignConstants = false, foreignTags = false;
-    bool legacy = false;
+    struct Record
+    {
+        uint64_t key = 0, providerGeneration = 0;
+        bool constants = false, tags = false, consumed = false;
+        bool foreignConstants = false, foreignTags = false, legacy = false;
+    };
+    static constexpr size_t capacity = 16;
+    std::array<Record, capacity> records {};
+    uint64_t latestConstants = 0, latestTags = 0, consumed = 0, sequence = 0;
+    Record* Find(uint64_t key, uint64_t providerGeneration = 0)
+    {
+        if (!key) return nullptr;
+        auto& record = records[(key - 1) % capacity];
+        return record.key == key && (!providerGeneration || record.providerGeneration == providerGeneration) ? &record : nullptr;
+    }
+    const Record* Find(uint64_t key, uint64_t providerGeneration = 0) const
+    { return const_cast<Ledger*>(this)->Find(key, providerGeneration); }
+    Record& Ensure(uint64_t key, uint64_t providerGeneration)
+    {
+        auto& record = records[(key - 1) % capacity];
+        if (record.key != key || record.providerGeneration != providerGeneration)
+        {
+            record = {};
+            record.key = key;
+            record.providerGeneration = providerGeneration;
+        }
+        return record;
+    }
   public:
     struct Snapshot
     {
         uint64_t constants, tags, consumed, sequence;
         bool foreignConstants, foreignTags, legacy;
     };
-    Snapshot Inspect() const { return {constants, tags, consumed, sequence, foreignConstants, foreignTags, legacy}; }
-    void Constants(uint32_t frame, uint32_t viewport)
+    Snapshot Inspect() const
+    {
+        const auto* constants = Find(latestConstants);
+        const auto* tags = Find(latestTags);
+        return {latestConstants, latestTags, consumed, sequence,
+            constants && constants->foreignConstants, tags && tags->foreignTags,
+            tags && tags->legacy};
+    }
+    void Constants(uint32_t frame, uint32_t viewport, uint64_t providerGeneration = 0)
     {
         const uint64_t key = uint64_t(frame) + 1;
-        if (constants != key) foreignConstants = false;
-        constants = key;
-        foreignConstants |= viewport != 0;
+        auto& record = Ensure(key, providerGeneration);
+        record.constants = true;
+        record.foreignConstants |= viewport != 0;
+        latestConstants = key;
     }
-    void Tags(uint32_t frame, uint32_t viewport)
+    void Tags(uint32_t frame, uint32_t viewport, uint64_t providerGeneration = 0)
     {
-        legacy = false;
         const uint64_t key = uint64_t(frame) + 1;
-        if (tags != key) foreignTags = false;
-        tags = key;
-        foreignTags |= viewport != 0;
+        auto& record = Ensure(key, providerGeneration);
+        record.tags = true;
+        record.legacy = false;
+        record.foreignTags |= viewport != 0;
+        latestTags = key;
     }
-    void LegacyTags(uint32_t viewport)
+    void LegacyTags(uint32_t viewport, uint64_t providerGeneration = 0)
     {
-        if (constants) Tags(static_cast<uint32_t>(constants - 1), viewport);
-        else tags = 0;
-        legacy = true;
+        if (!latestConstants) { latestTags = 0; return; }
+        auto& record = Ensure(latestConstants, providerGeneration);
+        record.tags = true;
+        record.legacy = true;
+        record.foreignTags |= viewport != 0;
+        latestTags = latestConstants;
     }
-    uint64_t Current() const { return foreignConstants ? 0 : constants; }
-    Frame Claim()
+    uint64_t Current(uint64_t providerGeneration = 0) const
     {
-        Frame result {constants, ++sequence};
-        result.legacyTags = legacy;
-        const uint32_t advance = static_cast<uint32_t>(constants - consumed);
-        const bool fresh = constants && (!consumed || (advance && advance < 0x80000000u));
-        if (foreignConstants || foreignTags) result.refusal = "Multiple/nonzero Streamline viewports are unsupported";
-        else if (!constants || constants != tags) {}
-        else if (!fresh) result.refusal = "Duplicate/stale Streamline real-frame token";
+        const auto* record = Find(latestConstants, providerGeneration);
+        return record && record->constants && !record->foreignConstants ? latestConstants : 0;
+    }
+    Frame Claim(uint64_t selected = 0, bool requireSelected = false, uint64_t providerGeneration = 0)
+    {
+        const uint64_t key = selected ? selected : requireSelected ? 0 : latestConstants;
+        Frame result {key, ++sequence};
+        auto* record = Find(key, providerGeneration);
+        const uint32_t advance = static_cast<uint32_t>(key - consumed);
+        const bool fresh = key && (!consumed || (advance && advance < 0x80000000u));
+        if (requireSelected && !selected) result.refusal = "No successful Streamline PresentStart frame marker";
+        else if (!record || !record->constants || !record->tags) {}
+        else if (record->foreignConstants || record->foreignTags)
+            result.refusal = "Multiple/nonzero Streamline viewports are unsupported";
+        else if (record->consumed || !fresh) result.refusal = "Duplicate/stale Streamline real-frame token";
         else { result.valid = true; result.refusal = nullptr; }
-        // A refused frame cannot later become eligible by a second Present call.
-        if (fresh) consumed = constants;
+        if (record) result.legacyTags = record->legacy;
+        // Consume only the explicitly selected Present frame. A refused frame cannot
+        // later become eligible, while an overlapping future producer remains intact.
+        if (fresh)
+        {
+            consumed = key;
+            if (record) record->consumed = true;
+        }
         return result;
     }
-    void Reset() { constants = tags = consumed = 0; foreignConstants = foreignTags = false; }
+    void Reset() { records = {}; latestConstants = latestTags = consumed = 0; }
 };
+
+struct PresentIdentity { uint64_t key = 0; bool ambiguous = false; };
+inline thread_local PresentIdentity presentingFrame;
+inline void PresentStart(uint32_t frame)
+{
+    const uint64_t key = uint64_t(frame) + 1;
+    if (presentingFrame.key && presentingFrame.key != key) presentingFrame.ambiguous = true;
+    else presentingFrame.key = key;
+}
+inline void PresentEnd(uint32_t frame)
+{
+    if (presentingFrame.key != uint64_t(frame) + 1) presentingFrame.ambiguous = true;
+    presentingFrame = {};
+}
+inline void PresentMarkerFailed() { presentingFrame = {}; }
+inline uint64_t PresentFrame() { return presentingFrame.ambiguous ? 0 : presentingFrame.key; }
 struct ProviderState
 {
     bool known = false, enabled = false, supported = false;
@@ -141,36 +208,41 @@ inline uint64_t CurrentFrame()
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
-    return state.swapchains == 1 ? state.ledger.Current() : 0;
+    return state.swapchains == 1 ? state.ledger.Current(state.provider.generation) : 0;
 }
 inline void ObserveConstants(uint32_t frame, uint32_t viewport)
-{
-    std::lock_guard lock(State().mutex);
-    const auto before = State().ledger.Inspect();
-    State().ledger.Constants(frame, viewport);
-    ObserveLedger("constants", frame, viewport, before);
-}
-inline void ObserveTags(uint32_t frame, uint32_t viewport)
-{
-    std::lock_guard lock(State().mutex);
-    const auto before = State().ledger.Inspect();
-    State().ledger.Tags(frame, viewport);
-    ObserveLedger("tags", frame, viewport, before);
-}
-inline void ObserveLegacyTags(uint32_t viewport)
-{
-    std::lock_guard lock(State().mutex);
-    const auto before = State().ledger.Inspect();
-    State().ledger.LegacyTags(viewport);
-    ObserveLedger("legacy-tags", 0, viewport, before);
-}
-inline Frame Claim()
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
     const auto before = state.ledger.Inspect();
-    auto frame = state.ledger.Claim();
-    ObserveLedger("claim", 0, 0, before);
+    state.ledger.Constants(frame, viewport, state.provider.generation);
+    ObserveLedger("constants", frame, viewport, before);
+}
+inline void ObserveTags(uint32_t frame, uint32_t viewport)
+{
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    const auto before = state.ledger.Inspect();
+    state.ledger.Tags(frame, viewport, state.provider.generation);
+    ObserveLedger("tags", frame, viewport, before);
+}
+inline void ObserveLegacyTags(uint32_t viewport)
+{
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    const auto before = state.ledger.Inspect();
+    state.ledger.LegacyTags(viewport, state.provider.generation);
+    ObserveLedger("legacy-tags", 0, viewport, before);
+}
+inline Frame Claim(bool requirePresentIdentity = false)
+{
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    const auto before = state.ledger.Inspect();
+    const auto selected = requirePresentIdentity ? PresentFrame() : 0;
+    auto frame = state.ledger.Claim(selected, requirePresentIdentity, state.provider.generation);
+    frame.providerGeneration = state.provider.generation;
+    ObserveLedger("claim", selected ? static_cast<uint32_t>(selected - 1) : 0, 0, before);
     if (state.swapchains != 1)
     {
         frame.valid = false;

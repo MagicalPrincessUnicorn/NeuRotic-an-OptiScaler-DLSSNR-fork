@@ -1639,6 +1639,16 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
     }
 
     const auto markerResult = o_slPCLSetMarker(marker, frame);
+    if (marker == sl::PCLMarker::ePresentStart)
+    {
+        if (markerResult == sl::Result::eOk) DlssNr::PreFg::PresentStart(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
+    else if (marker == sl::PCLMarker::ePresentEnd)
+    {
+        if (markerResult == sl::Result::eOk) DlssNr::PreFg::PresentEnd(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
     if (marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd)
         NR_FRAME_TRACE("nr-pcl", "phase=return marker={} frame={} result={} path=existing-hook",
             static_cast<unsigned int>(marker), static_cast<uint32_t>(frame), static_cast<unsigned int>(markerResult));
@@ -1676,6 +1686,16 @@ sl::Result AssociationPclMarker(sl::PCLMarker marker, const sl::FrameToken& fram
         NR_FRAME_TRACE("nr-pcl", "phase=enter marker={} frame={} path=observer",
             static_cast<unsigned int>(marker), static_cast<uint32_t>(frame));
     const auto result = associationPclMarker.load(std::memory_order_acquire)(marker, frame);
+    if (marker == sl::PCLMarker::ePresentStart)
+    {
+        if (result == sl::Result::eOk) DlssNr::PreFg::PresentStart(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
+    else if (marker == sl::PCLMarker::ePresentEnd)
+    {
+        if (result == sl::Result::eOk) DlssNr::PreFg::PresentEnd(static_cast<uint32_t>(frame));
+        else DlssNr::PreFg::PresentMarkerFailed();
+    }
     if (presentMarker)
         NR_FRAME_TRACE("nr-pcl", "phase=return marker={} frame={} result={} path=observer",
             static_cast<unsigned int>(marker), static_cast<uint32_t>(frame), static_cast<unsigned int>(result));
@@ -1695,9 +1715,9 @@ void* StreamlineHooks::hkpcl_slGetPluginFunction(const char* functionName)
         return &hkslPCLSetMarker;
     }
 
-    // Opt-in diagnostics for the native provider; preserve the exact function and result.
-    // Existing game quirks/replacement-provider branches above still take precedence.
-    if (strcmp(functionName, "slPCLSetMarker") == 0 && DlssNr::FrameTrace::AssociationRequested())
+    // The native provider's successful Present markers are the authoritative frame
+    // identity. Preserve the exact function/result; existing provider hooks above win.
+    if (strcmp(functionName, "slPCLSetMarker") == 0)
     {
         const auto original = reinterpret_cast<decltype(&slPCLSetMarker)>(o_pcl_slGetPluginFunction(functionName));
         if (!original) return nullptr;
