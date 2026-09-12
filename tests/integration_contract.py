@@ -51,10 +51,15 @@ for match in re.finditer(r'ToggleBurstMessages\s*=\s*\{(.*?)\}', source('OptiSca
 for key in strings(source('OptiScaler/dlssnr/DlssNr_BridgeTelemetry.h')):
     if key and normalize(key) not in inventory: missing.add(key)
 present = source('OptiScaler/dlssnr/DlssNr_Present.cpp')
-for match in re.finditer(r'SetFallback\(.*?\);', present, re.S):
+# Exclude the function definition: its body includes diagnostic-only trace strings.
+for match in re.finditer(r'SetFallback\((?!PresentApi\s+\w+).*?\);', present, re.S):
     for key in joined_strings(match.group()):
         if key and not key.startswith('DLSS-NR Present diagnostic:') and normalize(key) not in inventory:
             missing.add(key)
+for path in ['OptiScaler/dlssnr/PreFg.h', 'OptiScaler/dlssnr/StreamlinePreFg.h']:
+    for match in re.finditer(r'(?:refusal\s*=|ReportPresentUnavailable\(PresentApi::D3D12,)\s*("(?:[^"\\]|\\.)*")', source(path)):
+        key = ast.literal_eval(match.group(1))
+        if normalize(key) not in inventory: missing.add(key)
 for key in strings(source('OptiScaler/dlssnr/DlssNr_PresentCompatibility.h')):
     if key and key not in {'supported', 'unsupported Present target'} and normalize(key) not in inventory:
         missing.add(key)

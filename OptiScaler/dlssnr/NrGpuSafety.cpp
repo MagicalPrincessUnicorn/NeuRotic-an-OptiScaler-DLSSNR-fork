@@ -278,12 +278,12 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
 {
     if (!ticket || !consumer) return false;
     std::lock_guard lock(State().mutex);
-    if (State().failed || ticket->failed || ticket->submissions != 1 || ticket->points.size() != 1)
+    if (State().failed || ticket->failed || !ticket->sealed || ticket->submissions != 1 || ticket->points.size() != 1)
         return false;
     const auto& point = ticket->points.front();
     if (point.timeline->fence->GetCompletedValue() == UINT64_MAX) return false;
     if (Get<Timeline>(NativeObject(consumer), timelineGuid) == point.timeline) return true;
-    if (!ticket->sealed || consumer->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
+    if (consumer->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
     ComPtr<ID3D12Device> producerDevice, consumerDevice;
     if (FAILED(point.timeline->fence->GetDevice(IID_PPV_ARGS(&producerDevice))) ||
         FAILED(consumer->GetDevice(IID_PPV_ARGS(&consumerDevice))) ||

@@ -31,8 +31,8 @@ bool Readable(const Ticket& ticket);
 // GPU consumer ordering only, NOT permission to reuse/free. Exactly one observed submission,
 // on the consumer's queue; no CPU wait and no inferred cross-queue dependency.
 bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue);
-// Explicit provider handoff only. A different queue requires a sealed, uniquely
-// submitted producer on the same device. Enqueues a GPU wait on its observed fence;
+// Explicit provider handoff only. Requires a sealed, uniquely submitted producer;
+// a different queue must share its device and gets a GPU wait on its observed fence.
 // never waits for an unsubmitted recording or grants permission to reuse resources.
 bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer);
 UINT64 TimestampFrequency(const Ticket& ticket);

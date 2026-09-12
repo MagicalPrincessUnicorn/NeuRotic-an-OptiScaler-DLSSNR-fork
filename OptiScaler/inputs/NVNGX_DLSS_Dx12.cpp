@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <dlssnr/FrameTrace.h>
+#include <dlssnr/PreFg.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -1314,10 +1315,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
             void* traceHudless = nullptr;
             const auto backbufferResult = InParameters->Get("DLSSG.Backbuffer", &traceBackbuffer);
             const auto hudlessResult = InParameters->Get("DLSSG.HUDLess", &traceHudless);
+            const auto* preFg = DlssNr::PreFg::forwardingFrame;
             NR_FRAME_TRACE("ngx-fg-input", "provider=nvngx handle={} list={:p} backbuffer={:p} "
-                "hudless={:p} backbufferResult={} hudlessResult={} classifier=unavailable", handleId,
+                "hudless={:p} backbufferResult={} hudlessResult={} realSequence={} providerToken={} "
+                "nrSubmitted={} association=present-call-scope", handleId,
                 static_cast<void*>(InCmdList), traceBackbuffer, traceHudless,
-                static_cast<unsigned int>(backbufferResult), static_cast<unsigned int>(hudlessResult));
+                static_cast<unsigned int>(backbufferResult), static_cast<unsigned int>(hudlessResult),
+                preFg ? preFg->sequence : 0, preFg ? preFg->key : 0, preFg && preFg->outputSubmitted);
         }
         evalWithoutFG = 0;
 

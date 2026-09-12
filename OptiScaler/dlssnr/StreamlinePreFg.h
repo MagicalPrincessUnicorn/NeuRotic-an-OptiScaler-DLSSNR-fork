@@ -39,6 +39,7 @@ static Resize1Fn resize1 = nullptr;
 static decltype(&slUpgradeInterface) upgrade = nullptr;
 static decltype(&slGetNewFrameToken) getToken = nullptr;
 static decltype(&slSetTagForFrame) setTags = nullptr;
+static decltype(&slSetTag) setLegacyTags = nullptr;
 static decltype(&slSetConstants) setConstants = nullptr;
 static thread_local bool forwardingPresent = false;
 
@@ -81,6 +82,32 @@ inline sl::Result Constants(const sl::Constants& values, const sl::FrameToken& f
     if (result == sl::Result::eOk) ObserveConstants(static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport));
     return result;
 }
+inline sl::Result LegacyTags(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
+                            uint32_t count, sl::CommandBuffer* list)
+{
+    const auto result = setLegacyTags(viewport, tags, count, list);
+    if (result == sl::Result::eOk && tags)
+        for (uint32_t i = 0; i < count; ++i)
+            if (tags[i].resource && tags[i].resource->native &&
+                (tags[i].type == sl::kBufferTypeDepth || tags[i].type == sl::kBufferTypeMotionVectors ||
+                 tags[i].type == sl::kBufferTypeHUDLessColor))
+            { ObserveLegacyTags(static_cast<uint32_t>(viewport)); break; }
+    return result;
+}
+inline bool PrepareFullFrame(const Frame& frame)
+{
+    sl::ResourceTag fullFrame[] = {
+        {nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent},
+        {nullptr, sl::kBufferTypeUIColorAndAlpha, sl::ResourceLifecycle::eValidUntilPresent},
+        {nullptr, sl::kBufferTypeUIAlpha, sl::ResourceLifecycle::eValidUntilPresent}};
+    if (frame.legacyTags)
+        return setLegacyTags && setLegacyTags(sl::ViewportHandle(0), fullFrame, 3, nullptr) == sl::Result::eOk;
+    const uint32_t id = static_cast<uint32_t>(frame.key - 1);
+    sl::FrameToken* token = nullptr;
+    return getToken && setTags && getToken(token, &id) == sl::Result::eOk && token &&
+        static_cast<uint32_t>(*token) == id &&
+        setTags(*token, sl::ViewportHandle(0), fullFrame, 3, nullptr) == sl::Result::eOk;
+}
 
 inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI_PRESENT_PARAMETERS* parameters,
                         bool usePresent1)
@@ -92,44 +119,41 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     auto owner = GetOwner(chain);
     if (!owner || forwardingPresent || (flags & DXGI_PRESENT_TEST) != 0 || ::State::Instance().isShuttingDown)
         return forward();
+    std::unique_lock ownerLock(owner->presentationMutex, std::try_to_lock);
+    if (!ownerLock.owns_lock())
+    {
+        ++State().rejected;
+        NR_FRAME_TRACE("nr-before-fg-refused", "reason=concurrent-application-present");
+        return forward();
+    }
     struct ForwardScope { ForwardScope() { forwardingPresent = true; } ~ForwardScope() { forwardingPresent = false; } } scope;
     const double start = Util::MillisecondsNow();
-    auto frame = Claim();
     auto* config = Config::Instance();
     const bool fg = ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff;
+    if (owner->lastFg != fg)
+    {
+        std::lock_guard lock(State().mutex);
+        State().ledger.Reset();
+        owner->lastFg = fg;
+    }
+    auto frame = Claim();
     const bool requested = config->GetDlssNrRuntimeSnapshot().enabled && config->DlssNrRoute.value_or_default() != 0;
-    if (requested && fg)
+    if (fg)
     {
         if (::State::Instance().activeFgOutput != FGOutput::NoFG ||
             ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOn ||
-            ::State::Instance().dlssgDetectedInterpolationCount > 1 ||
-            config->DlssNrMultipassEnabled.value_or_default() || Telemetry().nativeRayReconstructionActive)
+            ::State::Instance().dlssgDetectedInterpolationCount > 1)
         {
             frame.valid = false;
             frame.refusal = "Pre-FG adapter supports native Streamline 2x, single-pass, RR off only";
         }
-        if (frame.valid)
-        {
-            // Deliberate full-frame/HUD-included policy. Do not interpolate an enhanced
-            // backbuffer together with an earlier, unenhanced HUDless/UI snapshot.
-            // Retag only this exact game frame; future game tags remain untouched.
-            const uint32_t id = static_cast<uint32_t>(frame.key - 1);
-            sl::FrameToken* token = nullptr;
-            sl::ResourceTag fullFrame[] = {
-                {nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent},
-                {nullptr, sl::kBufferTypeUIColorAndAlpha, sl::ResourceLifecycle::eValidUntilPresent},
-                {nullptr, sl::kBufferTypeUIAlpha, sl::ResourceLifecycle::eValidUntilPresent}};
-            if (!getToken || !setTags || getToken(token, &id) != sl::Result::eOk || !token ||
-                static_cast<uint32_t>(*token) != id ||
-                setTags(*token, sl::ViewportHandle(0), fullFrame, 3, nullptr) != sl::Result::eOk)
-            {
-                frame.valid = false;
-                frame.refusal = "Could not establish full-frame FG input policy for this token";
-            }
-        }
+        // Called only after successful NR model recording, before any backbuffer
+        // copyback. Refused/missing-guide frames retain the game's original FG tags.
+        if (frame.valid) frame.prepareInputs = &PrepareFullFrame;
     }
     // FG off uses the existing admission contract. Native mode still performs no Present model work.
     const auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, fg ? &frame : nullptr);
+    frame.outputSubmitted = identity.completedOutput;
     const double beforeProvider = Util::MillisecondsNow();
     if (identity.completedOutput) ++State().submitted;
     else if (requested) ++State().rejected;
@@ -139,6 +163,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         static_cast<void*>(chain), static_cast<void*>(owner->queue.Get()));
     // The NR adapter submitted all work on the exact creation queue before entering
     // Streamline. Its normal presenting-queue dependency orders the FG read after NR.
+    ForwardFrame providerScope(frame);
     const HRESULT result = forward();
     const double end = Util::MillisecondsNow();
     ReportPresentCallTiming({identity, 0.0, beforeProvider - start, end - start, end - beforeProvider, result});
@@ -161,19 +186,26 @@ inline void Invalidate()
 inline HRESULT STDMETHODCALLTYPE Resize(IDXGISwapChain* chain, UINT count, UINT width, UINT height,
                                         DXGI_FORMAT format, UINT flags)
 {
+    auto owner = GetOwner(chain);
+    std::unique_lock<std::recursive_mutex> ownerLock;
+    if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
     Invalidate();
     PresentGuides::Instance().Enable(false);
+    ReportPresentUnavailable(PresentApi::D3D12, "Present target changed");
     return resize(chain, count, width, height, format, flags);
 }
 inline HRESULT STDMETHODCALLTYPE Resize1(IDXGISwapChain3* chain, UINT count, UINT width, UINT height,
     DXGI_FORMAT format, UINT flags, const UINT* masks, IUnknown* const* queues)
 {
+    auto owner = GetOwner(chain);
+    std::unique_lock<std::recursive_mutex> ownerLock;
+    if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
     Invalidate();
     PresentGuides::Instance().Enable(false);
+    ReportPresentUnavailable(PresentApi::D3D12, "Present target changed");
     const HRESULT result = resize1(chain, count, width, height, format, flags, masks, queues);
     // Per-buffer queue changes need a new adapter contract. Stop NR; never retain a guessed queue.
-    if (SUCCEEDED(result) && queues)
-        if (auto owner = GetOwner(chain)) owner->queue.Reset();
+    if (SUCCEEDED(result) && queues && owner) owner->queue.Reset();
     return result;
 }
 inline void HookChain(IDXGISwapChain* chain, IUnknown* device)
@@ -272,13 +304,13 @@ inline void Uninstall()
     detach(createChain, &Chain); detach(createHwnd, &Hwnd);
     detach(present, &Present); detach(present1, &Present1);
     detach(resize, &Resize); detach(resize1, &Resize1);
-    detach(upgrade, &Upgrade); detach(setTags, &Tags); detach(setConstants, &Constants);
+    detach(upgrade, &Upgrade); detach(setTags, &Tags); detach(setLegacyTags, &LegacyTags); detach(setConstants, &Constants);
     if (DetourTransactionCommit() == NO_ERROR)
     {
         factory0 = factory1 = nullptr; factory2 = nullptr;
         createChain = nullptr; createHwnd = nullptr;
         present = nullptr; present1 = nullptr; resize = nullptr; resize1 = nullptr;
-        upgrade = nullptr; setTags = nullptr; setConstants = nullptr; getToken = nullptr;
+        upgrade = nullptr; setTags = nullptr; setLegacyTags = nullptr; setConstants = nullptr; getToken = nullptr;
         module = nullptr; targets.clear(); Invalidate();
     }
     else LOG_ERROR("NR pre-FG: could not detach Streamline adapter");
@@ -292,6 +324,7 @@ inline void Install(HMODULE interposer)
     auto address = [](const char* name) { return reinterpret_cast<void*>(KernelBaseProxy::GetProcAddress_()(module, name)); };
     // Attach after the existing OptiScaler hooks: each trampoline preserves them.
     Attach(setTags, address("slSetTagForFrame"), &Tags);
+    Attach(setLegacyTags, address("slSetTag"), &LegacyTags);
     Attach(setConstants, address("slSetConstants"), &Constants);
     Attach(upgrade, address("slUpgradeInterface"), &Upgrade);
     Attach(factory0, address("CreateDXGIFactory"), &Factory0);

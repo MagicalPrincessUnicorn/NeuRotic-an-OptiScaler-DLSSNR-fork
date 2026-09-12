@@ -37,6 +37,11 @@ int main()
     assert(ledger.Claim().valid);
     ledger.Constants(0, 0); ledger.Tags(0, 0);
     assert(ledger.Claim().valid); // uint32 wrap is not the missing-token sentinel
+    ledger.Constants(1, 0); ledger.LegacyTags(0);
+    const auto legacy = ledger.Claim();
+    assert(legacy.valid && legacy.legacyTags);
+    ledger.LegacyTags(0); ledger.Constants(2, 0);
+    assert(!ledger.Claim().valid); // legacy tags cannot be assigned to a future token
 
     State().swapchains = 1;
     ObserveConstants(23, 0); ObserveTags(23, 0);

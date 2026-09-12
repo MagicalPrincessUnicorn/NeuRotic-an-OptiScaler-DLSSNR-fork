@@ -1354,5 +1354,12 @@
   "xess": "xess",
   "yes": "sí",
   "| Input: %s": "| Entrada: %s",
-  "| Spoof: %s": "| Suplantación: %s"
+  "| Spoof: %s": "| Suplantación: %s",
+  "No matching Streamline frame tags/constants": "No coinciden las etiquetas y constantes de fotograma de Streamline",
+  "Multiple/nonzero Streamline viewports are unsupported": "No se admiten varias vistas de Streamline ni vistas con índice distinto de cero",
+  "Duplicate/stale Streamline real-frame token": "Identificador de fotograma real de Streamline duplicado o antiguo",
+  "No unique Streamline presentation owner": "No hay un único responsable de la presentación de Streamline",
+  "Pre-FG adapter supports native Streamline 2x, single-pass, RR off only": "El adaptador previo a FG solo admite Streamline nativo 2x, una pasada y RR desactivado",
+  "Could not establish full-frame FG input policy for this token": "No se pudo configurar la entrada de fotograma completo para FG con este identificador",
+  "Present target changed": "El destino de presentación cambió"
 }

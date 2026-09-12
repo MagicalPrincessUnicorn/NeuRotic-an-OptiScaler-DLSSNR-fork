@@ -690,6 +690,11 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::D3D12, preFgFrame->refusal);
         return identity;
     }
+    if (preFgFrame && (settings.DlssNrMultipassEnabled.value_or_default() || Telemetry().nativeRayReconstructionActive))
+    {
+        SetFallback(PresentApi::D3D12, "Pre-FG adapter supports native Streamline 2x, single-pass, RR off only");
+        return identity;
+    }
 
     // Experimental combinations are attempted. Actual guide/resource admission below still applies.
     const unsigned int experimentalFlags = enhanced ?
@@ -1125,7 +1130,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
-    if (FAILED(slot.compositeAllocator->Reset()) ||
+    const bool providerReady = !preFgFrame || !preFgFrame->prepareInputs ||
+        preFgFrame->prepareInputs(*preFgFrame);
+    if (!providerReady || FAILED(slot.compositeAllocator->Reset()) ||
         FAILED(g_present.list->Reset(slot.compositeAllocator.Get(), nullptr)))
     {
         const UINT64 signal = g_present.nextFence++;
@@ -1137,7 +1144,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         }
         else
             g_present.completionUntrackable = true;
-        SetFallback(api, "copyback command list could not be reset", true);
+        SetFallback(api, providerReady ? "copyback command list could not be reset" :
+            "Could not establish full-frame FG input policy for this token", true);
         return identity;
     }
     bool outputPrepared = true;

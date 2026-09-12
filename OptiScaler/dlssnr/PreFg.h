@@ -17,11 +17,27 @@ struct Frame
     uint64_t sequence = 0;
     bool valid = false;
     const char* refusal = "No matching Streamline frame tags/constants";
+    bool legacyTags = false;
+    bool outputSubmitted = false;
+    bool (*prepareInputs)(const Frame&) = nullptr;
+};
+// Present-scoped provenance only; zero outside the provider's synchronous call.
+// An asynchronous provider must supply its own token mapping, never inherit this by time proximity.
+inline thread_local const Frame* forwardingFrame = nullptr;
+class ForwardFrame
+{
+    const Frame* previous;
+  public:
+    explicit ForwardFrame(const Frame& frame) : previous(forwardingFrame) { forwardingFrame = &frame; }
+    ~ForwardFrame() { forwardingFrame = previous; }
+    ForwardFrame(const ForwardFrame&) = delete;
+    ForwardFrame& operator=(const ForwardFrame&) = delete;
 };
 class Ledger
 {
     uint64_t constants = 0, tags = 0, consumed = 0, sequence = 0;
     bool foreignConstants = false, foreignTags = false;
+    bool legacy = false;
   public:
     void Constants(uint32_t frame, uint32_t viewport)
     {
@@ -32,15 +48,23 @@ class Ledger
     }
     void Tags(uint32_t frame, uint32_t viewport)
     {
+        legacy = false;
         const uint64_t key = uint64_t(frame) + 1;
         if (tags != key) foreignTags = false;
         tags = key;
         foreignTags |= viewport != 0;
     }
+    void LegacyTags(uint32_t viewport)
+    {
+        if (constants) Tags(static_cast<uint32_t>(constants - 1), viewport);
+        else tags = 0;
+        legacy = true;
+    }
     uint64_t Current() const { return foreignConstants ? 0 : constants; }
     Frame Claim()
     {
         Frame result {constants, ++sequence};
+        result.legacyTags = legacy;
         const uint32_t advance = static_cast<uint32_t>(constants - consumed);
         const bool fresh = constants && (!consumed || (advance && advance < 0x80000000u));
         if (foreignConstants || foreignTags) result.refusal = "Multiple/nonzero Streamline viewports are unsupported";
@@ -77,6 +101,11 @@ inline void ObserveTags(uint32_t frame, uint32_t viewport)
     std::lock_guard lock(State().mutex);
     State().ledger.Tags(frame, viewport);
 }
+inline void ObserveLegacyTags(uint32_t viewport)
+{
+    std::lock_guard lock(State().mutex);
+    State().ledger.LegacyTags(viewport);
+}
 inline Frame Claim()
 {
     auto& state = State();
@@ -106,6 +135,8 @@ class Owner final : public IUnknown
     std::atomic<ULONG> refs {1};
   public:
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
+    std::recursive_mutex presentationMutex;
+    bool lastFg = false;
     explicit Owner(ID3D12CommandQueue* value) : queue(value) { ++State().swapchains; }
     ~Owner() { --State().swapchains; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override
