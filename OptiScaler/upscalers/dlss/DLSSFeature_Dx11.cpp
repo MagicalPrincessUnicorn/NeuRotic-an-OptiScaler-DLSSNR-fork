@@ -88,8 +88,16 @@ bool DLSSFeatureDx11::EvaluateInternal(ID3D11DeviceContext* InDeviceContext, NVS
 
         _nrDx11.Prepare(InDeviceContext, InParameters);
 
+        struct RestoreNativeDx11Parameters
+        {
+            DlssNr::NativeDx11::Feature& feature;
+            NVSDK_NGX_Parameter* parameters;
+            ~RestoreNativeDx11Parameters() { feature.Restore(parameters); }
+        } restore {_nrDx11, InParameters};
+
         nvResult = NVNGXProxy::D3D11_EvaluateFeature()(InDeviceContext, _p_dlssHandle, InParameters, NULL);
 
+        _nrDx11.Restore(InParameters);
         _nrDx11.Complete(InDeviceContext, nvResult == NVSDK_NGX_Result_Success);
 
         if (nvResult != NVSDK_NGX_Result_Success)

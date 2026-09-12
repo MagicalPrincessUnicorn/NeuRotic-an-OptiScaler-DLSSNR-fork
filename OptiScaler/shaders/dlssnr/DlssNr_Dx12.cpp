@@ -2181,7 +2181,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                            const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue,
                            const NrConfigSnapshot<Config>& cfg, bool privateCommandList,
                            unsigned int exactWorkWidth, unsigned int exactWorkHeight,
-                           bool nativeTemporalDomain)
+                           bool nativeTemporalDomain, bool nativePreSrRoute)
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
@@ -2268,14 +2268,17 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
     bool secondLayerHealthy = healthyPassCount > 1;
     auto use = DlssNr::GpuSafety::Record(cmdList);
-    // Pre-SR reserved before touching its scratch/output path; Post-SR admits here.
-    const bool preSr = output == g_nr.preSrScratch;
-    const auto admission = preSr
+    ID3D12Resource* target = output;
+    const bool reservedPreSr = target == g_nr.preSrScratch;
+    const bool currentRouteIsPreSr = reservedPreSr || nativePreSrRoute;
+    // The legacy D3D12 Pre-SR path reserves before touching its scratch/output path.
+    // Native-DX11 Pre-SR owns its carrier and enters through the ordinary bounded admission.
+    const auto admission = reservedPreSr
         ? (_pool.ReservedFor(use) ? DlssNr::CompositionPool::Admission::Accepted
                                  : DlssNr::CompositionPool::Admission::Tracking)
         : _pool.Begin(_device, use, &DlssNr::CompositionPool::CreateSlot,
                       DlssNr::CompositionPool::RequiredSlots(healthyPassCount));
-    if (!preSr) ReportPool(admission, false);
+    if (!reservedPreSr) ReportPool(admission, currentRouteIsPreSr);
     if (admission != DlssNr::CompositionPool::Admission::Accepted || !_init)
     {
         g_nr.reset = true;
@@ -2329,8 +2332,17 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return;
     }
 
-    ID3D12Resource* target = output;
-    const bool currentRouteIsPreSr = target == g_nr.preSrScratch;
+    if (g_nr.feature != nullptr && g_nr.completedPipelineEvaluations != 0 &&
+        g_nr.lastEvaluationWasPreSr != currentRouteIsPreSr)
+    {
+        g_nr.reset = true;
+        g_nr.resumeFeatureAwaitingRelease = g_nr.feature;
+        ParkNrFeature(g_nr.feature);
+        ParkAllAdditionalLayerFeatures("Pre-SR/Post-SR route changed");
+        LOG_INFO("DLSS-NR Native Temporal placement changed to {}; retiring the previous model session",
+                 currentRouteIsPreSr ? "Pre-SR" : "Post-SR");
+        return;
+    }
 
     for (size_t index = 0; index + 1 < requestedPassCount; ++index)
     {
@@ -5416,6 +5428,58 @@ bool EvaluateNativeDx11PostSrCommandList(ID3D12GraphicsCommandList* cmdList,
 
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     return g_nr.completedPipelineEvaluations > before;
+}
+
+bool EvaluateNativeDx11PreSrCommandList(ID3D12GraphicsCommandList* cmdList,
+                                        ID3D12CommandQueue* queue,
+                                        ID3D12Resource* colour,
+                                        ID3D12Resource* depth,
+                                        ID3D12Resource* motion,
+                                        const DlssNrFrameInfo& frame,
+                                        const NrConfigSnapshot<Config>& settings)
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
+        colour == nullptr || depth == nullptr || motion == nullptr ||
+        settings.DlssNrRoute.value_or_default() != 0 ||
+        !settings.DlssNrRunBeforeSr.value_or_default() ||
+        !settings.GetDlssNrRuntimeSnapshot().enabled)
+        return false;
+
+    ID3D12Device* device = nullptr;
+    if (FAILED(colour->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+        return false;
+    if (!AcceptGenerationDevice(device))
+    {
+        device->Release();
+        return false;
+    }
+    if (g_compose == nullptr)
+        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering - native DX11 Pre-SR", device);
+    device->Release();
+    if (g_compose == nullptr)
+        return false;
+
+    unsigned long long before = 0;
+    {
+        std::lock_guard<std::mutex> nrLock(g_nrMutex);
+        before = g_nr.completedPipelineEvaluations;
+        g_nr.preSrAwaitingEvaluation = true;
+    }
+
+    // The colour carrier is an owned render-resolution copy. NR edits it in place before the
+    // native DX11 DLSS evaluation consumes it; the original game texture is never transitioned.
+    g_compose->Dispatch(cmdList, colour, depth, motion, colour, frame, queue, settings,
+                        true, 0, 0, true, true);
+
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    const bool delivered = g_nr.completedPipelineEvaluations > before;
+    if (delivered)
+    {
+        g_nr.preSrScratchPrimed = true;
+        g_nr.preSrAwaitingEvaluation = false;
+    }
+    return delivered;
 }
 
 void ProbeD3D11(void* d3d11Device)

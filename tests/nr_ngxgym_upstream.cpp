@@ -690,15 +690,24 @@ static bool RenderFrame(Host &h)
             }
         }
 
+        unsigned int colorXBefore = 0, colorYBefore = 0;
+        const auto colorXResultBefore = h.p->Get("DLSS.Input.Color.Subrect.Base.X", &colorXBefore);
+        const auto colorYResultBefore = h.p->Get("DLSS.Input.Color.Subrect.Base.Y", &colorYBefore);
         const NVSDK_NGX_Result r = NVSDK_NGX_D3D11_EvaluateFeature(h.ctx, h.feat, h.p, nullptr);
         ++h.evaluated;
         if (NVSDK_NGX_SUCCEED(r)) ++h.delivered;
         else if (h.delivered == 0 || (h.evaluated % 600) == 0)
             printf("  EvaluateFeature frame %d -> 0x%08X\n", h.frame, r);
+        unsigned int colorXAfter = 0, colorYAfter = 0;
+        const auto colorXResultAfter = h.p->Get("DLSS.Input.Color.Subrect.Base.X", &colorXAfter);
+        const auto colorYResultAfter = h.p->Get("DLSS.Input.Color.Subrect.Base.Y", &colorYAfter);
         if (!ParameterResourceUnchanged(h.p, "Color", h.color.tex) ||
             !ParameterResourceUnchanged(h.p, "Output", h.output.tex) ||
             !ParameterResourceUnchanged(h.p, "Depth", h.depth.tex) ||
-            !ParameterResourceUnchanged(h.p, "MotionVectors", h.mv.tex))
+            !ParameterResourceUnchanged(h.p, "MotionVectors", h.mv.tex) ||
+            colorXResultBefore != colorXResultAfter || colorYResultBefore != colorYResultAfter ||
+            (colorXResultBefore == NVSDK_NGX_Result_Success && colorXBefore != colorXAfter) ||
+            (colorYResultBefore == NVSDK_NGX_Result_Success && colorYBefore != colorYAfter))
         { puts("FAIL: native evaluation resource parameter changed"); return false; }
         if ((h.frame == 60 || h.frame == 120 || h.frame == 240) && !PrintOutputHash(h))
         { puts("FAIL: native output hash unavailable"); return false; }

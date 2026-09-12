@@ -140,9 +140,12 @@ struct Feature::State
     UINT64 id = ++nextFeature, evaluation = 0, submissions = 0;
     unsigned int flags = 0, width = 0, height = 0, outWidth = 0, outHeight = 0;
     int quality = 0;
-    bool created = false, copyGuides = false, nativePostSr = false;
+    bool created = false, copyGuides = false, nativePostSr = false, nativePreSr = false;
+    bool privateColorActive = false, privateColorUsed = false, preSrDelivered = false;
+    bool colorXChanged = false, colorYChanged = false;
     int pending = -1;
     UINT backbuffer = 0;
+    unsigned int colorX = 0, colorY = 0;
     UINT64 generation = 0;
     DlssNrFrameInfo frame;
     std::optional<NrConfigSnapshot<Config>> settings;
@@ -209,6 +212,12 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     ++s.evaluation;
     s.copyGuides = false;
     s.nativePostSr = false;
+    s.nativePreSr = false;
+    s.privateColorActive = false;
+    s.privateColorUsed = false;
+    s.preSrDelivered = false;
+    s.colorXChanged = false;
+    s.colorYChanged = false;
     s.settings.reset();
     const auto* config = Config::Instance();
     const auto settings = TryNrConfigSnapshot(*config);
@@ -217,17 +226,17 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     const bool presentObserve = route == 2 || (route == 1 &&
         PresentResolution::Selected(*settings).mode == PresentResolution::FollowNative);
     const bool nativePostSr = route == 0 && !settings->DlssNrRunBeforeSr.value_or_default();
+    const bool nativePreSr = route == 0 && settings->DlssNrRunBeforeSr.value_or_default();
     const auto runtimeSettings = settings->GetDlssNrRuntimeSnapshot();
     PresentGuides::Instance().Enable(runtimeSettings.enabled && presentObserve,
         PresentResolution::CaptureKey(*settings));
     if (!runtimeSettings.enabled) return;
-    if (route == 0 && settings->DlssNrRunBeforeSr.value_or_default())
-    { s.Reject("native DX11 Pre-SR is unavailable until the Post-SR gate passes"); return; }
-    if (!nativePostSr && !presentObserve) return;
+    if (!nativePostSr && !nativePreSr && !presentObserve) return;
     if (!s.created || !context || !p || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
     { s.Reject("native feature contract or immediate context unavailable"); return; }
-    s.copyGuides = nativePostSr || route == 2;
+    s.copyGuides = nativePostSr || nativePreSr || route == 2;
     s.nativePostSr = nativePostSr;
+    s.nativePreSr = nativePreSr;
     s.settings = *settings;
     if (s.pending >= 0) { s.Reject("overlapping native feature evaluations"); return; }
     if (s.copyGuides && (s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered))
@@ -240,13 +249,13 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     std::lock_guard lock(runtime.mutex);
     std::string reason;
     if (!runtime.Initialize(context, reason)) { s.Reject(reason); return; }
-    if (s.nativePostSr && !runtime.nrChecked)
+    if ((s.nativePostSr || s.nativePreSr) && !runtime.nrChecked)
     {
         runtime.nrChecked = true;
         runtime.nrAvailable = DirectD3D12Available(runtime.device12.Get());
     }
-    if (s.nativePostSr && !runtime.nrAvailable)
-    { s.Reject("native DX11 Post-SR model is unavailable on the private D3D12 device"); return; }
+    if ((s.nativePostSr || s.nativePreSr) && !runtime.nrAvailable)
+    { s.Reject("native DX11 model is unavailable on the private D3D12 device"); return; }
     auto chain = UniqueChain(runtime.device11.Get());
     if (!chain) { s.Reject("no unique registered native DX11 swapchain"); return; }
     s.identity = PresentGuides::Identity(chain.Get());
@@ -272,10 +281,17 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     unsigned int outputX = 0, outputY = 0, colorX = 0, colorY = 0, reset = 0;
     p->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X, &outputX);
     p->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y, &outputY);
-    p->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, &colorX);
-    p->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, &colorY);
-    if (outputX || outputY || outputDesc.Width != s.outWidth || outputDesc.Height != s.outHeight ||
-        outputDesc.Width != chainDesc.Width || outputDesc.Height != chainDesc.Height ||
+    const bool haveColorX = p->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, &colorX) ==
+        NVSDK_NGX_Result_Success;
+    const bool haveColorY = p->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, &colorY) ==
+        NVSDK_NGX_Result_Success;
+    s.colorX = colorX;
+    s.colorY = colorY;
+    const bool outputBackingMatches = s.nativePreSr
+        ? outputDesc.Width >= s.outWidth && outputDesc.Height >= s.outHeight
+        : outputDesc.Width == s.outWidth && outputDesc.Height == s.outHeight;
+    if (outputX || outputY || !outputBackingMatches ||
+        s.outWidth != chainDesc.Width || s.outHeight != chainDesc.Height ||
         !Dx11Transport::SupportedShape(outputDesc))
     { s.Reject("partial/ambiguous output does not match the full Present target"); return; }
     s.frame = {};
@@ -311,6 +327,21 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
         s.frame.MotionSubrectX > md.Width || s.frame.MotionSubrectY > md.Height ||
         rw > md.Width - s.frame.MotionSubrectX || rh > md.Height - s.frame.MotionSubrectY))
     { s.Reject("native guide shape/subrect unsupported"); return; }
+    D3D11_TEXTURE2D_DESC imageDesc = outputDesc;
+    if (s.nativePreSr)
+    {
+        imageDesc = colorDesc;
+        imageDesc.Width = rw;
+        imageDesc.Height = rh;
+        imageDesc.MipLevels = 1;
+        imageDesc.ArraySize = 1;
+        imageDesc.SampleDesc.Count = 1;
+        imageDesc.SampleDesc.Quality = 0;
+        imageDesc.Usage = D3D11_USAGE_DEFAULT;
+        imageDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+        imageDesc.CPUAccessFlags = 0;
+        imageDesc.MiscFlags = 0;
+    }
     int selected = -1;
     UINT64 resident = 0, outputResident = 0;
     for (unsigned int i = 0; i < runtime.slots.size(); ++i)
@@ -324,7 +355,7 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     auto& slot = runtime.slots[selected];
     const UINT64 requested = Dx11Transport::Texture::RequiredBytes(dd, true) +
         Dx11Transport::Texture::RequiredBytes(md, false);
-    const UINT64 requestedOutput = Dx11Transport::Output::RequiredBytes(outputDesc);
+    const UINT64 requestedOutput = Dx11Transport::Output::RequiredBytes(imageDesc);
     // Four full 4K R32 depth/RG32 motion slots need just over 1 GiB when the game
     // textures cannot be viewed directly. Refuse larger contracts before allocation.
     constexpr UINT64 budget = Dx11Transport::BudgetBytes;
@@ -339,13 +370,13 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
         return;
     }
     constexpr UINT64 outputBudget = Dx11Transport::OutputBudgetBytes;
-    if (s.nativePostSr && (requestedOutput == 0 || requestedOutput > outputBudget ||
+    if ((s.nativePostSr || s.nativePreSr) && (requestedOutput == 0 || requestedOutput > outputBudget ||
         outputResident - slot.output.bytes > outputBudget - requestedOutput))
     {
         s.Reject("private output transport memory budget exceeded or format unsupported: requested=" +
             std::to_string(requestedOutput / (1024 * 1024)) + " MiB resident=" +
             std::to_string(outputResident / (1024 * 1024)) + " MiB budget=512 MiB format=" +
-            std::to_string(outputDesc.Format));
+            std::to_string(imageDesc.Format));
         return;
     }
     if (!slot.allocator)
@@ -363,17 +394,108 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (s.copyGuides && (!slot.depth.Prepare(runtime.device11.Get(), runtime.device12.Get(), dd, true, reason, depth.Get()) ||
         !slot.motion.Prepare(runtime.device11.Get(), runtime.device12.Get(), md, false, reason, motion.Get())))
     { s.Reject(reason); return; }
-    if (s.nativePostSr && !slot.output.Prepare(runtime.device11.Get(), runtime.device12.Get(), outputDesc, reason))
+    if ((s.nativePostSr || s.nativePreSr) &&
+        !slot.output.Prepare(runtime.device11.Get(), runtime.device12.Get(), imageDesc, reason))
     { s.Reject(reason); return; }
     if (s.copyGuides && !runtime.converter.Copy(context, slot.depth, depth.Get(), slot.motion, motion.Get(), reason))
     { s.Reject(reason); return; }
+    if (s.nativePreSr)
+    {
+        D3D11_BOX sourceBox {};
+        sourceBox.left = colorX;
+        sourceBox.top = colorY;
+        sourceBox.right = colorX + rw;
+        sourceBox.bottom = colorY + rh;
+        sourceBox.back = 1;
+        context->CopySubresourceRegion(slot.output.shared.Get(), 0, 0, 0, 0, s.color.Get(), 0, &sourceBox);
+    }
     slot.originalDepth = depth; slot.originalMotion = motion;
     slot.ready = ++runtime.nextReady;
     if (FAILED(runtime.context11->Signal(runtime.ready11.Get(), slot.ready)))
     { runtime.failed = true; s.Reject("DX11 guide producer signal failed; restart required"); return; }
     runtime.context11->Flush();
+
+    if (s.nativePreSr)
+    {
+        if (FAILED(slot.list->Reset(slot.allocator.Get(), nullptr)))
+        { runtime.failed = true; s.Reject("private Pre-SR recording unavailable"); return; }
+        auto ticket = GpuSafety::Record(slot.list.Get());
+        if (!ticket || FAILED(runtime.queue->Wait(runtime.ready12.Get(), slot.ready)))
+        { slot.list->Close(); runtime.failed = true; s.Reject("private Pre-SR producer wait/tracking failed"); return; }
+
+        auto transition = [list = slot.list.Get()](ID3D12Resource* resource,
+                                                   D3D12_RESOURCE_STATES before,
+                                                   D3D12_RESOURCE_STATES after)
+        {
+            D3D12_RESOURCE_BARRIER barrier {};
+            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Transition.pResource = resource;
+            barrier.Transition.StateBefore = before;
+            barrier.Transition.StateAfter = after;
+            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            list->ResourceBarrier(1, &barrier);
+        };
+        transition(slot.depth.resource12.Get(), D3D12_RESOURCE_STATE_COMMON,
+                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        transition(slot.motion.resource12.Get(), D3D12_RESOURCE_STATE_COMMON,
+                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        transition(slot.output.resource12.Get(), D3D12_RESOURCE_STATE_COMMON,
+                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        s.preSrDelivered = EvaluateNativeDx11PreSrCommandList(slot.list.Get(), runtime.queue.Get(),
+            slot.output.resource12.Get(), slot.depth.resource12.Get(), slot.motion.resource12.Get(),
+            s.frame, *s.settings);
+        transition(slot.output.resource12.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                   D3D12_RESOURCE_STATE_COMMON);
+        transition(slot.motion.resource12.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_COMMON);
+        transition(slot.depth.resource12.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_COMMON);
+
+        if (FAILED(slot.list->Close()))
+        { runtime.failed = true; s.Reject("private Pre-SR close failed"); return; }
+        ID3D12CommandList* lists[] = {slot.list.Get()};
+        runtime.queue->ExecuteCommandLists(1, lists);
+        const bool recordingSealed = GpuSafety::SealOwnedRecording(slot.list.Get());
+        slot.completed = ++runtime.nextCompleted;
+        if (FAILED(runtime.queue->Signal(runtime.completed12.Get(), slot.completed)) ||
+            !GpuSafety::OrderedOn(ticket, runtime.queue.Get()) || !recordingSealed)
+        { runtime.failed = true; s.Reject("private Pre-SR completion untrackable; restart required"); return; }
+
+        if (s.preSrDelivered)
+        {
+            if (FAILED(runtime.context11->Wait(runtime.completed11.Get(), slot.completed)))
+            { runtime.failed = true; s.Reject("DX11 Pre-SR consumer wait failed; original color preserved"); return; }
+            p->Set(NVSDK_NGX_Parameter_Color, static_cast<ID3D11Resource*>(slot.output.shared.Get()));
+            if (haveColorX && colorX)
+            {
+                p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, 0u);
+                s.colorXChanged = true;
+            }
+            if (haveColorY && colorY)
+            {
+                p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, 0u);
+                s.colorYChanged = true;
+            }
+            s.privateColorActive = true;
+            s.privateColorUsed = true;
+        }
+    }
     slot.reserved = true; s.pending = selected;
 }
+
+void Feature::Restore(NVSDK_NGX_Parameter* p)
+{
+    auto& s = *state;
+    if (!s.privateColorActive || p == nullptr)
+        return;
+    p->Set(NVSDK_NGX_Parameter_Color, static_cast<ID3D11Resource*>(s.color.Get()));
+    if (s.colorXChanged)
+        p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, s.colorX);
+    if (s.colorYChanged)
+        p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, s.colorY);
+    s.privateColorActive = false;
+}
+
 void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
 {
     auto& s = *state;
@@ -398,13 +520,55 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
         }
     } finish {s, slot};
 
+    auto report = [&](bool delivered)
+    {
+        const auto guides = PresentGuides::Instance().Inspect();
+        if (++s.submissions == 1 || !s.lastReason.empty() || s.evaluation % 300 == 0)
+            LOG_INFO("NR native DX11 {}: feature={} evaluation={} guides={} depth={}x{} motion={}x{} render={}x{} "
+                     "output={}x{} transport={}MiB directDepth={} directMotion={} producer={} completed={} retired={} "
+                     "delivered={} captures={} matched={} evaluated={} nativeDLSS=success status={}",
+                s.nativePreSr ? "Pre-SR" : (s.nativePostSr ? "Post-SR" : "capture"),
+                s.id, s.evaluation, s.copyGuides,
+                slot.depth.sourceDesc.Width, slot.depth.sourceDesc.Height,
+                slot.motion.sourceDesc.Width, slot.motion.sourceDesc.Height, s.frame.RenderSubrectWidth,
+                s.frame.RenderSubrectHeight, s.outWidth, s.outHeight,
+                (slot.depth.bytes + slot.motion.bytes +
+                 ((s.nativePostSr || s.nativePreSr) ? slot.output.bytes : 0)) / (1024 * 1024),
+                slot.depth.directSource,
+                slot.motion.directSource, slot.ready,
+                runtime.completed12->GetCompletedValue(), slot.retired, delivered, guides.captures,
+                guides.matched, guides.evaluated, guides.status);
+        s.lastReason.clear();
+    };
+
+    if (s.nativePreSr)
+    {
+        if (!context || !s.settings || !Dx11Transport::SameObject(context, runtime.context11.Get()))
+        { runtime.failed = true; s.Reject("native DX11 Pre-SR completion context or snapshot changed"); return; }
+        if (s.privateColorUsed)
+        {
+            slot.retired = ++runtime.nextReady;
+            if (FAILED(runtime.context11->Signal(runtime.ready11.Get(), slot.retired)))
+            { runtime.failed = true; s.Reject("DX11 Pre-SR input retirement signal failed; restart required"); return; }
+            runtime.context11->Flush();
+        }
+        if (s.privateColorActive)
+        { runtime.failed = true; s.Reject("temporary native DX11 color parameter was not restored"); return; }
+    }
+
     if (!nativeSucceeded)
     { s.Reject("native DLSS evaluation failed; native image preserved"); return; }
-    if (!s.nativePostSr && s.generation != PresentGuides::Instance().Inspect().generation)
+    if (!s.nativePostSr && !s.nativePreSr && s.generation != PresentGuides::Instance().Inspect().generation)
     { s.Reject("native source generation changed during evaluation"); return; }
     if (s.nativePostSr && (!context || !s.output || !s.settings ||
         !Dx11Transport::SameObject(context, runtime.context11.Get())))
     { s.Reject("native DX11 Post-SR completion context or snapshot changed"); return; }
+
+    if (s.nativePreSr)
+    {
+        report(s.preSrDelivered);
+        return;
+    }
 
     if (s.nativePostSr)
     {
@@ -484,20 +648,6 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
         runtime.context11->Flush();
     }
 
-    const auto guides = PresentGuides::Instance().Inspect();
-    if (++s.submissions == 1 || !s.lastReason.empty() || s.evaluation % 300 == 0)
-        LOG_INFO("NR native DX11 {}: feature={} evaluation={} guides={} depth={}x{} motion={}x{} render={}x{} "
-                 "output={}x{} transport={}MiB directDepth={} directMotion={} producer={} completed={} retired={} "
-                 "delivered={} captures={} matched={} evaluated={} nativeDLSS=success status={}",
-            s.nativePostSr ? "Post-SR" : "capture", s.id, s.evaluation, s.copyGuides,
-            slot.depth.sourceDesc.Width, slot.depth.sourceDesc.Height,
-            slot.motion.sourceDesc.Width, slot.motion.sourceDesc.Height, s.frame.RenderSubrectWidth,
-            s.frame.RenderSubrectHeight, s.outWidth, s.outHeight,
-            (slot.depth.bytes + slot.motion.bytes + (s.nativePostSr ? slot.output.bytes : 0)) / (1024 * 1024),
-            slot.depth.directSource,
-            slot.motion.directSource, slot.ready,
-            runtime.completed12->GetCompletedValue(), slot.retired, delivered, guides.captures,
-            guides.matched, guides.evaluated, guides.status);
-    s.lastReason.clear();
+    report(delivered);
 }
 }

@@ -151,6 +151,37 @@ int main(int argc, char** argv)
         checkPixels(destination.Get(),values,4,0);
         frameId=2; // keep the shared timeline monotonic for the matrix below
     }
+    // Native Temporal Pre-SR accepts a non-UAV game colour texture, crops its independent
+    // input subrect into a private SRV/UAV carrier, and leaves the entire original untouched.
+    {
+        const UINT sourceW=23,sourceH=13,x0=3,y0=2,w=17,h=9;
+        std::vector<float> sourceValues(sourceW*sourceH*4);
+        std::vector<unsigned short> sourceHalf(sourceValues.size());
+        for(UINT i=0;i<sourceValues.size();++i)
+        {
+            sourceValues[i]=float((i*7)%251)/256.0f;
+            sourceHalf[i]=DirectX::PackedVector::XMConvertFloatToHalf(sourceValues[i]);
+            sourceValues[i]=DirectX::PackedVector::XMConvertHalfToFloat(sourceHalf[i]);
+        }
+        auto source=texture11(sourceW,sourceH,DXGI_FORMAT_R16G16B16A16_FLOAT,sourceHalf.data(),sourceW*8,
+            D3D11_BIND_SHADER_RESOURCE);
+        D3D11_TEXTURE2D_DESC carrierDesc {}; source->GetDesc(&carrierDesc);
+        carrierDesc.Width=w; carrierDesc.Height=h;
+        carrierDesc.BindFlags|=D3D11_BIND_UNORDERED_ACCESS;
+        carrierDesc.MiscFlags=0;
+        T::Output carrier; assert(carrier.Prepare(d11.Get(),d12.Get(),carrierDesc,reason));
+        assert(carrier.bytes==UINT64(w)*h*8 && carrier.Matches(carrierDesc));
+        D3D11_BOX box {x0,y0,0,x0+w,y0+h,1};
+        c11->CopySubresourceRegion(carrier.shared.Get(),0,0,0,0,source.Get(),0,&box);
+        const UINT64 ready=4; Check(c11->Signal(f11.Get(),ready)); c11->Flush(); Check(queue->Wait(f12.Get(),ready));
+        Check(queue->Signal(f12.Get(),ready+1)); Check(c11->Wait(f11.Get(),ready+1));
+        std::vector<float> cropped(w*h*4);
+        for(UINT y=0;y<h;++y) for(UINT x=0;x<w;++x) for(UINT c=0;c<4;++c)
+            cropped[(y*w+x)*4+c]=sourceValues[((y+y0)*sourceW+(x+x0))*4+c];
+        checkPixels(carrier.shared.Get(),cropped,4,0);
+        checkPixels(source.Get(),sourceValues,4,0);
+        frameId=4;
+    }
     // BG3 uses packed R11G11B10_FLOAT for its native DLSS output. The exact-format
     // carrier must preserve every packed bit; no colour reinterpretation or conversion occurs.
     {
@@ -166,11 +197,11 @@ int main(int argc, char** argv)
         T::Output output; assert(output.Prepare(d11.Get(),d12.Get(),desc,reason));
         assert(output.bytes==UINT64(w)*h*4 && output.Matches(desc));
         c11->CopyResource(output.shared.Get(),source.Get());
-        const UINT64 ready=4; Check(c11->Signal(f11.Get(),ready)); c11->Flush(); Check(queue->Wait(f12.Get(),ready));
+        const UINT64 ready=6; Check(c11->Signal(f11.Get(),ready)); c11->Flush(); Check(queue->Wait(f12.Get(),ready));
         Check(queue->Signal(f12.Get(),ready+1)); Check(c11->Wait(f11.Get(),ready+1));
         c11->CopyResource(destination.Get(),output.shared.Get()); c11->Flush();
         checkRaw32(destination.Get(),values);
-        frameId=4;
+        frameId=6;
     }
     // Every texel, including the margins outside the render rectangle, crosses the production converter.
     for (UINT w : {17u,33u,65u}) for (DXGI_FORMAT motionFormat : {DXGI_FORMAT_R16G16_FLOAT, DXGI_FORMAT_R32G32_FLOAT})

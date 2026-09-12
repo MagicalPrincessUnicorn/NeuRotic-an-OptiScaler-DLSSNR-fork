@@ -65,6 +65,16 @@ bool EvaluateNativeDx11PostSrCommandList(ID3D12GraphicsCommandList* cmdList,
                                          const DlssNrFrameInfo& frame,
                                          const NrConfigSnapshot<Config>& settings);
 
+// Native-DX11 Pre-SR entry. The caller supplies a private render-resolution colour copy,
+// so the game's original scene colour is never modified by NR.
+bool EvaluateNativeDx11PreSrCommandList(ID3D12GraphicsCommandList* cmdList,
+                                        ID3D12CommandQueue* queue,
+                                        ID3D12Resource* colour,
+                                        ID3D12Resource* depth,
+                                        ID3D12Resource* motion,
+                                        const DlssNrFrameInfo& frame,
+                                        const NrConfigSnapshot<Config>& settings);
+
 
 
 // Frame generation titles tag their UI layer through Streamline; a copy of it makes the HUD mask
