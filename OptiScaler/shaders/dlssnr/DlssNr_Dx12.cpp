@@ -11,6 +11,10 @@
 
 
 #include <dlssnr/DlssNr_Capture.h>
+#include <dlssnr/NrPresentStageCapture.h>
+#include <dlssnr/NrFinalOutputCapture.h>
+#include <dlssnr/NrScreenshotSrPair.h>
+#include <sstream>
 #include <dlssnr/DlssNr_Proxy.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/NrDispatchResources.h>
@@ -559,6 +563,27 @@ std::optional<double> g_lastGpuTime;
 
 // Writes matched before/after frames on request, so comparisons stop depending on video.
 capture::FrameCapture g_capture;
+DlssNr::StageCapture::PresentStages g_presentStages;
+DlssNr::StageCapture::PresentStages g_screenshots;
+DlssNr::Screenshots::FinalOutputSubmission g_screenshotSubmission;
+unsigned int g_screenshotSelection = 0;
+bool g_screenshotPresent = false;
+bool g_screenshotEnabled = false;
+bool g_screenshotNativePair = false;
+bool g_screenshotPerformance = false;
+DlssNr::GpuSafety::Ticket g_screenshotPreSrFrame;
+NVSDK_NGX_Parameter* g_screenshotPreSrParams = nullptr;
+float g_screenshotPreSrWhite = 0.0f;
+
+bool PerformanceScreenshotBackendAvailable()
+{
+    auto* feature = State::Instance().currentFeature;
+    return feature && feature->GetUpscalerType() == Upscaler::DLSS && feature->Api() == API::DX12 &&
+           !feature->IsWithDx12() && feature->TargetWidth() == feature->DisplayWidth() &&
+           feature->TargetHeight() == feature->DisplayHeight();
+}
+bool g_screenshotRunBeforeSr = false;
+ULONGLONG g_screenshotDeadline = 0;
 
 // One capture happens on its own each session, so there is always a fresh sample without anyone having
 // to remember to ask. Started after the scene has had a moment to settle: the first frames after a
@@ -2216,6 +2241,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const bool secondLayerRequested = requestedPassCount > 1;
     g_resolutionRefusal = "";
 
+    if (g_presentStages.active())
+    {
+        if (!privateCommandList) g_presentStages.cancel();
+        g_presentStages.poll(Util::DllPath().remove_filename() / "dlssnr-present-capture");
+    }
+
     if (!runtime.enabled || g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr ||
         motion == nullptr || output == nullptr)
     {
@@ -3572,6 +3603,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ID3D12Resource* diagnosticProxy = resolveProxy;
         ID3D12Resource* diagnosticAnswer = resolveAnswer;
         ID3D12Resource* diagnosticOriginal = g_nr.hdrCopy;
+        ID3D12Resource* capturedLayer2Input = nullptr;
 
         if (!DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, motionIn,
                           exposureTex, target, nullptr))
@@ -3778,6 +3810,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                             g_nr.layer2.routeWasPreSr = currentRouteIsPreSr;
                             g_nr.lastEvaluationWasPreSr = currentRouteIsPreSr;
                             g_lastLayerCount = 2;
+                            capturedLayer2Input = layer2ModelInput;
                             diagnosticParams = layer2Resolve;
                             diagnosticProxy = layer2ResolveProxy;
                             diagnosticAnswer = layer2ResolveAnswer;
@@ -4001,6 +4034,99 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
 
+        // Post-upscale Native and Present both retain the full composition source
+        // and final result. Copy these, never reduced model inputs or answers.
+        if (currentRouteIsPreSr && g_screenshotPerformance)
+            g_screenshotPreSrWhite = isHdrBuffer ? whitePoint : 0.0f;
+        const bool screenshotRouteMatches = privateCommandList ? g_screenshotPresent :
+            (g_screenshotNativePair && !currentRouteIsPreSr && cfg.DlssNrRoute.value_or_default() == 0 &&
+             cfg.DlssNrRunBeforeSr.value_or_default() == g_screenshotRunBeforeSr);
+        if (screenshotRouteMatches && g_screenshotEnabled &&
+            g_screenshots.wantsFrame(GetTickCount64()))
+        {
+            using namespace DlssNr::Screenshots;
+            const bool saveAfter = (g_screenshotSelection & (privateCommandList ? DlssNr::Screenshots::Present : Native)) != 0;
+            const bool applied = cfg.DlssNrApplyModel.value_or_default() ||
+                (g_lastLayerCount == 2 && cfg.DlssNrSecondLayerApplyModel.value_or_default());
+            auto* feature = State::Instance().currentFeature;
+            const bool fullSize = privateCommandList || !feature ||
+                (width == feature->TargetWidth() && height == feature->TargetHeight());
+            if (cfg.DlssNrDebugView.value_or_default() != 0 || cfg.DlssNrCompare.value_or_default() != 0 ||
+                (saveAfter && !applied) || !fullSize || (secondLayerActive && g_lastLayerCount != 2))
+                g_screenshots.cancel();
+            else
+            {
+                // Scene PNGs use one explicit exposure for both full-resolution
+                // readbacks. Present pixels are already display encoded.
+                const float screenshotWhite = !privateCommandList && isHdrBuffer ? whitePoint : 0.0f;
+                std::vector<DlssNr::StageCapture::StageInput> images;
+                // Encode writes the preserved scene to hdrCopy; colorCopy is its
+                // display-encoded model proxy. Only the scene is comparable to
+                // the composed target under the same PNG colour conversion.
+                if (g_screenshotSelection & Before)
+                    images.push_back({"NR-Off", g_nr.hdrCopy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, screenshotWhite});
+                if (saveAfter)
+                    images.push_back({privateCommandList ? "Present-NR-On" : "Native-NR-On", target,
+                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS, screenshotWhite});
+                std::ostringstream settings;
+                settings << "same_evaluation true; mode_switching false; selection " << g_screenshotSelection
+                         << "\nroute " << (privateCommandList ? "Present" : "Native post-upscale")
+                         << "; placement full upscaled NR composition; NeuRotic_menu excluded"
+                         << "\nlayers " << g_lastLayerCount
+                         << "; PNG scene white point " << screenshotWhite;
+                if (!g_screenshots.record(cmdList, device, images, g_nr.successfulEvaluations, frame.Reset, settings.str()))
+                    LOG_WARN("Screenshot: {}", g_screenshots.status());
+                else LOG_INFO("Screenshot recorded: {}x{}, evaluation {}, {}", width, height,
+                              g_nr.successfulEvaluations, settings.str());
+            }
+        }
+
+        if (privateCommandList && g_presentStages.wantsFrame(GetTickCount64()))
+        {
+            // All resources still contain this evaluation's images here. In particular, each
+            // raw answer is the model output before resampling or composition, even at reduced
+            // workloads. Copies restore their entry states and never become a model input.
+            std::vector<DlssNr::StageCapture::StageInput> stages {
+                {"layer1_input", modelInput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE},
+                {"layer1_raw", g_nr.output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS}};
+            if (capturedLayer2Input != nullptr)
+            {
+                stages.push_back({"layer1_composed", g_nr.layer2.hdrCopy,
+                                  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
+                stages.push_back({"layer2_input", capturedLayer2Input,
+                                  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE});
+                stages.push_back({"layer2_raw", g_nr.layer2.output,
+                                  D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
+            }
+            stages.push_back({"final_composed", target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS});
+            const auto l2 = SecondLayerTuning(cfg);
+            std::ostringstream settings;
+            settings << "route Present; colour display-encoded; conversion before final backbuffer copy\n"
+                     << "layers " << g_lastLayerCount << " frame " << width << 'x' << height
+                     << " work " << workWidth << 'x' << workHeight
+                     << " layer2_work " << layer2WorkWidth << 'x' << layer2WorkHeight
+                     << " session " << g_nr.feature << '\n'
+                     << "layer1 apply " << resolveParams.ApplyModel
+                     << " strength " << resolveParams.TransferStrength
+                     << " colour " << resolveParams.ColourStrength << " guard " << resolveParams.MaxRatio
+                     << " transfer " << resolveParams.Transfer << " style " << cfg.DlssNrStyle.value_or_default()
+                     << " intensity " << cfg.DlssNrIntensity.value_or_default()
+                     << " localStructure " << cfg.DlssNrLocalStructure.value_or_default()
+                     << " localTone " << cfg.DlssNrLocalTone.value_or_default()
+                     << " skinStructure " << cfg.DlssNrSkinStructure.value_or_default()
+                     << " autoMask " << cfg.DlssNrAutoMask.value_or_default() << '\n'
+                     << "layer2 apply " << cfg.DlssNrSecondLayerApplyModel.value_or_default()
+                     << " strength " << cfg.DlssNrSecondLayerTransferStrength.value_or_default()
+                     << " colour " << cfg.DlssNrSecondLayerColourStrength.value_or_default()
+                     << " guard " << cfg.DlssNrSecondLayerMaxRatio.value_or_default()
+                     << " transfer " << cfg.DlssNrSecondLayerTransfer.value_or_default()
+                     << " style " << l2.style << " intensity " << l2.intensity
+                     << " localStructure " << l2.localStructure << " localTone " << l2.localTone
+                     << " skinStructure " << l2.skinStructure << " autoMask " << l2.autoMask;
+            g_presentStages.record(cmdList, device, stages, g_nr.successfulEvaluations,
+                                   frame.Reset, settings.str());
+        }
+
         // On-demand capture works in this path too: the staging copy still holds the frame as the
         // upscaler produced it, and the edited frame is the output itself. A later evaluation writes
         // the capture only after its recording tickets confirm completion, never by frame age.
@@ -4127,10 +4253,18 @@ void RetryAfterFailure()
     ClearTransitionFailure(g_nr.preDlaaFailureCircuit);
 }
 
+void ParkPerformanceScreenshot();
+
 void NotifyUpscalerRelease()
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
+
+    if (g_screenshotPerformance)
+    {
+        ParkPerformanceScreenshot();
+        g_screenshots.cancel();
+    }
 
     // A same-size native DLSS recreation is still a temporal discontinuity.  Forget the observed
     // identity so the next Pre-SR call rebuilds its scratch path, requests an NR history reset, and
@@ -4173,6 +4307,33 @@ struct PreDlaaRetired
 };
 
 std::vector<PreDlaaRetired> g_preDlaaRetired;
+
+struct PerformanceScreenshotWork
+{
+    NVSDK_NGX_Handle* feature = nullptr;
+    const NVSDK_NGX_Handle* live = nullptr;
+    ID3D12Resource* before = nullptr;
+    ID3D12Resource* after = nullptr;
+    GpuSafety::Ticket creation;
+    std::array<unsigned int, 12> signature {};
+    DXGI_FORMAT inputFormat = DXGI_FORMAT_UNKNOWN;
+    DXGI_FORMAT outputFormat = DXGI_FORMAT_UNKNOWN;
+} g_performanceScreenshot;
+
+void ParkPerformanceScreenshot()
+{
+    auto& work = g_performanceScreenshot;
+    // The submitting queues and recording seals own retirement, including a
+    // canceled creation or failed evaluation. No guessed fence or timer frees it.
+    if (work.feature || work.before)
+        g_preDlaaRetired.push_back({work.feature, work.before, GpuSafety::Pending()});
+    if (work.after)
+        g_preDlaaRetired.push_back({nullptr, work.after, GpuSafety::Pending()});
+    work = {};
+    g_screenshotPerformance = false;
+    g_screenshotPreSrFrame.reset();
+    g_screenshotPreSrParams = nullptr;
+}
 
 void TickPreDlaaRetired()
 {
@@ -4224,6 +4385,137 @@ void PreDlaaUavBarrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* resou
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
     barrier.UAV.pResource = resource;
     cmdList->ResourceBarrier(1, &barrier);
+}
+
+void EvaluatePerformanceScreenshot(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
+                                   const NVSDK_NGX_Handle* liveHandle)
+{
+    const auto settings = TryNrConfigSnapshot(*Config::Instance());
+    if (!settings) return;
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    if (!g_screenshotPerformance || !g_screenshots.wantsFrame(GetTickCount64())) return;
+    auto fail = [&](const char* reason)
+    {
+        ParkPerformanceScreenshot();
+        g_screenshots.cancel();
+        g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
+        g_screenshots.setIdleStatus(reason);
+        LOG_WARN("Screenshot: {}", reason);
+    };
+    const auto& cfg = *settings;
+    if (g_sessionClosed || g_shutdownFailed || !PerformanceScreenshotBackendAvailable() ||
+        cfg.DlssNrRoute.value_or_default() != 0 || !cfg.GetDlssNrRuntimeSnapshot().enabled ||
+        !cfg.DlssNrRunBeforeSr.value_or_default() || g_nr.nativeRayReconstructionActive ||
+        GetTickCount64() > g_screenshotDeadline)
+    { fail("Performance screenshot canceled: route, upscaler or settings changed."); return; }
+    if (!cmdList || !params || !liveHandle) return;
+    const auto ticket = GpuSafety::Record(cmdList);
+    if (!ticket || ticket != g_screenshotPreSrFrame || params != g_screenshotPreSrParams ||
+        !g_nr.preSrScratchPrimed || g_nr.preSrAwaitingEvaluation || !g_nr.lastEvaluationWasPreSr)
+        return; // Wait for one complete NR evaluation on this exact recording.
+    if (cfg.DlssNrDebugView.value_or_default() || cfg.DlssNrCompare.value_or_default() ||
+        !(cfg.DlssNrApplyModel.value_or_default() ||
+          (g_lastLayerCount == 2 && cfg.DlssNrSecondLayerApplyModel.value_or_default())) ||
+        (cfg.DlssNrSecondLayer.value_or_default() && g_lastLayerCount != 2))
+    { fail("Performance comparisons need completed NR layers, Apply Model on, and Debug / Compare off."); return; }
+    auto* color = GetResource(params, NVSDK_NGX_Parameter_Color, "DLSS.Color");
+    auto* output = GetResource(params, NVSDK_NGX_Parameter_Output, "DLSS.Output");
+    if (!color || !output || !g_nr.hdrCopy) return;
+    const auto inputDesc = color->GetDesc(), originalDesc = g_nr.hdrCopy->GetDesc(), outDesc = output->GetDesc();
+    const char* signatureKeys[] = {NVSDK_NGX_Parameter_Width, NVSDK_NGX_Parameter_Height,
+        NVSDK_NGX_Parameter_OutWidth, NVSDK_NGX_Parameter_OutHeight,
+        NVSDK_NGX_Parameter_PerfQualityValue, NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags,
+        NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraQuality,
+        NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced,
+        NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance};
+    std::array<unsigned int, 12> signature {};
+    for (size_t i = 0; i < signature.size(); ++i)
+        if (params->Get(signatureKeys[i], &signature[i]) != NVSDK_NGX_Result_Success && i < 6)
+        { fail("Performance screenshot unavailable: DLSS creation settings are incomplete."); return; }
+    unsigned int offsetX = 0, offsetY = 0;
+    params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X, &offsetX);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y, &offsetY);
+    if (inputDesc.Width != originalDesc.Width || inputDesc.Height != originalDesc.Height ||
+        inputDesc.Format != originalDesc.Format || outDesc.Width != signature[2] ||
+        outDesc.Height != signature[3] || offsetX || offsetY || outDesc.SampleDesc.Count != 1 ||
+        outDesc.MipLevels != 1 || outDesc.DepthOrArraySize != 1 || !Screenshots::PixelBytes(outDesc.Format))
+    { fail("Performance screenshot unavailable: unsupported full-output resource layout."); return; }
+    const auto create = NVNGXProxy::D3D12_CreateFeature();
+    const auto evaluate = NVNGXProxy::D3D12_EvaluateFeature();
+    if (!create || !evaluate || !NVNGXProxy::D3D12_ReleaseFeature())
+    { fail("Performance screenshot unavailable: native DLSS entry points are missing."); return; }
+    const bool restoreRequired = Config::Instance()->RestoreComputeSignature.value_or_default() ||
+                                 Config::Instance()->RestoreGraphicSignature.value_or_default();
+    if (restoreRequired && !D3D12Hooks::CanRestoreRootSignature(cmdList)) return;
+    TickPreDlaaRetired();
+    if (g_preDlaaRetired.size() >= 32)
+    { fail("Performance screenshot resources are still retiring. Retry after GPU work completes."); return; }
+    auto& work = g_performanceScreenshot;
+    if (work.feature && (work.live != liveHandle || work.signature != signature ||
+        work.inputFormat != inputDesc.Format || work.outputFormat != outDesc.Format))
+    { fail("Performance screenshot canceled: DLSS settings changed during preparation."); return; }
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    if (FAILED(cmdList->GetDevice(IID_PPV_ARGS(&device))))
+    { fail("Performance screenshot could not access the rendering device."); return; }
+    // This entry is inside TryEvaluateOptiFeature's disabled root/heap tracking
+    // scope. Leave that scope intact through the normal DLSS evaluation; an NR
+    // state envelope here would re-enable tracking too early and capture DLSS's
+    // bindings as the game's state. The outer upscaler restores game state.
+    if (!work.feature)
+    {
+        work.before = CreateScratch(device.Get(), outDesc.Format, signature[2], signature[3]);
+        work.after = CreateScratch(device.Get(), outDesc.Format, signature[2], signature[3]);
+        if (!work.before || !work.after)
+        { fail("Performance screenshot could not allocate its two full-resolution DLSS outputs."); return; }
+        NVSDK_NGX_Handle* handle = nullptr;
+        params->Set(NVSDK_NGX_Parameter_Output, work.before);
+        const auto result = create(cmdList, NVSDK_NGX_Feature_SuperSampling, params, &handle);
+        params->Set(NVSDK_NGX_Parameter_Output, output);
+        // A duplicate-feature result never grants ownership of a returned handle.
+        // Never reset/release the game's feature, even if a provider aliases it.
+        if (result != NVSDK_NGX_Result_Success || !handle || handle == liveHandle || handle->Id == liveHandle->Id)
+        {
+            LOG_WARN("Performance screenshot private DLSS create: 0x{:X}, distinct handle {}",
+                     (unsigned int) result, handle && handle != liveHandle && handle->Id != liveHandle->Id);
+            fail("Performance screenshot unavailable: DLSS did not create an independent temporary instance.");
+            return;
+        }
+        work.feature = handle; work.live = liveHandle; work.signature = signature;
+        work.inputFormat = inputDesc.Format; work.outputFormat = outDesc.Format; work.creation = ticket;
+        LOG_INFO("Performance screenshot: temporary DLSS instance created on request; waiting for creation completion.");
+        return;
+    }
+    if (!GpuSafety::Reusable(work.creation)) return;
+    // Both evaluations see this frame's identical depth, motion, jitter and
+    // exposure. Reset the temporary feature for EACH image, so neither inherits
+    // the other's history. The normal DLSS call still happens once afterwards.
+    Detail::DispatchResourceStates resourceStates(cmdList, Barrier);
+    resourceStates.Transition(g_nr.hdrCopy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                              D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    const bool ok = Screenshots::FreshSrPair(params, g_nr.hdrCopy, color, work.before, work.after, [&]
+    {
+        const auto result = evaluate(cmdList, work.feature, params, nullptr);
+        D3D12_RESOURCE_BARRIER uav {}; uav.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        cmdList->ResourceBarrier(1, &uav);
+        if (result != NVSDK_NGX_Result_Success)
+            LOG_WARN("Performance screenshot private DLSS evaluation: 0x{:X}", (unsigned int) result);
+        return result == NVSDK_NGX_Result_Success;
+    });
+    if (!ok)
+    { fail("Performance screenshot temporary DLSS evaluation failed; live DLSS parameters restored."); return; }
+    std::vector<StageCapture::StageInput> images;
+    if (g_screenshotSelection & Screenshots::Before)
+        images.push_back({"NR-Off", work.before, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_screenshotPreSrWhite});
+    if (g_screenshotSelection & Screenshots::Native)
+        images.push_back({"Native-NR-On", work.after, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_screenshotPreSrWhite});
+    const bool recorded = g_screenshots.record(cmdList, device.Get(), images, g_nr.successfulEvaluations, false,
+        "Performance same-frame full-resolution pair; two temporary DLSS evaluations with Reset=1; live history unchanged; scene before later effects/HUD");
+    LOG_INFO("Performance screenshot: evaluation {}, {}x{}, recorded {}; temporary processing stopped after pair.",
+             g_nr.successfulEvaluations, signature[2], signature[3], recorded);
+    if (!recorded)
+    { fail("Performance screenshot readback failed; temporary processing stopped."); return; }
+    ParkPerformanceScreenshot();
 }
 
 ID3D12Resource* EvaluatePreDlaa(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
@@ -4425,6 +4717,8 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                       const NrConfigSnapshot<Config>* settings)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    g_screenshotPreSrFrame.reset();
+    g_screenshotPreSrParams = nullptr;
     if (g_sessionClosed || g_shutdownFailed)
         return nullptr;
     const auto localSettings = settings == nullptr ? TryNrConfigSnapshot(*Config::Instance())
@@ -4974,6 +5268,11 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                  observedOutWidth, observedOutHeight);
     }
 
+    if (g_screenshotPerformance && g_screenshots.wantsFrame(GetTickCount64()))
+    {
+        g_screenshotPreSrFrame = GpuSafety::Record(cmdList);
+        g_screenshotPreSrParams = params;
+    }
     device->Release();
     return color;
 }// Reads the game's parameter block and runs the pass on what it finds.
@@ -5721,6 +6020,174 @@ void RequestCapture(unsigned int frames)
     g_capture.request(frames);
 }
 
+void RequestPresentStageCapture()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    if (!g_sessionClosed && !g_shutdownFailed && !g_screenshots.active()) g_presentStages.request(GetTickCount64());
+}
+
+void RequestComparisonScreenshot()
+{
+    auto* config = Config::Instance();
+    unsigned int selected;
+    bool present, enabled, runBeforeSr;
+    {
+        NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
+        selected = (config->ScreenshotNrOff.value_or_default() ? Screenshots::Before : 0u) |
+                   (config->ScreenshotNativeNr.value_or_default() ? Screenshots::Native : 0u) |
+                   (config->ScreenshotPresentNr.value_or_default() ? Screenshots::Present : 0u);
+        present = config->DlssNrRoute.value_or_default() == 1;
+        enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+        runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
+    }
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    if (g_screenshots.active()) return;
+    if (g_sessionClosed || g_shutdownFailed)
+    {
+        g_screenshots.setIdleStatus("Screenshot unavailable while the renderer is shut down.");
+        return;
+    }
+    if (g_presentStages.active())
+    {
+        g_screenshots.setIdleStatus("Wait for the diagnostic capture to finish.");
+        return;
+    }
+    const bool performance = !present && enabled && runBeforeSr && !g_nr.nativeRayReconstructionActive &&
+                             (selected & Screenshots::Before) && PerformanceScreenshotBackendAvailable();
+    const bool nativePair = !present && enabled && (!runBeforeSr || g_nr.nativeRayReconstructionActive || performance);
+    g_screenshotSelection = Screenshots::AvailableSelection(selected, present, enabled, nativePair);
+    if (!g_screenshotSelection)
+    {
+        g_screenshots.setIdleStatus("Select at least one screenshot available for the active route.");
+        return;
+    }
+    g_screenshotPresent = present;
+    g_screenshotEnabled = enabled;
+    g_screenshotNativePair = nativePair;
+    g_screenshotPerformance = performance;
+    g_screenshotPreSrFrame.reset();
+    g_screenshotPreSrParams = nullptr;
+    g_screenshotRunBeforeSr = runBeforeSr;
+    g_screenshotDeadline = GetTickCount64() + 15000;
+    g_screenshots.request(GetTickCount64(), 0, 1, true);
+}
+
+void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags)
+{
+    auto* config = Config::Instance();
+    bool present, enabled, runBeforeSr;
+    {
+        NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
+        present = config->DlssNrRoute.value_or_default() == 1;
+        enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+        runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
+    }
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    g_screenshotSubmission.poll();
+    TickPreDlaaRetired();
+    if (!g_screenshots.active()) return;
+    if (g_screenshots.wantsFrame(GetTickCount64()) &&
+        (present != g_screenshotPresent || enabled != g_screenshotEnabled ||
+         runBeforeSr != g_screenshotRunBeforeSr ||
+         ((!present && enabled && (!runBeforeSr || g_nr.nativeRayReconstructionActive ||
+            ((g_screenshotSelection & Screenshots::Before) && PerformanceScreenshotBackendAvailable()))) != g_screenshotNativePair) ||
+         GetTickCount64() > g_screenshotDeadline))
+    {
+        ParkPerformanceScreenshot();
+        g_screenshots.cancel();
+    }
+    g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
+    if (!g_screenshots.wantsFrame(GetTickCount64()) || (present && enabled) || g_screenshotNativePair) return;
+    if (!swapChain || !presentDevice || (presentFlags & DXGI_PRESENT_TEST)) return;
+    auto unavailable = [&](const char* reason)
+    {
+        g_screenshots.cancel();
+        g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
+        g_screenshots.setIdleStatus(reason);
+        LOG_WARN("Screenshot: {}", reason);
+    };
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain3;
+    Microsoft::WRL::ComPtr<ID3D12Resource> output;
+    if (FAILED(presentDevice->QueryInterface(IID_PPV_ARGS(&queue))) ||
+        queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT ||
+        FAILED(swapChain->QueryInterface(IID_PPV_ARGS(&swapChain3))) ||
+        FAILED(swapChain3->GetBuffer(swapChain3->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&output))))
+    {
+        unavailable("Full-output screenshots require an available DirectX 12 swapchain.");
+        return;
+    }
+    if (State::Instance().isHdrActive)
+    {
+        unavailable("Full-output HDR screenshot conversion is not available yet.");
+        return;
+    }
+    std::ostringstream settings;
+    settings << "placement full upscaled swapchain output; NeuRotic_menu excluded; mode_switching false"
+             << "\nNR_enabled " << enabled << "; route " << (present ? "Present" : "Native")
+             << "; last_NR_evaluation " << g_nr.successfulEvaluations
+             << "\nCurrent output only; unavailable NR-off comparison was not rendered.";
+    if (!g_screenshotSubmission.submit(queue.Get(), output.Get(), g_screenshots,
+        enabled ? "Current-output" : "NR-Off", g_nr.successfulEvaluations, settings.str()))
+        LOG_WARN("Screenshot: {}", g_screenshots.status());
+}
+
+void CancelComparisonScreenshot()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    ParkPerformanceScreenshot();
+    g_screenshots.cancel();
+}
+
+std::string ComparisonScreenshotStatus()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    g_screenshotSubmission.poll();
+    const bool timedOut = g_screenshots.active() && g_screenshots.count() == 0 && GetTickCount64() > g_screenshotDeadline;
+    if (timedOut)
+    {
+        ParkPerformanceScreenshot();
+        g_screenshots.cancel();
+    }
+    TickPreDlaaRetired();
+    if (g_screenshots.active()) g_screenshots.poll(Util::DllPath().remove_filename() / "NeuroticScreenshots");
+    if (timedOut) g_screenshots.setIdleStatus("No eligible NR frame was captured. Check NR is running, then retry.");
+    return g_screenshots.status();
+}
+
+bool ComparisonScreenshotBusy()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return g_screenshots.active();
+}
+
+bool NativeComparisonScreenshotAvailable()
+{
+    auto* config = Config::Instance();
+    bool eligible, runBeforeSr;
+    {
+        NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
+        eligible = config->DlssNrRoute.value_or_default() == 0 && config->GetDlssNrRuntimeSnapshot().enabled;
+        runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
+    }
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return eligible && (!runBeforeSr || g_nr.nativeRayReconstructionActive || PerformanceScreenshotBackendAvailable());
+}
+
+std::string PresentStageCaptureStatus()
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return g_presentStages.status();
+}
+
 bool CaptureInProgress()
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
@@ -5740,6 +6207,7 @@ bool Shutdown()
     for (const auto& [reason, counts] : SkipReasons())
         LOG_INFO("DLSS-NR skip summary: reason={} count={}", reason, counts.count);
 
+    ParkPerformanceScreenshot();
     if (!GpuSafety::Drain(2000))
     {
         g_shutdownFailed = true;
@@ -5749,6 +6217,7 @@ bool Shutdown()
         g_gpuTime.release();
         g_ngxTime.release();
         g_ngxTimeLayer2.release();
+        g_screenshotSubmission.retainUntilExit();
         LOG_ERROR("DLSS-NR shutdown: GPU work is unsubmitted, incomplete, or lost; retaining the generation and blocking native NGX teardown/restart");
         return false;
     }
@@ -5962,6 +6431,9 @@ bool Shutdown()
     }
 
     g_capture.release();
+    g_presentStages.release();
+    g_screenshotSubmission.releaseAfterDrain();
+    g_screenshots.release();
 
     g_frames = 0;
     g_gameResetEvents = 0;

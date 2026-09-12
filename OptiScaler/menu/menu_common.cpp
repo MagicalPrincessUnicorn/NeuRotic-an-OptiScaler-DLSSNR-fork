@@ -162,6 +162,7 @@ static float lastMenuScale = 0.0f;
 static CustomOptional<uint32_t> comboPreset { 0 };
 static int lastKey = 0;
 static bool inputDlssNr = false;
+static bool inputScreenshot = false;
 static bool capturingKey = false;
 
 template <typename T, size_t N> struct RingBuffer
@@ -281,6 +282,8 @@ void MenuCommon::UpdateManualInput(HWND targetHwnd)
                       "Menu key pressed, will be switching FPS mode");
         CheckShortcut(config->DlssNrToggleKey.value_or_default(), inputDlssNr,
                       "Neural Rendering key pressed, will be toggling the pass");
+        CheckShortcut(config->ScreenshotKey.value_or_default(), inputScreenshot,
+                      "Screenshot key pressed, will capture the selected same-frame comparisons");
     }
     else if (capturingKey)
     {
@@ -1369,6 +1372,12 @@ void MenuCommon::HandleMenuShortcuts(RenderMenuContext& ctx)
         {
             inputFps = false;
             config->ShowFps = !config->ShowFps.value_or_default();
+        }
+
+        if (inputScreenshot)
+        {
+            inputScreenshot = false;
+            DlssNr::RequestComparisonScreenshot();
         }
 
         if (inputDlssNr)
@@ -7074,6 +7083,13 @@ void MenuCommon::RenderAnisotropicFilteringSettings(RenderMenuContext& ctx)
     }
 }
 
+void MenuCommon::RenderScreenshotKeybind(Config* config)
+{
+    // One binding and one key-listening state, shown in both locations.
+    static auto screenshot = Keybind("Comparison screenshots", 15);
+    screenshot.Render(config->ScreenshotKey);
+}
+
 void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
 {
     auto config = ctx.config;
@@ -7099,6 +7115,7 @@ void MenuCommon::RenderKeybindSettings(RenderMenuContext& ctx)
         fpsOverlayCycle.Render(config->FpsCycleShortcutKey);
         fgEnable.Render(config->FGShortcutKey);
         dlssNrToggle.Render(config->DlssNrToggleKey);
+        RenderScreenshotKeybind(config);
     }
 }
 
@@ -7125,6 +7142,7 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
         else
             ImGui::TextUnformatted("NeuRotic is up to date.");
     }
+    DlssNr::RenderScreenshotMenu(ctx.config);
     RenderKeybindSettings(ctx);
     RenderThemeSettings(ctx);
     RenderVsyncSettings(ctx);

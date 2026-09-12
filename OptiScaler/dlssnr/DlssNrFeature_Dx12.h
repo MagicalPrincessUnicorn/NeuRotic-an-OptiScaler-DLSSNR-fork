@@ -1,6 +1,7 @@
 #pragma once
 
 #include <d3d12.h>
+#include <dxgi.h>
 
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <nvsdk_ngx.h>
@@ -218,6 +219,20 @@ std::optional<double> LastGpuTime();
 // The pair is a control: same frames, same run, one variable.
 void RequestCapture(unsigned int frames);
 bool CaptureInProgress();
+// Experimental Present-only matched stage capture; UI request never changes saved settings.
+void RequestPresentStageCapture();
+std::string PresentStageCaptureStatus();
+void RequestComparisonScreenshot();
+// Called at the real Present boundary, before the NeuRotic overlay.
+void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags);
+void CancelComparisonScreenshot();
+std::string ComparisonScreenshotStatus();
+bool ComparisonScreenshotBusy();
+bool NativeComparisonScreenshotAvailable();
+// Called by native DX12 DLSS after resolving its effective evaluation parameters.
+void EvaluatePerformanceScreenshot(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
+                                   const NVSDK_NGX_Handle* liveHandle);
+void RenderScreenshotMenu(::Config* config);
 
 bool Shutdown();
 // Reopens evaluation after an explicit host NGX initialization.

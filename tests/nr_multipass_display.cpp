@@ -13,6 +13,7 @@
 #include "../OptiScaler/shaders/dlssnr/DlssNr_Common.h"
 #pragma warning(pop)
 #include "../OptiScaler/shaders/dlssnr/precompile/DlssNr_Shader.h"
+#include "../OptiScaler/dlssnr/NrScreenshotPng.h"
 using Microsoft::WRL::ComPtr;
 static void Require(bool ok) { if (!ok) std::abort(); }
 static void Check(HRESULT hr) { Require(SUCCEEDED(hr)); }
@@ -133,4 +134,61 @@ int main()
         context->Unmap(readback.Get(), 0); ++checks;
     }
     std::printf("PASS: shipped multipass display shader, %u WARP cases (original/final, wipe, side-by-side, zoom, swap, HDR range, alpha).\n", checks);
+
+    // Regression: the two encode outputs have equal dimensions but different
+    // colour representations. Screenshot NR-off must use Keep (hdrCopy), never
+    // Target (colorCopy). Exercise the shipped shader, including live exposure,
+    // then the production PNG colour conversion on the retained scene.
+    // High scene values reproduce the nearly black proxy-as-scene MHWilds export.
+    for (UINT y = 0; y < H; ++y)
+    for (UINT x = 0; x < W; ++x)
+        original[y * W + x] = {100.0f + x * 20.0f, 200.0f + y * 30.0f, 400.0f, 0.4f};
+    context->UpdateSubresource(base.Get(), 0, nullptr, original.data(), W * sizeof(Pixel), 0);
+    ID3D11ShaderResourceView* encodeSrvs[] = {baseView.Get(), nullptr, nullptr, nullptr, baseView.Get()};
+    context->CSSetShaderResources(0, 5, encodeSrvs);
+    unsigned int encodeChecks = 0;
+    for (UINT mode : {0u, 1u, 2u, 3u, 4u})
+    for (UINT passthrough : {0u, 1u})
+    for (UINT exposure : {0u, 1u})
+    {
+        DlssNrConstants p {};
+        p.Mode = DlssNrMode_Encode; p.Width = W; p.Height = H;
+        p.WhitePoint = 1024.0f; p.ReversibleMode = mode; p.Passthrough = passthrough;
+        p.UseGameExposure = exposure; p.ExposurePreMul = 51200.0f;
+        context->UpdateSubresource(constants.Get(), 0, nullptr, &p, 0, 0);
+        context->Dispatch((W + 7) / 8, (H + 7) / 8, 1);
+        context->CopyResource(readback.Get(), keep.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped {};
+        Check(context->Map(readback.Get(), 0, D3D11_MAP_READ, 0, &mapped));
+        for (UINT y = 0; y < H; ++y)
+        for (UINT x = 0; x < W; ++x)
+        {
+            const auto& expected = original[y * W + x];
+            auto actual = reinterpret_cast<const Pixel*>(static_cast<const char*>(mapped.pData) + y * mapped.RowPitch)[x];
+            for (int c = 0; c < 4; ++c) Require(actual[c] == expected[c]);
+            float scene[3] = {actual[0], actual[1], actual[2]};
+            DlssNr::Screenshots::SceneToSrgb(scene, p.WhitePoint);
+            for (int c = 0; c < 3; ++c)
+            {
+                const double peak = std::max({double(expected[0]), double(expected[1]), double(expected[2])});
+                const double linear = expected[c] / std::sqrt(peak * peak + 1024.0 * 1024.0);
+                const double srgb = linear <= 0.0031308 ? 12.92 * linear : 1.055 * std::pow(linear, 1.0 / 2.4) - 0.055;
+                Require(std::abs(scene[c] - srgb) < 0.00001);
+                Require(scene[c] > 0.3f);
+            }
+        }
+        context->Unmap(readback.Get(), 0);
+        if (!passthrough)
+        {
+            context->CopyResource(readback.Get(), output.Get());
+            Check(context->Map(readback.Get(), 0, D3D11_MAP_READ, 0, &mapped));
+            auto proxy = *static_cast<const Pixel*>(mapped.pData);
+            float incorrectlyConverted[3] = {proxy[0], proxy[1], proxy[2]};
+            DlssNr::Screenshots::SceneToSrgb(incorrectlyConverted, p.WhitePoint);
+            for (float c : incorrectlyConverted) Require(c < 0.013f);
+            context->Unmap(readback.Get(), 0);
+        }
+        ++encodeChecks;
+    }
+    std::printf("PASS: %u shipped encode cases preserve the full scene and alpha for matched PNG conversion; proxy double-conversion reproduces the dark-export failure.\n", encodeChecks);
 }

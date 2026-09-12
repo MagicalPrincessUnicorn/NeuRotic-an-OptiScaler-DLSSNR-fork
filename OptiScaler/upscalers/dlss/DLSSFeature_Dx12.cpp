@@ -2,6 +2,7 @@
 #include "DLSSFeature_Dx12.h"
 #include <dxgi1_4.h>
 #include <Config.h>
+#include <dlssnr/DlssNrFeature_Dx12.h>
 
 bool DLSSFeatureDx12::InitInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters)
 {
@@ -88,6 +89,8 @@ bool DLSSFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
     if (NVNGXProxy::D3D12_EvaluateFeature() != nullptr)
     {
         ProcessEvaluateParams(InParameters);
+
+        DlssNr::EvaluatePerformanceScreenshot(InCommandList, InParameters, _p_dlssHandle);
 
         nvResult = NVNGXProxy::D3D12_EvaluateFeature()(InCommandList, _p_dlssHandle, InParameters, NULL);
 

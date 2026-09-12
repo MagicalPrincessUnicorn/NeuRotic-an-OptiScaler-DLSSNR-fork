@@ -2782,4 +2782,51 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
     }
 }
 
+void RenderScreenshotMenu(Config* config)
+{
+    if (auto section = ScopedCollapsingHeader("Screenshots", ImGuiTreeNodeFlags_DefaultOpen); section.IsHeaderOpen())
+    {
+        ScopedIndent indent {};
+        ScopedNestedTextWrap wrap {};
+        const bool present = config->DlssNrRoute.value_or_default() == 1;
+        const bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
+        const bool busy = ComparisonScreenshotBusy();
+        const bool nativePair = NativeComparisonScreenshotAvailable();
+        ImGui::TextWrapped("Save full-resolution PNG images in NeuroticScreenshots beside the game. No extra text files.");
+        ImGui::BeginDisabled(busy);
+        bool before = config->ScreenshotNrOff.value_or_default();
+        ImGui::BeginDisabled(enabled && !present && !nativePair);
+        if (ImGui::Checkbox("NR off", &before)) config->ScreenshotNrOff = before;
+        ImGui::EndDisabled();
+        bool native = config->ScreenshotNativeNr.value_or_default();
+        ImGui::BeginDisabled(present || !enabled);
+        if (ImGui::Checkbox(nativePair ? "Native NR on" : "Current full output", &native)) config->ScreenshotNativeNr = native;
+        ImGui::EndDisabled();
+        bool imageOnly = config->ScreenshotPresentNr.value_or_default();
+        ImGui::BeginDisabled(!present || !enabled);
+        if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
+        ImGui::EndDisabled();
+        if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
+            ImGui::TextWrapped("Performance with NR off selected: a screenshot request temporarily upscales both versions of one frame with fresh DLSS history, then stops. This can briefly pause rendering and use extra memory. The pair compares NR on that frame; it does not reproduce the live image's accumulated DLSS history. With NR off unchecked, Native NR on saves the current full output.");
+        else if (nativePair)
+            ImGui::TextWrapped("Native comparisons capture the same upscaled frame before and after NR, ahead of later game effects and HUD. Linear scenes use matching colour conversion for both images.");
+        else if (enabled && !present)
+            ImGui::TextWrapped("Performance comparisons currently require native DX12 DLSS at full display output. This upscaler can save its current full output; unavailable comparisons are disabled.");
+        else if (enabled)
+            ImGui::TextWrapped("Present NR saves the selected before/after images from the same full-resolution frame.");
+        else
+            ImGui::TextWrapped("NR is off: its current full output is available. Unavailable comparisons are disabled.");
+        ImGui::TextWrapped("Capture starts on the next ready frame. You can leave this menu open; it is excluded automatically. In-game HUD and other overlays already in the image remain.");
+        if (ImGui::Button("Take screenshots")) RequestComparisonScreenshot();
+        ImGui::EndDisabled();
+        if (busy && ImGui::Button("Cancel screenshots")) CancelComparisonScreenshot();
+        ImGui::TextWrapped("%s", ComparisonScreenshotStatus().c_str());
+        ImGui::TextWrapped("NR-on comparisons need Apply Model on and Debug view / Compare off.");
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Screenshot keybind");
+        MenuCommon::RenderScreenshotKeybind(config);
+        ImGui::TextDisabled("Escape cancels; Backspace clears the binding. Also shown in Keybinds.");
+    }
+}
+
 } // namespace DlssNr

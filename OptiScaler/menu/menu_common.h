@@ -217,6 +217,7 @@ class MenuCommon
 
   public:
     static void Dx11Inited() { _dx11Ready = true; }
+    static void RenderScreenshotKeybind(Config* config);
     static void Dx12Inited() { _dx12Ready = true; }
     static void VulkanInited() { _vulkanReady = true; }
     static bool IsInited() { return _isInited; }
