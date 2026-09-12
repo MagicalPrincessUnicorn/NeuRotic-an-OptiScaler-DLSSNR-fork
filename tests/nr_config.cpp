@@ -327,6 +327,9 @@ void CoherentSnapshots()
 
     const NrConfigSnapshot<TestConfig> held(config);
     CHECK(held.SameConfiguration(NrConfigSnapshot<TestConfig>(config)));
+    CHECK(held.Describe().find("DlssNrIntensity=30000") != std::string::npos);
+    CHECK(held.Describe().find("runtime.resumeGeneration=") != std::string::npos);
+    CHECK(held.Describe().find("DlssNrExtraLayers=") != std::string::npos);
     auto writerWithSnapshotAlive = std::async(std::launch::async, [&] { config.DlssNrIntensity = -1.0f; });
     CHECK(writerWithSnapshotAlive.wait_for(std::chrono::seconds(3)) == std::future_status::ready);
     writerWithSnapshotAlive.get();

@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$BuildManifest,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
-    [string]$ReleaseName = 'NeuRotic-Public-Installer-Candidate'
+    [string]$ReleaseName = 'NeuRotic-Public-Installer-Candidate',
+    [switch]$ExperimentalReview
 )
 
 Set-StrictMode -Version 2.0
@@ -80,10 +81,14 @@ $record = [ordered]@{kind='neurotic-customer-candidate';lifecycle='public-instal
     commit=$commit;branch=$branch;public_release=$false;deployed=$false;runtime_result='Inconclusive';
     decision='installer/uninstaller review candidate; no release or promotion';created_utc=[DateTime]::UtcNow.ToString('o');
     build_manifest='support\BUILD-MANIFEST.json';files=$files}
+if ($ExperimentalReview) {
+    $record.lifecycle = 'experimental-review'
+    $record.decision = 'keep experimental; no deployment, candidate selection, release or promotion'
+}
 [IO.File]::WriteAllText((Join-Path $support 'PACKAGE-MANIFEST.json'),($record | ConvertTo-Json -Depth 12),(New-Object Text.UTF8Encoding($false)))
 
 foreach ($file in $record.files) {
     $path = Join-Path $OutputDirectory $file.path
     if ((HashFile $path) -ne $file.sha256) { throw "Final package verification failed: $($file.path)" }
 }
-Write-Output "PASS: verified public installer candidate: $OutputDirectory"
+Write-Output "PASS: verified $($record.lifecycle) package: $OutputDirectory"

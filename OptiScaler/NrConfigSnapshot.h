@@ -3,6 +3,47 @@
 #include "NrConfigState.h"
 #include "dlssnr/DlssNr_BasicMultipass.h"
 #include <new>
+#include <sstream>
+#include <iomanip>
+#include <locale>
+#include <type_traits>
+
+template<class T> void NrDescribeValue(std::ostream& out, const T& value)
+{
+    if constexpr (requires { value.value_or_default(); }) NrDescribeValue(out, value.value_or_default());
+    else if constexpr (requires { value.has_value(); value.value(); })
+    {
+        if (value.has_value()) NrDescribeValue(out, value.value());
+        else out << "unset";
+    }
+    else if constexpr (requires { out << value; }) out << value;
+    else if constexpr (std::is_enum_v<T>) out << static_cast<std::underlying_type_t<T>>(value);
+    else if constexpr (requires { value.advanced; value.maximum; })
+    {
+        out << "{advanced=" << value.advanced << ";maximum=" << value.maximum
+            << ";resolution=" << value.resolution << ";downscaler=" << value.downscaler
+            << ";model=" << value.model << ";detail=" << value.detail << '}';
+    }
+    else if constexpr (requires { value.workingScale; })
+    {
+        out << '{';
+#define NR_DESCRIBE_LAYER(name) out << #name << '='; NrDescribeValue(out, value.name); out << ';';
+        NR_DESCRIBE_LAYER(workingScale) NR_DESCRIBE_LAYER(scalingDownscaler)
+        NR_DESCRIBE_LAYER(transfer) NR_DESCRIBE_LAYER(preset) NR_DESCRIBE_LAYER(intensity)
+        NR_DESCRIBE_LAYER(style) NR_DESCRIBE_LAYER(localStructure) NR_DESCRIBE_LAYER(localTone)
+        NR_DESCRIBE_LAYER(skinStructure) NR_DESCRIBE_LAYER(autoMask) NR_DESCRIBE_LAYER(transferStrength)
+        NR_DESCRIBE_LAYER(colourStrength) NR_DESCRIBE_LAYER(maxRatio) NR_DESCRIBE_LAYER(reversibleMode)
+        NR_DESCRIBE_LAYER(applyModel)
+#undef NR_DESCRIBE_LAYER
+        out << '}';
+    }
+    else
+    {
+        out << '[';
+        for (const auto& entry : value) { NrDescribeValue(out, entry); out << ';'; }
+        out << ']';
+    }
+}
 
 // Compare effective immutable render values without changing CustomOptional semantics.
 template<class T> bool NrSnapshotEqual(const T& a, const T& b)
@@ -114,6 +155,18 @@ template <class Source> struct NrConfigSnapshot
 #undef NR_DECLARE_SNAPSHOT
 
     NrConfigState::RuntimeSnapshot GetDlssNrRuntimeSnapshot() const noexcept { return _runtime; }
+
+    std::string Describe() const
+    {
+        std::ostringstream out;
+        out.imbue(std::locale::classic());
+        out << std::setprecision(9) << "runtime.enabled=" << _runtime.enabled
+            << ";runtime.resumeGeneration=" << _runtime.resumeGeneration << '\n';
+#define NR_DESCRIBE_SNAPSHOT(name) out << #name << '='; NrDescribeValue(out, name); out << '\n';
+        NR_CONFIG_SNAPSHOT_FIELDS(NR_DESCRIBE_SNAPSHOT)
+#undef NR_DESCRIBE_SNAPSHOT
+        return out.str();
+    }
 
     bool SameConfiguration(const NrConfigSnapshot& other) const
     {

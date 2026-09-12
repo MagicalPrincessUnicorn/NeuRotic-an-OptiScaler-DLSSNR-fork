@@ -250,6 +250,8 @@ struct AdvisorState
     unsigned long long startGuideEvaluations = 0;
     unsigned long long lastNativeGpuFrame = 0;
     unsigned long long lastPresentGpuSample = 0;
+    unsigned long long lifecycleGeneration = 0;
+    std::optional<NrConfigSnapshot<Config>> expectedSettings;
     double frameIntervalTotal = 0.0;
     unsigned int frameIntervalSamples = 0;
     double modelGpuTotal = 0.0;
@@ -355,7 +357,9 @@ void BeginAdvisorRoute(Config& config, int route)
     advisor.phase = AdvisorPhase::Warmup;
     advisor.phaseStarted = AdvisorNow();
     ConfigureAdvisorRoute(config, route);
+    advisor.expectedSettings = TryNrConfigSnapshot(config);
     const auto native = DlssNr::Telemetry();
+    advisor.lifecycleGeneration = native.lifecycleGeneration;
     const auto present = DlssNr::PresentTelemetry();
     const auto guides = DlssNr::PresentGuides::Instance().Inspect();
     advisor.startNativeFrames = native.completedPipelineEvaluations;
@@ -823,7 +827,7 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
 
     if (enabled && nativeOutput && nrTelemetry.totalGpuMs)
         ImGui::TextColored(green, "NR processing: %.2f ms per frame", *nrTelemetry.totalGpuMs);
-    else if (enabled && presentActive && presentTelemetry.presentGpuSamples != 0 &&
+    else if (enabled && presentActive && presentTelemetry.presentGpuValid &&
              presentTelemetry.presentGpuRoute == (route == 2
                  ? PresentPacing::Route::PresentEnhanced
                  : PresentPacing::Route::PresentImageOnly))
@@ -880,6 +884,15 @@ void TickAdvisor(Config* config)
 {
     auto& advisor = Advisor();
     if (!advisor.running || config == nullptr) return;
+    const auto currentSettings = TryNrConfigSnapshot(*config);
+    const auto lifecycle = DlssNr::Telemetry();
+    if (!currentSettings || !advisor.expectedSettings ||
+        !advisor.expectedSettings->SameConfiguration(*currentSettings) ||
+        !lifecycle.lifecycleOpen || lifecycle.lifecycleGeneration != advisor.lifecycleGeneration)
+    {
+        CancelAdvisorAnalysis(config, "Route, settings or rendering session changed; original settings were restored.");
+        return;
+    }
     const auto present = DlssNr::PresentTelemetry();
     if ((advisor.originalWidth && present.backbufferWidth && advisor.originalWidth != present.backbufferWidth) ||
         (advisor.originalHeight && present.backbufferHeight && advisor.originalHeight != present.backbufferHeight))
@@ -937,7 +950,7 @@ void TickAdvisor(Config* config)
             const auto expectedRoute = advisor.routeIndex == 2
                 ? DlssNr::PresentPacing::Route::PresentEnhanced
                 : DlssNr::PresentPacing::Route::PresentImageOnly;
-            if (present.presentGpuRoute == expectedRoute && std::isfinite(present.presentGpuMs) &&
+            if (present.presentGpuValid && present.presentGpuRoute == expectedRoute && std::isfinite(present.presentGpuMs) &&
                 present.presentGpuMs >= 0.0)
             {
                 advisor.modelGpuTotal += present.presentGpuMs;
@@ -2812,7 +2825,10 @@ void RenderScreenshotMenu(Config* config)
         if (route == 0)
             ImGui::TextWrapped("Experimental Native comparison: display conversion remains under investigation. Brightness may differ; no brightness adjustment is applied.");
         if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
+        {
             ImGui::TextWrapped("Performance compares one frame using two temporary DLSS evaluations with fresh history, then stops. Live history is unchanged. Capture can briefly pause rendering and use extra memory.");
+            ImGui::TextWrapped("These fresh-history images do not reproduce accumulated live-image history.");
+        }
         else if (nativePair)
             ImGui::TextWrapped("Native pairs capture the same scene before and after NR, ahead of later game effects and HUD.");
         else if (enabled && !present)

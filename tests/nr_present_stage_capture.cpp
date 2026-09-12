@@ -323,6 +323,28 @@ int main(int argc, char** argv)
         assert(manifest.find(presentPng.filename().string()) != std::string::npos);
     }
     assert(!std::filesystem::exists(pngDir / (batchPrefix + "_CAPTURE.txt")));
+    // Completed GPU copies do not imply successful Present publication.
+    capture.request(GetTickCount64(), 0, 1, true);
+    assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 602, false, "failed publication"));
+    capture.awaitPublication();
+    Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+    assert(Safety::Drain(10000));
+    Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+    capture.completePublication(false);
+    capture.poll(root / "refused-publication");
+    assert(!capture.active() && !std::filesystem::exists(root / "refused-publication"));
+    // An actual filesystem write failure cannot be reported as a saved comparison.
+    const auto blockedOutput = root / "output-is-a-file";
+    { std::ofstream file(blockedOutput); file << "preserve this sentinel"; }
+    capture.request(GetTickCount64(), 0, 1, true);
+    assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 603, false, "write failure"));
+    Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+    assert(Safety::Drain(10000));
+    Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+    capture.poll(blockedOutput);
+    assert(!capture.active() && capture.status().find("could not be saved") != std::string::npos);
+    { std::ifstream file(blockedOutput); std::string sentinel; std::getline(file, sentinel);
+      assert(sentinel == "preserve this sentinel"); }
     Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
     {
         ComPtr<IWICImagingFactory> imaging;

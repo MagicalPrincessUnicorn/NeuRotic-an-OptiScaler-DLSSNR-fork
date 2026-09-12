@@ -175,6 +175,7 @@ struct TelemetrySnapshot
     bool runBeforeSr = false;
     bool enabled = false;
     bool lifecycleOpen = false;
+    unsigned long long lifecycleGeneration = 0;
     bool modelLoaded = false;
     unsigned int layerCount = 0;
     bool layer2Requested = false;

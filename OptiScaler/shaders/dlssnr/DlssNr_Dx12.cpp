@@ -2,6 +2,7 @@
 #include <dlssnr/FrameTrace.h>
 #include <dlssnr/DredDiagnostics.h>
 #include <dlssnr/DlssNr_PresentGuides.h>
+#include <dlssnr/DlssNr_Present.h>
 #include <dlssnr/PreFg.h>
 
 #include <set>
@@ -519,6 +520,7 @@ std::unique_ptr<DlssNr_Dx12> g_compose;
 std::recursive_mutex g_lifecycleMutex;
 ID3D12Device* g_generationDevice = nullptr; // retained until explicit NGX shutdown
 bool g_sessionClosed = false;
+unsigned long long g_lifecycleGeneration = 0;
 bool g_shutdownFailed = false;
 
 bool AcceptGenerationDevice(ID3D12Device* device)
@@ -573,6 +575,7 @@ unsigned int g_screenshotRoute = 0;
 std::optional<NrConfigSnapshot<Config>> g_screenshotConfig;
 ID3D12Device* g_screenshotDevice = nullptr; // identity only; generation retains the device
 unsigned long long g_screenshotFeatureBuilds = 0;
+unsigned long long g_screenshotPresentGeneration = 0;
 bool g_screenshotEnabled = false;
 bool g_screenshotNativePair = false;
 bool g_screenshotPerformance = false;
@@ -4082,7 +4085,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                          << "; placement full upscaled NR composition; NeuRotic_menu excluded"
                          << "\nlayers " << g_lastLayerCount
                          << "; PNG scene white point " << screenshotWhite
-                         << "; Native display conversion remains under investigation; no brightness adjustment";
+                         << "; Native display conversion remains under investigation; no brightness adjustment\n"
+                         << cfg.Describe();
                 const DlssNr::Screenshots::Identity captureIdentity {0, 0, 0, g_featureBuilds, 0};
                 if (!g_screenshots.record(cmdList, device, images, g_nr.successfulEvaluations, frame.Reset, settings.str(), captureIdentity))
                     LOG_WARN("Screenshot: {}", g_screenshots.status());
@@ -4427,9 +4431,7 @@ void EvaluatePerformanceScreenshot(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         !g_nr.preSrScratchPrimed || g_nr.preSrAwaitingEvaluation || !g_nr.lastEvaluationWasPreSr)
         return; // Wait for one complete NR evaluation on this exact recording.
     if (cfg.DlssNrDebugView.value_or_default() || cfg.DlssNrCompare.value_or_default() ||
-        !(cfg.DlssNrApplyModel.value_or_default() ||
-          (g_lastLayerCount == 2 && cfg.DlssNrSecondLayerApplyModel.value_or_default())) ||
-        (cfg.DlssNrSecondLayer.value_or_default() && g_lastLayerCount != 2))
+        !cfg.DlssNrApplyModel.value_or_default() || g_lastLayerCount != RequestedPassCount(cfg))
     { fail("Performance comparisons need completed NR layers, Apply Model on, and Debug / Compare off."); return; }
     auto* color = GetResource(params, NVSDK_NGX_Parameter_Color, "DLSS.Color");
     auto* output = GetResource(params, NVSDK_NGX_Parameter_Output, "DLSS.Output");
@@ -4521,8 +4523,8 @@ void EvaluatePerformanceScreenshot(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         images.push_back({"NR-Off", work.before, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_screenshotPreSrWhite});
     if (g_screenshotSelection & Screenshots::Native)
         images.push_back({"Native-NR-On", work.after, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_screenshotPreSrWhite});
-    const bool recorded = g_screenshots.record(cmdList, device.Get(), images, g_nr.successfulEvaluations, false,
-        "Performance same-frame full-resolution pair; two temporary DLSS evaluations with Reset=1; live history unchanged; scene before later effects/HUD; Native display conversion under investigation; no brightness adjustment",
+    const bool recorded = g_screenshots.record(cmdList, device.Get(), images, g_nr.successfulEvaluations, true,
+        "Performance same-frame full-resolution pair; two temporary DLSS evaluations with Reset=1; live history unchanged; does not reproduce accumulated live history; scene before later effects/HUD; Native display conversion under investigation; no brightness adjustment\n" + cfg.Describe(),
         Screenshots::Identity {0, 0, 0, g_featureBuilds, 0});
     LOG_INFO("Performance screenshot: evaluation {}, {}x{}, recorded {}; temporary processing stopped after pair.",
              g_nr.successfulEvaluations, signature[2], signature[3], recorded);
@@ -5953,6 +5955,7 @@ TelemetrySnapshot Telemetry()
     const auto runtime = Config::Instance()->GetDlssNrRuntimeSnapshot();
     t.enabled = runtime.enabled;
     t.lifecycleOpen = !g_sessionClosed && !g_shutdownFailed;
+    t.lifecycleGeneration = g_lifecycleGeneration;
     t.modelLoaded = g_nr.feature != nullptr;
     t.frames = g_frames;
     t.gameResets = g_gameResetEvents;
@@ -6058,6 +6061,8 @@ void RequestComparisonScreenshot()
         enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
     }
+    // Observe Present before entering lifecycle/NR locks, preserving render lock order.
+    const auto presentGeneration = present ? PresentTelemetry().resourceGeneration : 0;
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     if (g_screenshots.active()) return;
@@ -6097,6 +6102,7 @@ void RequestComparisonScreenshot()
     g_screenshotConfig = std::move(capturedSettings);
     g_screenshotDevice = g_generationDevice;
     g_screenshotFeatureBuilds = g_featureBuilds;
+    g_screenshotPresentGeneration = presentGeneration;
     g_screenshotEnabled = enabled;
     g_screenshotNativePair = nativePair;
     g_screenshotPerformance = performance;
@@ -6118,6 +6124,7 @@ bool RecordPresentComparison(ID3D12GraphicsCommandList* list, ID3D12Device* devi
     if (!g_screenshotPresent || !g_screenshots.wantsFrame(GetTickCount64())) return false;
     if (!g_screenshotConfig || !g_screenshotConfig->SameConfiguration(settings) ||
         g_screenshotRoute != settings.DlssNrRoute.value_or_default() ||
+        g_screenshotPresentGeneration != resourceGeneration ||
         g_screenshotDevice != g_generationDevice || g_screenshotFeatureBuilds != g_featureBuilds ||
         !settings.DlssNrApplyModel.value_or_default() || !before || !after || before == after ||
         before->GetDesc().Width != after->GetDesc().Width || before->GetDesc().Height != after->GetDesc().Height ||
@@ -6132,7 +6139,8 @@ bool RecordPresentComparison(ID3D12GraphicsCommandList* list, ID3D12Device* devi
     std::ostringstream description;
     description << "same_evaluation true; final full-resolution Present copyback; NeuRotic_menu excluded; selection "
                 << g_screenshotSelection << "; passes " << RequestedPassCount(settings)
-                << "; no brightness adjustment; actual FG presentations and runtime image quality not established";
+                << "; no brightness adjustment; actual FG presentations and runtime image quality not established\n"
+                << settings.Describe();
     Screenshots::Identity identity {g_screenshotRoute, providerFrame, providerGeneration, resourceGeneration, backbuffer};
     const bool recorded = g_screenshots.record(list, device, images, evaluation, false, description.str(), identity);
     if (recorded) g_screenshots.awaitPublication();
@@ -6279,6 +6287,7 @@ bool Shutdown()
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     if (g_sessionClosed)
         return !g_shutdownFailed;
+    if (!g_sessionClosed) ++g_lifecycleGeneration;
     g_sessionClosed = true;
 
     if (g_compose) g_compose->ReportFinalPool();

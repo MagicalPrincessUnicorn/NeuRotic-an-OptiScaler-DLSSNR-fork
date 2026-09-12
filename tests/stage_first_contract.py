@@ -8,10 +8,15 @@ def original(path):
     return subprocess.check_output(['git', '-C', str(root), 'show', f'{base}:{path}'])
 
 for path in ['OptiScaler.ini', 'integration/OptiScaler.ini',
-             'OptiScaler/dlssnr/DlssNr_PresentGuides.h',
              'OptiScaler/shaders/dlssnr/precompile/dlssnr.hlsl',
              'OptiScaler/shaders/dlssnr/DlssNr_Vk.cpp']:
     assert (root / path).read_bytes() == original(path), path
+
+# This integration deliberately imports the accepted Wilds association observer.
+# Preserve that exact contribution rather than the earlier UI-only preview copy.
+guides = 'OptiScaler/dlssnr/DlssNr_PresentGuides.h'
+assert (root / guides).read_bytes() == subprocess.check_output(
+    ['git', '-C', str(root), 'show', '6c36057a8f107e45c2a1d8eaa14caa7e54e7c31b:' + guides])
 
 old = original('OptiScaler/Config.cpp').decode()
 new = (root / 'OptiScaler/Config.cpp').read_text(encoding='utf-8')

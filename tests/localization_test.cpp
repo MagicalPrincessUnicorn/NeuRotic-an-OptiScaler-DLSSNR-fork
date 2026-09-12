@@ -131,6 +131,8 @@ int main()
                     tabId = tab;
                 }
                 Check(id == checkboxId && tab == tabId, "widget IDs survive language changes");
+                Check(ImGui::GetID("Native NR on##ScreenshotNative") != ImGui::GetID("NR off"),
+                      "screenshot selections have distinct IDs at every language and scale");
                 const auto englishLabel = ImGui::CalcTextSize("Save Settings");
                 const auto translated = Neurotic::Translate("Save Settings");
                 const auto nativeSize =

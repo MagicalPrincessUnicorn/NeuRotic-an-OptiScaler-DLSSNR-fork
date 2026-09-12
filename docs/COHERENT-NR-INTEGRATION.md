@@ -38,3 +38,39 @@ Strict patch parse/apply/equality and whitespace; complete diff; focused CPU/GPU
 and screenshot regression; ordinary/no-op canonical immutable build; controlled failure/missing-output checks;
 experimental matched package and full disposable installation suite. Runtime is Inconclusive until authorized
 game testing. Final result must retain Native conversion limitations and Enhanced unvalidated-runtime status.
+
+## Implemented resolutions and review boundaries
+
+The exact corrected Cyberpunk parent was merged with Wilds, then the complete UI, screenshot and installer
+tips were merged in separate commits. Pairwise and sequential prospective merge trees were retained before
+resolution. Config keeps tracing plus stage/UI migrations. Present keeps pre-FG refusal before Basic zero-effect
+bypass. The old screenshot status block was removed from the authoritative Advisor layout; developer stage
+capture is under Diagnostics and the single user Screenshots section is retained.
+
+Generation-owned placement retirement and private command-list sealing were selective ports. No native DX11
+transport, OptiClip or brightness descendants were imported. Admission remains the bounded selected-frame
+ledger; GPU completion remains the independently owned, claim-once exact-backbuffer handoff.
+
+Present comparisons now record at final full-resolution copyback, including the format-converted output.
+Publication success and sealed GPU completion are independent export gates. Requests own a complete NR
+configuration snapshot, placement, device/model generation and Present resource generation; recorded frames
+retain evaluation/provider/backbuffer identity. Native Performance keeps a temporary fresh-history DLSS pair
+and verifies completion of the requested pass count. Every PNG batch publishes its JSON manifest last; partial
+failure removes only newly reserved outputs and never reports success. The manifest records the embedded
+build label, all effective NR settings, selections, dimensions, identity and limitations. Existing display-format
+conversion remains; no brightness gain or correction is introduced.
+
+Timing validity is cleared after Present history invalidation; only matched completions of the current history
+generation are published. Screenshot-copy overhead is excluded from the route timing sample. Advisor
+captures its expected temporary settings and lifecycle generation, restoring original settings if either changes.
+Screenshots refuse temporary model-effect suppression; starting analysis cancels an outstanding comparison.
+
+Added screenshot controls, warnings and statuses use the inherited four-language catalog. The authoritative
+NR/Advisor English preview remains scoped as in the UI control; saved language preferences are untouched.
+The package builder adds an opt-in ExperimentalReview switch. Its existing manifest kind is retained for
+installer schema compatibility; lifecycle and decision explicitly identify an experimental review package.
+
+Historical preservation tests now compare the guide observer with the exact approved Wilds tip. This is an
+explicit integration delta, not a relaxation of the unchanged INI, composition shader or Vulkan checks.
+CPU/WARP/layout fixtures establish bounded contracts, not game image quality, generated presentations,
+driver-specific behavior or runtime acceptance. All those require a separately authorized game session.

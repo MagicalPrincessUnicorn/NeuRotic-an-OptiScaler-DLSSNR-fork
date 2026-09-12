@@ -113,7 +113,7 @@ void SyncHistoryTelemetry()
 void InvalidateHistory(const char* reason)
 {
     ++g_present.historyGeneration;
-    g_present.telemetry.presentGpuMs.reset();
+    g_present.telemetry.presentGpuValid = false;
     g_present.history.Invalidate(reason != nullptr ? reason : "unknown continuity interruption");
     SyncHistoryTelemetry();
 }
@@ -182,6 +182,7 @@ void ReadCompletedPacingSample(PresentSlot& slot, unsigned int slotIndex, UINT64
     else if (slot.historyGeneration == g_present.historyGeneration)
     {
         g_present.telemetry.presentGpuMs = gpuMs;
+        g_present.telemetry.presentGpuValid = true;
         g_present.telemetry.presentGpuRoute = slot.pacing.route;
         ++g_present.telemetry.presentGpuSamples;
     }
@@ -1015,6 +1016,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         }
         g_present.resourceRouteKey = routeKey;
         ++g_present.resourceGeneration;
+        g_present.telemetry.resourceGeneration = g_present.resourceGeneration;
     }
 
     if (!DirectD3D12Available(device.Get()))
