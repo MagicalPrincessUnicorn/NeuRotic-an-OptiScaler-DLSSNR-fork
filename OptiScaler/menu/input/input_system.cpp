@@ -59,7 +59,7 @@ DirectInputDeviceRelease_t o_DirectInputDeviceRelease = nullptr;
 
 thread_local int bypassHookDepth = 0;
 
-bool ShouldApplyBlockingPolicyLocked() { return bypassHookDepth == 0 && _state.MenuVisible; }
+bool ShouldApplyBlockingPolicyLocked() { return bypassHookDepth == 0 && _state.MenuVisible && _state.Focused; }
 
 bool ShouldBlockKeyboardInputLocked() { return ShouldApplyBlockingPolicyLocked() && _state.BlockKeyboard; }
 
@@ -1293,6 +1293,14 @@ void SetGameplayPolicy(bool allowMouse, bool allowKeyboard, bool allowController
     ApplyMenuVisibilityChangeLocked(_state.MenuVisible);
 }
 
+void PollMenuPlatform(void (*newFrame)())
+{
+    // Only the menu's thread-local device polling bypasses gameplay blocking.
+    // Otherwise a blocked controller would also become neutral to ImGui itself.
+    ScopedHookBypass bypass;
+    newFrame();
+}
+
 bool IsFocused()
 {
     std::unique_lock lock(_state.Mutex);
@@ -1436,6 +1444,7 @@ DebugState GetDebugState()
     state.MenuVisible = _state.MenuVisible;
     state.BlockMouse = _state.BlockMouse;
     state.BlockKeyboard = _state.BlockKeyboard;
+    state.BlockController = _state.BlockController;
     state.BlockCursor = _state.BlockCursor;
 
     state.IsUwp = _state.IsUwp;

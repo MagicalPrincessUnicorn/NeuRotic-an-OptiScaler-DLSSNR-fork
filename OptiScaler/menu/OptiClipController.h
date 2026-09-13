@@ -19,7 +19,8 @@ enum class Event : std::uint8_t
     Resolution,
     Strength,
     Repository,
-    Coffee
+    Coffee,
+    LowResolution
 };
 
 struct Message
@@ -154,6 +155,7 @@ class Controller
     {
         switch (event)
         {
+        case Event::LowResolution: return 3;
         case Event::None: return 0;
         case Event::RapidToggle: return 5;
         case Event::Multipass: return 4;
@@ -234,6 +236,7 @@ class Controller
         switch (event)
         {
         case Event::None: return nullptr;
+        case Event::LowResolution: return "Toaster mode: fewer pixels, fewer details. At least the toast should be fast.";
         case Event::Greeting: return "Hi. I'm OptiClip. I watch sliders so you don't have to.";
         case Event::Multipass: return Choose(event, multipass);
         case Event::Resolution: return Choose(event, resolution);
@@ -254,7 +257,7 @@ class Controller
     double _lastIdleAt = -1.0;
     std::uint32_t _random;
     std::optional<Message> _active;
-    std::array<std::optional<std::size_t>, 8> _lastChoice {};
+    std::array<std::optional<std::size_t>, 9> _lastChoice {};
     std::unordered_map<std::string, ThresholdState> _thresholds;
 };
 } // namespace OptiClip

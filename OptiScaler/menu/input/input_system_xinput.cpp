@@ -222,6 +222,7 @@ DWORD WINAPI hkXInputGetState(DWORD userIndex, XINPUT_STATE* state)
 
     *state = realState;
     state->Gamepad = {}; // neutral connected controller only if it really exists
+    state->dwPacketNumber ^= 0x80000000u; // Policy transitions must invalidate the game's cached held state.
 
     return ERROR_SUCCESS;
 }
@@ -280,6 +281,7 @@ DWORD WINAPI hkXInputGetStateEx(DWORD userIndex, XINPUT_STATE* state)
 
     *state = realState;
     state->Gamepad = {}; // neutral connected controller only if it really exists
+    state->dwPacketNumber ^= 0x80000000u;
 
     return ERROR_SUCCESS;
 }

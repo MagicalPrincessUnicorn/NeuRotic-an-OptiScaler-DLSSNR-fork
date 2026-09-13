@@ -15,7 +15,8 @@ LANGUAGES = ['es', 'fr', 'de', 'pt']
 FORMAT = re.compile(r'%(?:[-+#0]*\d*(?:\.\d+)?(?:hh|ll|[hljztL]|I64)?[diuoxXfFeEgGaAcsp]|%)|\{(?::[^{}]*)?\}')
 
 def extra_rows():
-    return [line.split('\t') for line in (DEST / 'extra.tsv').read_text(encoding='utf-8').splitlines()
+    return [line.split('\t') for name in ('extra.tsv', 'advisor-input.tsv')
+            for line in (DEST / name).read_text(encoding='utf-8').splitlines()
             if line and not line.startswith('#')]
 
 def inventory():

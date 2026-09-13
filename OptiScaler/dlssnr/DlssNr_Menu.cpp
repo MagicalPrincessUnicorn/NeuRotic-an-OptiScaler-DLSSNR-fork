@@ -19,6 +19,7 @@
 #include <State.h>
 #include <menu/menu_common.h>
 #include <menu/Localization.h>
+#include <magic_enum.hpp>
 
 #include <imgui/imgui.h>
 #include <imgui/ImGuiNotify.hpp>
@@ -140,6 +141,9 @@ static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<flo
     const double reactionTime = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     OptiClip::ObserveThreshold(label, percent ? OptiClip::Event::Resolution : OptiClip::Event::Strength,
         edit.Value(), 1.0, changed, reactionTime);
+    if (percent)
+        OptiClip::ObserveThreshold((std::string(label) + ".low").c_str(), OptiClip::Event::LowResolution,
+            -edit.Value(), -0.5, changed, reactionTime);
     edit.Finish(ImGui::IsItemActive());
     ImGui::SameLine();
     const char* stableLabel = strstr(label, "###");
@@ -278,6 +282,7 @@ struct AdvisorState
     unsigned long long lastCompletedObservation = 0;
     unsigned long long lifecycleGeneration = 0;
     std::optional<NrConfigSnapshot<Config>> expectedSettings;
+    std::optional<NrConfigSnapshot<Config>> coverageSettings;
     double frameIntervalTotal = 0.0;
     unsigned int frameIntervalSamples = 0;
     double modelGpuTotal = 0.0;
@@ -522,6 +527,7 @@ void FinishAdvisorRoute(Config& config)
     LOG_INFO("Advisor route={} transition={:.3f}s samples={} nativeFPS={:.2f} valid={}", route,
         advisor.transitionSeconds, advisor.sampling.samples, result.fps, result.succeeded);
     RestoreAdvisorSettings(config, advisor.original);
+    advisor.coverageSettings = TryNrConfigSnapshot(config);
     advisor.running = false;
     advisor.phase = AdvisorPhase::Idle;
     ChooseAdvisorRecommendation(advisor);
@@ -529,6 +535,7 @@ void FinishAdvisorRoute(Config& config)
 
 const char* AdvisorRouteRefusal(const Config& config, int route)
 {
+    if (route < 0 || route > 2) return "Unknown Neural Rendering route.";
     if (IsVulkanInput() && route != 0) return "Present routes do not support Vulkan.";
     if (config.DlssNrMultipassEnabled.value_or_default()) return "Turn off Multipass before testing a route; Multipass owns resolution.";
     auto proposed = config.GetDlssNrConfigSnapshot();
@@ -573,8 +580,8 @@ void ApplyAdvisorRoute(Config& config, int route)
         config.DlssNrUiAfterMethod.value_or_default() : route);
     if (route == 0)
     {
-        config.DlssNrRenderingMode = advisor.routes[route].testedSettings->DlssNrRenderingMode.snapshot();
-        config.DlssNrRunBeforeSr = advisor.routes[route].testedSettings->DlssNrRunBeforeSr.snapshot();
+        config.DlssNrRenderingMode = advisor.routes[route].testedSettings->DlssNrRenderingMode.value_or_default();
+        config.DlssNrRunBeforeSr = advisor.routes[route].testedSettings->DlssNrRunBeforeSr.value_or_default();
     }
     else
     {
@@ -588,6 +595,7 @@ void ApplyAdvisorRoute(Config& config, int route)
     advisor.appliedRoute = route;
     advisor.status = std::string("Applied: ") + names[route];
     advisor.reason = "Applied the tested route and resolution preference.";
+    advisor.coverageSettings = TryNrConfigSnapshot(config);
 }
 
 ImVec4 AdvisorColor(AdvisorResultLevel level)
@@ -944,6 +952,18 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
             ImGui::TextColored(yellow, "Waiting for Native Temporal. Image unchanged.");
     }
 
+    uint32_t actualW = 0, actualH = 0;
+    uint32_t outputW = presentTelemetry.backbufferWidth, outputH = presentTelemetry.backbufferHeight;
+    if (presentActive) { actualW = presentTelemetry.workWidth; actualH = presentTelemetry.workHeight; }
+    else if (nativeOutput)
+    {
+        actualW = nrTelemetry.workWidth; actualH = nrTelemetry.workHeight;
+        const auto feature = State::Instance().currentFeature;
+        const bool before = renderMode != 0 && !nrTelemetry.nativeRayReconstructionActive;
+        outputW = before ? (feature ? feature->DisplayWidth() : 0u) : nrTelemetry.frameWidth;
+        outputH = before ? (feature ? feature->DisplayHeight() : 0u) : nrTelemetry.frameHeight;
+    }
+    ImGui::TextWrapped("%s", StageUi::DimensionText(actualW, actualH, outputW, outputH).c_str());
     if (!presentRoute && (nrTelemetry.nativeRayReconstructionActive || vulkan))
         ImGui::TextWrapped("Ray Reconstruction and native Vulkan keep NR after reconstruction. Before-stage placement is unavailable on these paths.");
     if (enabled && !config->DlssNrApplyModel.value_or_default())
@@ -962,6 +982,23 @@ void TickAdvisor(Config* config)
     const auto present = DlssNr::PresentTelemetry();
     if (!advisor.running)
     {
+        if (advisor.analyzed && advisor.coverageSettings)
+        {
+            const auto current = TryNrConfigSnapshot(*config);
+            if (!current || !advisor.coverageSettings->SameConfiguration(*current) ||
+                advisor.providerGeneration != present.cadence.providerGeneration ||
+                advisor.fgMode != State::Instance().dlssgLastSetMode.load() ||
+                advisor.fgInput != State::Instance().activeFgInput || advisor.fgOutput != State::Instance().activeFgOutput ||
+                advisor.fgRatio != config->FGDLSSGInterpolationCount.value_or_default() ||
+                advisor.xeRatio != config->FGXeFGInterpolationCount.value_or_default() ||
+                (advisor.originalWidth && present.backbufferWidth != advisor.originalWidth) ||
+                (advisor.originalHeight && present.backbufferHeight != advisor.originalHeight))
+            {
+                advisor.routes = {}; advisor.analyzed = false; advisor.recommendation = -1;
+                advisor.appliedRoute = -1; advisor.coverageSettings.reset();
+                advisor.status = "Settings or rendering context changed; previous tests are no longer current.";
+            }
+        }
         static uint64_t lastBaseline = 0;
         if (present.cadence.sequence != lastBaseline && present.cadence.native &&
             std::isfinite(present.cadence.intervalMs) && present.cadence.intervalMs > 0)
@@ -1119,7 +1156,6 @@ void CancelAdvisorAnalysis(Config* config, const char* reason)
 void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStatus::RuntimeStatus>& status,
                 const char* gpuName)
 {
-    Neurotic::EnglishPreview englishPreview;
     Advisor().gpuName = gpuName != nullptr && gpuName[0] != 0 ? gpuName : "Detecting graphics card...";
     RenderAdvisor(config, menuResScale);
     // DLSS Neural Rendering -----------------------------
@@ -1177,8 +1213,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                        "After. Lower values reduce model cost and fine detail. Values above 100% "
                        "supersample, increase cost roughly with image area, and reveal the downscaler. "
                        "Reset restores 100%.");
-            ImGui::SetNextItemWidth((std::max)(40.0f, ImGui::GetContentRegionAvail().x -
-                ImGui::CalcTextSize("Reset (?)").x - ImGui::GetStyle().ItemSpacing.x * 3));
+            ImGui::SetNextItemWidth(MenuControls::ResponsiveMultipassControlWidth(ImGui::GetContentRegionAvail().x,
+                menuResScale, ImGui::CalcTextSize("Reset (?)").x, ImGui::GetStyle().ItemSpacing.x * 3));
             if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
             {
                 NrConfigSynchronization::Transaction transaction;
@@ -2588,6 +2624,20 @@ static void ResetButton(const char* id, const std::function<void()>& reset)
 
 static void RenderMultipassMenu(Config* config, float menuResScale)
 {
+    const auto effectiveCount = [&]() {
+        const auto profile = BasicMultipass::Normalize(config->DlssNrBasicMultipass.value_or_default());
+        return OptiClip::EffectiveMultipass(config->DlssNrMultipassEnabled.value_or_default(), profile.advanced,
+            std::clamp(config->DlssNrPasses.value_or_default(), 1u, 10u), BasicMultipass::Count(profile));
+    };
+    const auto priorCount = effectiveCount();
+    OptiClip::ObserveThreshold("multipass.effective", OptiClip::Event::Multipass, priorCount, 2.0, false, AdvisorNow());
+    struct ObserveOnExit
+    {
+        decltype(effectiveCount)& count;
+        unsigned int prior;
+        ~ObserveOnExit() { OptiClip::ObserveThreshold("multipass.effective", OptiClip::Event::Multipass,
+            count(), 2.0, count() != prior, AdvisorNow()); }
+    } reaction {effectiveCount, priorCount};
     ImGui::Spacing();
     if (auto panel = ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection");
         panel.IsHeaderOpen())

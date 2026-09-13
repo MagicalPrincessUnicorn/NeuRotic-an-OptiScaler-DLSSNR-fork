@@ -323,7 +323,7 @@ bool ShouldBlockWindowsKeyboardHookCallbackLocked(WindowsHookSlot& slot, int cod
 
     if (!released)
     {
-        _state.WindowsHookKeyboardBlockedDown[vk] = true;
+        if (!_state.Keys[vk].Down) _state.WindowsHookKeyboardBlockedDown[vk] = true;
         return true;
     }
 
@@ -349,7 +349,8 @@ bool ShouldBlockWindowsMouseHookCallbackLocked(WindowsHookSlot& slot, int code, 
     {
         const int button = WindowsHookMouseMessageToButton(slot.HookType, wParam, lParam);
 
-        if (button >= 0 && button < static_cast<int>(_state.WindowsHookMouseBlockedDown.size()))
+        if (button >= 0 && button < static_cast<int>(_state.WindowsHookMouseBlockedDown.size()) &&
+            !_state.MouseButtons[button].Down)
             _state.WindowsHookMouseBlockedDown[button] = true;
 
         return true;

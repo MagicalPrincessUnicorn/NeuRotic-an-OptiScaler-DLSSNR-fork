@@ -525,7 +525,7 @@ bool HandleWindowMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, Inpu
         UpdateMousePositionFromClient(hwnd, lParam);
 
         const int button = MouseMessageToButton(msg, wParam);
-        SetMouseDown(button, GetMessageTime(), _state.BlockMouse);
+        SetMouseDown(button, GetMessageTime(), ShouldBlockMouseInputLocked());
         OPTIINPUT_LOG_VERBOSE("mouse down button:{} blocked:{} pos=({}, {})", button, _state.BlockMouse ? 1 : 0,
                               _state.MouseClientPos.x, _state.MouseClientPos.y);
 
@@ -570,7 +570,7 @@ bool HandleWindowMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, Inpu
     case WM_SYSKEYDOWN:
     {
         const int vk = NormalizeModifierVirtualKey(static_cast<int>(wParam), lParam);
-        SetKeyDown(vk, GetMessageTime(), _state.BlockKeyboard);
+        SetKeyDown(vk, GetMessageTime(), ShouldBlockKeyboardInputLocked());
         OPTIINPUT_LOG_VERBOSE("key down vk:{} blocked:{}", vk, _state.BlockKeyboard ? 1 : 0);
 
         shouldBlock = _state.BlockKeyboard;
@@ -650,6 +650,7 @@ bool HandleWindowMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, Inpu
     }
     }
 
+    shouldBlock = shouldBlock && ShouldApplyBlockingPolicyLocked();
     if (isInputMessage)
     {
         if (source == InputMessageSource::WndProc)

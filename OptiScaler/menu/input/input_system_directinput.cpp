@@ -216,9 +216,11 @@ bool HookDirectInputDeviceLocked(void* device, DirectInputDeviceKind kind)
         if (SUCCEEDED(reinterpret_cast<GetCaps>(vtable[3])(device, &caps)))
         {
             const auto type = GET_DIDEVICE_TYPE(caps.dwDevType);
-            if (type == DI8DEVTYPE_KEYBOARD || type == DIDEVTYPE_KEYBOARD) kind = DirectInputDeviceKind::Keyboard;
-            else if (type == DI8DEVTYPE_MOUSE || type == DIDEVTYPE_MOUSE) kind = DirectInputDeviceKind::Mouse;
-            else if (type == DIDEVTYPE_JOYSTICK || (type >= DI8DEVTYPE_JOYSTICK && type <= DI8DEVTYPE_SUPPLEMENTAL))
+            // Legacy type values from dinput.h are hidden when DIRECTINPUT_VERSION is 0x0800.
+            constexpr DWORD legacyMouse = 2, legacyKeyboard = 3, legacyJoystick = 4;
+            if (type == DI8DEVTYPE_KEYBOARD || type == legacyKeyboard) kind = DirectInputDeviceKind::Keyboard;
+            else if (type == DI8DEVTYPE_MOUSE || type == legacyMouse) kind = DirectInputDeviceKind::Mouse;
+            else if (type == legacyJoystick || (type >= DI8DEVTYPE_JOYSTICK && type <= DI8DEVTYPE_SUPPLEMENTAL))
                 kind = DirectInputDeviceKind::Controller;
         }
     }
@@ -718,59 +720,91 @@ HRESULT WINAPI hkDirectInputCreateDeviceW(void* directInput, REFGUID guid, void*
 
 HRESULT WINAPI hkDirectInputGetDeviceState(void* device, DWORD dataSize, LPVOID data)
 {
+    bool blocked = false;
+    DirectInputDeviceKind kind = DirectInputDeviceKind::Other;
     {
         std::unique_lock lock(_state.Mutex);
-        const DirectInputDeviceKind kind = GetDirectInputDeviceKindLocked(device);
+        kind = GetDirectInputDeviceKindLocked(device);
         _state.DirectInputGetDeviceStateCallCount++;
-
-        if (ShouldBlockDirectInputDeviceLocked(kind))
-        {
-            if (data != nullptr && dataSize > 0)
-                std::memset(data, 0, dataSize);
-
-            _state.DirectInputGetDeviceStateBlockedCount++;
-            OPTIINPUT_LOG_VERBOSE("blocking DirectInput GetDeviceState device:{} kind:{} size:{}", device,
-                                  DirectInputDeviceKindName(kind), dataSize);
-            return DI_OK;
-        }
-
-        _state.DirectInputGetDeviceStatePassedCount++;
+        blocked = ShouldBlockDirectInputDeviceLocked(kind);
+        if (blocked) ++_state.DirectInputGetDeviceStateBlockedCount;
+        else ++_state.DirectInputGetDeviceStatePassedCount;
     }
 
     if (o_DirectInputDeviceGetDeviceState == nullptr)
         return DIERR_GENERIC;
 
     ScopedHookBypass bypass;
-    return o_DirectInputDeviceGetDeviceState(device, dataSize, data);
+    const auto result = o_DirectInputDeviceGetDeviceState(device, dataSize, data);
+    if (FAILED(result) || !blocked || !data) return result;
+    if (kind != DirectInputDeviceKind::Controller)
+        std::memset(data, 0, dataSize);
+    else if (dataSize == sizeof(DIJOYSTATE) || dataSize == sizeof(DIJOYSTATE2))
+    {
+        // Zero is full-left for ordinary absolute axes and north for POV hats.
+        // Query the game's configured axis ranges before neutralizing a standard state.
+        auto* state = static_cast<DIJOYSTATE*>(data);
+        PVOID* table = *reinterpret_cast<PVOID**>(device);
+        using GetProperty = HRESULT (STDMETHODCALLTYPE*)(void*, REFGUID, LPDIPROPHEADER);
+        std::array<LONG, 8> centers {};
+        for (DWORD axis = 0; axis < centers.size(); ++axis)
+        {
+            DIPROPRANGE range {}; range.diph.dwSize = sizeof(range); range.diph.dwHeaderSize = sizeof(range.diph);
+            range.diph.dwHow = DIPH_BYOFFSET; range.diph.dwObj = axis * sizeof(LONG);
+            if (SUCCEEDED(reinterpret_cast<GetProperty>(table[5])(device, DIPROP_RANGE, &range.diph)))
+                centers[axis] = LONG((int64_t(range.lMin) + int64_t(range.lMax)) / 2);
+        }
+        std::memset(data, 0, dataSize);
+        static_assert(offsetof(DIJOYSTATE, rgdwPOV) == sizeof(centers));
+        std::memcpy(data, centers.data(), sizeof(centers));
+        for (auto& pov : state->rgdwPOV) pov = 0xffffffffu;
+    }
+    // Custom controller data formats are intentionally passed through and disclosed in the UI.
+    return result;
 }
 
 HRESULT WINAPI hkDirectInputGetDeviceData(void* device, DWORD objectDataSize, LPDIDEVICEOBJECTDATA data, LPDWORD inOut,
                                           DWORD flags)
 {
+    bool blocked = false;
+    DirectInputDeviceKind kind = DirectInputDeviceKind::Other;
     {
         std::unique_lock lock(_state.Mutex);
-        const DirectInputDeviceKind kind = GetDirectInputDeviceKindLocked(device);
+        kind = GetDirectInputDeviceKindLocked(device);
         _state.DirectInputGetDeviceDataCallCount++;
-
-        if (ShouldBlockDirectInputDeviceLocked(kind))
-        {
-            if (inOut != nullptr)
-                *inOut = 0;
-
-            _state.DirectInputGetDeviceDataBlockedCount++;
-            OPTIINPUT_LOG_VERBOSE("blocking DirectInput GetDeviceData device:{} kind:{} flags:{}", device,
-                                  DirectInputDeviceKindName(kind), flags);
-            return DI_OK;
-        }
-
-        _state.DirectInputGetDeviceDataPassedCount++;
+        blocked = ShouldBlockDirectInputDeviceLocked(kind);
+        if (blocked) ++_state.DirectInputGetDeviceDataBlockedCount;
+        else ++_state.DirectInputGetDeviceDataPassedCount;
     }
 
     if (o_DirectInputDeviceGetDeviceData == nullptr)
         return DIERR_GENERIC;
 
     ScopedHookBypass bypass;
-    return o_DirectInputDeviceGetDeviceData(device, objectDataSize, data, inOut, flags);
+    // Consume blocked events, including PEEK reads, so they cannot replay after closing the menu.
+    const auto result = o_DirectInputDeviceGetDeviceData(device, objectDataSize, data, inOut,
+        blocked ? flags & ~DIGDD_PEEK : flags);
+    if (FAILED(result) || !blocked || !inOut) return result;
+    DWORD kept = 0;
+    if (data && objectDataSize >= sizeof(DIDEVICEOBJECTDATA_DX3))
+    {
+        auto* bytes = reinterpret_cast<unsigned char*>(data);
+        for (DWORD i = 0; i < *inOut; ++i)
+        {
+            auto* event = reinterpret_cast<DIDEVICEOBJECTDATA_DX3*>(bytes + size_t(i) * objectDataSize);
+            const bool button = kind == DirectInputDeviceKind::Keyboard ? event->dwOfs < 256 :
+                kind == DirectInputDeviceKind::Mouse ? event->dwOfs >= DIMOFS_BUTTON0 && event->dwOfs <= DIMOFS_BUTTON7 :
+                event->dwOfs >= DIJOFS_BUTTON(0) && event->dwOfs <= DIJOFS_BUTTON(127);
+            // An up is always safe and clears any press the game saw before the policy changed.
+            if (button && event->dwData == 0)
+            {
+                std::memmove(bytes + size_t(kept) * objectDataSize, event, objectDataSize);
+                ++kept;
+            }
+        }
+    }
+    *inOut = kept;
+    return result;
 }
 
 ULONG WINAPI hkDirectInputDeviceRelease(void* device)

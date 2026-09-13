@@ -5,6 +5,7 @@
 #include <Util.h>
 #include <Logger.h>
 #include <Config.h>
+#include "input/input_system.h"
 
 #include <imgui/imgui_impl_dx11.h>
 #include <imgui/imgui_impl_dx12.h>
@@ -247,7 +248,7 @@ static void RenderImGui_DX11(IDXGISwapChain* pSwapChain)
         if (ImGui::GetCurrentContext() && g_pd3dRenderTarget)
         {
             ImGui_ImplDX11_NewFrame();
-            ImGui_ImplWin32_NewFrame();
+            OptiInput::PollMenuPlatform(ImGui_ImplWin32_NewFrame);
 
             if (MenuOverlayBase::RenderMenu())
             {

@@ -104,6 +104,18 @@ class PresentStages
     // and its command-list recording is sealed. No frame-age approximation is used.
     void poll(const std::filesystem::path& root)
     {
+        try { pollFiles(root); }
+        catch (...)
+        {
+            // Batch RAII removes owned files. GPU resources remain retained until
+            // the normal completion/discard path or shutdown can release them.
+            discarded_ = true;
+            status_ = "Capture failed while preparing files. No complete batch was published.";
+        }
+    }
+
+    void pollFiles(const std::filesystem::path& root)
+    {
         if (!ready_ || publicationPending_) return;
         for (const auto& frame : frames_)
         {
@@ -130,6 +142,23 @@ class PresentStages
         std::string prefix;
         HANDLE reservation = INVALID_HANDLE_VALUE;
         bool created = false;
+        struct BatchCleanup
+        {
+            HANDLE& reservation;
+            std::filesystem::path directory;
+            bool ownDirectory = false, success = false;
+            std::vector<std::filesystem::path> staged;
+            std::vector<std::pair<std::filesystem::path, bool>> published;
+            ~BatchCleanup()
+            {
+                if (reservation != INVALID_HANDLE_VALUE) CloseHandle(reservation);
+                std::error_code error;
+                if (!success) for (const auto& [path, owned] : published)
+                    if (owned) std::filesystem::remove(path, error);
+                for (const auto& path : staged) std::filesystem::remove(path, error);
+                if (ownDirectory) std::filesystem::remove(directory, error);
+            }
+        } cleanup {reservation};
         for (unsigned int attempt = 0; !ec && attempt < 32 && !created; ++attempt)
         {
             if (!png_)
@@ -160,7 +189,9 @@ class PresentStages
             }
             created = true;
             directory = root.parent_path() / ("." + prefix + "_staging");
+            cleanup.directory = directory;
             created = std::filesystem::create_directory(directory, ec);
+            cleanup.ownDirectory = created;
             const bool ownDirectory = created;
             for (const auto& stage : stages_)
                 for (unsigned int i = 0; !ec && i < captured_; ++i)
@@ -169,6 +200,7 @@ class PresentStages
             if (!created || ec)
             {
                 if (ownDirectory) { std::error_code cleanup; std::filesystem::remove(directory, cleanup); }
+                cleanup.ownDirectory = false;
                 CloseHandle(reservation);
                 reservation = INVALID_HANDLE_VALUE;
             }
@@ -176,9 +208,12 @@ class PresentStages
         bool ok = created && !ec;
         for (const auto& stage : stages_)
             for (unsigned int i = 0; ok && i < captured_; ++i)
-                ok = dump(directory / (png_ ? screenshotName(prefix, stage.name, i) :
-                    stage.name + "_" + std::to_string(i) + ".raw"), stage, i, png_);
-        std::vector<std::filesystem::path> published;
+            {
+                const auto path = directory / (png_ ? screenshotName(prefix, stage.name, i) :
+                    stage.name + "_" + std::to_string(i) + ".raw");
+                if (png_) cleanup.staged.push_back(path);
+                ok = dump(path, stage, i, png_);
+            }
         // Every image contains its matching provenance; no user-facing sidecar.
         if (ok && png_)
         {
@@ -221,8 +256,9 @@ class PresentStages
                 {
                     const auto name = screenshotName(prefix, stage.name, i);
                     const auto destination = root / name;
+                    cleanup.published.emplace_back(destination, false);
                     ok = MoveFileExW((directory / name).c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE;
-                    if (ok) published.push_back(destination);
+                    cleanup.published.back().second = ok;
                 }
         }
         if (ok && !png_)
@@ -245,16 +281,7 @@ class PresentStages
             }
             else ok = false;
         }
-        if (reservation != INVALID_HANDLE_VALUE) CloseHandle(reservation);
-        if (!ok && png_)
-            for (const auto& path : published) std::filesystem::remove(path, ec);
-        if (png_ && created)
-        {
-            for (const auto& stage : stages_)
-                for (unsigned int i = 0; i < captured_; ++i)
-                    std::filesystem::remove(directory / screenshotName(prefix, stage.name, i), ec);
-            std::filesystem::remove(directory, ec);
-        }
+        cleanup.success = ok;
         release();
         status_ = ok ? "Saved: " + (png_ ? root / prefix : directory).string() :
                       "Capture could not be saved completely. Check disk space and permissions.";

@@ -1342,7 +1342,11 @@ void MenuCommon::UpdateMenuInputMode(RenderMenuContext& ctx)
             io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
         else
             io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
-        io.ConfigFlags = allowKeyboard ? ImGuiConfigFlags_NoKeyboard : ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags &= ~(ImGuiConfigFlags_NoMouse | ImGuiConfigFlags_NoMouseCursorChange |
+                            ImGuiConfigFlags_NoKeyboard | ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad);
+        io.ConfigFlags |= allowKeyboard ? ImGuiConfigFlags_NoKeyboard : ImGuiConfigFlags_NavEnableKeyboard;
+        if (ctx.config->AllowGameMouse.value_or_default() && !capturingKey)
+            io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
         if (!allowController) io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     }
     else
@@ -1556,7 +1560,7 @@ void MenuCommon::BeginMenuFrameIfNeeded(RenderMenuContext& ctx)
     {
         if (!_isUWP)
         {
-            ImGui_ImplWin32_NewFrame();
+            OptiInput::PollMenuPlatform(ImGui_ImplWin32_NewFrame);
         }
         else
         {
@@ -7171,7 +7175,7 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
             UpdateMenuInputMode(ctx);
         }
         ImGui::TextWrapped("Allowed devices continue controlling the game. Mouse clicks can affect both the menu and the game. Keyboard and controller gameplay disable their menu navigation. Save Settings remembers these choices.");
-        ImGui::TextDisabled("Controller blocking covers XInput and DirectInput. Other controller transports may bypass it.");
+        ImGui::TextWrapped("Controller blocking covers XInput and standard DirectInput states. Custom DirectInput formats, GameInput, Windows.Gaming.Input and raw HID controllers may bypass it.");
     }
     RenderKeybindSettings(ctx);
     RenderThemeSettings(ctx);

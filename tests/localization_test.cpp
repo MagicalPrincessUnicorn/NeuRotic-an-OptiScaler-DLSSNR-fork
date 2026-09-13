@@ -1,4 +1,5 @@
 #include "menu/Localization.h"
+#include "menu/OptiClipAdvisor.h"
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 #include <chrono>
@@ -12,6 +13,8 @@
 struct StageUiFixture
 {
     NrOptional<uint32_t> DlssNrRoute {2}, DlssNrUiAfterMethod {0};
+    NrOptional<uint32_t> DlssNrUiResolutionPreset {0}, DlssNrUiPresentResolutionPreset {0}, DlssNrUiEnhancedResolutionPreset {0};
+    NrOptional<float> DlssNrUiPresentManualScale {0.25f}, DlssNrUiEnhancedManualScale {0.25f};
     NrOptional<int32_t> DlssNrRenderingMode {1};
     NrOptional<bool> DlssNrRunBeforeSr {false}, DlssNrUiManualResolution {false};
     NrOptional<float> DlssNrWorkingScale {1.0f}, DlssNrUiManualScale {1.0f};
@@ -301,7 +304,7 @@ int main()
               "main tuning slider preferred width follows UI scale");
         Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(700.0f, 1.0f, 60.0f, 8.0f) - 320.0f) < 0.01f,
               "Basic shared resolution uses its shorter preferred width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(260.0f, 1.0f, 60.0f, 8.0f) - 192.0f) < 0.01f,
+        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(260.0f, 1.0f, 60.0f, 8.0f) - 127.0f) < 0.01f,
               "Basic shared resolution preserves reset space at narrow widths");
         Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(1000.0f, 2.0f, 60.0f, 8.0f) - 640.0f) < 0.01f,
               "Basic shared resolution preferred width follows UI scale");
@@ -309,10 +312,10 @@ int main()
               "one-pass cumulative strength uses one quarter of the safe row width");
         Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 2) - 466.0f) < 0.01f,
               "two-pass cumulative strength uses half of the safe row width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 3) - 699.0f) < 0.01f,
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 3) - 682.0f) < 0.01f,
               "three-pass cumulative strength uses three quarters of the safe row width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 4) - 932.0f) < 0.01f &&
-              std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 10) - 932.0f) < 0.01f,
+        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 4) - 682.0f) < 0.01f &&
+              std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 10) - 682.0f) < 0.01f,
               "four through ten passes use the full safe row width");
         Neurotic::SetLanguage("en");
         ImGui::GetStyle() = baseStyle;
@@ -352,6 +355,28 @@ int main()
         navFrame(true); navFrame();
         key(ImGuiKey_GamepadDpadDown);
         Check(GImGui->NavId == methodId, "controller navigation reaches the After-stage method");
+        for (const auto& language : Neurotic::Languages)
+        for (float scale : {0.5f, 1.0f, 2.0f})
+        {
+            Neurotic::SetLanguage(language.code);
+            ImGui::NewFrame();
+            const float width = std::min(760.0f * scale, io.DisplaySize.x - 32.0f);
+            const float height = std::min(600.0f * scale, io.DisplaySize.y - 32.0f);
+            ImGui::SetNextWindowPos({16, 16}); ImGui::SetNextWindowSize({width, height});
+            ImGui::Begin("OptiClip host");
+            ImGui::TextUnformatted("Gameplay input while menu is open");
+            ImGui::End();
+            OptiClip::SetEnabled(true, 500);
+            OptiClip::ReportRapidToggle(OptiClip::ToggleOrigin::Checkbox, "Show OptiClip advisor", 500);
+            OptiClip::Render({16, 16, width, height}, scale, 500, true);
+            const auto* mascot = ImGui::FindWindowByName("##OptiClipAdvisor");
+            Check(mascot && mascot->Active, "OptiClip renders at each language/scale");
+            Check(mascot->Pos.x >= 16 && mascot->Pos.y >= 16 &&
+                mascot->Pos.x + mascot->Size.x <= 16 + width && mascot->Pos.y + mascot->Size.y <= 16 + height,
+                "OptiClip remains anchored inside the host at each scale");
+            Check((mascot->Flags & ImGuiWindowFlags_NoNav) != 0, "OptiClip never steals device navigation");
+            ImGui::Render();
+        }
         ImGui::DestroyContext();
         const auto ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();

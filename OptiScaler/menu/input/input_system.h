@@ -51,6 +51,7 @@ struct DebugState
     bool MenuVisible = false;
     bool BlockMouse = false;
     bool BlockKeyboard = false;
+    bool BlockController = false;
     bool BlockCursor = false;
 
     bool IsUwp = false;
@@ -205,6 +206,7 @@ void EndFrame(bool menuVisible);
 
 void SetMenuVisible(bool visible);
 void SetGameplayPolicy(bool allowMouse, bool allowKeyboard, bool allowController, bool captureKey);
+void PollMenuPlatform(void (*newFrame)());
 void ResetMenuInputTransientState();
 
 bool IsFocused();

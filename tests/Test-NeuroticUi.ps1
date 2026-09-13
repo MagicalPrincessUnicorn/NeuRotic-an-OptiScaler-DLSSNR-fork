@@ -32,35 +32,34 @@ Assert-Ui ($nr.Contains('std::string("##AdvisorRoute") + std::to_string(route)')
            $nr.Contains('std::string("Use ") + names[route] + "##AdvisorApply"') -and
            $nr.Contains('ApplyAdvisorRoute(config, route);') -and
            -not $nr.Contains('Apply Recommendation')) 'all three route cards expose stable, route-specific apply buttons'
-Assert-Ui ($nr.Contains('route.level = AdvisorResultLevel::Analyzing') -and
-           $nr.Contains('advisor.routes = {};') -and $nr.Contains('Testing available routes...')) 'Analyze clears prior recommendation colors and gives all routes a neutral analyzing state'
+Assert-Ui ($nr.Contains('advisor.routes[selectedRoute].level = AdvisorResultLevel::Analyzing') -and
+           -not $nr.Contains('BeginAdvisorRoute(config, route + 1)') -and $nr.Contains('Testing one route...')) 'Analyze tests exactly one selected route without advancing into another route'
 Assert-Ui ($nr.Contains('Target native framerate') -and $nr.Contains('Optimization goal') -and
            $nr.Contains('Prioritize quality') -and $nr.Contains('Balance quality and performance') -and
            $nr.Contains('Prioritize performance')) 'Advisor exposes the approved frame target and optimization goals'
 Assert-Ui ($nr.Contains('config.DlssNrApplyModel = false;') -and
            $nr.Contains('config.DlssNrMultipassEnabled = false;') -and
            $nr.Contains('config.DlssNrPasses = 1u;') -and
-           $nr.Contains('PresentResolution::Automatic') -and
-           $nr.Contains('Analysis never tests below 100%%')) 'route analysis hides the effect and fixes every trial at 100 percent and one pass'
-Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on to test each route.') -and
+           $nr.Contains('StageUi::SelectResolutionChoice(config, Advisor().resolutionPreference)')) 'route analysis hides the effect and tests only the selected resolution preference at one pass'
+Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on to test one route.') -and
            $nr.Contains('your current settings are restored when analysis ends or is cancelled.')) 'Analyze visibly discloses temporary NR activation and restoration before the action'
-Assert-Ui ($nr.Contains('present.frameIntervalMs') -and
+Assert-Ui ($nr.Contains('advisor.sampling.Consume(present.cadence)') -and
            (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;')) 'Advisor scores each route from its current live frame interval rather than a stale completed route window'
 Assert-Ui ($nr.Contains('NR route GPU %.2f ms') -and $nr.Contains('Frame %.2f ms') -and
            $nr.Contains('present.presentGpuRoute == expectedRoute') -and
            (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.presentGpuRoute = slot.pacing.route;')) 'Advisor separates frame cadence from route-tagged Present GPU timing'
 Assert-Ui ($nr -match '(?s)else // performance.*?advisor\.routes\[route\]\.succeeded && advisor\.routes\[route\]\.fps > fastest' -and
-           $nr.Contains('the fastest verified route is recommended.')) 'Performance and missed-target fallbacks select the fastest verified route'
-Assert-Ui ($nr.Contains('BeginTable("##AdvisorPreferences", 2') -and
+           $nr.Contains('Best of tested routes: ')) 'Performance and missed-target fallbacks select the fastest measured route with incomplete coverage disclosed'
+Assert-Ui ($nr.Contains('BeginTable("##AdvisorPreferences", 3') -and
            $nr.IndexOf('Target native framerate') -lt $nr.IndexOf('Combo("##AdvisorTargetFps"') -and
-           $nr.IndexOf('Optimization goal') -lt $nr.IndexOf('Combo("##AdvisorGoal"')) 'target and goal share a responsive two-column row with dropdowns below their labels'
+           $nr.IndexOf('Optimization goal') -lt $nr.IndexOf('Combo("##AdvisorGoal"') -and $nr.Contains('##AdvisorResolution')) 'target, goal and resolution share a responsive three-column row'
 Assert-Ui ($nr.Contains('guides.evaluated > advisor.startGuideEvaluations') -and
-           ([regex]::Matches($nr, 'advisor.startGuideEvaluations = guides.evaluated;')).Count -eq 2) 'Present Enhanced requires guide evaluations produced during its own warmup and sample'
+           $nr.Contains('advisor.startGuideEvaluations = guides.evaluated;')) 'Present Enhanced requires guide evaluations produced during its own test'
 Assert-Ui ($nr.Contains('RestoreAdvisorSettings') -and $menu.Contains('CancelAdvisorAnalysis(config') -and
            $menu.Contains('CancelAdvisorAnalysis(Config::Instance()') -and
            $nr.Contains('Output size changed; analysis stopped')) 'save, close, shutdown, cancel, and resize paths restore captured settings'
-Assert-Ui ($nr.Contains('Stage, method, and 100% resolution policy were applied atomically.') -and
-           $nr.Contains('Model tuning and Multipass were unchanged.')) 'Apply limits its atomic update to the recommended route and resolution policy'
+Assert-Ui ($nr.Contains('Applied the tested route and resolution preference.') -and
+           $nr.Contains('StageUi::ResolutionScale(*advisor.routes[route].testedSettings)')) 'Apply uses the measured route and remembered tested resolution'
 Assert-Ui ($nr.Contains('BeginTable("##NrStylePresetRow", 2') -and
            $nr.IndexOf('ImGui::TableNextColumn(); renderStyle();') -lt $nr.IndexOf('ImGui::TableNextColumn(); renderModelPreset();')) 'Style and Model preset share a responsive row with Style first'
 Assert-Ui (-not $nr.Contains('Can be toggled with a key -- bind it under Keybinds')) 'redundant NR keybind description removed'
@@ -127,16 +126,14 @@ Assert-Ui (-not $menu.Contains('Sorry for bad translation.')) 'translation apolo
 Assert-Ui ($menu -match '(?s)Text\("%d", currentFeature->FrameCount\(\)\);.*?SameLine.*?Text\("GPU: %s", primaryGpu.name.c_str\(\)\);') 'GPU name shares resolution row'
 Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink\(\).*?Enjoying NeuRotic\?.*?Send Coffee.*?GetContentRegionAvail.*?SetCursorPosX.*?TextUnformatted\(prompt\).*?Button\(button\)') 'compact Send Coffee prompt right-aligned in final row'
 Assert-Ui (-not $menu.Contains('constexpr const char* button = "Buy Me a Coffee"')) 'old support-button label is no longer rendered'
-Assert-Ui ($nr -match '(?s)EmphasizedCheckbox\("Enable Neural Rendering", &enabled\).*?SetDlssNrEnabled\(enabled\);.*?NoteNrUserToggle\(\)') 'emphasized NR checkbox contributes to the shared user-toggle burst'
-Assert-Ui ($menu -match '(?s)inputDlssNr.*?SetDlssNrEnabled\(enabled\);\s*DlssNr::NoteNrUserToggle\(\);') 'NR hotkey contributes to the same user-toggle burst'
-Assert-Ui (($nr | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 2) 'shared tracker has one definition and one checkbox call'
-Assert-Ui (($menu | Select-String -Pattern 'NoteNrUserToggle\(\)' -AllMatches).Matches.Count -eq 1) 'hotkey is the only shared-tracker call outside the NR menu'
+Assert-Ui ($nr.Contains('NoteNrUserToggle(OptiClip::ToggleOrigin::Checkbox)')) 'NR checkbox contributes to the OptiClip toggle tracker'
+Assert-Ui ($menu.Contains('NoteNrUserToggle(OptiClip::ToggleOrigin::Hotkey)')) 'NR hotkey contributes to the same tracker'
 $burst = [regex]::Match($notes, '(?s)ToggleBurstMessages\s*=\s*\{(.*?)\};').Groups[1].Value
-Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 41 -and $burst.Contains('ZZZZZZZzzzzzzzzzzzz')) 'all 41 approved burst notes are present'
+Assert-Ui (([regex]::Matches($burst, '(?m)^\s*"')).Count -eq 27) 'accepted OptiClip toggle dialogue pool is present'
 Assert-Ui ($nr.Contains('"%s is active."') -and $nr.Contains('"Image unchanged. %s"') -and -not $nr.Contains('Use Native Temporal when it is available.')) 'Present active and actionable safe-fallback guidance without stale recommendation'
 $stage = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageControls.h')
 $adapter = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageUi.h')
-Assert-Ui ($stage.IndexOf('SentenceCombo("##NrStage"') -lt $stage.IndexOf('SentenceCombo("##NrMethod"') -and $stage.IndexOf('SentenceCombo("##NrMethod"') -lt $stage.IndexOf('SentenceCombo("##NrResolution"')) 'stage, method and resolution retain fixed sentence order'
+Assert-Ui ($stage.IndexOf('SentenceCombo("##NrStage"') -lt $stage.IndexOf('SentenceCombo("##NrMethod"') -and $stage.IndexOf('SentenceCombo("##NrMethod"') -lt $stage.IndexOf('BeginCombo("##NrResolution"')) 'stage, method and guarded resolution retain fixed order'
 Assert-Ui ($stage.Contains('"Neural Rendering Injection", "upscaling"') -and
            -not $stage.Contains('"Neural Rendering Injection", "Upscaling"') -and
            $stage.Contains('stageHelp, ImGui::GetFontSize() * 8.0f')) 'stage sentence uses lowercase upscaling and a scale-aware wider selector'
@@ -145,7 +142,7 @@ Assert-Ui ($stage.Contains('Before runs Neural Rendering on the game''s render i
            $stage.Contains('Your last selected After method is remembered.')) 'stage help explains both placements and remembered After method'
 Assert-Ui ($stage.Contains('Present Compatibility processes the') -and
            $stage.Contains('unavailable or invalid guides preserve the original image.')) 'method help accurately explains Native and both Present routes'
-Assert-Ui ($adapter.Contains('DlssNrEnhancedCustomScale') -and $adapter.Contains('DlssNrPresentCustomScale') -and $stage.Contains('resolution == 2 ? 3 : 2')) 'Present methods remember independent choices; Legacy is conditional'
+Assert-Ui ($adapter.Contains('DlssNrUiEnhancedManualScale') -and $adapter.Contains('DlssNrUiPresentManualScale') -and $stage.Contains('ResolutionRefusal(snapshot, choice)')) 'Present methods remember independent Manual choices and guard incompatible policies'
 Assert-Ui ($nr.Contains('Present history: %s | uninterrupted output frames %llu') -and $nr.Contains('Reset reason: %s | last interruption: %s')) 'Present history diagnostics are visible'
 Assert-Ui ($nr.IndexOf('EmphasizedCheckbox("Enable Neural Rendering", &enabled)') -lt $nr.IndexOf('StageUi::RenderControls(*config,')) 'enable lives above the NR injection sentence'
 Assert-Ui ($nr.IndexOf('Checkbox("Apply the model", &applyModel)') -lt $nr.IndexOf('StageUi::RenderControls(*config,') -and
@@ -186,8 +183,8 @@ Assert-Ui ($diagnostics -gt $nr.IndexOf('RenderLiveReadouts(config,') -and
            $nr.IndexOf('Automatic uses 100% of the game render input; Manual scales that input.',
                        $nr.IndexOf('if (detailed)')) -lt $nr.IndexOf('const auto guides = PresentGuides::Instance().Inspect();')) 'live readouts precede controls while policy and dimensions render only through collapsed diagnostics'
 Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $stage.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
-Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 1 }') -and
-           $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'fresh preview Automatic defaults do not enable NR or file logging'
+Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 0 }') -and
+           $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'fresh Match Game Render defaults do not enable NR or file logging'
 Assert-Ui ($menu.Contains('bool toFile = config->LogToFile.value_or_default(); ImGui::Checkbox("To File", &toFile)') -and
            $menu.Contains('config->LogToFile = toFile;') -and $config.Contains('LogToFile.set_from_config(readBool("Log", "LogToFile"))')) 'existing file logging checkbox uses effective config and keeps deliberate changes'
 foreach ($iniPath in @('OptiScaler.ini', 'integration/OptiScaler.ini')) {
