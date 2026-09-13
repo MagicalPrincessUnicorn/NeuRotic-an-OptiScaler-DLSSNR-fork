@@ -4,6 +4,7 @@
 #include "dlssnr/DlssNr_PresentResolution.h"
 #include "dlssnr/FrameTrace.h"
 #include "dlssnr/DlssNr_StageUi.h"
+#include "dlssnr/NrExperimentalPolicy.h"
 
 #include "Util.h"
 
@@ -14,6 +15,25 @@
 #include <SimpleIni.h>
 
 static CSimpleIniA ini;
+
+namespace
+{
+template<class Edit> bool SaveIniSubset(const std::filesystem::path& path, Edit&& edit)
+{
+    CSimpleIniA partial;
+    if (partial.LoadFile(path.c_str()) != SI_OK) return false;
+    edit(partial);
+    auto temporary = path;
+    temporary += L".neurotic-" + std::to_wstring(GetCurrentProcessId()) + L".tmp";
+    if (partial.SaveFile(temporary.c_str()) < 0) return false;
+    if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        DeleteFileW(temporary.c_str());
+        return false;
+    }
+    return ini.LoadFile(path.c_str()) == SI_OK;
+}
+}
 
 static inline int64_t GetTicks()
 {
@@ -348,6 +368,10 @@ bool Config::Reload(std::filesystem::path iniPath)
             _dlssNrState.LoadEnabled(DlssNrEnabled, readBool("DlssNr", "Enabled"));
             const auto multipassEnabled = readBool("DlssNr", "MultipassEnabled");
             DlssNrMultipassEnabled.set_from_config(multipassEnabled);
+            DlssNrExperimentalMode.set_from_config(readBool("DlssNr", "ExperimentalMode"));
+            DlssNrOverrideMultipassGuardrails.set_from_config(readBool("DlssNr", "OverrideMultipassGuardrails"));
+            DlssNrOverrideHdrGuardrails.set_from_config(readBool("DlssNr", "OverrideHdrGuardrails"));
+            DlssNrOverrideFgGuardrails.set_from_config(readBool("DlssNr", "OverrideFgGuardrails"));
             DlssNrSecondLayer.set_from_config(readBool("DlssNr", "SecondLayer"));
             DlssNrBasicMultipass.set_from_config(DlssNr::BasicMultipass::Load(
                 [&](const char* key) { return readFloat("DlssNrBasic", key); },
@@ -1405,6 +1429,13 @@ bool Config::SaveIni()
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
     ini.SetValue("DlssNr", "MultipassEnabled",
                  GetBoolValue(Instance()->DlssNrMultipassEnabled.value_for_config()).c_str());
+    ini.SetBoolValue("DlssNr", "ExperimentalMode", Instance()->DlssNrExperimentalMode.value_or_default());
+    ini.SetBoolValue("DlssNr", "OverrideMultipassGuardrails",
+                     Instance()->DlssNrOverrideMultipassGuardrails.value_or_default());
+    ini.SetBoolValue("DlssNr", "OverrideHdrGuardrails",
+                     Instance()->DlssNrOverrideHdrGuardrails.value_or_default());
+    ini.SetBoolValue("DlssNr", "OverrideFgGuardrails",
+                     Instance()->DlssNrOverrideFgGuardrails.value_or_default());
     ini.SetValue("DlssNr", "SecondLayer",
                  GetBoolValue(Instance()->DlssNrMultipassEnabled.value_or_default() &&
                               Instance()->DlssNrPasses.value_or_default() >= 2).c_str());
@@ -1979,6 +2010,35 @@ bool Config::SaveIni()
     LOG_INFO("Trying to save ini to: {0}", wstring_to_string(pathWStr));
 
     return ini.SaveFile(absoluteFileName.wstring().c_str()) >= 0;
+}
+
+bool Config::SaveMenuInputSettings(bool mouse, bool keyboard, bool controller)
+{
+    if (!SaveIniSubset(absoluteFileName, [&](CSimpleIniA& file) {
+        file.SetBoolValue("Menu", "AllowGameMouse", mouse);
+        file.SetBoolValue("Menu", "AllowGameKeyboard", keyboard);
+        file.SetBoolValue("Menu", "AllowGameController", controller);
+    })) return false;
+    AllowGameMouse = mouse;
+    AllowGameKeyboard = keyboard;
+    AllowGameController = controller;
+    return true;
+}
+
+bool Config::SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration)
+{
+    if (!SaveIniSubset(absoluteFileName, [&](CSimpleIniA& file) {
+        file.SetBoolValue("DlssNr", "ExperimentalMode", active);
+        file.SetBoolValue("DlssNr", "OverrideMultipassGuardrails", multipass);
+        file.SetBoolValue("DlssNr", "OverrideHdrGuardrails", hdr);
+        file.SetBoolValue("DlssNr", "OverrideFgGuardrails", frameGeneration);
+    })) return false;
+    DlssNrExperimentalMode = active;
+    DlssNrOverrideMultipassGuardrails = multipass;
+    DlssNrOverrideHdrGuardrails = hdr;
+    DlssNrOverrideFgGuardrails = frameGeneration;
+    DlssNr::ExperimentalPolicy::Changed();
+    return true;
 }
 
 bool Config::SaveXeFG()

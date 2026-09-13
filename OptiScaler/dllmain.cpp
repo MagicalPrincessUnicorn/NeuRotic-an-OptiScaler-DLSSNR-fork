@@ -1,4 +1,6 @@
 #include "pch.h"
+#include "dlssnr/NrExperimentalSession.h"
+#include "dlssnr/NrExperimentalSession.h"
 #include "dllmain.h"
 #include "dlssnr/FgLifecycle.h"
 
@@ -2184,6 +2186,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
     case DLL_PROCESS_DETACH:
         State::Instance().isShuttingDown = true;
+        DlssNr::ExperimentalSession::MarkCleanShutdown();
+        DlssNr::ExperimentalSession::MarkCleanShutdown();
 
         // Unhooking and cleaning stuff causing issues during shutdown.
         // Disabled for now to check if it cause any issues

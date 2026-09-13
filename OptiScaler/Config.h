@@ -195,6 +195,10 @@ class Config
     // Multipass is a separate opt-in. A count of one is deliberately valid and behaves exactly like
     // the established single-pass route; up to nine later passes own independent sessions/history.
     NrOptional<bool> DlssNrMultipassEnabled { false };
+    NrOptional<bool> DlssNrExperimentalMode { false };
+    NrOptional<bool> DlssNrOverrideMultipassGuardrails { false };
+    NrOptional<bool> DlssNrOverrideHdrGuardrails { false };
+    NrOptional<bool> DlssNrOverrideFgGuardrails { false };
     NrOptional<DlssNr::BasicMultipass::Profile> DlssNrBasicMultipass { {} };
     // Experimental D3D12-only second composed NR layer. Off preserves the established single-pass
     // route exactly. Profiles created before these keys existed are seeded once from layer 1 during
@@ -905,6 +909,8 @@ class Config
 
     bool LoadFromPath(const wchar_t* InPath);
     bool SaveIni();
+    bool SaveMenuInputSettings(bool mouse, bool keyboard, bool controller);
+    bool SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration);
     bool SaveXeFG();
 
     void CheckUpscalerFiles();
