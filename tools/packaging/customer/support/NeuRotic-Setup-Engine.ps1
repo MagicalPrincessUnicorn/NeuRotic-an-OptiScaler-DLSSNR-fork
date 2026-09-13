@@ -33,6 +33,14 @@ function HashBytes([byte[]]$Bytes) {
     try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-','') }
     finally { $sha.Dispose() }
 }
+function Get-UninstallSnapshotRelative($Entry) {
+    if ($Entry.PSObject.Properties.Name -contains 'snapshot') {
+        $snapshot = [string]$Entry.snapshot
+        if ($snapshot -notmatch '^files\\[a-fA-F0-9]{64}\.bin$') { throw 'Invalid uninstall recovery snapshot path.' }
+        return $snapshot
+    }
+    return [string]$Entry.path
+}
 function SaveRecord([string]$Path, $Value) {
     $parent = Split-Path -Parent $Path
     if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
@@ -269,8 +277,9 @@ function New-UninstallTransaction([string]$GameRoot,[string[]]$Chain,[string[]]$
         $exists = Test-Path -LiteralPath $target -PathType Leaf
         if ((Test-Path -LiteralPath $target) -and -not $exists) { throw "Directory occupies transaction target: $target" }
         $hash = $(if ($exists) { HashFile $target } else { $null })
-        if ($exists) { CopyVerified $target (SafePath $recoveryRoot $_) $hash }
-        [pscustomobject]@{path=$_;existed=$exists;sha256=$hash}
+        $snapshot = 'files\' + (HashBytes ([Text.Encoding]::UTF8.GetBytes(([string]$_).ToLowerInvariant()))) + '.bin'
+        if ($exists) { CopyVerified $target (SafePath $recoveryRoot $snapshot) $hash }
+        [pscustomobject]@{path=$_;snapshot=$snapshot;existed=$exists;sha256=$hash}
     })
     $journal = [pscustomobject]@{kind='neurotic-uninstall-transaction';game_directory=$GameRoot;recovery=$recoveryRelative;files=$entries}
     SaveRecord $journalPath $journal
@@ -285,13 +294,14 @@ function Restore-UninstallTransaction([string]$GameRoot,$Journal) {
         if (-not (AllowedTarget $f.path) -and $f.path -notin @('NeuRotic\UserData\OptiScaler.ini','NeuRotic\Installer\Current-Install.json','Uninstall NeuRotic.cmd') -and
             $f.path -notmatch '^NeuRotic-(test-)?backups\\[^\\]+\\INSTALL-MANIFEST.json$') { throw 'Invalid recovery target.' }
         [void](SafePath $GameRoot $f.path)
-        if ($f.existed -and (HashFile (SafePath $recoveryRoot $f.path)) -ne $f.sha256) { throw 'Uninstall recovery snapshot failed verification.' }
+        $snapshot = Get-UninstallSnapshotRelative $f
+        if ($f.existed -and (HashFile (SafePath $recoveryRoot $snapshot)) -ne $f.sha256) { throw 'Uninstall recovery snapshot failed verification.' }
     }
     foreach ($f in $Journal.files) {
         $target = SafePath $GameRoot $f.path
         if ($f.existed) {
             if ((Test-Path -LiteralPath $target -PathType Leaf) -and (HashFile $target) -eq $f.sha256) { continue }
-            CopyVerified (SafePath $recoveryRoot $f.path) $target $f.sha256
+            CopyVerified (SafePath $recoveryRoot (Get-UninstallSnapshotRelative $f)) $target $f.sha256
         } elseif (Test-Path -LiteralPath $target -PathType Leaf) { Remove-Item -LiteralPath $target -Force }
     }
     Remove-Item -LiteralPath (SafePath $GameRoot 'NeuRotic\Installer\Uninstall-Transaction.json') -Force
@@ -300,7 +310,7 @@ function Restore-UninstallTransaction([string]$GameRoot,$Journal) {
 
 function Remove-UninstallSnapshots([string]$GameRoot,$Journal) {
     foreach ($f in $Journal.files) {
-        if ($f.existed) { Remove-OwnedFile $GameRoot ($Journal.recovery + '\' + $f.path) $f.sha256 }
+        if ($f.existed) { Remove-OwnedFile $GameRoot ($Journal.recovery + '\' + (Get-UninstallSnapshotRelative $f)) $f.sha256 }
     }
 }
 
@@ -321,7 +331,7 @@ function New-UninstallCleanup([string]$GameRoot,[string[]]$Chain,$State,$Journal
     }
     }
     foreach ($f in $Journal.files) {
-        if ($f.existed) { $entries += [pscustomobject]@{path=($Journal.recovery + '\' + $f.path);sha256=$f.sha256} }
+        if ($f.existed) { $entries += [pscustomobject]@{path=($Journal.recovery + '\' + (Get-UninstallSnapshotRelative $f));sha256=$f.sha256} }
     }
     if ($Mode -eq 'Full' -and $State) {
         if ($State.PSObject.Properties.Name -contains 'manager_files') { $entries += @($State.manager_files) }
