@@ -434,6 +434,7 @@
   "Experimental Native comparison: display conversion remains under investigation. Brightness may differ; no brightness adjustment is applied.": "Comparação nativa experimental: a conversão de exibição segue em investigação. O brilho pode diferir; nenhum ajuste é aplicado.",
   "Experimental compatibility settings changed": "Configurações de compatibilidade experimental alteradas",
   "Experimental options are inactive because another game process owns the experimental session marker.": "As opções experimentais estão inativas porque outro processo de jogo possui o marcador da sessão experimental.",
+  "Experimental options could not be activated because the crash-recovery marker could not be written.": "As opções experimentais não puderam ser ativadas porque o marcador de recuperação após falha não pôde ser gravado.",
   "Experimental settings could not be saved": "Não foi possível salvar as configurações experimentais",
   "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.": "Experimental: geração de quadros, Ray Reconstruction, NR Multipass e DX11.",
   "Exposure": "Exposição",

@@ -29,6 +29,7 @@ inline std::once_flag initializeOnce;
 inline HANDLE markerHandle = INVALID_HANDLE_VALUE;
 inline std::atomic<bool> recoveredUnclean { false };
 inline std::atomic<bool> concurrentOwner { false };
+inline std::atomic<bool> markerUnavailable { false };
 inline std::atomic<bool> noticeConsumed { false };
 inline std::atomic<double> initializedAtMs { 0.0 };
 
@@ -119,17 +120,34 @@ inline void Initialize(Config* config)
             Detail::concurrentOwner.store(true, std::memory_order_release);
         }
         else if (config->DlssNrExperimentalMode.value_or_default() && !Detail::WriteMarker(true))
+        {
             DisableInMemory(*config);
+            config->SaveExperimentalSettings(false, false, false, false);
+            Detail::markerUnavailable.store(true, std::memory_order_release);
+        }
         ExperimentalPolicy::SessionReady.store(true, std::memory_order_release);
     });
 }
 
-inline void Applied(Config& config)
+inline bool Applied(Config& config)
 {
+    const bool requested = config.DlssNrExperimentalMode.value_or_default();
     Initialize(&config);
-    if (config.DlssNrExperimentalMode.value_or_default()) Detail::WriteMarker(true);
-    else Detail::WriteMarker(false);
+    if (requested && !config.DlssNrExperimentalMode.value_or_default()) return false;
+    if (config.DlssNrExperimentalMode.value_or_default())
+    {
+        if (!Detail::WriteMarker(true))
+        {
+            DisableInMemory(config);
+            config.SaveExperimentalSettings(false, false, false, false);
+            Detail::markerUnavailable.store(true, std::memory_order_release);
+            return false;
+        }
+    }
+    else
+        Detail::WriteMarker(false);
     ExperimentalPolicy::Changed();
+    return true;
 }
 
 inline bool ConsumeRecoveryNotice(double nowMs)
@@ -144,6 +162,11 @@ inline bool ConsumeRecoveryNotice(double nowMs)
 inline bool ConsumeConcurrentOwnerNotice()
 {
     return Detail::concurrentOwner.exchange(false, std::memory_order_acq_rel);
+}
+
+inline bool ConsumeMarkerUnavailableNotice()
+{
+    return Detail::markerUnavailable.exchange(false, std::memory_order_acq_rel);
 }
 
 // Called during process detach. The handle is opened earlier, so this performs only fixed-size

@@ -145,6 +145,9 @@ Assert-Ui ($menu.Contains('Experimental Mode - Active') -and $menu.Contains('Ena
 Assert-Ui ($session.Contains('MarkerOwnerAlive') -and $session.Contains('recoveredUnclean') -and
            $session.Contains('SaveExperimentalSettings(false, false, false, false)') -and
            $menu.Contains('Last session ended unexpectedly. Experimental options have been disabled.')) 'an unclean active experimental session clears the master and child overrides and reports it after startup'
+Assert-Ui ($session.Contains('markerUnavailable') -and $session.Contains('if (!Detail::WriteMarker(true))') -and
+           $session.Contains('DisableInMemory(config)') -and
+           $menu.Contains('Experimental options could not be activated because the crash-recovery marker could not be written.')) 'experimental activation fails closed when its crash-recovery marker cannot be written'
 Assert-Ui ($nr.Contains('NR deactivated due to this rendering combination being untested') -and
            $nr.Contains('presentStatus.policyBlocked')) 'guarded Multipass combinations show the requested red explanation'
 Assert-Ui ($clip.Contains('bubbleAvailable = availableHeight - avatarHeight - padding') -and

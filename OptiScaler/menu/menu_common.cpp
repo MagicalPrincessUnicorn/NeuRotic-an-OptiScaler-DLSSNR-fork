@@ -7248,7 +7248,8 @@ void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
     if (auto section = ScopedCollapsingHeader("Neural Rendering experimental settings"); section.IsHeaderOpen())
     {
         bool requested = draft.active;
-        const char* state = draft.active ? "Experimental Mode - Active" : "Experimental Mode - Inactive";
+        const char* state = ctx.config->DlssNrExperimentalMode.value_or_default()
+            ? "Experimental Mode - Active" : "Experimental Mode - Inactive";
         if (ImGui::Checkbox(state, &requested))
         {
             if (requested)
@@ -7289,8 +7290,8 @@ void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
             if (ctx.config->SaveExperimentalSettings(draft.active, draft.multipass, draft.hdr,
                                                      draft.frameGeneration))
             {
-                draft.dirty = false;
-                DlssNr::ExperimentalSession::Applied(*ctx.config);
+                if (DlssNr::ExperimentalSession::Applied(*ctx.config)) draft.dirty = false;
+                else DlssNr::ExperimentalPolicy::ResetDraft(*ctx.config);
             }
             else
                 ImGui::OpenPopup("Experimental settings could not be saved");
@@ -7607,7 +7608,8 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
             menuInputDraft.dirty = false;
             DlssNr::ExperimentalPolicy::Draft.dirty = false;
             UpdateMenuInputMode(ctx);
-            DlssNr::ExperimentalSession::Applied(*config);
+            if (!DlssNr::ExperimentalSession::Applied(*config))
+                DlssNr::ExperimentalPolicy::ResetDraft(*config);
         }
         else
         {
@@ -8203,6 +8205,13 @@ bool MenuCommon::RenderMenu()
     {
         ImGuiToast notification { ImGuiToastType::Warning, 12000,
             "Experimental options are inactive because another game process owns the experimental session marker." };
+        notification.setTitle("NeuRotic experimental safety");
+        ImGui::InsertNotification(notification);
+    }
+    if (DlssNr::ExperimentalSession::ConsumeMarkerUnavailableNotice())
+    {
+        ImGuiToast notification { ImGuiToastType::Warning, 12000,
+            "Experimental options could not be activated because the crash-recovery marker could not be written." };
         notification.setTitle("NeuRotic experimental safety");
         ImGui::InsertNotification(notification);
     }
