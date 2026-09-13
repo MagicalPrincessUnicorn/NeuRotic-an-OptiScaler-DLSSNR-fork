@@ -1,4 +1,10 @@
-NEUROTIC - CUSTOMER CANDIDATE
+NEUROTIC ALPHA 0.9.6
+
+This public-format Alpha combines the coherent Neural Rendering integration,
+native DirectX 11 transport, the revised NR interface and Advisor, comparison
+screenshots, and the recovery-safe installer/uninstaller. It remains an Alpha:
+game support depends on the rendering API, route, frame-generation provider,
+Ray Reconstruction state, resources and driver.
 
 UNINSTALL
 Every public package includes NeuRotic-Uninstall.cmd. Run it, select the same game
@@ -64,6 +70,14 @@ Enable Neural Rendering there. Start with one pass; try two for Multi-Pass.
 Model Resolution, Model Strength and Detail Strength in Multi-Pass adjust all
 selected child passes together. Release a slider to apply. Pass 1 stays independent.
 
+COMPARISON SCREENSHOTS
+The Comparison screenshots section explains route compatibility before capture.
+DirectX 11 supports comparisons through active Present Image Only and Present
+Enhanced routes. Native Temporal and NR-off comparisons require DirectX 12.
+Native Temporal comparisons are experimental because the original/reference image
+can be darker than it should be due to an unresolved display-conversion defect.
+No brightness workaround or hidden adjustment is applied.
+
 SETTINGS AND MODEL
 Existing settings and your nvngx_dlssnr.dll model are preserved during installation,
 except that choosing the ReShade option sets LoadReshade to true.
@@ -88,9 +102,18 @@ If the selected filename exists, choose its disposition yourself in Setup.
 For troubleshooting, enable file logging at Info in Diagnostics, restart, reproduce
 the problem and retain OptiScaler.log. Switch logging off again afterwards.
 
-This candidate contains the public Alpha 0.9.5 rendering source with revised
-installation and removal tools. Installer recovery is checked with disposable game
-folders; real-game behavior requires a separate review before release.
+Alpha 0.9.6 is built from the coherent NR integration commit recorded in
+support\PACKAGE-MANIFEST.json. Offline, GPU-fixture, localization, build and
+disposable installer/recovery checks passed. Real-game acceptance of this exact
+binary remains incomplete, including Present Enhanced with combined FG/RR and
+the known Native screenshot conversion defect.
+
+REMOVE OLD TEST LAUNCHERS
+Earlier development tests used PowerShell wrappers in Steam Launch Options. Remove
+any option that points into C:\OptiScaler-NR-Dev\artifacts\handoffs before normal
+play. On the build machine these were found for Cyberpunk 2077, Monster Hunter
+Wilds and Crimson Desert Enhanced. Dragon's Dogma 2 was already clear. Keep normal
+game options that do not point to a NeuRotic test wrapper.
 
 Use only in games that permit modifications; avoid protected online sessions.
 These files are unsigned. No model downloads are performed by Setup.

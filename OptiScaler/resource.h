@@ -35,7 +35,7 @@
 // published GitHub release tags and deliberately does not follow upstream's DLL version.
 #define NEUROTIC_VERSION_MAJOR 0
 #define NEUROTIC_VERSION_MINOR 9
-#define NEUROTIC_VERSION_PATCH 5
+#define NEUROTIC_VERSION_PATCH 6
 
 #define VER_DEV_RELEASE
 // #define VER_PRE_RELEASE
