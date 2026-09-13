@@ -184,6 +184,7 @@ class MenuCommon
     // This is the single owner for the Neural Rendering page, including the separate
     // collapsible Multipass section beneath the first-pass controls.
     static void RenderNeuralRenderingPage(RenderMenuContext& ctx);
+    static void RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ctx);
     static void RenderFrameGenerationPage(RenderMenuContext& ctx);
     static void RenderAdvancedPage(RenderMenuContext& ctx);
     static void RenderToolsPage(RenderMenuContext& ctx);

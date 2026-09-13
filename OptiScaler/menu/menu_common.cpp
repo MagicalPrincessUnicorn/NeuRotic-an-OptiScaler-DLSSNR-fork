@@ -7222,7 +7222,7 @@ void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
     RenderUpscalerInputsSettings(ctx);
 }
 
-static void RenderNeuralRenderingExperimentalSettings(MenuCommon::RenderMenuContext& ctx)
+void MenuCommon::RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ctx)
 {
     auto& draft = DlssNr::ExperimentalPolicy::Draft;
     DlssNr::ExperimentalPolicy::EnsureDraft(*ctx.config);
