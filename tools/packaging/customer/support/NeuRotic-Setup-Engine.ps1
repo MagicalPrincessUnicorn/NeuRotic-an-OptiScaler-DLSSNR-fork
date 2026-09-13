@@ -16,6 +16,7 @@ param(
     [ValidateSet('Update','Repair','ChangeProxy','Uninstall','Cancel')]
     [string]$ExistingInstallAction,
     [switch]$AdoptModifiedInstall,
+    [switch]$RetireObsoleteOptiScalerProxy,
     [ValidateSet('KeepSettings','RemoveSettings','Full')]
     [string]$UninstallMode,
     [ValidateSet('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')]
@@ -934,13 +935,28 @@ while ($true) {
 $ProxyName = $selectedProxy
 
 # Never infer the selected name from an existing DLL. Refuse a second active OptiScaler proxy.
+$retiredObsoleteProxy = $null
 $otherOptiScaler = @($allowedProxies | Where-Object { $_ -ine $ProxyName -and $_ -ine $changingFromProxy } | Where-Object {
     $candidate = SafePath $gameDir $_
     (Test-Path -LiteralPath $candidate -PathType Leaf) -and
         (Get-Item -LiteralPath $candidate).VersionInfo.OriginalFilename -ieq 'OptiScaler.dll'
 })
 if ($otherOptiScaler.Count) {
-    throw "NeuRotic/OptiScaler is already installed under $($otherOptiScaler -join ', '). Restore that installation before installing another proxy."
+    $canRetire = $adoptedModifiedInstall -and $otherOptiScaler.Count -eq 1 -and $otherOptiScaler[0] -ieq 'OptiScaler.dll'
+    $retire = $RetireObsoleteOptiScalerProxy
+    if ($canRetire -and -not $retire -and -not $ExistingInstallAction) {
+        Write-Host ''
+        Write-Host 'An older bare OptiScaler.dll is also present. Setup did not create a record for it.'
+        Write-Host '1. Preserve it in this update''s recovery backup and retire it before continuing'
+        Write-Host '0. Cancel'
+        $retire = ((Read-Host 'Choose 0 or 1').Trim() -eq '1')
+    }
+    if (-not $canRetire -or -not $retire) {
+        throw "NeuRotic/OptiScaler is already installed under $($otherOptiScaler -join ', '). Restore that installation before installing another proxy."
+    }
+    $obsoletePath = SafePath $gameDir 'OptiScaler.dll'
+    $retiredObsoleteProxy = [pscustomobject]@{path='OptiScaler.dll';target=$obsoletePath;sha256=(HashFile $obsoletePath)}
+    Write-Host 'The older bare OptiScaler.dll will be preserved in this update''s recovery backup and restored if this update is uninstalled.'
 }
 
 $files = New-Object System.Collections.Generic.List[object]
@@ -982,6 +998,10 @@ foreach ($file in $manifest.files) {
 if ($action -eq 'RenameReShade') {
     $files.Add([pscustomobject][ordered]@{path='ReShade64.dll';source=$null;operation='rename-existing-proxy';existed=$false;
         previous_hash=$null;installed_hash=(HashFile $proxyPath)})
+}
+if ($retiredObsoleteProxy) {
+    $files.Add([pscustomobject][ordered]@{path=$retiredObsoleteProxy.path;source=$null;operation='retire-obsolete-optiscaler-proxy';existed=$true;
+        previous_hash=$retiredObsoleteProxy.sha256;installed_exists=$false;installed_hash=$null})
 }
 $oldProxyTransition = $null
 if ($changingFromProxy) {
@@ -1026,6 +1046,7 @@ Write-Output ('NeuRotic - ' + $identityLabel + $manifest.commit.Substring(0,8))
 Write-Output "Game: $GameExecutable"
 Write-Output "Install target: $ProxyName"
 if ($oldProxyTransition) { Write-Output "Proxy change: restore/remove managed $changingFromProxy, then install as $ProxyName in one rollback transaction." }
+if ($retiredObsoleteProxy) { Write-Output 'Older bare OptiScaler.dll: preserve in recovery backup, then retire it before installing the selected proxy.' }
 if ($action -eq 'RenameReShade') {
     Write-Output 'Existing dxgi.dll: rename to ReShade64.dll and enable LoadReshade.'
 } elseif ($action -eq 'Replace') {
@@ -1121,8 +1142,14 @@ try {
             Remove-Item -LiteralPath $oldProxyTransition.target -Force
         }
     }
+    if ($retiredObsoleteProxy) {
+        Touch $retiredObsoleteProxy.path
+        if ((HashFile $retiredObsoleteProxy.target) -ne $retiredObsoleteProxy.sha256) { throw 'The older bare OptiScaler.dll changed before installation.' }
+        Remove-Item -LiteralPath $retiredObsoleteProxy.target -Force
+        if (Test-Path -LiteralPath $retiredObsoleteProxy.target) { throw 'The older bare OptiScaler.dll could not be retired.' }
+    }
     foreach ($file in $files) {
-        if ($file.operation -in @('rename-existing-proxy','restore-old-managed-proxy')) { continue }
+        if ($file.operation -in @('rename-existing-proxy','restore-old-managed-proxy','retire-obsolete-optiscaler-proxy')) { continue }
         $target = SafePath $gameDir $file.path
         if ($file.operation -eq 'preserve-existing') {
             if ((HashFile $target) -ne $file.previous_hash) { throw 'OptiScaler.ini changed before installation.' }

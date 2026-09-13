@@ -318,16 +318,18 @@ RunEngine 'adopted-install-original' @('-GameExecutable',(Join-Path $adopted 'Fi
 $oldBackup=Backup $adopted
 [IO.File]::WriteAllText((Join-Path $adopted 'dxgi.dll'),'externally updated proxy')
 [IO.File]::WriteAllText((Join-Path $adopted 'nvngx.dll_dlssnr.dll'),'externally updated forwarder')
+[IO.File]::Copy((Join-Path $PackageRoot 'payload\OptiScaler.dll'),(Join-Path $adopted 'OptiScaler.dll'))
 $adoptedProxyHash=HashFile (Join-Path $adopted 'dxgi.dll')
 $adoptedForwarderHash=HashFile (Join-Path $adopted 'nvngx.dll_dlssnr.dll')
+$adoptedBareProxyHash=HashFile (Join-Path $adopted 'OptiScaler.dll')
 $adoptedBefore=Inventory $adopted
 RunEngine 'adopted-modified-refusal' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ExistingInstallAction','Update') $false | Out-Null
 Check ((Inventory $adopted) -eq $adoptedBefore) 'Modified managed files are refused without an explicit adoption choice'
-RunEngine 'adopted-modified-install' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-AdoptModifiedInstall','-ExistingProxyAction','Replace') | Out-Null
+RunEngine 'adopted-modified-install' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-AdoptModifiedInstall','-RetireObsoleteOptiScalerProxy','-ExistingProxyAction','Replace') | Out-Null
 $state=Get-Content -Raw -LiteralPath (Join-Path $adopted 'NeuRotic\Installer\Current-Install.json') | ConvertFrom-Json
 Check ($state.adopted_modified_install -and $state.restore_chain.Count -eq 1 -and (Test-Path -LiteralPath (Join-Path $oldBackup 'INSTALL-MANIFEST.json'))) 'Explicit adoption preserves earlier records and starts a verified recovery lineage'
 RunEngine 'adopted-modified-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
-Check ((HashFile (Join-Path $adopted 'dxgi.dll')) -eq $adoptedProxyHash -and (HashFile (Join-Path $adopted 'nvngx.dll_dlssnr.dll')) -eq $adoptedForwarderHash) 'Adopted install uninstall restores the exact externally updated files'
+Check ((HashFile (Join-Path $adopted 'dxgi.dll')) -eq $adoptedProxyHash -and (HashFile (Join-Path $adopted 'nvngx.dll_dlssnr.dll')) -eq $adoptedForwarderHash -and (HashFile (Join-Path $adopted 'OptiScaler.dll')) -eq $adoptedBareProxyHash) 'Adopted install uninstall restores the exact externally updated files'
 
 # A modified managed state/record must never redirect restore work to another game folder.
 $tamperedState=Fixture 'public-tampered-state' $true
