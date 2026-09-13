@@ -15,6 +15,7 @@ param(
     [string]$GameDirectory,
     [ValidateSet('Update','Repair','ChangeProxy','Uninstall','Cancel')]
     [string]$ExistingInstallAction,
+    [switch]$AdoptModifiedInstall,
     [ValidateSet('KeepSettings','RemoveSettings','Full')]
     [string]$UninstallMode,
     [ValidateSet('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','OptiScaler.dll')]
@@ -232,6 +233,7 @@ function Remove-OwnedFile([string]$Root,[string]$Relative,[string]$ExpectedHash)
 
 function Test-RestoreChain([string]$GameRoot,[string[]]$Chain) {
     $hashes = @{}; $seen = @{}
+    $mismatches = New-Object System.Collections.Generic.List[string]
     foreach ($path in $Chain) {
         [void](Assert-PathUnderRoot $GameRoot $path)
         if ($path.Substring($GameRoot.Length+1) -notmatch '^NeuRotic-(test-)?backups\\[^\\]+\\INSTALL-MANIFEST\.json$') {
@@ -252,7 +254,7 @@ function Test-RestoreChain([string]$GameRoot,[string[]]$Chain) {
             }
             $expected = -not ($f.PSObject.Properties.Name -contains 'installed_exists') -or [bool]$f.installed_exists
             if ($f.path -ne 'OptiScaler.ini' -and (($expected -and $null -ne $hashes[$f.path] -and $hashes[$f.path] -ne $f.installed_hash) -or
-                (-not $expected -and $null -ne $hashes[$f.path]))) { throw "Restore chain does not match: $($f.path)" }
+                (-not $expected -and $null -ne $hashes[$f.path]))) { [void]$mismatches.Add($f.path) }
             if ($f.existed) {
                 $previous = SafePath (Join-Path $r.backup 'previous') $f.path
                 if ((HashFile $previous) -ne $f.previous_hash) { throw "Backup verification failed: $previous" }
@@ -260,6 +262,7 @@ function Test-RestoreChain([string]$GameRoot,[string[]]$Chain) {
             $hashes[$f.path] = $(if ($f.existed) { $f.previous_hash } else { $null })
         }
     }
+    if ($mismatches.Count) { throw ('Restore chain does not match: ' + (($mismatches | Select-Object -Unique) -join ', ')) }
 }
 
 function New-UninstallTransaction([string]$GameRoot,[string[]]$Chain,[string[]]$AdditionalPaths=@()) {
@@ -808,6 +811,8 @@ if (Test-Path -LiteralPath (SafePath $gameDir 'NeuRotic\Installer\Cleanup-Pendin
 }
 $priorState = $null
 $retainedState = $null
+$adoptedModifiedInstall = $false
+$adoptedPriorRelease = $null
 $changingFromProxy = $null
 if (Test-Path -LiteralPath $currentStatePath -PathType Leaf) {
     $priorState = Get-Content -Raw -Encoding UTF8 -LiteralPath $currentStatePath | ConvertFrom-Json
@@ -824,7 +829,30 @@ if (Test-Path -LiteralPath $currentStatePath -PathType Leaf) {
 }
 if ($priorState) {
     $verifyChain = @($priorState.restore_chain | ForEach-Object { [string]$_ }); [array]::Reverse($verifyChain)
-    Test-RestoreChain $gameDir $verifyChain
+    try {
+        Test-RestoreChain $gameDir $verifyChain
+    } catch {
+        $chainFailure = $_
+        if ($chainFailure.Exception.Message -notlike 'Restore chain does not match:*') { throw }
+        $adopt = $AdoptModifiedInstall
+        if (-not $adopt -and -not $ExistingInstallAction) {
+            Write-Host ''
+            Write-Host 'A previous NeuRotic installation record does not match the files now in this game folder.'
+            Write-Host 'Setup has not changed any files.'
+            Write-Host ('Changed recorded targets: ' + $chainFailure.Exception.Message.Substring('Restore chain does not match: '.Length))
+            Write-Host '1. Preserve the current files as this update''s recovery baseline and continue'
+            Write-Host '0. Cancel'
+            $adopt = ((Read-Host 'Choose 0 or 1').Trim() -eq '1')
+        }
+        if (-not $adopt) {
+            throw 'The managed installation was changed after its recorded install. Setup made no changes. Re-run with -AdoptModifiedInstall only if the current game files are the state you want this update to restore on uninstall.'
+        }
+        $adoptedModifiedInstall = $true
+        $adoptedPriorRelease = [string]$priorState.release_name
+        Write-Host 'The current game files will be preserved as the recovery baseline for this update. Earlier backup records will remain untouched.'
+        $priorState = $null
+    }
+    if ($priorState) {
     if ($ExistingInstallAction -eq 'Cancel') { Write-Output 'Setup cancelled. No files were changed.'; return }
     if ($ExistingInstallAction -eq 'Uninstall') { $script:GameDirectory = $gameDir; Invoke-PublicUninstall; return }
     if (-not $ProxyName) {
@@ -865,6 +893,7 @@ if ($priorState) {
     } elseif (-not $ExistingProxyAction -and (Test-Path -LiteralPath (SafePath $gameDir $ProxyName) -PathType Leaf)) {
         $ExistingProxyAction = 'Replace'
     }
+}
 }
 $action = 'None'
 $scriptedAction = $ExistingProxyAction
@@ -1158,6 +1187,11 @@ pause
         install_history=$history;restore_chain=$chain;installed_uninstaller='Uninstall NeuRotic.cmd';
         preserved=$preserved;uninstalled_utc=$null;uninstall_mode=$null;
         manager_files=@([pscustomobject]@{path='NeuRotic\Installer\NeuRotic-Setup-Engine.ps1';sha256=(HashFile $installedEngine)})}
+    if ($adoptedModifiedInstall) {
+        $state.adopted_modified_install = $true
+        $state.adopted_previous_release = $adoptedPriorRelease
+        $state.adopted_utc = $record.completed_utc
+    }
     SaveRecord $currentStatePath $state
 } catch {
     $record.error=$_.Exception.Message

@@ -311,6 +311,24 @@ Check (Test-Path -LiteralPath (Join-Path $stacked 'dxgi.dll')) 'Uninstall previe
 RunEngine 'stacked-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $stacked 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
 Check (-not (Test-Path -LiteralPath (Join-Path $stacked 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $stacked 'OptiScaler.ini'))) 'One uninstall walks stacked updates back to the original fresh state'
 
+# A deliberate external update must not silently merge into a managed restore chain.
+# Adoption creates a new, one-entry lineage that restores the exact current files on uninstall.
+$adopted=Fixture 'public-adopt-modified-install' $true
+RunEngine 'adopted-install-original' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
+$oldBackup=Backup $adopted
+[IO.File]::WriteAllText((Join-Path $adopted 'dxgi.dll'),'externally updated proxy')
+[IO.File]::WriteAllText((Join-Path $adopted 'nvngx.dll_dlssnr.dll'),'externally updated forwarder')
+$adoptedProxyHash=HashFile (Join-Path $adopted 'dxgi.dll')
+$adoptedForwarderHash=HashFile (Join-Path $adopted 'nvngx.dll_dlssnr.dll')
+$adoptedBefore=Inventory $adopted
+RunEngine 'adopted-modified-refusal' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ExistingInstallAction','Update') $false | Out-Null
+Check ((Inventory $adopted) -eq $adoptedBefore) 'Modified managed files are refused without an explicit adoption choice'
+RunEngine 'adopted-modified-install' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-AdoptModifiedInstall','-ExistingProxyAction','Replace') | Out-Null
+$state=Get-Content -Raw -LiteralPath (Join-Path $adopted 'NeuRotic\Installer\Current-Install.json') | ConvertFrom-Json
+Check ($state.adopted_modified_install -and $state.restore_chain.Count -eq 1 -and (Test-Path -LiteralPath (Join-Path $oldBackup 'INSTALL-MANIFEST.json'))) 'Explicit adoption preserves earlier records and starts a verified recovery lineage'
+RunEngine 'adopted-modified-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
+Check ((HashFile (Join-Path $adopted 'dxgi.dll')) -eq $adoptedProxyHash -and (HashFile (Join-Path $adopted 'nvngx.dll_dlssnr.dll')) -eq $adoptedForwarderHash) 'Adopted install uninstall restores the exact externally updated files'
+
 # A modified managed state/record must never redirect restore work to another game folder.
 $tamperedState=Fixture 'public-tampered-state' $true
 $otherGame=Fixture 'public-tampered-state-other-game' $true
