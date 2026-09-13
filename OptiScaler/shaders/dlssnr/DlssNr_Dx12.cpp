@@ -320,11 +320,24 @@ struct NrState
     uint32_t preSrObservedOutHeight = 0;
     DXGI_FORMAT preSrObservedOutFormat = DXGI_FORMAT_UNKNOWN;
     int preSrObservedPerfQuality = -999999;
+    PreSrSignature preSrObservedSignature {};
+    bool preSrSignatureValid = false;
     // A transition is complete once the new resources/features have been created and one
     // evaluation has succeeded. This is deliberately readiness-based rather than a fixed number
     // of rendered frames, so high-refresh systems do not race through an arbitrary settle window.
     bool preSrAwaitingEvaluation = false;
-    bool preSrResetWasRequested = false;
+    DlssNr::PreSrResetPolicyState preSrResetPolicy {};
+    bool preSrStructuralResetHeld = false;
+    bool preSrSoftResetBurstActive = false;
+    unsigned long long preSrSoftResetBurstCount = 0;
+    unsigned long long preSrSoftResetBurstFrames = 0;
+    unsigned long long preSrSoftResetEvaluationAttempts = 0;
+    unsigned long long preSrSoftResetEvaluationSuccesses = 0;
+    unsigned long long preSrSoftResetEvaluationFailures = 0;
+    unsigned long long preSrSoftResetBuildsAtStart = 0;
+    unsigned long long preSrSoftResetRebuildsAtStart = 0;
+    unsigned long long preSrSoftResetFeatureRetiresAtStart = 0;
+    unsigned long long preSrSoftResetResourceRetiresAtStart = 0;
     bool nativeRayReconstructionActive = false;
     TransitionFailureCircuit preSrFailureCircuit {};
     TransitionFailureCircuit preDlaaFailureCircuit {};
@@ -590,6 +603,8 @@ unsigned long long g_frames = 0;
 unsigned long long g_gameResetEvents = 0;
 unsigned long long g_featureBuilds = 0;
 unsigned long long g_featureRebuilds = 0;
+unsigned long long g_featureRetirements = 0;
+unsigned long long g_resourceRetirements = 0;
 unsigned long long g_evaluateFailures = 0;
 unsigned long long g_layer2FeatureBuilds = 0;
 unsigned long long g_layer2FeatureRetires = 0;
@@ -1111,6 +1126,7 @@ void ParkNrFeature(void*& feature)
     r.feature = feature;
     feature = nullptr;
     g_nrRetired.push_back(r);
+    ++g_featureRetirements;
 }
 
 void ParkNrResource(ID3D12Resource*& res)
@@ -1122,6 +1138,7 @@ void ParkNrResource(ID3D12Resource*& res)
     r.resource = res;
     res = nullptr;
     g_nrRetired.push_back(r);
+    ++g_resourceRetirements;
 }
 
 NrSecondLayerState& AdditionalLayer(size_t index)
@@ -1148,11 +1165,79 @@ void ParkAdditionalLayerFeature(size_t index, const char* reason)
     layer.ready = false;
     layer.reset = true;
     ++g_layer2FeatureRetires;
+    ++g_featureRetirements;
     g_nrRetired.push_back(retired);
     LOG_INFO("DLSS-NR pass {}: retiring generation {} ({})", index + 2, g_layer2FeatureRetires, reason);
 }
 
 void ParkSecondLayerFeature(const char* reason) { ParkAdditionalLayerFeature(0, reason); }
+
+void EndPreSrSoftResetBurst(const char* reason)
+{
+    if (!g_nr.preSrSoftResetBurstActive)
+        return;
+
+    LOG_INFO("DLSS-NR Pre-SR soft-reset burst {} ended (reason={}, frames={}, evaluations={}, "
+             "successes={}, failures={}, feature builds={}, rebuilds={}, feature retirements={}, "
+             "resource retirements={})",
+             g_nr.preSrSoftResetBurstCount, reason, g_nr.preSrSoftResetBurstFrames,
+             g_nr.preSrSoftResetEvaluationAttempts, g_nr.preSrSoftResetEvaluationSuccesses,
+             g_nr.preSrSoftResetEvaluationFailures,
+             g_featureBuilds - g_nr.preSrSoftResetBuildsAtStart,
+             g_featureRebuilds - g_nr.preSrSoftResetRebuildsAtStart,
+             g_featureRetirements - g_nr.preSrSoftResetFeatureRetiresAtStart,
+             g_resourceRetirements - g_nr.preSrSoftResetResourceRetiresAtStart);
+    g_nr.preSrSoftResetBurstActive = false;
+}
+
+void BeginPreSrSoftResetBurst()
+{
+    if (g_nr.preSrSoftResetBurstActive)
+        return;
+
+    g_nr.preSrSoftResetBurstActive = true;
+    ++g_nr.preSrSoftResetBurstCount;
+    g_nr.preSrSoftResetBurstFrames = 0;
+    g_nr.preSrSoftResetEvaluationAttempts = 0;
+    g_nr.preSrSoftResetEvaluationSuccesses = 0;
+    g_nr.preSrSoftResetEvaluationFailures = 0;
+    g_nr.preSrSoftResetBuildsAtStart = g_featureBuilds;
+    g_nr.preSrSoftResetRebuildsAtStart = g_featureRebuilds;
+    g_nr.preSrSoftResetFeatureRetiresAtStart = g_featureRetirements;
+    g_nr.preSrSoftResetResourceRetiresAtStart = g_resourceRetirements;
+    LOG_INFO("DLSS-NR Pre-SR soft-reset burst {} started; retaining Feature 18 and compatible scratch",
+             g_nr.preSrSoftResetBurstCount);
+}
+
+void RecordPreSrSoftResetEvaluation(bool attempted, bool succeeded)
+{
+    if (!g_nr.preSrSoftResetBurstActive)
+        return;
+    if (!attempted)
+    {
+        ++g_nr.preSrSoftResetEvaluationFailures;
+        return;
+    }
+
+    ++g_nr.preSrSoftResetEvaluationAttempts;
+    if (succeeded)
+        ++g_nr.preSrSoftResetEvaluationSuccesses;
+    else
+        ++g_nr.preSrSoftResetEvaluationFailures;
+}
+
+struct PreSrSoftResetFrameTelemetry
+{
+    bool active = false;
+    bool attempted = false;
+    bool succeeded = false;
+
+    ~PreSrSoftResetFrameTelemetry()
+    {
+        if (active)
+            RecordPreSrSoftResetEvaluation(attempted, succeeded);
+    }
+};
 
 void ParkAllAdditionalLayerFeatures(const char* reason)
 {
@@ -2444,10 +2529,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     if (frame.Reset)
     {
-        g_nr.reset = true;
+        g_nr.reset = DlssNr::PassResetForFrame(true, g_nr.reset);
         for (size_t index = 0; index < 9; ++index)
         {
-            AdditionalLayer(index).reset = true;
+            AdditionalLayer(index).reset =
+                DlssNr::PassResetForFrame(true, AdditionalLayer(index).reset);
             AdditionalLayer(index).ready = false;
         }
         ++g_gameResetEvents;
@@ -3319,22 +3405,23 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const unsigned int guideOrigins[] = {frame.DepthSubrectX, frame.DepthSubrectY,
                                          frame.MotionSubrectX, frame.MotionSubrectY};
     const bool enhanced = privateCommandList && cfg.DlssNrRoute.value_or_default() == 2;
+    const bool mainResetSubmitted = g_nr.reset;
     const int result = enhanced ? (g_nr.evaluateGuided ? g_nr.evaluateGuided(
         cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
         workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
-        g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+        mainResetSubmitted ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
         (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
         cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
         cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
         g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY, guideOrigins) : 0) :
         useProxy ? static_cast<int>(DlssNr::Proxy::Run(
         cmdList, device, modelInput, depthIn, motionIn, g_nr.output, workWidth, workHeight,
-        guideWidth, guideHeight, g_nr.guideDepthInverted, g_nr.reset,
+        guideWidth, guideHeight, g_nr.guideDepthInverted, mainResetSubmitted,
         g_nr.guideMvScaleX * mvToWork.x, g_nr.guideMvScaleY * mvToWork.y,
         frame.JitterX, frame.JitterY, cfg)) : g_nr.evaluate(
         cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
         workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
-        g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+        mainResetSubmitted ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
         (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
         cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
         cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
@@ -3343,7 +3430,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (g_ngxTime != nullptr)
         g_ngxTime->End(cmdList);
 
-    g_nr.reset = false;
+    g_nr.reset = DlssNr::ResetPendingAfterPass(mainResetSubmitted,
+                                               result == NVSDK_NGX_Result_Success);
 
     // Supersampling probe: report the model working ABOVE native so a test log tells us whether NGX even
     // accepts a super-native evaluate and what it returns. Once per working-size change, or on any error.
@@ -3643,11 +3731,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     if (g_ngxTimeLayer2 != nullptr)
                         g_ngxTimeLayer2->Start(cmdList);
 
+                    const bool layer2ResetSubmitted = g_nr.layer2.reset;
                     const int layer2Result = g_nr.evaluate(
                         cmdList, g_nr.layer2.feature, g_nr.capabilityParams, layer2ModelInput,
                         depthIn, motionIn, g_nr.layer2.output, layer2WorkWidth, layer2WorkHeight, guideWidth,
                         guideHeight, g_nr.guideDepthInverted ? 1 : 0,
-                        g_nr.layer2.reset ? 1 : 0, layer2Tuning.intensity,
+                        layer2ResetSubmitted ? 1 : 0, layer2Tuning.intensity,
                         (int) layer2Tuning.style, layer2Tuning.localStructure,
                         layer2Tuning.localTone, layer2Tuning.skinStructure,
                         layer2Tuning.autoMask ? 1 : 0,
@@ -3656,6 +3745,9 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
                     if (g_ngxTimeLayer2 != nullptr)
                         g_ngxTimeLayer2->End(cmdList);
+
+                    g_nr.layer2.reset = DlssNr::ResetPendingAfterPass(
+                        layer2ResetSubmitted, layer2Result == NVSDK_NGX_Result_Success);
 
                     if (layer2Result != NVSDK_NGX_Result_Success)
                     {
@@ -3672,7 +3764,6 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     }
                     else
                     {
-                        g_nr.layer2.reset = false;
                         resourceStates.Transition(g_nr.layer2.output,
                                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -3855,15 +3946,18 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 }
 
                 SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
+                const bool passResetSubmitted = layer.reset;
                 const int passResult = g_nr.evaluate(
                     cmdList, layer.feature, g_nr.capabilityParams, passModelInput, depthIn, motionIn,
                     layer.output, passWorkWidth, passWorkHeight, guideWidth, guideHeight,
-                    g_nr.guideDepthInverted ? 1 : 0, layer.reset ? 1 : 0,
+                    g_nr.guideDepthInverted ? 1 : 0, passResetSubmitted ? 1 : 0,
                     settings.tuning.intensity, (int) settings.tuning.style,
                     settings.tuning.localStructure, settings.tuning.localTone,
                     settings.tuning.skinStructure, settings.tuning.autoMask ? 1 : 0,
                     g_nr.guideMvScaleX * mvToPassWork.x,
                     g_nr.guideMvScaleY * mvToPassWork.y, frame.JitterX, frame.JitterY);
+                layer.reset = DlssNr::ResetPendingAfterPass(
+                    passResetSubmitted, passResult == NVSDK_NGX_Result_Success);
                 if (passResult != NVSDK_NGX_Result_Success)
                 {
                     ++g_layer2EvaluateFailures;
@@ -3876,7 +3970,6 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     break;
                 }
 
-                layer.reset = false;
                 resourceStates.Transition(layer.output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 bool superDownOk = false;
@@ -4055,6 +4148,7 @@ void RetryAfterFailure()
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     if (g_sessionClosed || g_shutdownFailed)
         return;
+    EndPreSrSoftResetBurst("manual failure retry");
     g_nr.failed = false;
     g_nr.reason = "";
     g_nr.reset = true;
@@ -4075,6 +4169,7 @@ void NotifyUpscalerRelease()
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    EndPreSrSoftResetBurst("native upscaler feature release");
 
     // A same-size native DLSS recreation is still a temporal discontinuity.  Forget the observed
     // identity so the next Pre-SR call rebuilds its scratch path, requests an NR history reset, and
@@ -4086,9 +4181,12 @@ void NotifyUpscalerRelease()
     g_nr.preSrObservedOutHeight = 0;
     g_nr.preSrObservedOutFormat = DXGI_FORMAT_UNKNOWN;
     g_nr.preSrObservedPerfQuality = -999999;
+    g_nr.preSrObservedSignature = {};
+    g_nr.preSrSignatureValid = false;
     g_nr.preSrScratchPrimed = false;
     g_nr.preSrAwaitingEvaluation = true;
-    g_nr.preSrResetWasRequested = false;
+    g_nr.preSrResetPolicy = {};
+    g_nr.preSrStructuralResetHeld = false;
     g_nr.reset = true;
     for (size_t index = 0; index < 9; ++index)
     {
@@ -4451,7 +4549,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                      outputDesc.Format,
                                      expectedWorkW,
                                      expectedWorkH,
-                                     havePerfQuality ? perfQuality : -999999,
+                                     havePerfQuality ? perfQuality : g_nr.preSrObservedPerfQuality,
                                      cfg.DlssNrPreDlaa.value_or_default(),
                                      cfg.DlssNrPreset.value_or_default(),
                                      cfg.DlssNrIntensity.value_or_default(),
@@ -4472,24 +4570,15 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         params->Get(NVSDK_NGX_Parameter_Reset, &resetValue) == NVSDK_NGX_Result_Success &&
         resetValue != 0;
 
-    // Games may hold Reset high for several evaluations. Treat it as a transition event only on
-    // the rising edge; repeatedly parking the same resources while Reset remains high turns a
-    // normal reset into an unnecessary teardown loop.
-    const bool resetEdge = resetRequested && !g_nr.preSrResetWasRequested;
-    const bool resetEnded = !resetRequested && g_nr.preSrResetWasRequested;
-    g_nr.preSrResetWasRequested = resetRequested;
+    const PreSrResetPolicyDecision resetPolicy = AdvancePreSrResetPolicy(
+        g_nr.preSrResetPolicy, resetRequested,
+        cfg.DlssNrPreSrSoftReset.value_or_default());
 
-    // A reset can remain asserted across several evaluations. Keep NR bypassed only while Reset is
-    // actually held, then let the first coherent post-reset frame rebuild and seed the replacement.
-    // This preserves the held-reset safety property without an arbitrary frame-count delay.
-    if (resetRequested || resetEnded)
+    if (resetPolicy.resetStarted)
     {
-        g_nr.reset = true;
-        for (size_t index = 0; index < 9; ++index)
-        {
-            AdditionalLayer(index).reset = true;
-            AdditionalLayer(index).ready = false;
-        }
+        LOG_INFO("DLSS-NR Pre-SR Reset burst policy: {} (experimental PreSrSoftReset={})",
+                 resetPolicy.softResetForBurst ? "soft reset" : "conservative transition",
+                 cfg.DlssNrPreSrSoftReset.value_or_default() ? 1 : 0);
     }
 
     const bool inputChanged =
@@ -4513,7 +4602,95 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         g_nr.preSrObservedOutWidth == 0 ||
         g_nr.preSrObservedOutHeight == 0;
 
-    if (firstObservation || inputChanged || outputChanged || qualityChanged || resetEdge || resetEnded)
+    const bool configurationChanged =
+        g_nr.preSrSignatureValid && !(g_nr.preSrObservedSignature == signature);
+    const bool nrRestart =
+        cfg.GetDlssNrRuntimeSnapshot().resumeGeneration != g_nr.resumeGeneration;
+    const bool structuralChange =
+        firstObservation || inputChanged || outputChanged || qualityChanged ||
+        configurationChanged || nrRestart || resetPolicy.conservativeTransition;
+
+    bool resourcesReady =
+        !g_nr.failed && g_nr.feature != nullptr && g_nr.output != nullptr && g_nr.colorCopy != nullptr &&
+        g_nr.hdrCopy != nullptr && g_nr.preSrScratch != nullptr && g_nr.preSrRejitter != nullptr;
+    if (expectedWorkW != observedWidth || expectedWorkH != observedHeight)
+        resourcesReady = resourcesReady && g_nr.colorSmall != nullptr;
+    if (cfg.DlssNrPreDlaa.value_or_default())
+        resourcesReady = resourcesReady && g_nr.preDlaaFeature != nullptr &&
+                         g_nr.preDlaaOutput != nullptr;
+
+    bool additionalPassesCompatible = true;
+    const unsigned int requestedPassCount = RequestedPassCount(cfg);
+    for (size_t index = 0; index + 1 < requestedPassCount; ++index)
+    {
+        const auto settings = PassSettings(cfg, static_cast<unsigned int>(index + 1));
+        const float passScale = std::clamp(settings.workingScale, 0.25f, 2.0f);
+        const unsigned int passWorkW =
+            std::max(8u, (unsigned int) (observedWidth * passScale + 0.5f) & ~7u);
+        const unsigned int passWorkH =
+            std::max(8u, (unsigned int) (observedHeight * passScale + 0.5f) & ~7u);
+        const auto& layer = AdditionalLayer(index);
+        if (layer.failed)
+            continue;
+        resourcesReady = resourcesReady && layer.feature != nullptr && layer.output != nullptr &&
+                         layer.colorCopy != nullptr && layer.hdrCopy != nullptr;
+        if (passWorkW != observedWidth || passWorkH != observedHeight)
+            resourcesReady = resourcesReady && layer.colorSmall != nullptr;
+        additionalPassesCompatible = additionalPassesCompatible &&
+            layer.feature != nullptr && layer.width == observedWidth &&
+            layer.height == observedHeight && layer.workWidth == passWorkW &&
+            layer.workHeight == passWorkH && AdditionalLayerTuningMatches(cfg, index);
+    }
+
+    const bool sessionCompatible =
+        g_nr.preSrSignatureValid && g_nr.preSrObservedSignature == signature &&
+        g_nr.feature != nullptr && g_nr.width == observedWidth &&
+        g_nr.height == observedHeight && g_nr.workWidth == expectedWorkW &&
+        g_nr.workHeight == expectedWorkH && TuningMatchesFeature(cfg) &&
+        g_nr.preSrScratchPrimed && !g_nr.preSrAwaitingEvaluation &&
+        additionalPassesCompatible;
+
+    const PreSrEvent event = ClassifyPreSrEvent(
+        { resetRequested, structuralChange, sessionCompatible, resourcesReady,
+          g_nr.preSrStructuralResetHeld });
+
+    if (resetPolicy.resetEnded)
+    {
+        EndPreSrSoftResetBurst("Reset falling edge");
+        g_nr.preSrStructuralResetHeld = false;
+    }
+
+    const auto requestResetForAllPasses = [&]()
+    {
+        g_nr.reset = PassResetForFrame(resetRequested, g_nr.reset);
+        for (size_t index = 0; index < 9; ++index)
+        {
+            auto& layer = AdditionalLayer(index);
+            layer.reset = PassResetForFrame(resetRequested, layer.reset);
+            layer.ready = false;
+        }
+    };
+
+    const bool softResetFrame =
+        resetPolicy.softResetForBurst && event == PreSrEvent::SoftReset;
+    if (softResetFrame)
+    {
+        BeginPreSrSoftResetBurst();
+        ++g_nr.preSrSoftResetBurstFrames;
+        requestResetForAllPasses();
+    }
+    else if (resetRequested)
+    {
+        EndPreSrSoftResetBurst(event == PreSrEvent::FrameFailure
+                                  ? "reset-frame resource failure"
+                                  : "structural transition");
+        g_nr.preSrStructuralResetHeld = true;
+        requestResetForAllPasses();
+    }
+
+    PreSrSoftResetFrameTelemetry softResetTelemetry { softResetFrame };
+
+    if (structuralChange)
     {
         const int oldQuality = g_nr.preSrObservedPerfQuality;
 
@@ -4526,6 +4703,8 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
 
         if (havePerfQuality)
             g_nr.preSrObservedPerfQuality = perfQuality;
+        g_nr.preSrObservedSignature = signature;
+        g_nr.preSrSignatureValid = true;
 
         // Carry the transition into the NR feature itself so its first post-transition evaluation
         // cannot reuse the old scene's temporal history.
@@ -4542,21 +4721,23 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         ParkPreDlaa();
 
         LOG_WARN("DLSS-NR v10 RAW PRE-SR: DLSS transition detected "
-                 "(reset={}, input {}x{}, output {}x{}, quality {} -> {}); "
+                 "(reset={}, input {}x{}, output {}x{}, quality {} -> {}, configurationChanged={}); "
                  "raw pre-SR NR is bypassed until the new path is ready",
-                 resetEdge ? 1 : 0,
+                 resetRequested ? 1 : 0,
                  observedWidth, observedHeight,
                  observedOutWidth, observedOutHeight,
-                 oldQuality, havePerfQuality ? perfQuality : oldQuality);
+                 oldQuality, havePerfQuality ? perfQuality : oldQuality,
+                 configurationChanged ? 1 : 0);
 
     }
 
-    // Reset may remain asserted across several calls. Those frames are not a coherent post-reset
-    // configuration, so keep the native path untouched until the falling edge. The first frame after
-    // that edge proceeds directly into replacement preparation below.
-    if (resetRequested)
+    // A reset-only event evaluates immediately. A reset accompanied by structural evidence, a prior
+    // structural reset in the same held burst, or missing resources retains the conservative bypass.
+    if (resetRequested && !softResetFrame)
     {
-        ReportSkipOnce("Pre-SR reset held");
+        ReportSkipOnce(event == PreSrEvent::FrameFailure
+                           ? "Pre-SR reset frame resources unavailable"
+                           : "Pre-SR structural reset held");
         device->Release();
         return nullptr;
     }
@@ -4677,6 +4858,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     const unsigned long long successfulEvaluationsBefore = g_nr.completedPipelineEvaluations;
 
     params->Set(NVSDK_NGX_Parameter_Output, g_nr.preSrScratch);
+    softResetTelemetry.attempted = true;
     EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, true, cfg);
     params->Set(NVSDK_NGX_Parameter_Output, originalOutputVoid);
 
@@ -4910,6 +5092,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                  observedOutWidth, observedOutHeight);
     }
 
+    softResetTelemetry.succeeded = true;
     device->Release();
     return color;
 }// Reads the game's parameter block and runs the pass on what it finds.
@@ -5640,6 +5823,7 @@ bool Shutdown()
     if (g_sessionClosed)
         return !g_shutdownFailed;
     g_sessionClosed = true;
+    EndPreSrSoftResetBurst("session shutdown");
 
     if (g_compose) g_compose->ReportFinalPool();
     for (const auto& [reason, counts] : SkipReasons())
@@ -5755,8 +5939,17 @@ bool Shutdown()
     g_nr.preSrObservedOutHeight = 0;
     g_nr.preSrObservedOutFormat = DXGI_FORMAT_UNKNOWN;
     g_nr.preSrObservedPerfQuality = -999999;
+    g_nr.preSrObservedSignature = {};
+    g_nr.preSrSignatureValid = false;
     g_nr.preSrAwaitingEvaluation = false;
-    g_nr.preSrResetWasRequested = false;
+    g_nr.preSrResetPolicy = {};
+    g_nr.preSrStructuralResetHeld = false;
+    g_nr.preSrSoftResetBurstActive = false;
+    g_nr.preSrSoftResetBurstCount = 0;
+    g_nr.preSrSoftResetBurstFrames = 0;
+    g_nr.preSrSoftResetEvaluationAttempts = 0;
+    g_nr.preSrSoftResetEvaluationSuccesses = 0;
+    g_nr.preSrSoftResetEvaluationFailures = 0;
     g_nr.preSrScratchPrimed = false;
     g_nr.successfulEvaluations = 0;
     g_nr.completedPipelineEvaluations = 0;
@@ -5871,6 +6064,8 @@ bool Shutdown()
     g_gameResetEvents = 0;
     g_featureBuilds = 0;
     g_featureRebuilds = 0;
+    g_featureRetirements = 0;
+    g_resourceRetirements = 0;
     g_evaluateFailures = 0;
     g_layer2FeatureBuilds = 0;
     g_layer2FeatureRetires = 0;

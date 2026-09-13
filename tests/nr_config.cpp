@@ -58,6 +58,7 @@ struct TestConfig
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR
+    NrOptional<bool> DlssNrPreSrSoftReset { false };
     NrOptional<int> DlssNrToggleKey { UnboundKey };
     NrOptional<uint32_t> DlssNrPreset { 0 };
     NrOptional<float> DlssNrIntensity { 1.0f };

@@ -368,6 +368,7 @@ bool Config::Reload(std::filesystem::path iniPath)
                 renderingMode = 1;
             NrConfigState::LoadRoutingMode(DlssNrRenderingMode, DlssNrRunBeforeSr, renderingMode.value());
             DlssNrPreDlaa.set_from_config(readBool("DlssNr", "PreDlaa"));
+            DlssNrPreSrSoftReset.set_from_config(readBool("DlssNr", "PreSrSoftReset"));
             DlssNrToggleKey.set_from_config(readInt("DlssNr", "ToggleKey"));
             DlssNrTransferStrength.set_from_config(readFloat("DlssNr", "TransferStrength"));
             DlssNrColourStrength.set_from_config(readFloat("DlssNr", "ColourStrength"));
@@ -1427,6 +1428,8 @@ bool Config::SaveIni()
     ini.SetValue("DlssNr", "PerformanceMode", performanceMode.c_str());
     ini.SetValue("DlssNr", "RunBeforeSR", performanceMode.c_str());
     ini.SetValue("DlssNr", "PreDlaa", GetBoolValue(Instance()->DlssNrPreDlaa.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "PreSrSoftReset",
+                 GetBoolValue(Instance()->DlssNrPreSrSoftReset.value_for_config()).c_str());
     {
         auto toggle = Instance()->DlssNrToggleKey.value_for_config();
         ini.SetValue("DlssNr", "ToggleKey", GetIntValue(toggle, toggle > 0).c_str());

@@ -5,6 +5,49 @@
 int main()
 {
     using namespace DlssNr;
+
+    const PreSrEventInput compatibleReset { true, false, true, true, false };
+    assert(ClassifyPreSrEvent(compatibleReset) == PreSrEvent::SoftReset); // one-frame reset
+    assert(ClassifyPreSrEvent(compatibleReset) == PreSrEvent::SoftReset); // held reset, frame two
+    assert(ClassifyPreSrEvent({ false, false, true, true, false }) == PreSrEvent::None); // falling edge
+    assert(ClassifyPreSrEvent({ true, true, true, true, false }) ==
+           PreSrEvent::StructuralTransition); // reset plus resize/format/quality/config change
+    assert(ClassifyPreSrEvent({ true, false, true, true, true }) ==
+           PreSrEvent::StructuralTransition); // same-size native feature replacement remains hard
+    assert(ClassifyPreSrEvent({ true, false, true, false, false }) ==
+           PreSrEvent::FrameFailure); // missing resources never become a soft reset
+    assert(ClassifyPreSrEvent({ true, false, false, true, false }) ==
+           PreSrEvent::StructuralTransition); // incompatible model/pass session
+
+    PreSrResetPolicyState resetPolicy;
+    auto policy = AdvancePreSrResetPolicy(resetPolicy, true, false);
+    assert(policy.resetStarted && !policy.softResetForBurst && policy.conservativeTransition);
+    policy = AdvancePreSrResetPolicy(resetPolicy, true, true);
+    assert(!policy.resetStarted && !policy.softResetForBurst && !policy.conservativeTransition);
+    policy = AdvancePreSrResetPolicy(resetPolicy, false, true);
+    assert(policy.resetEnded && !policy.softResetForBurst && policy.conservativeTransition);
+
+    policy = AdvancePreSrResetPolicy(resetPolicy, true, true);
+    assert(policy.resetStarted && policy.softResetForBurst && !policy.conservativeTransition);
+    policy = AdvancePreSrResetPolicy(resetPolicy, true, false);
+    assert(!policy.resetStarted && policy.softResetForBurst && !policy.conservativeTransition);
+    policy = AdvancePreSrResetPolicy(resetPolicy, false, false);
+    assert(policy.resetEnded && policy.softResetForBurst && !policy.conservativeTransition);
+    policy = AdvancePreSrResetPolicy(resetPolicy, true, false);
+    assert(policy.resetStarted && !policy.softResetForBurst && policy.conservativeTransition);
+
+    bool passReset[10] = {};
+    for (bool& reset : passReset)
+        reset = PassResetForFrame(true, reset);
+    for (bool reset : passReset)
+        assert(reset); // every active multipass layer receives the game's Reset
+    passReset[0] = ResetPendingAfterPass(passReset[0], false);
+    assert(passReset[0]); // failed evaluation retains Reset
+    passReset[0] = ResetPendingAfterPass(passReset[0], true);
+    assert(!passReset[0]); // successful evaluation consumes Reset for this pass only
+    assert(ResetPendingAfterPass(true, false)); // skipped/failed evaluation
+    assert(!ResetPendingAfterPass(true, true));
+
     ReadinessInput state;
     assert(!GetReadiness(state).running && !GetReadiness(state).transitionPending);
     state.enabled = state.sessionOpen = true;
@@ -50,5 +93,5 @@ int main()
         assert(GetReadiness(state).running);
         state.resetPending = true;
     }
-    std::puts("PASS: startup, retained handles, resume generations, route transitions, failure, shutdown, 10000 toggles");
+    std::puts("PASS: default-off burst-latched soft reset policy, multipass reset delivery, readiness, failure, shutdown, 10000 toggles");
 }

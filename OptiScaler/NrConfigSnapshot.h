@@ -33,6 +33,7 @@
     X(DlssNrRunBeforeSr) \
     X(DlssNrRenderingMode) \
     X(DlssNrPreDlaa) \
+    X(DlssNrPreSrSoftReset) \
     X(DlssNrToggleKey) \
     X(DlssNrPreset) \
     X(DlssNrIntensity) \
