@@ -266,6 +266,9 @@ int main()
                     const auto top = ImGui::GetCursorScreenPos();
                     const auto right = top.x + ImGui::GetContentRegionAvail().x;
                     Check(!DlssNr::StageUi::RenderControls(cfg), "drawing stage controls is read-only");
+                    int advisorStage = choice % 2;
+                    Check(!DlssNr::StageUi::SentenceCombo("##AdvisorStage", "Render", "upscaling", &advisorStage,
+                        DlssNr::StageUi::Stages, 2), "Advisor stage dropdown drawing is read-only");
                     Check(ImGui::GetItemRectMax().x <= right + 1, "primary controls fit every language and scale");
                     Check(ImGui::GetItemRectMin().y > top.y, "primary rows retain vertical order");
                     Check(cfg.DlssNrRoute.value_or_default() == before.DlssNrRoute.value_or_default() &&

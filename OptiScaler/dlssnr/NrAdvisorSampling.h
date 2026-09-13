@@ -30,6 +30,15 @@ struct Window
         return value.native && std::isfinite(value.intervalMs) && value.intervalMs > 0;
     }
     bool Stall(double interval) const { return interval > (std::max)(500.0, baselineMedianMs * 8.0); }
+    bool RejectStall(bool measuring, double tickMs, bool fresh, double intervalMs) const
+    { return measuring && (Stall(tickMs) || (fresh && Stall(intervalMs))); }
+    bool WarmupFrame(bool matching, bool fresh, double intervalMs, double tickMs)
+    {
+        if (matching && !Stall(intervalMs) && !Stall(tickMs)) ++warmFrames;
+        else if (fresh || Stall(tickMs)) warmFrames = 0;
+        return warmFrames >= 30;
+    }
+    bool StartupExpired(double elapsed) const { return elapsed >= 15.0; }
     bool Complete(double elapsed) const { return samples >= 120 && elapsed >= 3.0; }
     double Fps() const { return samples && totalMs > 0 ? 1000.0 * samples / totalMs : 0; }
 };

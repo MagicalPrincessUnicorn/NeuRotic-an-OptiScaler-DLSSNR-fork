@@ -189,6 +189,24 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
                 end - exitStart, end - beforeForward, result, false, 0});
             return result;
         }
+        if (AdvisorSampling::TemporarySettings.load() && runtime.enabled && route == 0)
+        {
+            // Advisor-only native cadence. No Present NR admission, resource queries,
+            // probes or FG input changes; ordinary Native/Off retains its fast exit.
+            const double start = Util::MillisecondsNow();
+            const double interval = owner->previousPresentMs ? start - owner->previousPresentMs : 0.0;
+            owner->previousPresentMs = start;
+            const auto provider = Provider();
+            PresentCallIdentity identity {};
+            identity.pacing.route = PresentPacing::Route::NativeTemporal;
+            identity.advisorConfigurationGeneration = AdvisorSampling::ConfigurationGeneration.load();
+            const HRESULT result = forward();
+            const double end = Util::MillisecondsNow();
+            ReportPresentCallTiming({identity, interval, 0.0, end - start, end - start, result,
+                provider.known && !provider.enabled && State().swapchains == 1, provider.generation});
+            return result;
+        }
+        owner->previousPresentMs = 0.0;
         return forward();
     }
     owner->presentPolicyActive = true;

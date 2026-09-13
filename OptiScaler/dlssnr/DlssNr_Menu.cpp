@@ -14,6 +14,7 @@
 #include "NrPendingEdit.h"
 #include "NrScreenshotContract.h"
 #include "NrExperimentalPolicy.h"
+#include "NrAdvisorPolicy.h"
 
 
 #include <Config.h>
@@ -250,6 +251,7 @@ struct AdvisorOriginalSettings
     std::optional<uint32_t> enhancedResolution;
     std::optional<uint32_t> enhancedScale;
     std::optional<float> manualScale, presentManualScale, enhancedManualScale;
+    std::optional<uint32_t> nativePreset, presentPreset, enhancedPreset;
 };
 
 struct AdvisorState
@@ -263,6 +265,7 @@ struct AdvisorState
     int targetIndex = 2; // 60 FPS
     int goalIndex = 1;   // balanced
     int resolutionPreference = 1;
+    int stage = AdvisorPolicy::After; // Advisor scope only; never changes live settings on draw.
     int routeIndex = 0;
     int recommendation = -1;
     double phaseStarted = 0.0;
@@ -310,6 +313,12 @@ double AdvisorNow()
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+uint64_t AdvisorProviderGeneration(const PresentTelemetrySnapshot& present)
+{
+    const auto provider = PreFg::Provider();
+    return provider.known ? provider.generation : present.cadence.providerGeneration;
+}
+
 void CaptureAdvisorSettings(Config& config, AdvisorOriginalSettings& out)
 {
     NrConfigSynchronization::Transaction transaction;
@@ -330,6 +339,9 @@ void CaptureAdvisorSettings(Config& config, AdvisorOriginalSettings& out)
     out.manualScale = config.DlssNrUiManualScale.snapshot();
     out.presentManualScale = config.DlssNrUiPresentManualScale.snapshot();
     out.enhancedManualScale = config.DlssNrUiEnhancedManualScale.snapshot();
+    out.nativePreset = config.DlssNrUiResolutionPreset.snapshot();
+    out.presentPreset = config.DlssNrUiPresentResolutionPreset.snapshot();
+    out.enhancedPreset = config.DlssNrUiEnhancedResolutionPreset.snapshot();
     out.captured = true;
 }
 
@@ -356,6 +368,9 @@ void RestoreAdvisorSettings(Config& config, AdvisorOriginalSettings& original)
     config.DlssNrUiManualScale = original.manualScale;
     config.DlssNrUiPresentManualScale = original.presentManualScale;
     config.DlssNrUiEnhancedManualScale = original.enhancedManualScale;
+    config.DlssNrUiResolutionPreset = original.nativePreset;
+    config.DlssNrUiPresentResolutionPreset = original.presentPreset;
+    config.DlssNrUiEnhancedResolutionPreset = original.enhancedPreset;
     original.captured = false;
     ++AdvisorSampling::ConfigurationGeneration;
     AdvisorSampling::TemporarySettings.store(false);
@@ -369,16 +384,7 @@ void ConfigureAdvisorRoute(Config& config, int route)
     config.DlssNrMultipassEnabled = false;
     config.DlssNrSecondLayer = false;
     config.DlssNrPasses = 1u;
-    config.DlssNrRoute = uint32_t(std::clamp(route, 0, 2));
-    if (route == 0)
-    {
-        // Keep Native's selected placement. Testing a resolution never switches it.
-    }
-    else
-    {
-        config.DlssNrRenderingMode = 0;
-        config.DlssNrRunBeforeSr = false;
-    }
+    AdvisorPolicy::SelectPlacement(config, Advisor().stage, route);
     StageUi::SelectResolutionChoice(config, Advisor().resolutionPreference);
 }
 
@@ -410,7 +416,7 @@ void BeginAdvisorRoute(Config& config, int route)
     advisor.lifecycleGeneration = native.lifecycleGeneration;
     const auto present = DlssNr::PresentTelemetry();
     advisor.sampling.lastSequence = present.cadence.sequence;
-    advisor.providerGeneration = present.cadence.providerGeneration;
+    advisor.providerGeneration = AdvisorProviderGeneration(present);
     const auto guides = DlssNr::PresentGuides::Instance().Inspect();
     advisor.startNativeFrames = native.completedPipelineEvaluations;
     advisor.startPresentEvaluations = present.modelEvaluations;
@@ -430,7 +436,7 @@ void ChooseAdvisorRecommendation(AdvisorState& advisor);
 bool BeginNextAdvisorRoute(Config& config)
 {
     auto& advisor = Advisor();
-    while (advisor.nextRoute < 3)
+    while (advisor.nextRoute < AdvisorPolicy::RouteCount(advisor.stage))
     {
         const int route = advisor.nextRoute++;
         // Analyze All owns a reversible single-pass setup for every trial. Capture first so
@@ -455,7 +461,7 @@ bool BeginNextAdvisorRoute(Config& config)
         advisor.routes[route].level = AdvisorResultLevel::Analyzing;
         advisor.routes[route].detail = "Waiting for matching completed evaluations...";
         advisor.running = true;
-        advisor.status = std::string("Testing route ") + std::to_string(route + 1) + " of 3...";
+        advisor.status = "Testing available routes...";
         BeginAdvisorRoute(config, route);
         return true;
     }
@@ -585,6 +591,10 @@ void FinishAdvisorRoute(Config& config)
 void FailAdvisorRoute(Config& config, const char* reason)
 {
     auto& advisor = Advisor();
+    const auto present = DlssNr::PresentTelemetry();
+    LOG_WARN("Advisor stage={} route={} resolution={} reason={} fallback={} nativeFailure={}",
+        advisor.stage, advisor.routeIndex, advisor.resolutionPreference, reason ? reason : "interrupted",
+        present.fallbackReason, DlssNr::Telemetry().failureReason);
     auto& result = advisor.routes[advisor.routeIndex];
     result = {};
     result.detail = reason != nullptr ? reason : "Interrupted - not measured";
@@ -608,15 +618,9 @@ void FailAdvisorRoute(Config& config, const char* reason)
 
 const char* AdvisorRouteRefusal(const Config& config, int route)
 {
-    if (route < 0 || route > 2) return "Unknown Neural Rendering route.";
-    if (IsVulkanInput() && route != 0) return "Present routes do not support Vulkan.";
-    if (config.DlssNrMultipassEnabled.value_or_default()) return "Turn off Multipass before testing a route; Multipass owns resolution.";
-    auto proposed = config.GetDlssNrConfigSnapshot();
-    proposed.DlssNrRoute = uint32_t(route);
-    if (route != 0) { proposed.DlssNrRenderingMode = 0; proposed.DlssNrRunBeforeSr = false; }
-    if (const auto* reason = StageUi::NativePlacementRefusal(proposed,
-        IsVulkanInput() || DlssNr::Telemetry().nativeRayReconstructionActive)) return reason;
-    return StageUi::ResolutionRefusal(proposed, Advisor().resolutionPreference);
+    // Both individual and all-route tests own the same reversible single-pass setup.
+    return AdvisorPolicy::Refusal(config.GetDlssNrConfigSnapshot(), Advisor().stage, route,
+        Advisor().resolutionPreference, IsVulkanInput(), DlssNr::Telemetry().nativeRayReconstructionActive);
 }
 
 void StartAdvisorAnalysis(Config& config, int selectedRoute)
@@ -638,6 +642,8 @@ void StartAdvisorAnalysis(Config& config, int selectedRoute)
     CaptureAdvisorSettings(config, advisor.original);
     AdvisorSampling::TemporarySettings.store(true);
     const auto present = DlssNr::PresentTelemetry();
+    advisor.providerGeneration = AdvisorProviderGeneration(present);
+    advisor.lifecycleGeneration = DlssNr::Telemetry().lifecycleGeneration;
     advisor.originalWidth = present.backbufferWidth;
     advisor.originalHeight = present.backbufferHeight;
     advisor.running = true;
@@ -666,7 +672,7 @@ void StartAdvisorAllRoutes(Config& config)
 void ApplyAdvisorRoute(Config& config, int route)
 {
     auto& advisor = Advisor();
-    if (advisor.running || route < 0 || route >= static_cast<int>(advisor.routes.size()) ||
+    if (advisor.running || !AdvisorPolicy::Contains(advisor.stage, route) ||
         !advisor.routes[route].succeeded || !advisor.routes[route].testedSettings)
         return;
     NrConfigSynchronization::Transaction transaction;
@@ -906,13 +912,25 @@ void RenderAdvisor(Config* config, float menuResScale)
     }
 
     ImGui::Spacing();
-    if (wide && ImGui::BeginTable("##AdvisorRoutes", 3, ImGuiTableFlags_SizingStretchSame))
+    ImGui::BeginDisabled(advisor.running);
+    if (StageUi::SentenceCombo("##AdvisorStage", "Render", "upscaling", &advisor.stage,
+                              StageUi::Stages, IM_ARRAYSIZE(StageUi::Stages)))
     {
-        for (int route = 0; route < 3; ++route) { ImGui::TableNextColumn(); RenderAdvisorRouteCard(*config, route, 190.0f * menuResScale); }
+        advisor.routes = {}; advisor.analyzed = false; advisor.recommendation = -1;
+        advisor.appliedRoute = -1; advisor.coverageSettings.reset();
+        advisor.status = "Advisor stage changed - analyze again.";
+        advisor.reason = "No settings change until you choose an available route.";
+    }
+    ImGui::EndDisabled();
+    ImGui::TextWrapped("Advisor tests only the selected stage. Before offers Native Temporal; After offers all three routes. Manual settings are restored after testing.");
+    const int routeCount = AdvisorPolicy::RouteCount(advisor.stage);
+    if (wide && routeCount > 1 && ImGui::BeginTable("##AdvisorRoutes", routeCount, ImGuiTableFlags_SizingStretchSame))
+    {
+        for (int route = 0; route < routeCount; ++route) { ImGui::TableNextColumn(); RenderAdvisorRouteCard(*config, route, 190.0f * menuResScale); }
         ImGui::EndTable();
     }
     else
-        for (int route = 0; route < 3; ++route) RenderAdvisorRouteCard(*config, route, 180.0f * menuResScale);
+        for (int route = 0; route < routeCount; ++route) RenderAdvisorRouteCard(*config, route, 180.0f * menuResScale);
 
     ImGui::TextDisabled("Green recommended  |  Orange available  |  Red unavailable  |  Grey not measured");
     ImGui::Spacing();
@@ -950,6 +968,7 @@ void RenderAdvisor(Config* config, float menuResScale)
         if (ImGui::Combo("##AdvisorResolution", &advisor.resolutionPreference,
                          StageUi::ResolutionChoices, IM_ARRAYSIZE(StageUi::ResolutionChoices)))
             clearAnalysis("Resolution preference changed - analyze again.");
+        HelpMarker("Native Temporal After needs Always Full Output or Manual. Before needs Match Game Render or Manual. Experimental overrides do not change these placement limits.");
     };
     if (wide && ImGui::BeginTable("##AdvisorPreferences", 3, ImGuiTableFlags_SizingStretchSame))
     {
@@ -976,7 +995,7 @@ void RenderAdvisor(Config* config, float menuResScale)
     {
         if (ImGui::Button("Analyze All Routes")) StartAdvisorAllRoutes(*config);
         ImGui::SameLine();
-        HelpMarker("Tests Native Temporal, Present Compatibility, and Present Enhanced one at a time. Unsupported routes are skipped with a reason, failed routes remain unmeasured, and original settings are restored between trials.");
+        HelpMarker("Tests the cards at the selected stage one at a time. Unsupported stage or resolution combinations are skipped with a reason; original settings are restored between trials.");
     }
     ImGui::TextWrapped("Tests one resolution preference. Route changes may briefly interrupt rendering; stalled or incomplete tests are discarded. Comparisons are unavailable during analysis.");
 }
@@ -1092,7 +1111,7 @@ void TickAdvisor(Config* config)
         {
             const auto current = TryNrConfigSnapshot(*config);
             if (!current || !advisor.coverageSettings->SameConfiguration(*current) ||
-                advisor.providerGeneration != present.cadence.providerGeneration ||
+                advisor.providerGeneration != AdvisorProviderGeneration(present) ||
                 advisor.rayReconstruction != DlssNr::Telemetry().nativeRayReconstructionActive ||
                 advisor.lifecycleGeneration != DlssNr::Telemetry().lifecycleGeneration ||
                 advisor.fgMode != State::Instance().dlssgLastSetMode.load() ||
@@ -1142,14 +1161,15 @@ void TickAdvisor(Config* config)
     const double tickMs = (now - advisor.lastTick) * 1000.0;
     advisor.lastTick = now;
     const bool fresh = advisor.sampling.Consume(present.cadence);
-    if (advisor.sampling.Stall(tickMs) || (fresh && advisor.sampling.Stall(present.cadence.intervalMs)))
+    if (advisor.sampling.RejectStall(advisor.phase == AdvisorPhase::Sample,
+                                    tickMs, fresh, present.cadence.intervalMs))
     {
         LOG_WARN("Advisor stalled route={} sinceStart={:.3f}s tick={:.3f}ms frame={:.3f}ms",
             advisor.routeIndex, now - advisor.testStarted, tickMs, present.cadence.intervalMs);
         FailAdvisorRoute(*config, "Test interrupted by a rendering stall; unmeasured. Original settings restored.");
         return;
     }
-    if (present.cadence.providerGeneration != advisor.providerGeneration ||
+    if (AdvisorProviderGeneration(present) != advisor.providerGeneration ||
         advisor.fgInput != State::Instance().activeFgInput || advisor.fgOutput != State::Instance().activeFgOutput ||
         advisor.fgMode != State::Instance().dlssgLastSetMode.load() ||
         advisor.rayReconstruction != lifecycle.nativeRayReconstructionActive ||
@@ -1183,16 +1203,15 @@ void TickAdvisor(Config* config)
             advisor.transitionSeconds = now - advisor.testStarted;
             advisor.phaseStarted = now;
         }
-        if (!advisor.ready && now - advisor.testStarted >= 5.0)
+        if (!advisor.ready && advisor.sampling.StartupExpired(now - advisor.testStarted))
         {
-            FailAdvisorRoute(*config, "No matching output and verified native cadence within five seconds; unmeasured.");
+            FailAdvisorRoute(*config, "No matching output and verified native cadence within fifteen seconds; unmeasured.");
             return;
         }
         if (advisor.ready)
         {
-            if (matchingCadence && matchingOutput) ++advisor.sampling.warmFrames;
-            else if (fresh) advisor.sampling.warmFrames = 0;
-            if (advisor.sampling.warmFrames >= 30)
+            if (advisor.sampling.WarmupFrame(matchingCadence && matchingOutput, fresh,
+                                            present.cadence.intervalMs, tickMs))
             {
                 advisor.phase = AdvisorPhase::Sample;
                 advisor.phaseStarted = now;
