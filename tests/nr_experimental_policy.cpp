@@ -32,6 +32,22 @@ int main()
     assert(!Capture(config).Allows(Guardrail::Hdr));
     assert(!Capture(config).Allows(Guardrail::FrameGeneration));
 
+    for (unsigned int mask = 0; mask < 16; ++mask)
+    {
+        config.DlssNrExperimentalMode = (mask & 1) != 0;
+        config.DlssNrOverrideMultipassGuardrails = (mask & 2) != 0;
+        config.DlssNrOverrideHdrGuardrails = (mask & 4) != 0;
+        config.DlssNrOverrideFgGuardrails = (mask & 8) != 0;
+        const auto policy = Capture(config);
+        assert(policy.Allows(Guardrail::Multipass) == ((mask & 3) == 3));
+        assert(policy.Allows(Guardrail::Hdr) == ((mask & 5) == 5));
+        assert(policy.Allows(Guardrail::FrameGeneration) == ((mask & 9) == 9));
+    }
+
+    config.DlssNrExperimentalMode = true;
+    config.DlssNrOverrideMultipassGuardrails = true;
+    config.DlssNrOverrideHdrGuardrails = false;
+    config.DlssNrOverrideFgGuardrails = false;
     ResetDraft(config);
     Draft.active = false;
     Draft.multipass = false;

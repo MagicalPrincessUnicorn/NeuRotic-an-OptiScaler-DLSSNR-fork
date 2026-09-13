@@ -104,17 +104,13 @@ inline void Initialize(Config* config)
         const bool hasActiveMarker = Detail::ReadMarker(previous) && previous.active;
         const bool ownerAlive = hasActiveMarker && Detail::MarkerOwnerAlive(previous);
         const bool unclean = hasActiveMarker && !ownerAlive;
-        if (ownerAlive)
-        {
-            DisableInMemory(*config);
-            Detail::concurrentOwner.store(true, std::memory_order_release);
-        }
-        const bool ownedByAnotherProcess = previous.active && Detail::MarkerOwnerAlive(previous) &&
+        const bool ownedByAnotherProcess = ownerAlive &&
                                            previous.processId != GetCurrentProcessId();
         if (unclean)
         {
             DisableInMemory(*config);
             config->SaveExperimentalSettings(false, false, false, false);
+            Detail::WriteMarker(false);
             Detail::recoveredUnclean.store(true, std::memory_order_release);
         }
         if (ownedByAnotherProcess)
@@ -146,11 +142,6 @@ inline bool ConsumeRecoveryNotice(double nowMs)
 }
 
 inline bool ConsumeConcurrentOwnerNotice()
-{
-    return Detail::concurrentOwner.exchange(false, std::memory_order_acq_rel);
-}
-
-inline bool ConsumeConcurrentNotice()
 {
     return Detail::concurrentOwner.exchange(false, std::memory_order_acq_rel);
 }

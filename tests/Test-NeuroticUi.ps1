@@ -6,6 +6,8 @@ $nrControls = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/DlssN
 $notes = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/NrToggleNotes.h') -Raw
 $config = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/Config.cpp') -Raw
 $header = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/Config.h') -Raw
+$clip = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/menu/OptiClipAdvisor.cpp') -Raw
+$session = Get-Content -LiteralPath (Join-Path $root 'OptiScaler/dlssnr/NrExperimentalSession.h') -Raw
 function Assert-Ui([bool]$condition, [string]$message) {
     if (-not $condition) { throw $message }
     Write-Output "PASS: $message"
@@ -140,8 +142,14 @@ Assert-Ui ($menu.Contains('Save Input Settings') -and $menu.Contains('SaveMenuIn
            $menu.Contains('Pending changes apply only after saving.')) 'gameplay input choices remain drafts until targeted or global save succeeds'
 Assert-Ui ($menu.Contains('Experimental Mode - Active') -and $menu.Contains('Enable Experimental Mode?') -and
            -not $menu.Contains('Override All Guardrails')) 'experimental settings use a confirmed master switch without an override-all control'
+Assert-Ui ($session.Contains('MarkerOwnerAlive') -and $session.Contains('recoveredUnclean') -and
+           $session.Contains('SaveExperimentalSettings(false, false, false, false)') -and
+           $menu.Contains('Last session ended unexpectedly. Experimental options have been disabled.')) 'an unclean active experimental session clears the master and child overrides and reports it after startup'
 Assert-Ui ($nr.Contains('NR deactivated due to this rendering combination being untested') -and
            $nr.Contains('presentStatus.policyBlocked')) 'guarded Multipass combinations show the requested red explanation'
+Assert-Ui ($clip.Contains('bubbleAvailable = availableHeight - avatarHeight - padding') -and
+           $clip.Contains('bubbleHeight + padding + avatarHeight') -and
+           $clip.Contains('origin.y + bubbleHeight - buttonHeight - padding')) 'OptiClip speech and dismissal occupy a bubble above the anchored avatar'
 Assert-Ui ($stage.Contains('"Neural Rendering Injection", "upscaling"') -and
            -not $stage.Contains('"Neural Rendering Injection", "Upscaling"') -and
            $stage.Contains('stageHelp, ImGui::GetFontSize() * 8.0f')) 'stage sentence uses lowercase upscaling and a scale-aware wider selector'
