@@ -39,14 +39,12 @@ def require(value, message):
     if not value: raise AssertionError(message)
     print('PASS:', message)
 missing = set()
-for path in ['OptiScaler/menu/menu_common.cpp']:
+for path in ['OptiScaler/menu/menu_common.cpp', 'OptiScaler/dlssnr/DlssNr_Menu.cpp']:
     old = subprocess.check_output(['git','-c','safe.directory='+ROOT.as_posix(),'-C',str(ROOT),
-                                   'show','7040d75d:'+path]).decode('utf-8')
+                                   'show','78c91b998dd05e58fb375560d8f6804bbd47531d:'+path]).decode('utf-8')
     for key in visible(source(path)) - visible(old):
         if normalize(key) not in inventory and not key.startswith('https://'):
             missing.add(key)
-require('Neurotic::EnglishPreview englishPreview;' in source('OptiScaler/dlssnr/DlssNr_Menu.cpp'),
-        'new NR strings are scoped to the explicit English preview')
 for match in re.finditer(r'ToggleBurstMessages\s*=\s*\{(.*?)\}', source('OptiScaler/dlssnr/NrToggleNotes.h'), re.S):
     for key in joined_strings(match.group(1)):
         if normalize(key) not in inventory: missing.add(key)
@@ -81,10 +79,12 @@ require('api != PresentApi::D3D12 || !PresentGuides' not in present and
         'PresentGuides::Instance().MatchMetadata(guideSelection' in present and
         'PresentGuides::Instance().Bind(guideSelection' in present,
         'DX11 can reach actual guide matching and binding without an API-name rejection')
-require('Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.' in nr and
+require('Present Enhanced compatibility remains experimental for Frame Generation, NR Multipass, HDR and DX11.' in nr and
         'if (!d3d12 && !presentRoute) ImGui::BeginDisabled();' in nr and
-        'Present Enhanced requires DX12 SDR' not in nr,
-        'Experimental guidance replaces compatibility locks; Present Multipass is selectable')
+        'Present Enhanced requires DX12 SDR' not in nr and
+        'experimental.Allows(ExperimentalPolicy::Guardrail::Multipass)' in present and
+        'experimental.Allows(ExperimentalPolicy::Guardrail::FrameGeneration)' in present,
+        'Enhanced experimental combinations require saved category overrides while Present Multipass remains selectable')
 require('InvalidateHistory("Experimental compatibility settings changed")' in present and
         'experimentalFlags != g_present.experimentalFlags' in present and
         'LogToFile =' not in present,
@@ -93,7 +93,7 @@ require(menu.index('ScopedCollapsingHeader("Updates"') > menu.index('void MenuCo
 require(menu.count('DlssNr::RenderMenu(') == 1 and menu.count('DlssNr::RenderMultipassMenu(') == 0 and
         nr.count('RenderMultipassMenu(config, menuResScale);') == 1,
         'Multipass is a collapsible section within the Neural Rendering page')
-require(nr.count('StageUi::RenderControls(*config, basicOwnsMain)') == 1 and
+require(nr.count('StageUi::RenderControls(*config, basicOwnsMain, nativeAfterOnly)') == 1 and
         nr.count('MenuControls::EmphasizedCheckbox("Enable NR Multipass"') == 1,
         'single route and bounded multipass controls')
 require(nr.count('RenderPassCountSelector(config)') == 1 and
@@ -113,7 +113,7 @@ require('one to ten Neural Rendering passes' in nr and 'independent model sessio
         'independent pass-chain behavior and cost are disclosed')
 require('!IsVulkanInput() && State::Instance().api == API::DX12' in nr and
         'if (!d3d12 && !presentRoute) ImGui::BeginDisabled();' in nr,
-        'Native Multipass API restriction retained; Present routes allow experimental attempts')
+        'Native Multipass API restriction retained; Present routes remain selectable with Enhanced policy guarding')
 require('CompositionPool' not in nr and 'HardCap' not in nr, 'adaptive capacity has no menu control')
 require('Automatic installation will' not in menu, 'no automatic installer promise')
 require('ParkAllAdditionalLayerFeatures("NR route domain changed")' in dx and

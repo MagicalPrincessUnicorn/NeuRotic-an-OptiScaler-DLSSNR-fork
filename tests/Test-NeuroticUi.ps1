@@ -21,9 +21,10 @@ Assert-Ui ($menu -match '(?s)void MenuCommon::RenderDiagnosticsPage.*?RenderLogg
 foreach ($label in @('Advanced Settings', 'Logging')) {
     Assert-Ui ($menu.Contains('ScopedCollapsingHeader("' + $label + '", ImGuiTreeNodeFlags_DefaultOpen)')) "$label starts expanded"
 }
-Assert-Ui ($nr.Contains('ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen)')) 'NR starts expanded with a plain collapsible heading'
-Assert-Ui ($nr.Contains('ScopedCollapsingHeader("Neural Rendering Advisor", ImGuiTreeNodeFlags_DefaultOpen)') -and
-           $nr.IndexOf('ScopedCollapsingHeader("Neural Rendering Advisor"') -lt $nr.IndexOf('ScopedCollapsingHeader("DLSS Neural Rendering"')) 'Advisor is default-open, collapsible, and immediately precedes Neural Rendering'
+Assert-Ui (-not $nr.Contains('ImGuiTreeNodeFlags_DefaultOpen') -and
+           $nr.Contains('DLSS Neural Rendering - ') -and $nr.Contains('Neural Rendering Multipass - ')) 'all Neural Rendering sections start collapsed and main headings show status'
+Assert-Ui ($nr.Contains('ScopedCollapsingHeader("Neural Rendering Advisor")') -and
+           $nr.IndexOf('ScopedCollapsingHeader("Neural Rendering Advisor"') -lt $nr.IndexOf('DLSS Neural Rendering - ')) 'Advisor is collapsed by default and immediately precedes Neural Rendering'
 Assert-Ui ($nr.Contains('WHAT OPTISCALER SEES') -and $nr.Contains('RECOMMENDED SETUP') -and
            $nr.Contains('Graphics card') -and $menu.Contains('ctx.primaryGpu->name.c_str()')) 'Advisor shows the mock signal and recommendation panels with the detected GPU name'
 Assert-Ui ($nr.Contains('Native Temporal') -and $nr.Contains('Present Compatibility') -and
@@ -32,8 +33,8 @@ Assert-Ui ($nr.Contains('std::string("##AdvisorRoute") + std::to_string(route)')
            $nr.Contains('std::string("Use this route###AdvisorApply")') -and
            $nr.Contains('ApplyAdvisorRoute(config, route);') -and
            -not $nr.Contains('Apply Recommendation')) 'all three route cards expose stable, route-specific apply buttons'
-Assert-Ui ($nr.Contains('advisor.routes[selectedRoute].level = AdvisorResultLevel::Analyzing') -and
-           -not $nr.Contains('BeginAdvisorRoute(config, route + 1)') -and $nr.Contains('Testing one route...')) 'Analyze tests exactly one selected route without advancing into another route'
+Assert-Ui ($nr.Contains('StartAdvisorAllRoutes') -and $nr.Contains('Analyze All Routes') -and
+           $nr.Contains('BeginNextAdvisorRoute') -and $nr.Contains('StartAdvisorAnalysis(config, route)')) 'Advisor supports sequential all-route analysis and individual route tests'
 Assert-Ui ($nr.Contains('Target native framerate') -and $nr.Contains('Optimization goal') -and
            $nr.Contains('Prioritize quality') -and $nr.Contains('Balance quality and performance') -and
            $nr.Contains('Prioritize performance')) 'Advisor exposes the approved frame target and optimization goals'
@@ -41,7 +42,7 @@ Assert-Ui ($nr.Contains('config.DlssNrApplyModel = false;') -and
            $nr.Contains('config.DlssNrMultipassEnabled = false;') -and
            $nr.Contains('config.DlssNrPasses = 1u;') -and
            $nr.Contains('StageUi::SelectResolutionChoice(config, Advisor().resolutionPreference)')) 'route analysis hides the effect and tests only the selected resolution preference at one pass'
-Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on to test one route.') -and
+Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on and tests supported routes sequentially.') -and
            $nr.Contains('your current settings are restored when analysis ends or is cancelled.')) 'Analyze visibly discloses temporary NR activation and restoration before the action'
 Assert-Ui ($nr.Contains('advisor.sampling.Consume(present.cadence)') -and
            (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;')) 'Advisor scores each route from its current live frame interval rather than a stale completed route window'
@@ -68,7 +69,7 @@ Assert-Ui (-not $menu.Contains('BeginTabItem("Neural Rendering Multipass")') -an
            -not $menu.Contains('RenderNeuralRenderingMultipassPage')) 'Multipass is contained within Neural Rendering'
 $multipass = $nr.Substring($nr.LastIndexOf('static void RenderMultipassMenu'))
 Assert-Ui ($nr.Contains('RenderMultipassMenu(config, menuResScale);') -and
-           $multipass.Contains('ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection")')) 'Multipass is its own collapsible section beneath Neural Rendering'
+           $multipass.Contains('multipassTitle.c_str()')) 'Multipass is its own status-bearing collapsible section beneath Neural Rendering'
 Assert-Ui ($multipass.Contains('EmphasizedCheckbox("Enable NR Multipass"')) 'Multipass page uses the emphasized enable control'
 Assert-Ui ($nr.Contains('static unsigned int RenderPassCountSelector(Config* config)') -and
            ([regex]::Matches($nr, 'RenderPassCountSelector\(config\)')).Count -eq 1 -and
@@ -134,6 +135,13 @@ Assert-Ui ($nr.Contains('"%s is active."') -and $nr.Contains('"Image unchanged. 
 $stage = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageControls.h')
 $adapter = Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_StageUi.h')
 Assert-Ui ($stage.IndexOf('SentenceCombo("##NrStage"') -lt $stage.IndexOf('SentenceCombo("##NrMethod"') -and $stage.IndexOf('SentenceCombo("##NrMethod"') -lt $stage.IndexOf('BeginCombo("##NrResolution"')) 'stage, method and guarded resolution retain fixed order'
+Assert-Ui ($stage.Contains('ImGui::TextDisabled("(?)")') -and $stage.Contains('Always Full Output uses the final game output dimensions.')) 'NR resolution explanation is contained in its adjacent tooltip'
+Assert-Ui ($menu.Contains('Save Input Settings') -and $menu.Contains('SaveMenuInputSettings') -and
+           $menu.Contains('Pending changes apply only after saving.')) 'gameplay input choices remain drafts until targeted or global save succeeds'
+Assert-Ui ($menu.Contains('Experimental Mode - Active') -and $menu.Contains('Enable Experimental Mode?') -and
+           -not $menu.Contains('Override All Guardrails')) 'experimental settings use a confirmed master switch without an override-all control'
+Assert-Ui ($nr.Contains('NR deactivated due to this rendering combination being untested') -and
+           $nr.Contains('presentStatus.policyBlocked')) 'guarded Multipass combinations show the requested red explanation'
 Assert-Ui ($stage.Contains('"Neural Rendering Injection", "upscaling"') -and
            -not $stage.Contains('"Neural Rendering Injection", "Upscaling"') -and
            $stage.Contains('stageHelp, ImGui::GetFontSize() * 8.0f')) 'stage sentence uses lowercase upscaling and a scale-aware wider selector'

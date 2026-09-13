@@ -9,6 +9,8 @@
 
 #include <dlssnr/DlssNr.h>
 #include <dlssnr/NrToggleNotes.h>
+#include <dlssnr/NrExperimentalPolicy.h>
+#include <dlssnr/NrExperimentalSession.h>
 
 #include "input/input_system.h"
 
@@ -62,6 +64,22 @@ static uint64_t lastInputTick = 0;
 constexpr uint64_t debounceThreshold = 1000;
 
 static bool hasGamepad = false;
+struct MenuInputDraft
+{
+    bool initialized = false;
+    bool dirty = false;
+    bool mouse = false;
+    bool keyboard = true;
+    bool controller = true;
+};
+static MenuInputDraft menuInputDraft;
+
+static void ResetMenuInputDraft(const Config& config)
+{
+    menuInputDraft = { true, false, config.AllowGameMouse.value_or_default(),
+                       config.AllowGameKeyboard.value_or_default(),
+                       config.AllowGameController.value_or_default() };
+}
 static bool ffxInitTried = false;
 static bool xefgInitTried = false;
 static std::string windowTitle;
@@ -7161,20 +7179,33 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
     if (auto input = ScopedCollapsingHeader("Gameplay input while menu is open", ImGuiTreeNodeFlags_DefaultOpen);
         input.IsHeaderOpen())
     {
-        bool mouse = ctx.config->AllowGameMouse.value_or_default();
-        bool keyboard = ctx.config->AllowGameKeyboard.value_or_default();
-        bool controller = ctx.config->AllowGameController.value_or_default();
-        bool changed = ImGui::Checkbox("Allow mouse input in game", &mouse);
-        changed |= ImGui::Checkbox("Allow keyboard input in game", &keyboard);
-        changed |= ImGui::Checkbox("Allow controller input in game", &controller);
-        if (changed)
+        if (!menuInputDraft.initialized) ResetMenuInputDraft(*ctx.config);
+        bool changed = ImGui::Checkbox("Allow mouse input in game", &menuInputDraft.mouse);
+        changed |= ImGui::Checkbox("Allow keyboard input in game", &menuInputDraft.keyboard);
+        changed |= ImGui::Checkbox("Allow controller input in game", &menuInputDraft.controller);
+        menuInputDraft.dirty |= changed;
+        if (ImGui::Button("Save Input Settings"))
         {
-            ctx.config->AllowGameMouse = mouse;
-            ctx.config->AllowGameKeyboard = keyboard;
-            ctx.config->AllowGameController = controller;
-            UpdateMenuInputMode(ctx);
+            if (ctx.config->SaveMenuInputSettings(menuInputDraft.mouse, menuInputDraft.keyboard,
+                                                  menuInputDraft.controller))
+            {
+                menuInputDraft.dirty = false;
+                UpdateMenuInputMode(ctx);
+            }
+            else
+                ImGui::OpenPopup("Input settings could not be saved");
         }
-        ImGui::TextWrapped("Allowed devices continue controlling the game. Mouse clicks can affect both the menu and the game. Keyboard and controller gameplay disable their menu navigation. Save Settings remembers these choices.");
+        if (menuInputDraft.dirty)
+            ImGui::TextColored(toneMapColor(ImVec4(1.0f, 0.72f, 0.25f, 1.0f)),
+                               "Pending changes apply only after saving.");
+        if (ImGui::BeginPopupModal("Input settings could not be saved", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextWrapped("The existing gameplay-input policy is still active. Check that OptiScaler.ini can be written, then try again.");
+            if (ImGui::Button("OK")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+        ImGui::TextWrapped("Allowed devices continue controlling the game. Mouse clicks can affect both the menu and the game. Keyboard and controller gameplay disable their menu navigation. Use Save Input Settings or Save Settings to apply these choices.");
         ImGui::TextWrapped("Controller blocking covers XInput and standard DirectInput states. Custom DirectInput formats, GameInput, Windows.Gaming.Input and raw HID controllers may bypass it.");
     }
     RenderKeybindSettings(ctx);
@@ -7212,6 +7243,69 @@ void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
 void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
 {
     RenderAdvancedSettings(ctx);
+    auto& draft = DlssNr::ExperimentalPolicy::Draft;
+    DlssNr::ExperimentalPolicy::EnsureDraft(*ctx.config);
+    if (auto section = ScopedCollapsingHeader("Neural Rendering experimental settings"); section.IsHeaderOpen())
+    {
+        bool requested = draft.active;
+        const char* state = draft.active ? "Experimental Mode - Active" : "Experimental Mode - Inactive";
+        if (ImGui::Checkbox(state, &requested))
+        {
+            if (requested)
+                ImGui::OpenPopup("Enable Experimental Mode?");
+            else
+            {
+                draft.active = false;
+                draft.dirty = true;
+            }
+        }
+        if (ImGui::BeginPopupModal("Enable Experimental Mode?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520.0f * ctx.menuResScale);
+            ImGui::TextWrapped("These routes are untested or still under development and may cause instability or crashes. Confirmed GPU-corruption risks remain blocked, so some settings may still do nothing.");
+            ImGui::PopTextWrapPos();
+            if (ImGui::Button("Enable Experimental Mode"))
+            {
+                draft.active = true;
+                draft.dirty = true;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+
+        ImGui::BeginDisabled(!draft.active);
+        draft.dirty |= ImGui::Checkbox("Override Multipass NR Guardrails (Experimental)", &draft.multipass);
+        draft.dirty |= ImGui::Checkbox("Override HDR Guardrails (Experimental)", &draft.hdr);
+        draft.dirty |= ImGui::Checkbox("Override FG Guardrails (Experimental, Probably don't need this)",
+                                       &draft.frameGeneration);
+        ImGui::EndDisabled();
+        ImGui::TextWrapped("Only implemented paths can be unlocked. Device, resource, format, synchronization, ownership, completion, and confirmed corruption-safety checks always remain active.");
+        if (ImGui::Button("Save experimental settings"))
+        {
+            DlssNr::CancelAdvisorAnalysis(ctx.config,
+                "Experimental settings save requested; analysis stopped and original settings restored.");
+            if (ctx.config->SaveExperimentalSettings(draft.active, draft.multipass, draft.hdr,
+                                                     draft.frameGeneration))
+            {
+                draft.dirty = false;
+                DlssNr::ExperimentalSession::Applied(*ctx.config);
+            }
+            else
+                ImGui::OpenPopup("Experimental settings could not be saved");
+        }
+        if (draft.dirty)
+            ImGui::TextColored(toneMapColor(ImVec4(1.0f, 0.72f, 0.25f, 1.0f)),
+                               "Pending changes apply only after saving.");
+        if (ImGui::BeginPopupModal("Experimental settings could not be saved", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextWrapped("The existing experimental policy is still active. Check that OptiScaler.ini can be written, then try again.");
+            if (ImGui::Button("OK")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+    }
 }
 
 void MenuCommon::RenderToolsPage(RenderMenuContext& ctx)
@@ -7492,7 +7586,36 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
     {
         // Never serialize the Advisor's temporary route trial.  Cancellation is a no-op when idle.
         DlssNr::CancelAdvisorAnalysis(config, "Settings save requested; analysis stopped and original settings restored.");
-        config->SaveIni();
+        if (!menuInputDraft.initialized) ResetMenuInputDraft(*config);
+        DlssNr::ExperimentalPolicy::EnsureDraft(*config);
+        const auto oldMouse = config->AllowGameMouse.snapshot();
+        const auto oldKeyboard = config->AllowGameKeyboard.snapshot();
+        const auto oldController = config->AllowGameController.snapshot();
+        const auto oldExperimental = config->DlssNrExperimentalMode.snapshot();
+        const auto oldMultipassOverride = config->DlssNrOverrideMultipassGuardrails.snapshot();
+        const auto oldHdrOverride = config->DlssNrOverrideHdrGuardrails.snapshot();
+        const auto oldFgOverride = config->DlssNrOverrideFgGuardrails.snapshot();
+        config->AllowGameMouse = menuInputDraft.mouse;
+        config->AllowGameKeyboard = menuInputDraft.keyboard;
+        config->AllowGameController = menuInputDraft.controller;
+        DlssNr::ExperimentalPolicy::ApplyDraft(*config);
+        if (config->SaveIni())
+        {
+            menuInputDraft.dirty = false;
+            DlssNr::ExperimentalPolicy::Draft.dirty = false;
+            UpdateMenuInputMode(ctx);
+            DlssNr::ExperimentalSession::Applied(*config);
+        }
+        else
+        {
+            config->AllowGameMouse = oldMouse;
+            config->AllowGameKeyboard = oldKeyboard;
+            config->AllowGameController = oldController;
+            config->DlssNrExperimentalMode = oldExperimental;
+            config->DlssNrOverrideMultipassGuardrails = oldMultipassOverride;
+            config->DlssNrOverrideHdrGuardrails = oldHdrOverride;
+            config->DlssNrOverrideFgGuardrails = oldFgOverride;
+        }
     }
 
     ImGui::SameLine(0.0f, 6.0f);
@@ -7500,6 +7623,8 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
     if (ImGui::Button("Close"))
     {
         DlssNr::CancelAdvisorAnalysis(config);
+        menuInputDraft.initialized = false;
+        DlssNr::ExperimentalPolicy::DiscardDraft();
         _isVisible = false;
         hasGamepad = (io.BackendFlags | ImGuiBackendFlags_HasGamepad) > 0;
         io.BackendFlags &= 30;
@@ -8043,6 +8168,12 @@ bool MenuCommon::RenderMenu()
         return false;
 
     RenderMenuContext ctx { State::Instance(), Config::Instance(), ImGui::GetIO() };
+    DlssNr::ExperimentalSession::Initialize(ctx.config);
+    if (!_isVisible)
+    {
+        menuInputDraft.initialized = false;
+        DlssNr::ExperimentalPolicy::DiscardDraft();
+    }
     Neurotic::SetLanguage(ctx.config->MenuLanguage.value_or_default());
     ctx.now = Util::MillisecondsNow();
     ctx.currentFeature = ctx.state.currentFeature;
@@ -8058,6 +8189,20 @@ bool MenuCommon::RenderMenu()
     // 2) Prepare one-shot notifications and start a new ImGui frame only when needed.
     UpdateVersionAndStartupNotifications(ctx);
     BeginMenuFrameIfNeeded(ctx);
+    if (DlssNr::ExperimentalSession::ConsumeRecoveryNotice(ctx.now))
+    {
+        ImGuiToast notification { ImGuiToastType::Warning, 12000,
+            "Last session ended unexpectedly. Experimental options have been disabled." };
+        notification.setTitle("NeuRotic experimental safety");
+        ImGui::InsertNotification(notification);
+    }
+    if (DlssNr::ExperimentalSession::ConsumeConcurrentOwnerNotice())
+    {
+        ImGuiToast notification { ImGuiToastType::Warning, 12000,
+            "Experimental options are inactive because another game process owns the experimental session marker." };
+        notification.setTitle("NeuRotic experimental safety");
+        ImGui::InsertNotification(notification);
+    }
     OptiInput::EndFrame(_isVisible);
 
     // 3) Draw lightweight overlay windows first, preserving the original order.
@@ -8081,6 +8226,7 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
 {
     // Reset shutdown flag in case of re-init
     State::Instance().isShuttingDown = false;
+    DlssNr::ExperimentalSession::Initialize(Config::Instance());
 
     HWND oldHandle = nullptr;
 

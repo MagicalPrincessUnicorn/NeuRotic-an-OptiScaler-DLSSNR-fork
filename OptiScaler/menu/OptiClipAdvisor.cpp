@@ -104,21 +104,23 @@ void Render(const Bounds& menu, float menuScale, double nowSeconds, bool enabled
     const float avatarWidth = 80 * avatarScale, avatarHeight = 112 * avatarScale;
     const float padding = 12 * menuScale;
     const float width = message ? (std::min)(480 * menuScale, availableWidth) : avatarWidth;
-    const float textWidth = width - avatarWidth - padding * 3;
+    const float textWidth = width - padding * 2;
     const float buttonHeight = ImGui::GetFrameHeight();
     const float dismissWidth = ImGui::CalcTextSize("Dismiss").x + ImGui::GetStyle().FramePadding.x * 2;
     // Tiny/clipped hosts retain the mascot; the current message can reappear when enlarged.
+    const float bubbleAvailable = availableHeight - avatarHeight - padding;
     const bool showMessage = message && textWidth >= (std::max)(dismissWidth, ImGui::GetFontSize() * 5) &&
-        availableHeight >= buttonHeight + padding * 3 + ImGui::GetFontSize();
+        bubbleAvailable >= buttonHeight + padding * 3 + ImGui::GetFontSize();
     const auto text = showMessage ? Neurotic::Translate(message->text) : std::string();
     const auto textSize = ImGui::CalcTextSize(text.c_str(), nullptr, false, (std::max)(1.0f, textWidth));
-    const float height = showMessage ? (std::min)(availableHeight,
-        (std::max)(avatarHeight, textSize.y + buttonHeight + padding * 3)) : avatarHeight;
+    const float bubbleHeight = showMessage ? (std::min)(bubbleAvailable,
+        textSize.y + buttonHeight + padding * 3) : 0.0f;
+    const float height = showMessage ? bubbleHeight + padding + avatarHeight : avatarHeight;
 
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowPos({ maxRight, maxBottom }, ImGuiCond_Always, { 1.0f, 1.0f });
     ImGui::SetNextWindowSize({ showMessage ? width : avatarWidth, height }, ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(showMessage ? 0.97f : 0.0f);
+    ImGui::SetNextWindowBgAlpha(0.0f);
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing |
         ImGuiWindowFlags_NoNav;
@@ -141,13 +143,20 @@ void Render(const Bounds& menu, float menuScale, double nowSeconds, bool enabled
         }
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const ImVec2 origin = ImGui::GetWindowPos();
+    if (showMessage)
+    {
+        draw->AddRectFilled(origin, {origin.x + width, origin.y + bubbleHeight},
+                            ImGui::GetColorU32(ImGuiCol_WindowBg, 0.97f), 8.0f * menuScale);
+        draw->AddRect(origin, {origin.x + width, origin.y + bubbleHeight},
+                      ImGui::GetColorU32(ImGuiCol_Border), 8.0f * menuScale);
+    }
     DrawMascot(draw, { maxRight - avatarWidth, maxBottom - avatarHeight }, avatarScale, nowSeconds);
     if (showMessage)
     {
-        const float bodyHeight = (std::max)(1.0f, height - buttonHeight - padding * 3);
+        const float bodyHeight = (std::max)(1.0f, bubbleHeight - buttonHeight - padding * 3);
         ImGui::SetCursorScreenPos({origin.x + padding, origin.y + padding});
-        // A separate text column permits translated prose to wrap/scroll without
-        // ever covering the anchored avatar or the left-side dismiss control.
+        // The full-width speech bubble remains above the bottom-right mascot, so neither
+        // translated prose nor its dismiss control can cover settings beside OptiClip.
         if (ImGui::BeginChild("##OptiClipText", {textWidth, bodyHeight}, ImGuiChildFlags_None,
                               ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav))
         {
@@ -157,7 +166,7 @@ void Render(const Bounds& menu, float menuScale, double nowSeconds, bool enabled
             ImGui::PopTextWrapPos();
         }
         ImGui::EndChild();
-        ImGui::SetCursorScreenPos({origin.x + padding, maxBottom - buttonHeight - padding});
+        ImGui::SetCursorScreenPos({origin.x + padding, origin.y + bubbleHeight - buttonHeight - padding});
         if (ImGui::SmallButton("Dismiss##OptiClip")) controller.Dismiss(nowSeconds);
     }
     ImGui::End();

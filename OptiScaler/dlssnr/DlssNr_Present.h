@@ -23,6 +23,8 @@ struct PresentTelemetrySnapshot
     bool requested = false;
     bool active = false;
     bool failed = false;
+    bool policyBlocked = false;
+    std::string policyGuardrail;
     PresentApi api = PresentApi::Unknown;
     unsigned int backbufferWidth = 0;
     unsigned int backbufferHeight = 0;

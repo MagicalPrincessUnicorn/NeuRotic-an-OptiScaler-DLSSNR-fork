@@ -6,6 +6,8 @@
 #include "DlssNr_PresentHistory.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
+#include "NrExperimentalPolicy.h"
+#include "NrExperimentalSession.h"
 #include "NativeIdentity.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
@@ -244,7 +246,7 @@ void UavBarrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource)
     list->ResourceBarrier(1, &barrier);
 }
 
-void SetFallback(PresentApi api, const char* reason, bool failed = false)
+void SetFallback(PresentApi api, const char* reason, bool failed = false, const char* policyGuardrail = nullptr)
 {
     NR_FRAME_TRACE("nr-fallback", "attempt={} api={} failed={} reason={}", g_present.telemetry.presentAttempts,
         static_cast<unsigned int>(api), failed, reason ? reason : "unknown");
@@ -261,6 +263,8 @@ void SetFallback(PresentApi api, const char* reason, bool failed = false)
     g_present.telemetry.fallbackReason = reason != nullptr ? reason : "unknown fallback";
     g_present.telemetry.failure = failed ? g_present.telemetry.fallbackReason : "";
     g_present.telemetry.failed = failed;
+    g_present.telemetry.policyBlocked = policyGuardrail != nullptr;
+    g_present.telemetry.policyGuardrail = policyGuardrail != nullptr ? policyGuardrail : "";
     ++g_present.telemetry.skippedFrames;
     ++g_present.telemetry.consecutiveFallbacks;
     g_present.telemetry.lastFallbackAttempt = g_present.telemetry.presentAttempts;
@@ -695,6 +699,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const bool presentRequested = enabled && route != 0;
     g_present.telemetry.requested = presentRequested;
     g_present.telemetry.active = false;
+    g_present.telemetry.policyBlocked = false;
+    g_present.telemetry.policyGuardrail.clear();
     g_present.telemetry.compatibilityPath.clear();
     g_present.telemetry.workWidth = g_present.telemetry.workHeight = 0;
     g_present.telemetry.requestedPlacement = route == 2 ? "Present Enhanced" :
@@ -748,11 +754,29 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
+    const auto experimental = ExperimentalPolicy::Capture(*config);
+    const bool frameGeneration = config->FGEnabled.value_or_default() ||
+        State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive;
+    if (enhanced && settings.DlssNrMultipassEnabled.value_or_default() &&
+        !experimental.Allows(ExperimentalPolicy::Guardrail::Multipass))
+    {
+        SetFallback(PresentApi::Unknown,
+            "Present Enhanced with NR Multipass is guarded; enable the saved Multipass experimental override",
+            false, "Multipass");
+        return identity;
+    }
+    if (enhanced && frameGeneration && !experimental.Allows(ExperimentalPolicy::Guardrail::FrameGeneration))
+    {
+        SetFallback(PresentApi::Unknown,
+            "Present Enhanced with Frame Generation is guarded; enable the saved FG experimental override",
+            false, "Frame Generation");
+        return identity;
+    }
+
     // Experimental combinations are attempted. Actual guide/resource admission below still applies.
     const unsigned int experimentalFlags = enhanced ?
         (settings.DlssNrMultipassEnabled.value_or_default() ? 1u : 0u) |
-        ((config->FGEnabled.value_or_default() || State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff ||
-          State::Instance().fsrfgInputActive) ? 2u : 0u) |
+        (frameGeneration ? 2u : 0u) |
         (Telemetry().nativeRayReconstructionActive ? 4u : 0u) : 0u;
     if (experimentalFlags != g_present.experimentalFlags)
     {
@@ -813,9 +837,16 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::Unknown, "target is not single-sample flip-model");
         return identity;
     }
-    if (colorSpace != DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709)
+    const bool hdrConversionAllowed = colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 &&
+        swapDesc.Format == DXGI_FORMAT_R10G10B10A2_UNORM &&
+        experimental.Allows(ExperimentalPolicy::Guardrail::Hdr);
+    if (colorSpace != DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 && !hdrConversionAllowed)
     {
-        SetFallback(PresentApi::Unknown, "HDR or non-SDR color space is unsupported");
+        SetFallback(PresentApi::Unknown,
+            colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+                ? "HDR Present NR is guarded or lacks the supported 10-bit conversion path"
+                : "non-SDR color space is unsupported",
+            false, colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "HDR" : nullptr);
         return identity;
     }
 
@@ -940,7 +971,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         backDesc.SampleDesc.Count == 1,
         swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_DISCARD ||
             swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
-        colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
+        colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 || hdrConversionAllowed,
         backDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         backDesc.Width != 0 && backDesc.Height != 0,
         true,
@@ -962,9 +993,11 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     g_present.telemetry.compatibilityPath = api == PresentApi::D3D11
         ? (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
-            ? "D3D11 shared R10 SDR conversion" : "D3D11 shared RGBA8 direct")
+            ? (hdrConversionAllowed ? "D3D11 shared R10 HDR experimental conversion" : "D3D11 shared R10 SDR conversion")
+            : "D3D11 shared RGBA8 direct")
         : (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
-            ? "D3D12 R10 SDR conversion" : "D3D12 RGBA8 direct");
+            ? (hdrConversionAllowed ? "D3D12 R10 HDR experimental conversion" : "D3D12 R10 SDR conversion")
+            : "D3D12 RGBA8 direct");
 
     const unsigned int width = static_cast<unsigned int>(backDesc.Width);
     const unsigned int height = backDesc.Height;

@@ -138,6 +138,12 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
     const auto* placementRefusal = NativePlacementRefusal(snapshot, nativeAfterOnly);
     ImGui::BeginDisabled(basicOwnsResolution || placementRefusal != nullptr);
     ImGui::TextUnformatted("Neural Rendering Resolution");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Always Full Output uses the final game output dimensions.\n"
+                          "Match Game Render - Recommended follows the game's render-input dimensions.\n"
+                          "Manual - Advanced / Low-end uses the selected percentage; very low values substantially reduce detail and the NR effect.");
     if (ImGui::BeginCombo("##NrResolution", ResolutionChoices[resolution]))
     {
         for (int choice = 0; choice < 3; ++choice)
@@ -155,7 +161,6 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
         }
         ImGui::EndCombo();
     }
-    ImGui::TextWrapped("Full Output uses final game output dimensions. Match Game Render follows the game's render input where supported. Manual scales the selected stage; very low values reduce detail and the NR effect.");
     ImGui::EndDisabled();
     if (placementRefusal) ImGui::TextWrapped("%s", placementRefusal);
     return changed;

@@ -13,6 +13,7 @@
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
 #include "NrScreenshotContract.h"
+#include "NrExperimentalPolicy.h"
 
 
 #include <Config.h>
@@ -256,6 +257,8 @@ struct AdvisorState
     AdvisorPhase phase = AdvisorPhase::Idle;
     bool running = false;
     bool analyzed = false;
+    bool analyzeAll = false;
+    int nextRoute = 0;
     int appliedRoute = -1;
     int targetIndex = 2; // 60 FPS
     int goalIndex = 1;   // balanced
@@ -421,6 +424,39 @@ void BeginAdvisorRoute(Config& config, int route)
     advisor.modelGpuSamples = 0;
 }
 
+const char* AdvisorRouteRefusal(const Config& config, int route);
+void ChooseAdvisorRecommendation(AdvisorState& advisor);
+
+bool BeginNextAdvisorRoute(Config& config)
+{
+    auto& advisor = Advisor();
+    while (advisor.nextRoute < 3)
+    {
+        const int route = advisor.nextRoute++;
+        if (const auto* refusal = AdvisorRouteRefusal(config, route))
+        {
+            advisor.routes[route] = {};
+            advisor.routes[route].level = AdvisorResultLevel::Unavailable;
+            advisor.routes[route].detail = std::string("Skipped: ") + refusal;
+            continue;
+        }
+        CaptureAdvisorSettings(config, advisor.original);
+        AdvisorSampling::TemporarySettings.store(true);
+        advisor.routes[route] = {};
+        advisor.routes[route].level = AdvisorResultLevel::Analyzing;
+        advisor.routes[route].detail = "Waiting for matching completed evaluations...";
+        advisor.running = true;
+        advisor.status = std::string("Testing route ") + std::to_string(route + 1) + " of 3...";
+        BeginAdvisorRoute(config, route);
+        return true;
+    }
+    advisor.running = false;
+    advisor.phase = AdvisorPhase::Idle;
+    advisor.coverageSettings = TryNrConfigSnapshot(config);
+    ChooseAdvisorRecommendation(advisor);
+    return false;
+}
+
 double AdvisorTargetFps(const AdvisorState& advisor)
 {
     static constexpr double values[] = { 30.0, 45.0, 60.0, 90.0, 120.0, 144.0 };
@@ -530,10 +566,35 @@ void FinishAdvisorRoute(Config& config)
     LOG_INFO("Advisor route={} transition={:.3f}s samples={} nativeFPS={:.2f} valid={}", route,
         advisor.transitionSeconds, advisor.sampling.samples, result.fps, result.succeeded);
     RestoreAdvisorSettings(config, advisor.original);
+    if (advisor.analyzeAll && BeginNextAdvisorRoute(config)) return;
     advisor.coverageSettings = TryNrConfigSnapshot(config);
     advisor.running = false;
     advisor.phase = AdvisorPhase::Idle;
     ChooseAdvisorRecommendation(advisor);
+}
+
+void FailAdvisorRoute(Config& config, const char* reason)
+{
+    auto& advisor = Advisor();
+    auto& result = advisor.routes[advisor.routeIndex];
+    result = {};
+    result.detail = reason != nullptr ? reason : "Interrupted - not measured";
+    RestoreAdvisorSettings(config, advisor.original);
+    if (advisor.analyzeAll && BeginNextAdvisorRoute(config)) return;
+    advisor.running = false;
+    advisor.phase = AdvisorPhase::Idle;
+    if (advisor.analyzeAll)
+    {
+        advisor.coverageSettings = TryNrConfigSnapshot(config);
+        ChooseAdvisorRecommendation(advisor);
+    }
+    else
+    {
+        advisor.analyzed = false;
+        advisor.recommendation = -1;
+        advisor.status = result.detail;
+        advisor.reason = "No recommendation was applied.";
+    }
 }
 
 const char* AdvisorRouteRefusal(const Config& config, int route)
@@ -556,6 +617,7 @@ void StartAdvisorAnalysis(Config& config, int selectedRoute)
     if (const auto* reason = AdvisorRouteRefusal(config, selectedRoute))
     { advisor.status = reason; return; }
     CancelComparisonScreenshot();
+    advisor.analyzeAll = false;
     advisor.routes[selectedRoute] = {};
     advisor.routes[selectedRoute].level = AdvisorResultLevel::Analyzing;
     advisor.routes[selectedRoute].detail = "Waiting for matching completed evaluations...";
@@ -571,6 +633,25 @@ void StartAdvisorAnalysis(Config& config, int selectedRoute)
     advisor.originalHeight = present.backbufferHeight;
     advisor.running = true;
     BeginAdvisorRoute(config, selectedRoute);
+}
+
+void StartAdvisorAllRoutes(Config& config)
+{
+    auto& advisor = Advisor();
+    if (advisor.running) return;
+    CancelComparisonScreenshot();
+    advisor.routes = {};
+    advisor.recommendation = -1;
+    advisor.analyzed = false;
+    advisor.appliedRoute = -1;
+    advisor.analyzeAll = true;
+    advisor.nextRoute = 0;
+    advisor.reason = "Each supported route uses the selected resolution preference. Original settings are restored between trials and at the end.";
+    const auto present = DlssNr::PresentTelemetry();
+    advisor.originalWidth = present.backbufferWidth;
+    advisor.originalHeight = present.backbufferHeight;
+    if (!BeginNextAdvisorRoute(config))
+        advisor.status = "No compatible routes were available to test.";
 }
 
 void ApplyAdvisorRoute(Config& config, int route)
@@ -682,6 +763,13 @@ void RenderAdvisorRouteCard(Config& config, int route, float height)
         if (ImGui::Button((std::string("Test This Route##AdvisorTest") + std::to_string(route)).c_str()))
             StartAdvisorAnalysis(config, route);
         ImGui::EndDisabled();
+        ImGui::SameLine();
+        static constexpr const char* explanations[] = {
+            "Native Temporal uses the game's temporal upscaler inputs. It is usually the most complete integration, but NR weight and visible effect can be inconsistent.",
+            "Present Compatibility processes the final image. It often looks strong in still scenes, but motion can show artifacts or blur.",
+            "Present Enhanced adds matched depth and motion guides to the Present path. It is intended to combine both approaches, but still needs broader compatibility work."
+        };
+        HelpMarker(explanations[route]);
         if (refusal) HelpMarker(refusal);
         ImGui::SetCursorPosY((std::max)(ImGui::GetCursorPosY(), height - ImGui::GetFrameHeightWithSpacing() -
             ImGui::GetStyle().WindowPadding.y));
@@ -722,7 +810,7 @@ void RenderAdvisor(Config* config, float menuResScale)
     const bool wide = width >= 700.0f * menuResScale;
 
     ImGui::Spacing();
-    auto header = ScopedCollapsingHeader("Neural Rendering Advisor", ImGuiTreeNodeFlags_DefaultOpen);
+    auto header = ScopedCollapsingHeader("Neural Rendering Advisor");
     if (!header.IsHeaderOpen()) return;
     ScopedIndent indent {};
     ImGui::Spacing();
@@ -867,7 +955,7 @@ void RenderAdvisor(Config* config, float menuResScale)
     }
     ImGui::EndDisabled();
     ImGui::Spacing();
-    ImGui::TextColored(orange, "Analyze temporarily turns Neural Rendering on to test one route.");
+    ImGui::TextColored(orange, "Analyze temporarily turns Neural Rendering on and tests supported routes sequentially.");
     ImGui::TextWrapped("The model effect stays hidden, and your current settings are restored when analysis ends or is cancelled.");
     if (advisor.running)
     {
@@ -875,12 +963,9 @@ void RenderAdvisor(Config* config, float menuResScale)
     }
     else
     {
-        const int route = int(config->DlssNrRoute.value_or_default());
-        const auto* refusal = AdvisorRouteRefusal(*config, route);
-        ImGui::BeginDisabled(refusal != nullptr);
-        if (ImGui::Button("Analyze Current Route")) StartAdvisorAnalysis(*config, route);
-        ImGui::EndDisabled();
-        if (refusal) HelpMarker(refusal);
+        if (ImGui::Button("Analyze All Routes")) StartAdvisorAllRoutes(*config);
+        ImGui::SameLine();
+        HelpMarker("Tests Native Temporal, Present Compatibility, and Present Enhanced one at a time. Unsupported routes are skipped with a reason, failed routes remain unmeasured, and original settings are restored between trials.");
     }
     ImGui::TextWrapped("Tests one resolution preference. Route changes may briefly interrupt rendering; stalled or incomplete tests are discarded. Comparisons are unavailable during analysis.");
 }
@@ -980,8 +1065,8 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
         ImGui::TextColored(yellow, "Model effect hidden. Enable Apply the model to show it.");
     if (route == 2)
     {
-        ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
-        HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
+        ImGui::TextColored(yellow, "Present Enhanced compatibility remains experimental for Frame Generation, NR Multipass, HDR and DX11.");
+        HelpMarker("Saved experimental overrides can unlock implemented FG, Multipass and 10-bit HDR paths. Device, format, guide, synchronization, ownership and completion checks remain mandatory. Vulkan Present has no adapter yet.");
     }
 }
 
@@ -1050,7 +1135,7 @@ void TickAdvisor(Config* config)
     {
         LOG_WARN("Advisor stalled route={} sinceStart={:.3f}s tick={:.3f}ms frame={:.3f}ms",
             advisor.routeIndex, now - advisor.testStarted, tickMs, present.cadence.intervalMs);
-        CancelAdvisorAnalysis(config, "Test interrupted by a rendering stall; unmeasured. Original settings restored.");
+        FailAdvisorRoute(*config, "Test interrupted by a rendering stall; unmeasured. Original settings restored.");
         return;
     }
     if (present.cadence.providerGeneration != advisor.providerGeneration ||
@@ -1089,7 +1174,7 @@ void TickAdvisor(Config* config)
         }
         if (!advisor.ready && now - advisor.testStarted >= 5.0)
         {
-            CancelAdvisorAnalysis(config, "No matching output and verified native cadence within five seconds; unmeasured.");
+            FailAdvisorRoute(*config, "No matching output and verified native cadence within five seconds; unmeasured.");
             return;
         }
         if (advisor.ready)
@@ -1103,7 +1188,7 @@ void TickAdvisor(Config* config)
                 advisor.routes[advisor.routeIndex].detail = "Measuring fresh native frames...";
             }
             else if (now - advisor.phaseStarted >= 15.0)
-                CancelAdvisorAnalysis(config, "Stable warmup did not complete; unmeasured. Original settings restored.");
+                FailAdvisorRoute(*config, "Stable warmup did not complete; unmeasured. Original settings restored.");
         }
     }
     else if (advisor.phase == AdvisorPhase::Sample)
@@ -1146,7 +1231,7 @@ void TickAdvisor(Config* config)
         if (advisor.sampling.Complete(elapsed))
             FinishAdvisorRoute(*config);
         else if (elapsed >= 15.0)
-            CancelAdvisorAnalysis(config, "Insufficient fresh native frames before the sample deadline; unmeasured. Original settings restored.");
+            FailAdvisorRoute(*config, "Insufficient fresh native frames before the sample deadline; unmeasured. Original settings restored.");
     }
 }
 
@@ -1156,6 +1241,7 @@ void CancelAdvisorAnalysis(Config* config, const char* reason)
     if (!advisor.running || config == nullptr) return;
     RestoreAdvisorSettings(*config, advisor.original);
     advisor.running = false;
+    advisor.analyzeAll = false;
     advisor.phase = AdvisorPhase::Idle;
     advisor.analyzed = false;
     advisor.recommendation = -1;
@@ -1175,7 +1261,13 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
     ImGui::Spacing();
     {
     bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
-    auto ch = ScopedCollapsingHeader("DLSS Neural Rendering", ImGuiTreeNodeFlags_DefaultOpen);
+    const std::string nrTitle = Neurotic::Translate(enabled ? "DLSS Neural Rendering - ON"
+                                                       : "DLSS Neural Rendering - OFF") +
+                                "###DlssNrMainSection";
+    ImGui::PushStyleColor(ImGuiCol_Text, enabled ? ImVec4(0.25f, 0.90f, 0.38f, 1.0f)
+                                                 : ImVec4(0.95f, 0.30f, 0.28f, 1.0f));
+    auto ch = ScopedCollapsingHeader(nrTitle.c_str());
+    ImGui::PopStyleColor();
     if (ch.IsHeaderOpen())
     {
         ScopedIndent indent {};
@@ -1352,8 +1444,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             ImGui::TextColored(yellow, "Model effect hidden. Enable Apply the model to show it.");
         if (route == 2)
         {
-            ImGui::TextColored(yellow, "Experimental: Frame Generation, Ray Reconstruction, NR Multipass and DX11.");
-            HelpMarker("These combinations are unlocked. Processing requires fresh matching guides and compatible resources. Vulkan Present has no adapter yet. SDR output is required.");
+            ImGui::TextColored(yellow, "Present Enhanced compatibility remains experimental for Frame Generation, NR Multipass, HDR and DX11.");
+            HelpMarker("Saved experimental overrides can unlock implemented FG, Multipass and 10-bit HDR paths. Device, format, guide, synchronization, ownership and completion checks remain mandatory. Vulkan Present has no adapter yet.");
         }
         }
         if (detailed)
@@ -2653,8 +2745,18 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
             count(), 2.0, count() != prior, AdvisorNow()); }
     } reaction {effectiveCount, priorCount};
     ImGui::Spacing();
-    if (auto panel = ScopedCollapsingHeader("Neural Rendering Multipass##DlssNrMultipassSection");
-        panel.IsHeaderOpen())
+    const bool requestedMultipass = config->DlssNrMultipassEnabled.value_or_default();
+    const auto presentStatus = PresentTelemetry();
+    const bool blockedMultipass = requestedMultipass && presentStatus.policyBlocked &&
+                                  presentStatus.policyGuardrail == "Multipass";
+    const char* multipassState = blockedMultipass ? "Neural Rendering Multipass - ON - BLOCKED" :
+        requestedMultipass ? "Neural Rendering Multipass - ON" : "Neural Rendering Multipass - OFF";
+    const std::string multipassTitle = Neurotic::Translate(multipassState) + "###DlssNrMultipassSection";
+    ImGui::PushStyleColor(ImGuiCol_Text, requestedMultipass && !blockedMultipass
+        ? ImVec4(0.25f, 0.90f, 0.38f, 1.0f) : ImVec4(0.95f, 0.30f, 0.28f, 1.0f));
+    auto panel = ScopedCollapsingHeader(multipassTitle.c_str());
+    ImGui::PopStyleColor();
+    if (panel.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
@@ -2683,6 +2785,9 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         }
         if (!d3d12 && !presentRoute) ImGui::EndDisabled();
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
+        if (blockedMultipass)
+            ImGui::TextColored(ImVec4(0.95f, 0.30f, 0.28f, 1.0f),
+                "NR deactivated due to this rendering combination being untested and potentially broken or unstable. To override guardrails and render anyways, activate Experimental mode in the Advanced settings.");
 
         if (!basic.advanced)
         {
@@ -2996,7 +3101,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
 
 void RenderScreenshotMenu(Config* config)
 {
-    if (auto section = ScopedCollapsingHeader("Comparison screenshots", ImGuiTreeNodeFlags_DefaultOpen); section.IsHeaderOpen())
+    if (auto section = ScopedCollapsingHeader("Comparison screenshots"); section.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
