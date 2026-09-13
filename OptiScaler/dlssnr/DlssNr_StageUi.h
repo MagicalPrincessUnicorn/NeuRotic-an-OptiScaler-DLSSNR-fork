@@ -144,6 +144,12 @@ template<class C> const char* ResolutionRefusal(const C& c, int choice)
         return "Match Game Render is unavailable for Native Temporal After. Select Before or a Present route explicitly.";
     return nullptr;
 }
+template<class C> const char* NativePlacementRefusal(const C& c, bool forcedAfter)
+{
+    return forcedAfter && c.DlssNrRoute.value_or_default() == 0 && Stage(c) == 0
+        ? "Native Temporal is currently forced After reconstruction. Select After explicitly to edit or test its resolution."
+        : nullptr;
+}
 template<class C> void SelectResolutionChoice(C& c, int choice)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());

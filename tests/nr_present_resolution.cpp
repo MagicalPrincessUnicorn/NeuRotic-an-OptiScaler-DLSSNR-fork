@@ -36,6 +36,32 @@ void Load(CSimpleIniA& ini, Config& cfg)
 int main()
 {
     namespace U = DlssNr::StageUi;
+    for (uint32_t route : {1u, 2u})
+    {
+        Config policy; policy.DlssNrRoute = route;
+        policy.DlssNrPresentResolution = R::FollowNative; policy.DlssNrEnhancedResolution = R::FollowNative;
+        U::SelectResolutionChoice(policy, U::ManualChoice);
+        assert(U::ResolutionScale(policy) == 0.25f);
+        U::SelectResolutionScale(policy, 1.25f);
+        U::SelectResolutionChoice(policy, 0);
+        const auto full = R::Resolve(R::Selected(policy), 3840, 2160, 1920, 1080);
+        assert(full.width == 3840 && full.height == 2160);
+        U::SelectResolutionChoice(policy, 1);
+        const auto native = R::Resolve(R::Selected(policy), 3840, 2160, 1920, 1080);
+        assert(native.width == 1920 && native.height == 1080);
+        U::SelectResolutionChoice(policy, U::ManualChoice);
+        assert(U::ResolutionScale(policy) == 1.25f);
+    }
+    {
+        Config native; native.DlssNrRoute = 0u; native.DlssNrRenderingMode = 1;
+        assert(U::ResolutionRefusal(native, 0) && !U::ResolutionRefusal(native, 1));
+        assert(U::NativePlacementRefusal(native, true) && !U::NativePlacementRefusal(native, false));
+        U::SelectResolutionChoice(native, 0);
+        assert(native.DlssNrRenderingMode.value_or_default() == 1 && native.DlssNrWorkingScale.value_or_default() == 1);
+        native.DlssNrRenderingMode = 0;
+        assert(!U::NativePlacementRefusal(native, true));
+        assert(U::ResolutionRefusal(native, 1) && !U::ResolutionRefusal(native, 0));
+    }
     for (bool advanced : {false, true})
     {
         DlssNr::BasicMultipass::Profile profile {advanced, 4, 1.25f, 6, 2.3f, 1.5f};

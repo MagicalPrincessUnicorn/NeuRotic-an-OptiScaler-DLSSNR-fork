@@ -103,7 +103,7 @@ inline bool SentenceCombo(const char* id, const char* prefix, const char* suffix
 }
 
 // Shared by the production page and the headless ImGui navigation/layout fixture.
-template<class C> bool RenderControls(C& config, bool basicOwnsResolution = false)
+template<class C> bool RenderControls(C& config, bool basicOwnsResolution = false, bool nativeAfterOnly = false)
 {
     bool changed = false;
     auto snapshot = config.GetDlssNrConfigSnapshot();
@@ -135,7 +135,8 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
     if (stage == 0) ImGui::TextWrapped("Present methods require After. Your After method is remembered.");
     snapshot = config.GetDlssNrConfigSnapshot();
     int resolution = basicOwnsResolution ? ManualChoice : ResolutionChoiceSelection(snapshot);
-    ImGui::BeginDisabled(basicOwnsResolution);
+    const auto* placementRefusal = NativePlacementRefusal(snapshot, nativeAfterOnly);
+    ImGui::BeginDisabled(basicOwnsResolution || placementRefusal != nullptr);
     ImGui::TextUnformatted("Neural Rendering Resolution");
     if (ImGui::BeginCombo("##NrResolution", ResolutionChoices[resolution]))
     {
@@ -156,6 +157,7 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
     }
     ImGui::TextWrapped("Full Output uses final game output dimensions. Match Game Render follows the game's render input where supported. Manual scales the selected stage; very low values reduce detail and the NR effect.");
     ImGui::EndDisabled();
+    if (placementRefusal) ImGui::TextWrapped("%s", placementRefusal);
     return changed;
 }
 }

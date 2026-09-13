@@ -33,6 +33,7 @@
 #include <bit>
 #include <array>
 #include <optional>
+#include <cfloat>
 
 namespace DlssNr
 {
@@ -269,6 +270,7 @@ struct AdvisorState
     FGInput fgInput = FGInput::NoFG;
     FGOutput fgOutput = FGOutput::NoFG;
     sl::DLSSGMode fgMode = sl::DLSSGMode::eOff;
+    bool rayReconstruction = false;
     int fgRatio = 0, xeRatio = 0;
     bool ready = false;
     std::vector<double> baselineIntervals;
@@ -397,6 +399,7 @@ void BeginAdvisorRoute(Config& config, int route)
     advisor.fgInput = State::Instance().activeFgInput;
     advisor.fgOutput = State::Instance().activeFgOutput;
     advisor.fgMode = State::Instance().dlssgLastSetMode.load();
+    advisor.rayReconstruction = DlssNr::Telemetry().nativeRayReconstructionActive;
     advisor.fgRatio = config.FGDLSSGInterpolationCount.value_or_default();
     advisor.xeRatio = config.FGXeFGInterpolationCount.value_or_default();
     advisor.expectedSettings = TryNrConfigSnapshot(config);
@@ -476,7 +479,7 @@ void ChooseAdvisorRecommendation(AdvisorState& advisor)
         const bool targetMet = advisor.routes[selected].fps >= target;
         advisor.reason = targetMet
             ? "The measured native cadence met the target at the selected resolution preference. Untested routes are unmeasured."
-            : "No tested route met the target. This was the fastest measured route; untested routes are unmeasured.";
+            : "The selected route is below the native target. Compare the measured alternatives; untested routes are unmeasured.";
     }
 }
 
@@ -541,6 +544,8 @@ const char* AdvisorRouteRefusal(const Config& config, int route)
     auto proposed = config.GetDlssNrConfigSnapshot();
     proposed.DlssNrRoute = uint32_t(route);
     if (route != 0) { proposed.DlssNrRenderingMode = 0; proposed.DlssNrRunBeforeSr = false; }
+    if (const auto* reason = StageUi::NativePlacementRefusal(proposed,
+        IsVulkanInput() || DlssNr::Telemetry().nativeRayReconstructionActive)) return reason;
     return StageUi::ResolutionRefusal(proposed, Advisor().resolutionPreference);
 }
 
@@ -653,13 +658,16 @@ void RenderAdvisorRouteCard(Config& config, int route, float height)
     const ImVec4 color = AdvisorColor(result.level);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(color.x, color.y, color.z, 0.07f));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(color.x, color.y, color.z, 0.70f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, height), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::BeginChild((std::string("##AdvisorRoute") + std::to_string(route)).c_str(),
-                          ImVec2(0.0f, height), ImGuiChildFlags_Borders,
+                          ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
     {
-        ImGui::TextColored(color, "%s", names[route]);
-        ImGui::SameLine();
-        ImGui::TextColored(color, "- %s", AdvisorLevelName(result.level));
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextWrapped("%s", names[route]);
+        ImGui::TextWrapped("%s", AdvisorLevelName(result.level));
+        ImGui::PopStyleColor();
         ImGui::TextWrapped("%s", result.detail.c_str());
         if (result.fps > 0.0)
         {
@@ -687,12 +695,13 @@ void RenderAdvisorRouteCard(Config& config, int route, float height)
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(button.x, button.y, button.z, 0.95f));
         }
         const std::string buttonLabel = advisor.appliedRoute == route
-            ? std::string("Applied##AdvisorApply") + std::to_string(route)
-            : std::string("Use ") + names[route] + "##AdvisorApply" + std::to_string(route);
+            ? std::string("Applied###AdvisorApply") + std::to_string(route)
+            : std::string("Use this route###AdvisorApply") + std::to_string(route);
         if (ImGui::Button(buttonLabel.c_str(), ImVec2(-1.0f, 0.0f)))
             ApplyAdvisorRoute(config, route);
         if (canApply) ImGui::PopStyleColor(3);
         ImGui::EndDisabled();
+        ImGui::PopTextWrapPos();
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
@@ -720,11 +729,12 @@ void RenderAdvisor(Config* config, float menuResScale)
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.12f, 0.18f, 0.45f));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.60f, 0.90f, 0.55f));
-    if (ImGui::BeginChild("##AdvisorSummary", ImVec2(0.0f, 68.0f * menuResScale),
-                          ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+    if (ImGui::BeginChild("##AdvisorSummary", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar))
     {
-        ImGui::TextColored(advisor.running ? AdvisorColor(AdvisorResultLevel::Analyzing) : green,
-                           "%s", advisor.status.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, advisor.running ? AdvisorColor(AdvisorResultLevel::Analyzing) : green);
+        ImGui::TextWrapped("%s", advisor.status.c_str());
+        ImGui::PopStyleColor();
         ImGui::TextWrapped("%s", advisor.reason.c_str());
     }
     ImGui::EndChild();
@@ -828,7 +838,7 @@ void RenderAdvisor(Config* config, float menuResScale)
     const auto renderGoal = [&]()
     {
         ImGui::TextUnformatted("Optimization goal");
-        HelpMarker("Quality prefers tested Present Enhanced. Balanced requires the native target. Performance chooses the fastest tested route. Only the selected resolution is tested.");
+        HelpMarker("Quality prefers tested Present Enhanced and allows up to a 10% target shortfall. Balanced requires the native target. Performance chooses the fastest tested route. Only the selected resolution is tested.");
         ImGui::SetNextItemWidth(comboWidth);
         if (ImGui::Combo("##AdvisorGoal", &advisor.goalIndex, goals, IM_ARRAYSIZE(goals)))
             clearAnalysis("Optimization goal changed - analyze again.");
@@ -987,6 +997,8 @@ void TickAdvisor(Config* config)
             const auto current = TryNrConfigSnapshot(*config);
             if (!current || !advisor.coverageSettings->SameConfiguration(*current) ||
                 advisor.providerGeneration != present.cadence.providerGeneration ||
+                advisor.rayReconstruction != DlssNr::Telemetry().nativeRayReconstructionActive ||
+                advisor.lifecycleGeneration != DlssNr::Telemetry().lifecycleGeneration ||
                 advisor.fgMode != State::Instance().dlssgLastSetMode.load() ||
                 advisor.fgInput != State::Instance().activeFgInput || advisor.fgOutput != State::Instance().activeFgOutput ||
                 advisor.fgRatio != config->FGDLSSGInterpolationCount.value_or_default() ||
@@ -1044,6 +1056,7 @@ void TickAdvisor(Config* config)
     if (present.cadence.providerGeneration != advisor.providerGeneration ||
         advisor.fgInput != State::Instance().activeFgInput || advisor.fgOutput != State::Instance().activeFgOutput ||
         advisor.fgMode != State::Instance().dlssgLastSetMode.load() ||
+        advisor.rayReconstruction != lifecycle.nativeRayReconstructionActive ||
         advisor.fgRatio != config->FGDLSSGInterpolationCount.value_or_default() ||
         advisor.xeRatio != config->FGXeFGInterpolationCount.value_or_default())
     {
@@ -1185,7 +1198,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 
         const bool basicOwnsMain = BasicMultipass::Active(config->GetDlssNrConfigSnapshot()) && !IsVulkanInput();
         RenderLiveReadouts(config, config->GetDlssNrConfigSnapshot(), enabled, basicOwnsMain, status);
-        if (StageUi::RenderControls(*config, basicOwnsMain)) CancelNrEdits();
+        const bool nativeAfterOnly = IsVulkanInput() || DlssNr::Telemetry().nativeRayReconstructionActive;
+        if (StageUi::RenderControls(*config, basicOwnsMain, nativeAfterOnly)) CancelNrEdits();
         auto uiConfig = config->GetDlssNrConfigSnapshot();
         if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
         const auto& routeNames = StageUi::Methods;
@@ -1196,7 +1210,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         const bool presentRoute = route != 0;
         if (basicOwnsMain)
             ImGui::TextWrapped("Basic Multipass controls resolution, downscaler and strengths for every pass. These controls show Pass 1; edit them in Multipass below.");
-        ImGui::BeginDisabled(basicOwnsMain);
+        ImGui::BeginDisabled(basicOwnsMain || StageUi::NativePlacementRefusal(uiConfig, nativeAfterOnly) != nullptr);
         if (StageUi::ResolutionSelection(uiConfig) == 1)
         {
             static NrOptional<float> scalePreview { 1.0f };

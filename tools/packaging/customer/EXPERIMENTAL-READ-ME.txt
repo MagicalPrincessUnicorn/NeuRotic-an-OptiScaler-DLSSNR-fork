@@ -1,10 +1,33 @@
-NEUROTIC - COHERENT NR EXPERIMENTAL REVIEW
+NEUROTIC ALPHA 0.9.6 - ADVISOR AND INPUT EXPERIMENTAL REVIEW
 
 Keep experimental. This matched folder is for review and separately authorized
 runtime testing. It is not a release, stable promotion or selected public candidate.
 Source identity and binary hashes are in support\PACKAGE-MANIFEST.json and
 support\BUILD-MANIFEST.json. Keep this complete folder outside the game folder.
 No archive extraction or Downloads location is required.
+
+WHAT CHANGED
+Analyze Current Route and Test This Route test one route and one resolution
+preference per click. Settings are restored afterward. Unknown native cadence,
+stalls and incomplete samples cannot produce a successful measurement. Changing
+routes may still interrupt rendering; the reported hitch needs exact-binary tests.
+Frame Generation settings do not prove actual generated-frame presentations.
+
+Resolution choices are Always Full Output, Match Game Render (recommended), and
+Manual (25-200%). Incompatible placement choices show a reason. Existing explicit
+profiles are retained. Very low Manual resolution can lose detail and the NR effect.
+OptiClip is visible by default and can be hidden in General.
+
+General has separate gameplay-input controls while the menu is open. Defaults:
+mouse blocked, keyboard allowed, controller allowed. Save Settings remembers them.
+Allowed keyboard/controller devices do not navigate the menu. Allowed mouse clicks
+can affect both menu and game. Standard XInput/DirectInput are covered; custom
+DirectInput, GameInput, Windows.Gaming.Input and raw HID controllers may bypass it.
+Held-input/focus behavior still needs exact-binary game testing.
+
+New comparison captures contain PNG images only, with versioned provenance embedded
+inside each image. Existing images and old sidecars are preserved. No brightness
+gain or correction has been added.
 
 RUNTIME LIMITS
 Native Temporal, Present Image Only and Present Enhanced expose screenshot
@@ -19,7 +42,7 @@ Close the game. Run NeuRotic-Setup.cmd and select the actual game executable and
 proxy filename. Read the detected-file decision before proceeding: selecting a
 free filename installs immediately. Existing settings are preserved; selecting
 ReShade compatibility explicitly enables its setting. Fresh installations use
-the unchanged integration INI recorded in the build manifest.
+the revised default integration INI recorded in the build manifest.
 
 The private nvngx_dlssnr.dll model is not included. Preserve or supply your own
 model before enabling NR. The included nvngx.dll_dlssnr.dll is the forwarder,

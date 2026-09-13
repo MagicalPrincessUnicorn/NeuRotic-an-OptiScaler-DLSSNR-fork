@@ -29,7 +29,7 @@ Assert-Ui ($nr.Contains('WHAT OPTISCALER SEES') -and $nr.Contains('RECOMMENDED S
 Assert-Ui ($nr.Contains('Native Temporal') -and $nr.Contains('Present Compatibility') -and
            $nr.Contains('Present Enhanced') -and -not $nr.Contains('Prism Enhanced') -and -not $nr.Contains('Prism Compact')) 'Advisor uses the current Present route terminology'
 Assert-Ui ($nr.Contains('std::string("##AdvisorRoute") + std::to_string(route)') -and
-           $nr.Contains('std::string("Use ") + names[route] + "##AdvisorApply"') -and
+           $nr.Contains('std::string("Use this route###AdvisorApply")') -and
            $nr.Contains('ApplyAdvisorRoute(config, route);') -and
            -not $nr.Contains('Apply Recommendation')) 'all three route cards expose stable, route-specific apply buttons'
 Assert-Ui ($nr.Contains('advisor.routes[selectedRoute].level = AdvisorResultLevel::Analyzing') -and
@@ -180,8 +180,7 @@ Assert-Ui ($diagnostics -gt $nr.IndexOf('RenderLiveReadouts(config,') -and
            $diagnostics -gt $nr.IndexOf('Checkbox("Apply the model"') -and
            $diagnostics -lt $nr.IndexOf('renderReadouts(true);') -and
            -not $nr.Contains('renderReadouts(false);') -and
-           $nr.IndexOf('Automatic uses 100% of the game render input; Manual scales that input.',
-                       $nr.IndexOf('if (detailed)')) -lt $nr.IndexOf('const auto guides = PresentGuides::Instance().Inspect();')) 'live readouts precede controls while policy and dimensions render only through collapsed diagnostics'
+           $nr.Contains('StageUi::DimensionText(actualW, actualH, outputW, outputH)')) 'live actual dimensions precede controls while detailed history remains in Diagnostics'
 Assert-Ui ($nr.Contains('observation.Fresh(selection,') -and $stage.Contains('NR: unavailable | Output: unavailable')) 'new selection waits for fresh telemetry; unknown sizes are explicit'
 Assert-Ui ($header.Contains('DlssNrRoute { 2 }') -and $header.Contains('DlssNrEnhancedResolution { 0 }') -and
            $header.Contains('DlssNrEnabled { false }') -and $header.Contains('LogToFile { false }')) 'fresh Match Game Render defaults do not enable NR or file logging'
