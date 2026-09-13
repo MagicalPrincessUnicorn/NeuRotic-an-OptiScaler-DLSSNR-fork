@@ -1,4 +1,4 @@
-NEUROTIC ALPHA 0.9.6 - ADVISOR AND INPUT EXPERIMENTAL REVIEW
+NEUROTIC ALPHA 0.9.6 - MENU AND EXPERIMENTAL CONTROLS REVIEW
 
 Keep experimental. This matched folder is for review and separately authorized
 runtime testing. It is not a release, stable promotion or selected public candidate.
@@ -7,23 +7,37 @@ support\BUILD-MANIFEST.json. Keep this complete folder outside the game folder.
 No archive extraction or Downloads location is required.
 
 WHAT CHANGED
-Analyze Current Route and Test This Route test one route and one resolution
-preference per click. Settings are restored afterward. Unknown native cadence,
-stalls and incomplete samples cannot produce a successful measurement. Changing
-routes may still interrupt rendering; the reported hitch needs exact-binary tests.
-Frame Generation settings do not prove actual generated-frame presentations.
+Analyze All Routes tests each compatible route in sequence. Test This Route on an
+individual card tests only that route. Both use the selected resolution preference
+and restore the original settings. Unsupported routes are skipped with a reason;
+unknown native cadence, stalls and incomplete samples cannot produce a successful
+measurement. Changing routes may still interrupt rendering, so the reported hitch
+needs exact-binary tests. Frame Generation settings do not prove actual generated-
+frame presentations.
 
 Resolution choices are Always Full Output, Match Game Render (recommended), and
 Manual (25-200%). Incompatible placement choices show a reason. Existing explicit
 profiles are retained. Very low Manual resolution can lose detail and the NR effect.
-OptiClip is visible by default and can be hidden in General.
+Neural Rendering sections start collapsed and their headings show ON, OFF or BLOCKED
+status. OptiClip is visible by default, speaks above its avatar and can be hidden in
+General.
 
 General has separate gameplay-input controls while the menu is open. Defaults:
-mouse blocked, keyboard allowed, controller allowed. Save Settings remembers them.
+mouse blocked, keyboard allowed, controller allowed. Checkbox edits remain pending
+until Save Input Settings or the global Save Settings succeeds; closing the menu
+discards unsaved edits. This prevents a mouse-policy edit from applying while the
+user still needs the menu.
 Allowed keyboard/controller devices do not navigate the menu. Allowed mouse clicks
 can affect both menu and game. Standard XInput/DirectInput are covered; custom
 DirectInput, GameInput, Windows.Gaming.Input and raw HID controllers may bypass it.
 Held-input/focus behavior still needs exact-binary game testing.
+
+Advanced Settings has a separate Experimental Mode master switch and Multipass,
+HDR and Frame Generation overrides. Activation requires a warning confirmation.
+Edits apply only after Save Experimental Settings or the global Save Settings.
+An unclean prior session automatically disables the master and every override on
+the next launch. Hard checks that protect against known GPU corruption remain in
+force even when an override is saved.
 
 New comparison captures contain PNG images only, with versioned provenance embedded
 inside each image. Existing images and old sidecars are preserved. No brightness
