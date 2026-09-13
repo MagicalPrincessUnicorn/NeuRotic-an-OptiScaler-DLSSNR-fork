@@ -162,3 +162,14 @@ require('NativeFeatureRegistry<NVSDK_NGX_Feature>' in ngx_dx12 and
         'native feature classification is synchronized and failed releases retain their identity')
 require('dlssnr_call_probe_d3d12' in source('OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp'), 'direct Feature 18 capability probe retained')
 print('PASS: integration source contracts; runtime evidence remains required')
+hdr = source('OptiScaler/dlssnr/HdrObservation.h')
+readiness = source('OptiScaler/dlssnr/StartupReadiness.h')
+require('uint64_t hdrIdentity = 0;' in readiness and
+        'key.hdrIdentity = hdrObservation.identityGeneration;' in present and
+        'currentHdr.transitioning || currentHdr.identityGeneration != preFgFrame->readinessIdentity.hdrIdentity' in present,
+        'HDR structural identity binds readiness and is rechecked after model evaluation')
+require('identityGeneration = entry.snapshot.observationSequence' in hdr and
+        'snapshot.identityGeneration = NextSequence();' in hdr,
+        'HDR registration and resize identities use the registry-wide monotonic sequence')
+require(present.index('if (!presentRequested)') < present.index('HdrObservation::Registry::Instance().Read(swapChain)'),
+        'Native Temporal and NR Off remain before HDR Present admission')

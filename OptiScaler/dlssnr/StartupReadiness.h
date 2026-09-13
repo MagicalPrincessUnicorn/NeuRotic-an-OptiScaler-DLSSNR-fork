@@ -16,6 +16,7 @@ struct ReadinessIdentity
     unsigned int route = 0, width = 0, height = 0, format = 0, samples = 0, quality = 0;
     unsigned int workWidth = 0, workHeight = 0, colorSpace = 0;
     uint64_t modelLifecycle = 0;
+    uint64_t hdrIdentity = 0;
     bool operator==(const ReadinessIdentity&) const = default;
 };
 

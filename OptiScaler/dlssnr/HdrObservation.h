@@ -69,6 +69,9 @@ struct Snapshot
     bool transitioning = false;
     std::uint64_t observationSequence = 0;
     std::uint64_t generation = 0;
+    // Globally unique structural identity, including destruction/pointer reuse.
+    // Failed calls, repeated colors and metadata-only updates do not revoke readiness.
+    std::uint64_t identityGeneration = 0;
     std::uint64_t resizeGeneration = 0;
     std::uint64_t metadataGeneration = 0;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
@@ -106,6 +109,7 @@ class Registry
             entry.snapshot.format = format;
             entry.snapshot.generation = 1;
             entry.snapshot.observationSequence = NextSequence();
+            entry.snapshot.identityGeneration = entry.snapshot.observationSequence;
         }
         return entry.snapshot;
     }
@@ -134,7 +138,10 @@ class Registry
         if (SUCCEEDED(result))
         {
             if (!snapshot.colorSpaceObserved || snapshot.colorSpace != requested)
+            {
                 ++snapshot.generation;
+                snapshot.identityGeneration = snapshot.observationSequence;
+            }
             snapshot.colorSpace = requested;
             snapshot.colorSpaceObserved = true;
         }
@@ -147,7 +154,10 @@ class Registry
         std::lock_guard lock(_mutex);
         auto& snapshot = Ensure(swapChain).snapshot;
         if (!snapshot.transitioning)
+        {
             ++snapshot.generation;
+            snapshot.identityGeneration = NextSequence();
+        }
         snapshot.transitioning = true;
         snapshot.observationSequence = NextSequence();
         return snapshot;
@@ -162,6 +172,7 @@ class Registry
         snapshot.transitioning = false;
         snapshot.observationSequence = NextSequence();
         ++snapshot.generation;
+        snapshot.identityGeneration = snapshot.observationSequence;
         if (SUCCEEDED(result))
         {
             ++snapshot.resizeGeneration;
@@ -215,6 +226,7 @@ class Registry
         {
             entry.snapshot.registered = true;
             entry.snapshot.generation = 1;
+            entry.snapshot.identityGeneration = NextSequence();
             entry.owners = 1;
         }
         return entry;

@@ -1,5 +1,6 @@
 #include "../OptiScaler/dlssnr/PreFg.h"
 #include "../OptiScaler/dlssnr/NativeFeatureRegistry.h"
+#include "../OptiScaler/dlssnr/HdrObservation.h"
 #include <cassert>
 #include <cstdio>
 #include <thread>
@@ -91,11 +92,114 @@ static void TestReadiness(ID3D12Device* device)
     CHECK_ID(route); CHECK_ID(width); CHECK_ID(height); CHECK_ID(format);
     CHECK_ID(samples); CHECK_ID(quality); CHECK_ID(workWidth); CHECK_ID(workHeight); CHECK_ID(colorSpace);
     CHECK_ID(modelLifecycle);
+    CHECK_ID(hdrIdentity);
 #undef CHECK_ID
     prepare(); status->Fail(); assert(!readiness.Ready() && !readiness.Poll(key, device, 3));
     prepare(); readiness.CheckEpoch(key.invalidation + 1); assert(!readiness.Ready());
     prepare(); assert(!readiness.Poll(key, nullptr, 3));
     std::puts("Readiness: 10000 stalled polls, exact proof, next-frame activation, all identities, DD2 replay PASS");
+}
+
+static void TestHdrReadiness(ID3D12Device* device)
+{
+    using namespace DlssNr::PreFg;
+    DlssNr::HdrObservation::Registry registry;
+    const auto chain = reinterpret_cast<void*>(uintptr_t(0x3000));
+    const auto other = reinterpret_cast<void*>(uintptr_t(0x4000));
+    auto* resource = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x5000));
+    registry.Register(chain, DXGI_FORMAT_R10G10B10A2_UNORM);
+    registry.Register(other, DXGI_FORMAT_R10G10B10A2_UNORM);
+    registry.RecordColorSpace(chain, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, S_OK);
+    const auto identity = [&](const void* selected) {
+        const auto hdr = registry.Read(selected);
+        ReadinessIdentity key {};
+        key.swapchain = reinterpret_cast<uintptr_t>(selected);
+        key.hdrIdentity = hdr.identityGeneration;
+        key.colorSpace = hdr.colorSpace;
+        key.format = hdr.format;
+        return key;
+    };
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+    assert(SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))));
+    StartupReadiness readiness;
+    CompletionLedger completions;
+    uint64_t value = 0;
+    const auto probe = [&] {
+        readiness.Reset();
+        auto status = std::make_shared<DlssNr::GpuSafety::ExternalWaitStatus>();
+        status->bound = status->applied = true;
+        ++value;
+        assert(readiness.Submit(identity(chain), fence.Get(), value, value, status));
+        readiness.Presented(value, true);
+        assert(!readiness.Poll(identity(chain), device, value + 1));
+        const auto packet = completions.Reserve(resource, 1, 2, 3, value, value);
+        assert(packet && completions.Commit(packet, resource, fence.Get(), value));
+    };
+    const auto revoked = [&] {
+        assert(!readiness.Poll(identity(chain), device, value + 1));
+        assert(readiness.State() == StartupReadiness::Phase::AwaitingFrame);
+        completions.Reset();
+        assert(completions.Count() == 1); // readiness revocation never erases unfinished GPU work
+        assert(completions.Claim(resource, 1, 2, 3).result == CompletionClaimResult::Refused);
+        assert(SUCCEEDED(fence->Signal(value)));
+        completions.Reset();
+        assert(completions.Count() == 0);
+    };
+
+    probe();
+    const auto original = identity(chain);
+    registry.RecordColorSpace(other, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709, S_OK);
+    registry.RecordColorSpace(chain, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709, E_INVALIDARG);
+    registry.RecordMetadata(chain, DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr, E_INVALIDARG);
+    registry.RecordMetadata(chain, DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr, S_OK);
+    registry.RecordColorSpace(chain, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, S_OK);
+    assert(identity(chain) == original); // failed/repeated calls and metadata do not starve proof
+    assert(readiness.Pending());
+    assert(SUCCEEDED(fence->Signal(value)));
+    assert(readiness.Poll(identity(chain), device, value + 1));
+    assert(!readiness.Poll(identity(other), device, value + 2));
+    completions.Reset();
+
+    probe();
+    registry.RecordColorSpace(chain, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, S_OK);
+    registry.RecordColorSpace(chain, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, S_OK);
+    revoked(); // same final color still requires a new certificate
+    for (const HRESULT result : {S_OK, DXGI_ERROR_INVALID_CALL})
+    {
+        probe();
+        assert(registry.BeginResize(chain).transitioning);
+        readiness.CheckIdentity(identity(chain));
+        assert(!readiness.Pending());
+        const auto resized = registry.CompleteResize(chain, result, DXGI_FORMAT_UNKNOWN);
+        assert(!resized.transitioning);
+        revoked();
+    }
+    probe();
+    registry.Unregister(chain);
+    registry.Register(chain, DXGI_FORMAT_R10G10B10A2_UNORM);
+    registry.RecordColorSpace(chain, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, S_OK);
+    revoked(); // same pointer, format and color are a distinct lifetime
+
+    ConsumerPath consumer;
+    ConsumerKey consumerKey {1,2,3};
+    for (auto type : {D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_TYPE_COMPUTE})
+    {
+        probe();
+        consumer.key = consumerKey;
+        consumer.type = type;
+        consumer.observation = std::make_shared<DlssNr::GpuSafety::ExternalExecutionStatus>();
+        consumer.observation->evaluated = consumer.observation->submitted = true;
+        assert(consumer.Ready(consumerKey));
+        assert(SUCCEEDED(fence->Signal(value)));
+        assert(readiness.Poll(identity(chain), device, value + 1));
+        completions.Reset();
+        ++consumerKey.provider; // unsupported/replaced provider suspends until fresh observation
+        assert(!consumer.Ready(consumerKey));
+        readiness.Reset();
+    }
+    registry.Unregister(chain);
+    registry.Unregister(other);
+    std::puts("HDR/readiness: pending color round-trip, resize success/failure, failed calls, metadata, multiple chains, reuse, DIRECT/COMPUTE recovery and retained GPU ownership PASS");
 }
 
 int main()
@@ -257,6 +361,7 @@ int main()
     assert(SUCCEEDED(D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))));
     assert(SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))));
     TestReadiness(device.Get());
+    TestHdrReadiness(device.Get());
     auto* resourceA = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x1000));
     auto* resourceB = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x2000));
     CompletionLedger completions;

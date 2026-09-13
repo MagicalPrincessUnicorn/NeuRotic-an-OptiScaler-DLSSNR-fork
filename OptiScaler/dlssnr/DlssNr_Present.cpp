@@ -1170,6 +1170,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         key.format = backDesc.Format; key.samples = backDesc.SampleDesc.Count;
         key.quality = backDesc.SampleDesc.Quality;
         key.workWidth = workWidth; key.workHeight = workHeight; key.colorSpace = colorSpace;
+        key.hdrIdentity = hdrObservation.identityGeneration;
         if (!key.swapchain || !key.device || device->GetDeviceRemovedReason() != S_OK)
         {
             SetFallback(api, "swapchain or Present device unavailable", true);
@@ -1366,7 +1367,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             preFgFrame->readinessIdentity.modelLifecycle = model.lifecycleGeneration;
         }
         const auto current = TryNrConfigSnapshot(*config);
+        const auto currentHdr = HdrObservation::Registry::Instance().Read(swapChain);
         if (!current || !settings.SameConfiguration(*current) || !model.lifecycleOpen || !model.modelLoaded ||
+            currentHdr.transitioning || currentHdr.identityGeneration != preFgFrame->readinessIdentity.hdrIdentity ||
             preFgFrame->readinessIdentity.invalidation != PreFg::State().readinessEpoch.load() ||
             device->GetDeviceRemovedReason() != S_OK)
         {
