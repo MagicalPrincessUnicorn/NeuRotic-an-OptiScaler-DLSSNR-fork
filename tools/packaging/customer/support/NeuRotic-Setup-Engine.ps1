@@ -36,7 +36,7 @@ function HashBytes([byte[]]$Bytes) {
 function Get-UninstallSnapshotRelative($Entry) {
     if ($Entry.PSObject.Properties.Name -contains 'snapshot') {
         $snapshot = [string]$Entry.snapshot
-        if ($snapshot -notmatch '^files\\[a-fA-F0-9]{64}\.bin$') { throw 'Invalid uninstall recovery snapshot path.' }
+        if ($snapshot -notmatch '^(?:f\\[a-fA-F0-9]{4}|files\\[a-fA-F0-9]{64})\.bin$') { throw 'Invalid uninstall recovery snapshot path.' }
         return $snapshot
     }
     return [string]$Entry.path
@@ -272,12 +272,14 @@ function New-UninstallTransaction([string]$GameRoot,[string[]]$Chain,[string[]]$
         $paths += $recordPath.Substring($GameRoot.Length+1)
         $paths += @((Read-InstallRecord $recordPath).files | ForEach-Object { [string]$_.path })
     }
+    $snapshotIndex = 0
     $entries = @($paths | Select-Object -Unique | ForEach-Object {
         $target = SafePath $GameRoot $_
         $exists = Test-Path -LiteralPath $target -PathType Leaf
         if ((Test-Path -LiteralPath $target) -and -not $exists) { throw "Directory occupies transaction target: $target" }
         $hash = $(if ($exists) { HashFile $target } else { $null })
-        $snapshot = 'files\' + (HashBytes ([Text.Encoding]::UTF8.GetBytes(([string]$_).ToLowerInvariant()))) + '.bin'
+        $snapshot = 'f\' + ('{0:x4}.bin' -f $snapshotIndex)
+        $snapshotIndex++
         if ($exists) { CopyVerified $target (SafePath $recoveryRoot $snapshot) $hash }
         [pscustomobject]@{path=$_;snapshot=$snapshot;existed=$exists;sha256=$hash}
     })
