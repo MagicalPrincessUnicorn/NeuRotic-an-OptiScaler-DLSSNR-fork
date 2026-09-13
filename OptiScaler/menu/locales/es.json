@@ -464,6 +464,7 @@
   "FG Scale Depth Max": "Escala máxima de profundidad FG",
   "FG Use List": "Lista de uso FG",
   "FG Use Mutex for Present": "Mutex para presentación FG",
+  "FG execution path not ready; NR paused while original game frames continue": "La ruta de ejecución de FG no está lista; NR en pausa mientras continúan los fotogramas originales del juego",
   "FG mode": "Modo FG",
   "FG provider": "Proveedor FG",
   "FG provider changed; test unmeasured and original settings restored.": "Cambió el proveedor FG; prueba sin medir y ajustes originales restaurados.",

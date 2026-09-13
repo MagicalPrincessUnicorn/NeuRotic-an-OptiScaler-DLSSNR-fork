@@ -326,5 +326,6 @@
   ["create capture allocator", "crear asignador de captura", "créer l’allocateur de capture", "Aufnahmeallokator erstellen", "criar alocador de captura"],
   ["create capture recording", "crear registro de captura", "créer l’enregistrement de capture", "Aufnahmeaufzeichnung erstellen", "criar registro de captura"],
   ["track capture completion", "rastrear finalización de captura", "suivre la fin de capture", "Aufnahmeabschluss verfolgen", "rastrear conclusão da captura"],
-  ["close capture recording", "cerrar registro de captura", "fermer l’enregistrement de capture", "Aufnahmeaufzeichnung schließen", "fechar registro de captura"]
+  ["close capture recording", "cerrar registro de captura", "fermer l’enregistrement de capture", "Aufnahmeaufzeichnung schließen", "fechar registro de captura"],
+  ["FG execution path not ready; NR paused while original game frames continue", "La ruta de ejecución de FG no está lista; NR en pausa mientras continúan los fotogramas originales del juego", "Le chemin d’exécution FG n’est pas prêt ; NR en pause pendant que les images originales du jeu continuent", "FG-Ausführungspfad noch nicht bereit; NR pausiert, während originale Spielbilder weiterlaufen", "O caminho de execução de FG não está pronto; NR pausado enquanto os quadros originais do jogo continuam"]
 ]
