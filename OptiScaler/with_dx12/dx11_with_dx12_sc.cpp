@@ -8,6 +8,7 @@
 
 #include <Util.h>
 #include <Config.h>
+#include <dlssnr/HdrObservation.h>
 
 #include <d3d11.h>
 #include <d3d11_4.h>
@@ -130,14 +131,30 @@ Dx11wDx12SC::Dx11wDx12SC(IDXGISwapChain* real, IDXGISwapChain4* fgSC, ID3D11Devi
 
     _RefreshCachedSwapchainDesc();
 
-    LOG_INFO("Dx11wDx12SC {} created, real: {:X}, fg: {:X}, dx11: {:X}, dx12: {:X}, queue: {:X}", _id, (UINT64) _real,
-             (UINT64) _fgSwapChain, (UINT64) _dx11Device, (UINT64) _dx12Device, (UINT64) _dx12CommandQueue);
+    const auto realObservation =
+        DlssNr::HdrObservation::Registry::Instance().Register(_real, _bufferFormat);
+    if (_fgSwapChain != nullptr && _fgSwapChain != _real)
+    {
+        DXGI_SWAP_CHAIN_DESC1 fgDesc {};
+        const DXGI_FORMAT fgFormat = SUCCEEDED(_fgSwapChain->GetDesc1(&fgDesc))
+            ? fgDesc.Format : DXGI_FORMAT_UNKNOWN;
+        DlssNr::HdrObservation::Registry::Instance().Register(_fgSwapChain, fgFormat);
+    }
+
+    LOG_INFO("Dx11wDx12SC {} created, real: {:X}, fg: {:X}, dx11: {:X}, dx12: {:X}, queue: {:X}, "
+             "HDR observation {} generation {} format {}", _id, (UINT64) _real,
+             (UINT64) _fgSwapChain, (UINT64) _dx11Device, (UINT64) _dx12Device, (UINT64) _dx12CommandQueue,
+             realObservation.observationSequence, realObservation.generation, (UINT) realObservation.format);
 }
 
 Dx11wDx12SC::~Dx11wDx12SC()
 {
     MenuOverlayDx::CleanupRenderTarget(true, _handle);
     _ReleaseInteropObjects();
+
+    DlssNr::HdrObservation::Registry::Instance().Unregister(_real);
+    if (_fgSwapChain != nullptr && _fgSwapChain != _real)
+        DlssNr::HdrObservation::Registry::Instance().Unregister(_fgSwapChain);
 
     SafeRelease(_real4);
     SafeRelease(_real3);
@@ -408,6 +425,10 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers(UINT BufferCount, UINT Widt
     MenuOverlayDx::CleanupRenderTarget(true, _handle);
     _ReleaseInteropBackBuffers();
 
+    DlssNr::HdrObservation::Registry::Instance().BeginResize(_real);
+    if (_fgSwapChain != nullptr && _fgSwapChain != _real)
+        DlssNr::HdrObservation::Registry::Instance().BeginResize(_fgSwapChain);
+
     HRESULT realResult = _real != nullptr ? _real->ResizeBuffers(BufferCount, Width, Height, NewFormat, SwapChainFlags)
                                           : DXGI_ERROR_DEVICE_REMOVED;
 
@@ -416,6 +437,24 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers(UINT BufferCount, UINT Widt
         fgResult = _fgSwapChain->ResizeBuffers(BufferCount, Width, Height, NewFormat, SwapChainFlags);
 
     LOG_DEBUG("Dx11wDx12SC ResizeBuffers results: real {:X}, fg {:X}", (UINT) realResult, (UINT) fgResult);
+
+    const auto realObservation =
+        DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, realResult,
+            SUCCEEDED(realResult) ? ResolveBufferFormat(_real, _real1) : DXGI_FORMAT_UNKNOWN);
+    DlssNr::HdrObservation::Snapshot presentObservation = realObservation;
+    if (_fgSwapChain != nullptr && _fgSwapChain != _real)
+    {
+        DXGI_SWAP_CHAIN_DESC1 fgDesc {};
+        const DXGI_FORMAT fgFormat = SUCCEEDED(fgResult) && SUCCEEDED(_fgSwapChain->GetDesc1(&fgDesc))
+            ? fgDesc.Format : DXGI_FORMAT_UNKNOWN;
+        presentObservation = DlssNr::HdrObservation::Registry::Instance().CompleteResize(
+            _fgSwapChain, fgResult, fgFormat);
+    }
+    LOG_INFO("DLSS-NR HDR diagnostic: DX11/DX12 swapchain resize observation {}, generation {}, "
+             "resize generation {}, format {}, real result {:X}, present result {:X}",
+             presentObservation.observationSequence, presentObservation.generation,
+             presentObservation.resizeGeneration, (UINT) presentObservation.format,
+             (UINT) realResult, (UINT) fgResult);
 
     if (SUCCEEDED(realResult) && SUCCEEDED(fgResult))
     {
@@ -598,15 +637,20 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::CheckColorSpaceSupport(DXGI_COLOR_SPACE_T
 
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::SetColorSpace1(DXGI_COLOR_SPACE_TYPE ColorSpace)
 {
-    State::Instance().isHdrActive = ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ||
-                                    ColorSpace == DXGI_COLOR_SPACE_YCBCR_FULL_GHLG_TOPLEFT_P2020 ||
-                                    ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020 ||
-                                    ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
-
-    if (_fgSwapChain != nullptr)
-        return _fgSwapChain->SetColorSpace1(ColorSpace);
-
-    return _real3 != nullptr ? _real3->SetColorSpace1(ColorSpace) : DXGI_ERROR_DEVICE_REMOVED;
+    IDXGISwapChain3* target = _fgSwapChain != nullptr ? _fgSwapChain : _real3;
+    const HRESULT result = target != nullptr ? target->SetColorSpace1(ColorSpace)
+                                              : DXGI_ERROR_DEVICE_REMOVED;
+    const auto observation =
+        DlssNr::HdrObservation::Registry::Instance().RecordColorSpace(target, ColorSpace, result);
+    if (SUCCEEDED(result))
+        State::Instance().isHdrActive = DlssNr::HdrObservation::IsHdr(
+            DlssNr::HdrObservation::Classify(ColorSpace));
+    LOG_INFO("DLSS-NR HDR diagnostic: DX11/DX12 present swapchain {:X} color-space request {} result {:X}, "
+             "observation {}, generation {}, class {}",
+             (UINT64) target, (UINT) ColorSpace, (UINT) result, observation.observationSequence,
+             observation.generation,
+             DlssNr::HdrObservation::ColorClassName(DlssNr::HdrObservation::Classify(ColorSpace)));
+    return result;
 }
 
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT Format,
@@ -622,6 +666,10 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
     MenuOverlayDx::CleanupRenderTarget(true, _handle);
     _ReleaseInteropBackBuffers();
 
+    DlssNr::HdrObservation::Registry::Instance().BeginResize(_real);
+    if (_fgSwapChain != nullptr && _fgSwapChain != _real)
+        DlssNr::HdrObservation::Registry::Instance().BeginResize(_fgSwapChain);
+
     HRESULT realResult = _real3 != nullptr ? _real3->ResizeBuffers1(BufferCount, Width, Height, Format, SwapChainFlags,
                                                                     pCreationNodeMask, ppPresentQueue)
                                            : ResizeBuffers(BufferCount, Width, Height, Format, SwapChainFlags);
@@ -634,6 +682,24 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
     }
 
     LOG_DEBUG("Dx11wDx12SC ResizeBuffers1 results: real {:X}, fg {:X}", (UINT) realResult, (UINT) fgResult);
+
+    const auto realObservation =
+        DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, realResult,
+            SUCCEEDED(realResult) ? ResolveBufferFormat(_real, _real1) : DXGI_FORMAT_UNKNOWN);
+    DlssNr::HdrObservation::Snapshot presentObservation = realObservation;
+    if (_fgSwapChain != nullptr && _fgSwapChain != _real)
+    {
+        DXGI_SWAP_CHAIN_DESC1 fgDesc {};
+        const DXGI_FORMAT fgFormat = SUCCEEDED(fgResult) && SUCCEEDED(_fgSwapChain->GetDesc1(&fgDesc))
+            ? fgDesc.Format : DXGI_FORMAT_UNKNOWN;
+        presentObservation = DlssNr::HdrObservation::Registry::Instance().CompleteResize(
+            _fgSwapChain, fgResult, fgFormat);
+    }
+    LOG_INFO("DLSS-NR HDR diagnostic: DX11/DX12 ResizeBuffers1 observation {}, generation {}, "
+             "resize generation {}, format {}, real result {:X}, present result {:X}",
+             presentObservation.observationSequence, presentObservation.generation,
+             presentObservation.resizeGeneration, (UINT) presentObservation.format,
+             (UINT) realResult, (UINT) fgResult);
 
     if (SUCCEEDED(realResult) && SUCCEEDED(fgResult))
     {
@@ -655,10 +721,16 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
 
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData)
 {
-    if (_fgSwapChain != nullptr)
-        return _fgSwapChain->SetHDRMetaData(Type, Size, pMetaData);
-
-    return _real4 != nullptr ? _real4->SetHDRMetaData(Type, Size, pMetaData) : DXGI_ERROR_DEVICE_REMOVED;
+    IDXGISwapChain4* target = _fgSwapChain != nullptr ? _fgSwapChain : _real4;
+    const HRESULT result = target != nullptr ? target->SetHDRMetaData(Type, Size, pMetaData)
+                                              : DXGI_ERROR_DEVICE_REMOVED;
+    const auto observation =
+        DlssNr::HdrObservation::Registry::Instance().RecordMetadata(target, Type, Size, pMetaData, result);
+    LOG_INFO("DLSS-NR HDR diagnostic: DX11/DX12 present swapchain {:X} metadata type {} size {} result {:X}, "
+             "observation {}, generation {}, metadata generation {}, bounded hash {:X}",
+             (UINT64) target, (UINT) Type, Size, (UINT) result, observation.observationSequence,
+             observation.generation, observation.metadataGeneration, observation.requestedMetadataHash);
+    return result;
 }
 
 bool Dx11wDx12SC::_InitInteropObjects()
