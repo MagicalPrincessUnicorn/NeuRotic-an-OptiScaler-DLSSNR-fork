@@ -570,6 +570,16 @@ std::unique_ptr<GpuTime_Dx12> g_ngxTimeLayer2;
 std::optional<double> g_lastNgxTime;
 std::optional<double> g_lastNgxTimeLayer2;
 std::optional<double> g_lastGpuTime;
+std::optional<NrConfigSnapshot<Config>> g_timingSettings;
+bool g_timingCapture = false;
+
+void InvalidateNrTiming()
+{
+    g_lastGpuTime.reset(); g_lastNgxTime.reset(); g_lastNgxTimeLayer2.reset();
+    if (g_gpuTime) g_gpuTime->InvalidateSamples();
+    if (g_ngxTime) g_ngxTime->InvalidateSamples();
+    if (g_ngxTimeLayer2) g_ngxTimeLayer2->InvalidateSamples();
+}
 
 // Writes matched before/after frames on request, so comparisons stop depending on video.
 capture::FrameCapture g_capture;
@@ -1161,6 +1171,7 @@ void ParkNrFeature(void*& feature)
     r.feature = feature;
     feature = nullptr;
     g_nr.primaryPlacement.Retired();
+    InvalidateNrTiming();
     g_nrRetired.push_back(r);
 }
 
@@ -2258,6 +2269,15 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const unsigned int requestedPassCount = RequestedPassCount(cfg);
     const bool secondLayerRequested = requestedPassCount > 1;
     g_resolutionRefusal = "";
+
+    const bool timingCapture = g_screenshots.active() || g_presentStages.active();
+    if (!g_timingSettings || !g_timingSettings->SameConfiguration(cfg) ||
+        timingCapture != g_timingCapture || frame.Reset)
+        InvalidateNrTiming();
+    g_timingSettings = cfg;
+    g_timingCapture = timingCapture;
+    // No cached observation may masquerade as the next successful evaluation's sample.
+    g_lastGpuTime.reset(); g_lastNgxTime.reset(); g_lastNgxTimeLayer2.reset();
 
     if (g_presentStages.active())
     {
@@ -4284,7 +4304,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         auto* queue = timingQueue != nullptr ? timingQueue
                                              : (ID3D12CommandQueue*) State::Instance().currentCommandQueue;
 
-        if (queue != nullptr)
+        if (queue != nullptr && !timingCapture)
         {
             if (auto ms = g_gpuTime->ReadGpuTime(queue); ms.has_value())
                 g_lastGpuTime = ms;
@@ -6136,6 +6156,7 @@ ExposureStatus GameExposureStatus()
 
 TelemetrySnapshot Telemetry()
 {
+    const auto currentSettings = TryNrConfigSnapshot(*Config::Instance());
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     TelemetrySnapshot t {};
@@ -6201,10 +6222,13 @@ TelemetrySnapshot Telemetry()
     if (t.running)
     {
         t.layerCount = g_lastLayerCount;
-        t.totalGpuMs = g_lastGpuTime;
-        t.modelGpuMs = g_lastNgxTime;
-        if (g_lastLayerCount == 2)
-            t.layer2ModelGpuMs = g_lastNgxTimeLayer2;
+        if (currentSettings && g_timingSettings && g_timingSettings->SameConfiguration(*currentSettings))
+        {
+            t.totalGpuMs = g_lastGpuTime;
+            t.modelGpuMs = g_lastNgxTime;
+            if (g_lastLayerCount == 2)
+                t.layer2ModelGpuMs = g_lastNgxTimeLayer2;
+        }
     }
     return t;
 }
@@ -6256,6 +6280,11 @@ void RequestComparisonScreenshot()
     if (!capturedSettings || route > 2)
     {
         g_screenshots.setIdleStatus("Screenshot unavailable: NR settings could not be captured.");
+        return;
+    }
+    if (const char* reason = Screenshots::BackendRefusal(route, enabled, State::Instance().api == API::DX12))
+    {
+        g_screenshots.setIdleStatus(reason);
         return;
     }
     if (enabled && (!capturedSettings->DlssNrApplyModel.value_or_default() ||
@@ -6449,7 +6478,8 @@ bool NativeComparisonScreenshotAvailable()
     bool eligible, runBeforeSr;
     {
         NrConfigSynchronization::Guard configLock(NrConfigSynchronization::Mutex());
-        eligible = config->DlssNrRoute.value_or_default() == 0 && config->GetDlssNrRuntimeSnapshot().enabled;
+        eligible = config->DlssNrRoute.value_or_default() == 0 &&
+                   config->GetDlssNrRuntimeSnapshot().enabled && State::Instance().api == API::DX12;
         runBeforeSr = config->DlssNrRunBeforeSr.value_or_default();
     }
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);

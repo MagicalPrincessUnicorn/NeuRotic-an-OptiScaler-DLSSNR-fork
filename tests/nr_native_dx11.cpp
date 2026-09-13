@@ -46,6 +46,13 @@ int main(int argc, char** argv)
     assert(ValidateOutputContract(true,0,0,true,false,2560,1440,3840,2160)==
         OutputResult::PartialOrUnsupported);
     const bool hardware = argc > 1 && std::strcmp(argv[1], "--hardware") == 0;
+    D3D11_TEXTURE2D_DESC mipDesc {};
+    mipDesc.Width = 8; mipDesc.Height = 4; mipDesc.MipLevels = 4;
+    mipDesc.ArraySize = 1; mipDesc.SampleDesc.Count = 1; mipDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    assert(T::Output::RequiredBytes(mipDesc) == (32 + 8 + 2 + 1) * 4);
+    mipDesc.MipLevels = 5; assert(T::Output::RequiredBytes(mipDesc) == 0);
+    mipDesc.MipLevels = 1; mipDesc.SampleDesc.Count = 4;
+    assert(!T::SupportedShape(mipDesc) && T::Output::RequiredBytes(mipDesc) == 0);
     ComPtr<ID3D12Debug> debug12;
     const bool debug = SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug12)));
     if (debug) debug12->EnableDebugLayer();

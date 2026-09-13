@@ -12,6 +12,7 @@
 #include "NrToggleBurst.h"
 #include "NrToggleNotes.h"
 #include "NrPendingEdit.h"
+#include "NrScreenshotContract.h"
 
 
 #include <Config.h>
@@ -2807,16 +2808,17 @@ void RenderScreenshotMenu(Config* config)
         const bool enabled = config->GetDlssNrRuntimeSnapshot().enabled;
         const bool busy = ComparisonScreenshotBusy();
         const bool nativePair = NativeComparisonScreenshotAvailable();
+        const char* backendRefusal = Screenshots::BackendRefusal(route, enabled, State::Instance().api == API::DX12);
         ImGui::TextWrapped("Save full-resolution PNG comparisons and matching JSON manifests in NeuroticScreenshots beside the game.");
         const bool analysis = Advisor().running;
-        ImGui::BeginDisabled(busy || analysis);
+        ImGui::BeginDisabled(busy || analysis || backendRefusal != nullptr);
         bool before = config->ScreenshotNrOff.value_or_default();
         ImGui::BeginDisabled(enabled && !present && !nativePair);
         if (ImGui::Checkbox("NR off", &before)) config->ScreenshotNrOff = before;
         ImGui::EndDisabled();
         bool native = config->ScreenshotNativeNr.value_or_default();
         ImGui::BeginDisabled(present || !enabled);
-        if (ImGui::Checkbox(nativePair ? "Native NR on##ScreenshotNative" : "Current full output##ScreenshotNative", &native)) config->ScreenshotNativeNr = native;
+        if (ImGui::Checkbox(nativePair ? "Native NR on###ScreenshotNative" : "Current full output###ScreenshotNative", &native)) config->ScreenshotNativeNr = native;
         ImGui::EndDisabled();
         bool imageOnly = config->ScreenshotPresentNr.value_or_default();
         ImGui::BeginDisabled(!present || !enabled);
@@ -2824,7 +2826,9 @@ void RenderScreenshotMenu(Config* config)
         ImGui::EndDisabled();
         if (route == 0)
             ImGui::TextWrapped("Experimental Native comparison: display conversion remains under investigation. Brightness may differ; no brightness adjustment is applied.");
-        if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
+        if (backendRefusal)
+            ImGui::TextWrapped("%s", backendRefusal);
+        else if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
         {
             ImGui::TextWrapped("Performance compares one frame using two temporary DLSS evaluations with fresh history, then stops. Live history is unchanged. Capture can briefly pause rendering and use extra memory.");
             ImGui::TextWrapped("These fresh-history images do not reproduce accumulated live-image history.");

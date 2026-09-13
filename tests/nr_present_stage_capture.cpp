@@ -277,6 +277,13 @@ int main(int argc, char** argv)
         }
     }
     // Checkbox selection never silently requests the other route or additional images.
+    for (unsigned int route = 0; route < 3; ++route)
+        for (bool enabled : {false, true})
+        {
+            assert(DlssNr::Screenshots::BackendRefusal(route, enabled, true) == nullptr);
+            assert((DlssNr::Screenshots::BackendRefusal(route, enabled, false) == nullptr) ==
+                   (enabled && route != 0));
+        }
     for (unsigned int route = 0; route < 4; ++route)
         for (bool enabled : {false, true})
             for (bool before : {false, true})

@@ -749,6 +749,7 @@
   "Native Temporal runs with the game's upscaler. Present Image Only processes the final image. Present Enhanced also uses captured game depth and motion. Both Present routes include the HUD.": "Native Temporal funciona com o upscaler do jogo. Present somente imagem processa a imagem final. Present aprimorado também usa profundidade e movimento capturados. Ambas as rotas Present incluem o HUD.",
   "Native Temporal uses the game's upscaler inputs. Present (Compatibility) processes the final image without RR guides. Present (Enhanced) requires verified depth and motion guides; unavailable guides preserve the original image.": "Temporal nativo usa as entradas do ampliador do jogo. Present (Compatibilidade) processa a imagem final sem guias RR. Present (Melhorado) exige guias verificados de profundidade e movimento; sem eles, a imagem original é preservada.",
   "Native Vulkan NR active after the upscaler.": "NR Vulkan nativo ativo após o upscaler.",
+  "Native and NR-off screenshots require a DirectX 12 swapchain. DX11 comparisons are available on active Present routes only.": "Capturas nativas e com NR desligado exigem uma cadeia de apresentação DirectX 12. Comparações DX11 estão disponíveis apenas nas rotas Present ativas.",
   "Native capture calls %llu": "Chamadas de captura nativa %llu",
   "Native pairs capture the same scene before and after NR, ahead of later game effects and HUD.": "Os pares nativos capturam a mesma cena antes e depois do NR, antes dos efeitos posteriores e do HUD.",
   "Natural": "Natural",

@@ -6,6 +6,14 @@
 namespace DlssNr::Screenshots
 {
 inline bool IsPresentRoute(unsigned int route) { return route == 1 || route == 2; }
+inline const char* BackendRefusal(unsigned int route, bool enabled, bool dx12Swapchain)
+{
+    // Present captures run on their owned DX12 composition queue, including the DX11 bridge.
+    // Native comparisons and NR-Off full-output capture currently require a DX12 swapchain.
+    return !dx12Swapchain && (!enabled || !IsPresentRoute(route))
+        ? "Native and NR-off screenshots require a DirectX 12 swapchain. DX11 comparisons are available on active Present routes only."
+        : nullptr;
+}
 inline bool NativePairAvailable(unsigned int route, bool enabled, bool beforeSr,
                                 bool rayReconstruction, bool performanceBackend)
 {

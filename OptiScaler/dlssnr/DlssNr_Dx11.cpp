@@ -323,6 +323,8 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (!rw || !rh || rw > s.outWidth || rh > s.outHeight || colorX > colorDesc.Width || colorY > colorDesc.Height ||
         rw > colorDesc.Width - colorX || rh > colorDesc.Height - colorY)
     { s.Reject("render subrect exceeds native color/output dimensions"); return; }
+    if (s.nativePreSr && !Dx11Transport::SupportedShape(colorDesc))
+    { s.Reject("native Pre-SR color shape unsupported; original color preserved"); return; }
     if (s.copyGuides && (!jitter || !std::isfinite(s.frame.MvScaleX) || !std::isfinite(s.frame.MvScaleY) ||
         !std::isfinite(s.frame.JitterX) || !std::isfinite(s.frame.JitterY)))
     { s.Reject("jitter/motion-scale metadata missing or non-finite"); return; }
@@ -416,9 +418,12 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if ((s.nativePostSr || s.nativePreSr) &&
         !slot.output.Prepare(runtime.device11.Get(), runtime.device12.Get(), imageDesc, reason))
     { s.Reject(reason); return; }
-    if (s.copyGuides && !runtime.converter.Copy(context, slot.depth, depth.Get(), slot.motion, motion.Get(), reason))
-    { s.Reject(reason); return; }
-    if (s.nativePreSr)
+    // A depth dispatch may already be queued when motion view creation fails. Retain both
+    // inputs and fence even that partial operation before permitting allocation reuse.
+    slot.originalDepth = depth; slot.originalMotion = motion;
+    const bool copied = !s.copyGuides ||
+        runtime.converter.Copy(context, slot.depth, depth.Get(), slot.motion, motion.Get(), reason);
+    if (copied && s.nativePreSr)
     {
         D3D11_BOX sourceBox {};
         sourceBox.left = colorX;
@@ -428,11 +433,11 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
         sourceBox.back = 1;
         context->CopySubresourceRegion(slot.output.shared.Get(), 0, 0, 0, 0, s.color.Get(), 0, &sourceBox);
     }
-    slot.originalDepth = depth; slot.originalMotion = motion;
     slot.ready = ++runtime.nextReady;
     if (FAILED(runtime.context11->Signal(runtime.ready11.Get(), slot.ready)))
     { runtime.failed = true; s.Reject("DX11 guide producer signal failed; restart required"); return; }
     runtime.context11->Flush();
+    if (!copied) { s.Reject(reason); return; }
 
     if (s.nativePreSr)
     {

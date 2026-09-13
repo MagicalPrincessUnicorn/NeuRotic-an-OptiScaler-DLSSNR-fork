@@ -236,16 +236,30 @@ struct Output
     bool Matches(const D3D11_TEXTURE2D_DESC& d) const
     {
         return resource12 && d.Width == sourceDesc.Width && d.Height == sourceDesc.Height &&
-            d.Format == sourceDesc.Format && d.BindFlags == sourceDesc.BindFlags && SupportedShape(d);
+            d.MipLevels == sourceDesc.MipLevels && d.Format == sourceDesc.Format &&
+            d.BindFlags == sourceDesc.BindFlags && SupportedShape(d);
     }
     static UINT64 RequiredBytes(const D3D11_TEXTURE2D_DESC& d)
     {
-        return UINT64(d.Width) * d.Height * FormatBytes(d.Format);
+        if (!SupportedShape(d)) return 0;
+        UINT width = d.Width, height = d.Height;
+        UINT64 pixels = 0;
+        for (UINT mip = 0; mip < d.MipLevels; ++mip)
+        {
+            pixels += UINT64(width) * height;
+            if (width == 1 && height == 1)
+            {
+                if (mip + 1 != d.MipLevels) return 0; // invalid mip chain
+                break;
+            }
+            width = std::max(1u, width / 2); height = std::max(1u, height / 2);
+        }
+        return pixels * FormatBytes(d.Format);
     }
     bool Prepare(ID3D11Device* device11, ID3D12Device* device12,
                  const D3D11_TEXTURE2D_DESC& input, std::string& reason)
     {
-        if (!SupportedShape(input) || !FormatBytes(input.Format) ||
+        if (!RequiredBytes(input) ||
             !(input.BindFlags & D3D11_BIND_UNORDERED_ACCESS))
         { reason = "native output format/shape/UAV contract unsupported"; return false; }
         if (Matches(input)) return true;

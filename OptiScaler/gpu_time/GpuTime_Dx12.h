@@ -25,6 +25,8 @@ class GpuTime_Dx12
     void End(ID3D12GraphicsCommandList* cmdList);
 
     std::optional<double> ReadGpuTime(ID3D12CommandQueue* commandQueue);
+    // Discard observations without releasing resources or weakening in-flight reuse fences.
+    void InvalidateSamples() { _trigger.fill(false); _recording = false; }
 };
 
 class ScopedGpuTime_Dx12
