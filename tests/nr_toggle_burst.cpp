@@ -17,7 +17,7 @@ int main()
 {
     DlssNr::ToggleBurstTracker tracker(0x12345678u);
     constexpr auto count = DlssNr::ToggleBurstMessages.size();
-    static_assert(count == 41);
+    static_assert(count == 27);
     Check(!tracker.Click(0.0, count), "checkbox toggle 1 is quiet");
     Check(!tracker.Click(0.4, count), "hotkey toggle 2 shares the burst and is quiet");
     Check(!tracker.Click(0.8, count), "checkbox toggle 3 is quiet");
@@ -61,5 +61,5 @@ int main()
             previous = selected;
         }
     }
-    std::cout << "PASS: shared NR user-toggle cadence, reset, non-user exclusion, 41-message bounds, and no immediate repeats\n";
+    std::cout << "PASS: shared NR user-toggle cadence, reset, non-user exclusion, 27-message bounds, and no immediate repeats\n";
 }
