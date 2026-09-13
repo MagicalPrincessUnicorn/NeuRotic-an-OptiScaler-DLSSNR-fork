@@ -1,6 +1,11 @@
 NEUROTIC ALPHA 0.9.6 - PUBLIC RELEASE CANDIDATE FOR TESTING / REVIEW
 
 This local candidate adds the Native Temporal input audit fixes and menu updates.
+It also imports the tested DD2 dialogue/menu dropout correction from 5394d2ab.
+Present captures carry provider tokens only while frame generation is active;
+otherwise a unique, correctly ordered Present interval owns the capture. When FG
+returns, the existing eight-frame qualification gate remains, so a brief original-
+image interval can still be visible. This is separate from persistent dialogue loss.
 Native DX12 DLSS now uses its exact backend to activate optional hardened Pre-SR
 resets, retains feature-owned creation flags, and forwards depth/motion origins
 and low/high-resolution motion-vector dimensions. Out-of-bounds guides refuse NR.

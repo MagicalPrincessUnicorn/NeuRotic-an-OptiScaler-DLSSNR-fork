@@ -28,6 +28,11 @@ runtime confirmation. DD2 first-menu/shop VRAM/stall concerns and Present face
 artifacts remain unresolved.
 
 CAMERA-CUT RESET EXPERIMENT (DIRECTX 12 NATIVE PRE-SR ONLY)
+For the DD2 conversation correction, compare Native Temporal and both Present modes
+in shopkeeper/NPC dialogue, the main menu and Inventory. Keep game settings and INI
+fixed. NR should remain visible throughout FG-off dialogue/menu intervals. A brief
+qualification interval when FG returns is expected and has not been shortened.
+
 Under Neural Rendering, open Neural Rendering - Experimental Overrides, confirm Unlock
 Experimental Mode, select Preserve NR During Camera Cuts, and save the experimental
 settings. Compare repeatable camera cuts and worldspace loads against a fresh run
