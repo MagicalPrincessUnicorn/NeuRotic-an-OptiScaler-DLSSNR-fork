@@ -113,6 +113,7 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
     X(DlssNrRunBeforeSr) \
     X(DlssNrRenderingMode) \
     X(DlssNrPreDlaa) \
+    X(DlssNrPreSrSoftReset) \
     X(DlssNrToggleKey) \
     X(DlssNrPreset) \
     X(DlssNrIntensity) \

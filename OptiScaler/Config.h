@@ -251,6 +251,9 @@ class Config
     // Keep the legacy boolean as the routing compatibility surface for existing callers/configurations.
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR
+    // Experimental opt-in: evaluate compatible reset-only Pre-SR frames instead of conservatively
+    // withdrawing NR for the complete Reset interval. Future UI placement is Advanced > Experimental.
+    NrOptional<bool> DlssNrPreSrSoftReset { false };
     // Toggles the pass in game. Unbound by default -- a key that does something unexpected is worse
     // than one that does nothing.
     NrOptional<int> DlssNrToggleKey { UnboundKey };

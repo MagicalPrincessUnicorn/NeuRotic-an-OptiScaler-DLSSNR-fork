@@ -400,6 +400,7 @@ bool Config::Reload(std::filesystem::path iniPath)
                 renderingMode = 1;
             NrConfigState::LoadRoutingMode(DlssNrRenderingMode, DlssNrRunBeforeSr, renderingMode.value());
             DlssNrPreDlaa.set_from_config(readBool("DlssNr", "PreDlaa"));
+            DlssNrPreSrSoftReset.set_from_config(readBool("DlssNr", "PreSrSoftReset"));
             DlssNrToggleKey.set_from_config(readInt("DlssNr", "ToggleKey"));
             ScreenshotNrOff.set_from_config(readBool("Screenshots", "NrOff"));
             ScreenshotNativeNr.set_from_config(readBool("Screenshots", "NativeNr"));
@@ -1485,6 +1486,8 @@ bool Config::SaveIni()
     ini.SetValue("DlssNr", "PerformanceMode", performanceMode.c_str());
     ini.SetValue("DlssNr", "RunBeforeSR", performanceMode.c_str());
     ini.SetValue("DlssNr", "PreDlaa", GetBoolValue(Instance()->DlssNrPreDlaa.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "PreSrSoftReset",
+                 GetBoolValue(Instance()->DlssNrPreSrSoftReset.value_for_config()).c_str());
     ini.SetValue("Screenshots", "NrOff", GetBoolValue(Instance()->ScreenshotNrOff.value_for_config()).c_str());
     ini.SetValue("Screenshots", "NativeNr", GetBoolValue(Instance()->ScreenshotNativeNr.value_for_config()).c_str());
     ini.SetValue("Screenshots", "PresentNr", GetBoolValue(Instance()->ScreenshotPresentNr.value_for_config()).c_str());
