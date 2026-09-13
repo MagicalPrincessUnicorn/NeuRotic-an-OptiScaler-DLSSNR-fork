@@ -109,6 +109,7 @@
   "Analyze Current Route": "Aktuellen Pfad analysieren",
   "Analyze temporarily turns Neural Rendering on and tests supported routes sequentially.": "Die Analyse aktiviert Neural Rendering vorübergehend und testet unterstützte Pfade nacheinander.",
   "Analyze temporarily turns Neural Rendering on to test one route.": "Die Analyse aktiviert Neural Rendering vorübergehend, um einen Pfad zu testen.",
+  "Analyze temporarily turns Neural Rendering on, turns Multipass off, and tests supported routes sequentially.": "Die Analyse aktiviert Neural Rendering vorübergehend, deaktiviert Multipass und testet unterstützte Pfade nacheinander.",
   "Anchor here": "Hier verankern",
   "And that's how you get to 60 FPS": "Und so erreicht man 60 FPS",
   "Anisotropic Filtering": "Anisotrope Filterung",
