@@ -145,10 +145,12 @@ require('queue->Wait(dependency->fence.Get(), dependency->value)' in gpu_safety 
 require('!identity.copybackSubmitted' in streamline_prefg and
         'unsafeHandoff ? E_FAIL : forward()' in streamline_prefg,
         'submitted copybacks cannot be canceled or forwarded without a published dependency')
-require('if (!requested) ResetCompletions();' in streamline_prefg and
-        streamline_prefg.index('if (!requested) ResetCompletions();') <
-        streamline_prefg.index('auto identity = EvaluatePresentImageOnly('),
-        'NR Off and Native route retire prior handoffs before forwarding the next Present')
+inactive = streamline_prefg[streamline_prefg.index('if (!requested)'):streamline_prefg.index('owner->presentPolicyActive = true;')]
+require('runtime.enabled && (route == 1 || route == 2)' in streamline_prefg and
+        'if (owner->presentPolicyActive)' in inactive and 'ResetCompletions();' in inactive and
+        'PresentGuides::Instance().Enable(false);' in inactive and 'return forward();' in inactive and
+        streamline_prefg.index('owner->presentPolicyActive = true;') < streamline_prefg.index('auto frame = Claim(fg);'),
+        'Native and NR Off exit before Present admission with one-time fenced cleanup and guide shutdown')
 require('ComPtr<ID3D12Fence> completionFence' in source('OptiScaler/dlssnr/DlssNr_Present.h'),
         'completion fence ownership crosses the Present mutex boundary')
 require(present.index('copyback command list could not close') <

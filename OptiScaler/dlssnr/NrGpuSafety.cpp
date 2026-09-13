@@ -386,23 +386,51 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
                       UINT64 producerValue, UINT64 token, UINT64 sequence,
                       std::shared_ptr<ExternalWaitStatus> status)
 {
-    if (!list || !producerFence || !producerValue || producerValue == UINT64_MAX ||
-        list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
+    const auto refuse = [&](const char* reason) {
+        if (status) status->Fail();
+        NR_FRAME_TRACE("nr-fg-wait-bind-refused", "reason={} list={:p} token={} sequence={}",
+            reason, static_cast<void*>(list), token, sequence);
+#ifndef NR_GPU_SAFETY_TEST
+        static std::atomic<uint64_t> refusals {0};
+        const auto count = ++refusals;
+        if (count <= 8 || count % 120 == 0)
+            LOG_WARN("NR Present wait binding refused: reason={} list={:p} token={} sequence={} count={}",
+                reason, static_cast<void*>(list), token, sequence, count);
+#else
+        (void)reason;
+#endif
+        return false;
+    };
+    if (!list || !producerFence || !producerValue || producerValue == UINT64_MAX)
+        return refuse("invalid-dependency");
+    if (list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT) return refuse("non-direct-list");
     list = NativeObject(list);
     producerFence = NativeObject(producerFence);
-    if (!EnsureHooks(list)) return false;
+    if (!EnsureHooks(list)) return refuse("completion-hooks-unavailable");
     std::lock_guard lock(State().mutex);
-    if (State().failed || Get<ExternalWait>(list, externalWaitGuid)) return false;
+    if (State().failed) return refuse("gpu-safety-registry-failed");
+    auto previous = Get<ExternalWait>(list, externalWaitGuid);
+    if (previous)
+    {
+        if (previous->token == token && previous->sequence == sequence)
+            return refuse("duplicate-dependency");
+        const auto completed = previous->fence->GetCompletedValue();
+        if (completed == UINT64_MAX) return refuse("previous-producer-device-lost");
+        if (completed < previous->value) return refuse("previous-producer-incomplete");
+        // A completed producer needs no future queue wait, including list replay.
+        // Replace only after this proof; do not erase an unfinished dependency.
+        // An unobserved old wait still fails its readiness proof on destruction.
+    }
     ComPtr<ID3D12Device> listDevice, fenceDevice;
     if (FAILED(list->GetDevice(IID_PPV_ARGS(&listDevice))) ||
         FAILED(producerFence->GetDevice(IID_PPV_ARGS(&fenceDevice))) ||
-        NativeObject(listDevice.Get()) != NativeObject(fenceDevice.Get())) return false;
+        NativeObject(listDevice.Get()) != NativeObject(fenceDevice.Get())) return refuse("foreign-or-unavailable-device");
     auto dependency = std::make_shared<ExternalWait>();
     dependency->fence = producerFence;
     dependency->value = producerValue;
     dependency->token = token;
     dependency->sequence = sequence;
-    dependency->status = std::move(status);
+    dependency->status = status;
     const bool bound = Put(list, externalWaitGuid, dependency);
     if (dependency->status)
     {
@@ -411,7 +439,8 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
     }
     NR_FRAME_TRACE("nr-fg-wait-bound", "list={:p} fence={:p} value={} token={} sequence={} ok={}",
         static_cast<void*>(list), static_cast<void*>(producerFence), producerValue, token, sequence, bound);
-    return bound;
+    if (!bound) return refuse("private-dependency-write-failed");
+    return true;
 }
 SlotSnapshot InspectSlots(const Ticket* tickets, unsigned int count)
 {

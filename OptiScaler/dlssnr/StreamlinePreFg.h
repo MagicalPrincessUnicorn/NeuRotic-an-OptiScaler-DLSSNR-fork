@@ -157,11 +157,44 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         return forward();
     }
     struct ForwardScope { ForwardScope() { forwardingPresent = true; } ~ForwardScope() { forwardingPresent = false; } } scope;
+    auto* config = Config::Instance();
+    const auto runtime = config->GetDlssNrRuntimeSnapshot();
+    const unsigned int route = config->DlssNrRoute.value_or_default();
+    const bool requested = runtime.enabled && (route == 1 || route == 2);
+    if (!requested)
+    {
+        // Native/Off forwards without Present admission, buffer queries or probes.
+        // Retire the previous Present policy once; its GPU dependencies keep their
+        // own lifetime until completion even after the visible policy is disabled.
+        if (owner->presentPolicyActive)
+        {
+            owner->startup.Reset();
+            ResetCompletions();
+            PresentGuides::Instance().Enable(false);
+            {
+                std::lock_guard lock(State().mutex);
+                State().ledger.Reset();
+            }
+            owner->presentPolicyActive = false;
+            owner->previousPresentMs = 0.0;
+            // Run the inherited exit cleanup once to disable guide observation,
+            // invalidate the old Present history and clear its UI telemetry.
+            const double exitStart = Util::MillisecondsNow();
+            auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, nullptr);
+            const double beforeForward = Util::MillisecondsNow();
+            const HRESULT result = forward();
+            const double end = Util::MillisecondsNow();
+            ReportPresentCallTiming({identity, 0.0, beforeForward - exitStart,
+                end - exitStart, end - beforeForward, result, false, 0});
+            return result;
+        }
+        return forward();
+    }
+    owner->presentPolicyActive = true;
     const double start = Util::MillisecondsNow();
     const auto previousReadiness = owner->startup.State();
     const double interval = owner->previousPresentMs != 0.0 ? start - owner->previousPresentMs : 0.0;
     owner->previousPresentMs = start;
-    auto* config = Config::Instance();
     const auto provider = Provider();
     const bool fg = provider.known ? provider.enabled : ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff;
     if (owner->lastFg != fg || owner->providerGeneration != provider.generation)
@@ -183,14 +216,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     NR_FRAME_TRACE("fg-frame-claim", "generation={} instance={} providerGeneration={} token={} sequence={} "
         "swapchain={:p} queue={:p}", frame.diagnosticClaim.generation, frame.diagnosticClaim.instance,
         provider.generation, frame.key, frame.sequence, static_cast<void*>(chain), static_cast<void*>(owner->queue.Get()));
-    const auto runtime = config->GetDlssNrRuntimeSnapshot();
-    const unsigned int route = config->DlssNrRoute.value_or_default();
-    const bool requested = runtime.enabled && route != 0;
-    // NR Off (or Native route) stops replacing the backbuffer. Retire prior
-    // handoffs so their claim-once markers cannot reject ordinary FG forever.
-    // Reset retains unfinished producers until their real GPU fence completes.
-    if (!requested) ResetCompletions();
-    if (!requested || !fg || route != owner->startupRoute || runtime.resumeGeneration != owner->startupResume)
+    if (!fg || route != owner->startupRoute || runtime.resumeGeneration != owner->startupResume)
         owner->startup.Reset();
     owner->startupRoute = route;
     owner->startupResume = runtime.resumeGeneration;

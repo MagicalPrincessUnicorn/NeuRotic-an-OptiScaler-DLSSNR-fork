@@ -574,6 +574,7 @@ class Owner final : public IUnknown
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
     std::recursive_mutex presentationMutex;
     bool lastFg = false;
+    bool presentPolicyActive = false;
     uint64_t providerGeneration = 0;
     double previousPresentMs = 0.0;
     StartupReadiness startup;

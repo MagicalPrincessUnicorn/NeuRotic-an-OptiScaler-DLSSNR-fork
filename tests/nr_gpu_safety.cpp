@@ -83,8 +83,30 @@ int main()
     probeLedger.RetireBefore(43);
     assert(probeLedger.Claim(probeResource, 3, 4, 5, 43, 43).result == PreFg::CompletionClaimResult::None);
     assert(certificate.Ready()); // retained proof survives ordinary packet retirement
+    // A provider may reuse a list whose completed wait cookie is still attached.
+    // The finished producer can retire without Reset, but the new unfinished
+    // dependency must survive duplicates and further attempted replacements.
+    auto replacementStatus = std::make_shared<Safety::ExternalWaitStatus>();
+    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 2, 43, 44, replacementStatus));
+    assert(waitStatus->applied && !waitStatus->failed && certificate.Ready());
+    assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 2, 43, 44));
+    assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 3, 45, 46));
+    assert(Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid)->status == replacementStatus);
     Check(list->Reset(allocator.Get(), nullptr));
     assert(!Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid));
+    assert(replacementStatus->failed && !replacementStatus->applied);
+
+    // Completed production alone must never fabricate a provider queue-wait
+    // acknowledgement. Replacing an unexecuted old wait cancels its proof.
+    auto unobservedStatus = std::make_shared<Safety::ExternalWaitStatus>();
+    auto retainedStatus = std::make_shared<Safety::ExternalWaitStatus>();
+    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 50, 51, unobservedStatus));
+    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 52, 53, retainedStatus));
+    assert(unobservedStatus->failed && !unobservedStatus->applied);
+    assert(retainedStatus->bound && !retainedStatus->failed && !retainedStatus->applied);
+    Check(list->Close());
+    Check(list->Reset(nextAllocator.Get(), nullptr));
+    assert(retainedStatus->failed && !retainedStatus->applied);
 
     // Reset before submission cancels the borrowed dependency.
     ComPtr<ID3D12Fence> canceledProducer;
