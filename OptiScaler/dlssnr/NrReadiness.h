@@ -60,6 +60,18 @@ struct PreSrEventInput
     bool structuralResetHeld = false;
 };
 
+// Readiness is deliberately not identity: a skipped composition frame does not replace a model.
+constexpr bool PreSrStructuralChange(bool legacyChange, bool experimentalPolicy,
+                                    bool configurationChanged, bool nrRestart)
+{
+    return legacyChange || (experimentalPolicy && (configurationChanged || nrRestart));
+}
+
+constexpr bool HoldPreSrStructuralReset(bool held, bool resetRequested, PreSrEvent event)
+{
+    return resetRequested && (held || event == PreSrEvent::StructuralTransition);
+}
+
 constexpr PreSrEvent ClassifyPreSrEvent(const PreSrEventInput& input)
 {
     if (input.structuralChange || (input.resetRequested && input.structuralResetHeld))
@@ -83,6 +95,28 @@ constexpr bool ResetPendingAfterPass(bool resetSubmitted, bool evaluationSucceed
 {
     return resetSubmitted && !evaluationSucceeded;
 }
+
+struct PreSrResetFrameResult
+{
+    unsigned int attempts = 0;
+    unsigned int successes = 0;
+    uint32_t successfulPasses = 0;
+
+    constexpr void RecordPass(unsigned int pass, bool succeeded)
+    {
+        ++attempts;
+        if (succeeded)
+        {
+            ++successes;
+            successfulPasses |= uint32_t{1} << pass;
+        }
+    }
+    constexpr bool AllPassesSucceeded(unsigned int requested) const
+    {
+        return requested > 0 && requested <= 10 &&
+            successfulPasses == ((uint32_t{1} << requested) - 1);
+    }
+};
 
 // Value-only reporting policy. A retained model handle is not evidence that the currently
 // requested route has evaluated. Inputs are copied while the backend state is locked.

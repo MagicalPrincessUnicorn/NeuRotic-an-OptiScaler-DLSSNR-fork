@@ -1344,7 +1344,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
             LOG_DEBUG("Passthrough to native DLSS EvaluateFeature for handle {}", handleId);
 
             if (isSuperResolution && nrSettings)
-                DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings);
+                DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, true);
 
             NVSDK_NGX_Result result =
                 NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);

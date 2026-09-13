@@ -35,7 +35,8 @@ namespace DlssNr
 // into the game's ORIGINAL Color resource. NVSDK_NGX_Parameter_Color itself is never replaced.
 ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                                       ID3D12CommandQueue* timingQueue = nullptr,
-                                      const NrConfigSnapshot<Config>* settings = nullptr);
+                                      const NrConfigSnapshot<Config>* settings = nullptr,
+                                      bool authoritativeNativePreSr = false);
 
 // V10 preserves original final-SR jitter; RestoreAfterUpscale only restores the temporary Reset override.
 void RestoreAfterUpscale(NVSDK_NGX_Parameter* params);

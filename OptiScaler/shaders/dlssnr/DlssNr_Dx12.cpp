@@ -328,12 +328,20 @@ struct NrState
     bool preSrAwaitingEvaluation = false;
     DlssNr::PreSrResetPolicyState preSrResetPolicy {};
     bool preSrStructuralResetHeld = false;
+    bool preSrSoftResetPending = false;
+    bool preSrSoftResetDispatch = false; // scoped to the authoritative native Pre-SR dispatch
     bool preSrSoftResetBurstActive = false;
     unsigned long long preSrSoftResetBurstCount = 0;
     unsigned long long preSrSoftResetBurstFrames = 0;
     unsigned long long preSrSoftResetEvaluationAttempts = 0;
     unsigned long long preSrSoftResetEvaluationSuccesses = 0;
     unsigned long long preSrSoftResetEvaluationFailures = 0;
+    unsigned long long preSrSoftResetSkippedFrames = 0;
+    bool preSrSoftResetBurstStructural = false;
+    DlssNr::PreSrResetFrameResult preSrResetFrameResult {};
+    unsigned long long preSrSoftResetModelAttempts = 0;
+    unsigned long long preSrSoftResetModelSuccesses = 0;
+    unsigned long long preSrSoftResetDegradedFrames = 0;
     unsigned long long preSrSoftResetBuildsAtStart = 0;
     unsigned long long preSrSoftResetRebuildsAtStart = 0;
     unsigned long long preSrSoftResetFeatureRetiresAtStart = 0;
@@ -1172,21 +1180,26 @@ void ParkAdditionalLayerFeature(size_t index, const char* reason)
 
 void ParkSecondLayerFeature(const char* reason) { ParkAdditionalLayerFeature(0, reason); }
 
-void EndPreSrSoftResetBurst(const char* reason)
+void EndPreSrSoftResetBurst(const char* reason, bool complete = false)
 {
     if (!g_nr.preSrSoftResetBurstActive)
         return;
 
-    LOG_INFO("DLSS-NR Pre-SR soft-reset burst {} ended (reason={}, frames={}, evaluations={}, "
-             "successes={}, failures={}, feature builds={}, rebuilds={}, feature retirements={}, "
-             "resource retirements={})",
-             g_nr.preSrSoftResetBurstCount, reason, g_nr.preSrSoftResetBurstFrames,
+    LOG_INFO("DLSS-NR Pre-SR soft-reset burst {} ended (reason={}, scope={}, frames={}, evaluation frames={}, "
+             "published={}, failures={}, skipped={}, structural={}, feature builds={}, rebuilds={}, feature retirements={}, "
+             "resource retirements={}, pass evaluations={}, pass successes={}, degraded publications={})",
+             g_nr.preSrSoftResetBurstCount, reason,
+             complete ? "through falling-edge frame" : "aborted; lifecycle counts partial",
+             g_nr.preSrSoftResetBurstFrames,
              g_nr.preSrSoftResetEvaluationAttempts, g_nr.preSrSoftResetEvaluationSuccesses,
              g_nr.preSrSoftResetEvaluationFailures,
-             g_featureBuilds - g_nr.preSrSoftResetBuildsAtStart,
+             g_nr.preSrSoftResetSkippedFrames, g_nr.preSrSoftResetBurstStructural,
+             g_featureBuilds + g_layer2FeatureBuilds - g_nr.preSrSoftResetBuildsAtStart,
              g_featureRebuilds - g_nr.preSrSoftResetRebuildsAtStart,
              g_featureRetirements - g_nr.preSrSoftResetFeatureRetiresAtStart,
-             g_resourceRetirements - g_nr.preSrSoftResetResourceRetiresAtStart);
+             g_resourceRetirements - g_nr.preSrSoftResetResourceRetiresAtStart,
+             g_nr.preSrSoftResetModelAttempts, g_nr.preSrSoftResetModelSuccesses,
+             g_nr.preSrSoftResetDegradedFrames);
     g_nr.preSrSoftResetBurstActive = false;
 }
 
@@ -1201,21 +1214,31 @@ void BeginPreSrSoftResetBurst()
     g_nr.preSrSoftResetEvaluationAttempts = 0;
     g_nr.preSrSoftResetEvaluationSuccesses = 0;
     g_nr.preSrSoftResetEvaluationFailures = 0;
-    g_nr.preSrSoftResetBuildsAtStart = g_featureBuilds;
+    g_nr.preSrSoftResetSkippedFrames = 0;
+    g_nr.preSrSoftResetBurstStructural = false;
+    g_nr.preSrSoftResetModelAttempts = 0;
+    g_nr.preSrSoftResetModelSuccesses = 0;
+    g_nr.preSrSoftResetDegradedFrames = 0;
+    g_nr.preSrSoftResetBuildsAtStart = g_featureBuilds + g_layer2FeatureBuilds;
     g_nr.preSrSoftResetRebuildsAtStart = g_featureRebuilds;
     g_nr.preSrSoftResetFeatureRetiresAtStart = g_featureRetirements;
     g_nr.preSrSoftResetResourceRetiresAtStart = g_resourceRetirements;
-    LOG_INFO("DLSS-NR Pre-SR soft-reset burst {} started; retaining Feature 18 and compatible scratch",
+    LOG_INFO("DLSS-NR Pre-SR soft-reset burst {} started; compatibility not yet classified",
              g_nr.preSrSoftResetBurstCount);
 }
 
-void RecordPreSrSoftResetEvaluation(bool attempted, bool succeeded)
+void RecordPreSrSoftResetEvaluation(bool succeeded, unsigned int requestedPasses)
 {
     if (!g_nr.preSrSoftResetBurstActive)
         return;
-    if (!attempted)
+    const auto& result = g_nr.preSrResetFrameResult;
+    g_nr.preSrSoftResetModelAttempts += result.attempts;
+    g_nr.preSrSoftResetModelSuccesses += result.successes;
+    if (succeeded && !result.AllPassesSucceeded(requestedPasses))
+        ++g_nr.preSrSoftResetDegradedFrames;
+    if (result.attempts == 0)
     {
-        ++g_nr.preSrSoftResetEvaluationFailures;
+        ++g_nr.preSrSoftResetSkippedFrames;
         return;
     }
 
@@ -1229,14 +1252,33 @@ void RecordPreSrSoftResetEvaluation(bool attempted, bool succeeded)
 struct PreSrSoftResetFrameTelemetry
 {
     bool active = false;
-    bool attempted = false;
+    bool endOnExit = false;
     bool succeeded = false;
+    unsigned int requestedPasses = 0;
 
     ~PreSrSoftResetFrameTelemetry()
     {
         if (active)
-            RecordPreSrSoftResetEvaluation(attempted, succeeded);
+            RecordPreSrSoftResetEvaluation(succeeded, requestedPasses);
+        if (endOnExit)
+            EndPreSrSoftResetBurst("Reset falling edge (including recovery-frame lifecycle)", true);
     }
+};
+
+void LatchPreSrReset()
+{
+    g_nr.reset = true;
+    for (size_t index = 0; index < 9; ++index)
+    {
+        AdditionalLayer(index).reset = true;
+        AdditionalLayer(index).ready = false;
+    }
+}
+
+struct ScopedPreSrResetDispatch
+{
+    explicit ScopedPreSrResetDispatch(bool enabled) { g_nr.preSrSoftResetDispatch = enabled; }
+    ~ScopedPreSrResetDispatch() { g_nr.preSrSoftResetDispatch = false; }
 };
 
 void ParkAllAdditionalLayerFeatures(const char* reason)
@@ -3430,8 +3472,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (g_ngxTime != nullptr)
         g_ngxTime->End(cmdList);
 
-    g_nr.reset = DlssNr::ResetPendingAfterPass(mainResetSubmitted,
-                                               result == NVSDK_NGX_Result_Success);
+    g_nr.reset = g_nr.preSrSoftResetDispatch && DlssNr::ResetPendingAfterPass(
+        mainResetSubmitted, result == NVSDK_NGX_Result_Success);
+    if (g_nr.preSrSoftResetDispatch)
+        g_nr.preSrResetFrameResult.RecordPass(0, result == NVSDK_NGX_Result_Success);
 
     // Supersampling probe: report the model working ABOVE native so a test log tells us whether NGX even
     // accepts a super-native evaluate and what it returns. Once per working-size change, or on any error.
@@ -3748,6 +3792,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
                     g_nr.layer2.reset = DlssNr::ResetPendingAfterPass(
                         layer2ResetSubmitted, layer2Result == NVSDK_NGX_Result_Success);
+                    if (g_nr.preSrSoftResetDispatch)
+                        g_nr.preSrResetFrameResult.RecordPass(1, layer2Result == NVSDK_NGX_Result_Success);
 
                     if (layer2Result != NVSDK_NGX_Result_Success)
                     {
@@ -3958,6 +4004,9 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     g_nr.guideMvScaleY * mvToPassWork.y, frame.JitterX, frame.JitterY);
                 layer.reset = DlssNr::ResetPendingAfterPass(
                     passResetSubmitted, passResult == NVSDK_NGX_Result_Success);
+                if (g_nr.preSrSoftResetDispatch)
+                    g_nr.preSrResetFrameResult.RecordPass(static_cast<unsigned int>(index + 1),
+                                                        passResult == NVSDK_NGX_Result_Success);
                 if (passResult != NVSDK_NGX_Result_Success)
                 {
                     ++g_layer2EvaluateFailures;
@@ -4187,6 +4236,8 @@ void NotifyUpscalerRelease()
     g_nr.preSrAwaitingEvaluation = true;
     g_nr.preSrResetPolicy = {};
     g_nr.preSrStructuralResetHeld = false;
+    g_nr.preSrSoftResetPending = false;
+    g_nr.preSrSoftResetDispatch = false;
     g_nr.reset = true;
     for (size_t index = 0; index < 9; ++index)
     {
@@ -4464,7 +4515,8 @@ void RestoreAfterUpscale(NVSDK_NGX_Parameter* params)
 
 ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                                       ID3D12CommandQueue* timingQueue,
-                                      const NrConfigSnapshot<Config>* settings)
+                                      const NrConfigSnapshot<Config>* settings,
+                                      bool authoritativeNativePreSr)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     if (g_sessionClosed || g_shutdownFailed)
@@ -4476,7 +4528,38 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
 
     if (cfg.DlssNrRoute.value_or_default() != 0 || !cfg.GetDlssNrRuntimeSnapshot().enabled ||
         !cfg.DlssNrRunBeforeSr.value_or_default() ||
-        cmdList == nullptr || params == nullptr)
+        params == nullptr)
+        return nullptr;
+
+    // CPU-only observation precedes every resource/tracking-dependent exit. Non-native adapters
+    // and default-off calls keep the original late-observation path below.
+    const bool observeEarly = authoritativeNativePreSr &&
+        (cfg.DlssNrPreSrSoftReset.value_or_default() || g_nr.preSrResetPolicy.softResetForBurst);
+    int resetValue = 0;
+    bool resetRequested = false;
+    PreSrResetPolicyDecision resetPolicy {};
+    PreSrSoftResetFrameTelemetry softResetTelemetry {};
+    if (observeEarly)
+    {
+        resetRequested = params->Get(NVSDK_NGX_Parameter_Reset, &resetValue) ==
+                             NVSDK_NGX_Result_Success && resetValue != 0;
+        resetPolicy = AdvancePreSrResetPolicy(g_nr.preSrResetPolicy, resetRequested,
+                                             cfg.DlssNrPreSrSoftReset.value_or_default());
+        if (resetRequested && resetPolicy.softResetForBurst)
+        {
+            BeginPreSrSoftResetBurst();
+            ++g_nr.preSrSoftResetBurstFrames;
+            softResetTelemetry.active = true;
+            softResetTelemetry.requestedPasses = RequestedPassCount(cfg);
+            g_nr.preSrResetFrameResult = {};
+            LatchPreSrReset();
+            g_nr.preSrSoftResetPending = true;
+        }
+        softResetTelemetry.endOnExit = resetPolicy.resetEnded;
+        if (resetPolicy.resetEnded)
+            g_nr.preSrStructuralResetHeld = false;
+    }
+    if (cmdList == nullptr)
         return nullptr;
 
     if (!GpuSafety::Record(cmdList))
@@ -4549,7 +4632,8 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                      outputDesc.Format,
                                      expectedWorkW,
                                      expectedWorkH,
-                                     havePerfQuality ? perfQuality : g_nr.preSrObservedPerfQuality,
+                                     havePerfQuality ? perfQuality :
+                                         (observeEarly ? g_nr.preSrObservedPerfQuality : -999999),
                                      cfg.DlssNrPreDlaa.value_or_default(),
                                      cfg.DlssNrPreset.value_or_default(),
                                      cfg.DlssNrIntensity.value_or_default(),
@@ -4565,14 +4649,15 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
                                      expectedSecondTuning.localTone, expectedSecondTuning.skinStructure,
                                      expectedSecondTuning.autoMask, AdditionalPassSignature(cfg) };
 
-    int resetValue = 0;
-    const bool resetRequested =
-        params->Get(NVSDK_NGX_Parameter_Reset, &resetValue) == NVSDK_NGX_Result_Success &&
-        resetValue != 0;
-
-    const PreSrResetPolicyDecision resetPolicy = AdvancePreSrResetPolicy(
-        g_nr.preSrResetPolicy, resetRequested,
-        cfg.DlssNrPreSrSoftReset.value_or_default());
+    if (!observeEarly)
+    {
+        resetRequested = params->Get(NVSDK_NGX_Parameter_Reset, &resetValue) ==
+                             NVSDK_NGX_Result_Success && resetValue != 0;
+        resetPolicy = AdvancePreSrResetPolicy(g_nr.preSrResetPolicy, resetRequested, false);
+    }
+    const bool experimentalPolicy = authoritativeNativePreSr &&
+        (resetPolicy.softResetForBurst ||
+         (!resetRequested && cfg.DlssNrPreSrSoftReset.value_or_default()));
 
     if (resetPolicy.resetStarted)
     {
@@ -4606,9 +4691,10 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         g_nr.preSrSignatureValid && !(g_nr.preSrObservedSignature == signature);
     const bool nrRestart =
         cfg.GetDlssNrRuntimeSnapshot().resumeGeneration != g_nr.resumeGeneration;
-    const bool structuralChange =
+    const bool structuralChange = PreSrStructuralChange(
         firstObservation || inputChanged || outputChanged || qualityChanged ||
-        configurationChanged || nrRestart || resetPolicy.conservativeTransition;
+            resetPolicy.conservativeTransition,
+        experimentalPolicy, configurationChanged, nrRestart);
 
     bool resourcesReady =
         !g_nr.failed && g_nr.feature != nullptr && g_nr.output != nullptr && g_nr.colorCopy != nullptr &&
@@ -4647,7 +4733,6 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         g_nr.feature != nullptr && g_nr.width == observedWidth &&
         g_nr.height == observedHeight && g_nr.workWidth == expectedWorkW &&
         g_nr.workHeight == expectedWorkH && TuningMatchesFeature(cfg) &&
-        g_nr.preSrScratchPrimed && !g_nr.preSrAwaitingEvaluation &&
         additionalPassesCompatible;
 
     const PreSrEvent event = ClassifyPreSrEvent(
@@ -4656,7 +4741,6 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
 
     if (resetPolicy.resetEnded)
     {
-        EndPreSrSoftResetBurst("Reset falling edge");
         g_nr.preSrStructuralResetHeld = false;
     }
 
@@ -4672,26 +4756,29 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     };
 
     const bool softResetFrame =
-        resetPolicy.softResetForBurst && event == PreSrEvent::SoftReset;
+        authoritativeNativePreSr && resetPolicy.softResetForBurst && event == PreSrEvent::SoftReset;
     if (softResetFrame)
     {
-        BeginPreSrSoftResetBurst();
-        ++g_nr.preSrSoftResetBurstFrames;
         requestResetForAllPasses();
     }
     else if (resetRequested)
     {
-        EndPreSrSoftResetBurst(event == PreSrEvent::FrameFailure
-                                  ? "reset-frame resource failure"
-                                  : "structural transition");
-        g_nr.preSrStructuralResetHeld = true;
+        g_nr.preSrStructuralResetHeld = HoldPreSrStructuralReset(
+            g_nr.preSrStructuralResetHeld, resetRequested, event);
+        if (g_nr.preSrSoftResetBurstActive && event == PreSrEvent::StructuralTransition)
+            g_nr.preSrSoftResetBurstStructural = true;
         requestResetForAllPasses();
     }
 
-    PreSrSoftResetFrameTelemetry softResetTelemetry { softResetFrame };
+    // Observe compatible configuration changes even with the option off, without changing its
+    // resource lifecycle. This also prevents enabling the option from comparing stale settings.
+    g_nr.preSrObservedSignature = signature;
+    g_nr.preSrSignatureValid = true;
 
     if (structuralChange)
     {
+        if (g_nr.preSrSoftResetBurstActive)
+            g_nr.preSrSoftResetBurstStructural = true;
         const int oldQuality = g_nr.preSrObservedPerfQuality;
 
         g_nr.preSrObservedWidth = observedWidth;
@@ -4858,8 +4945,11 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     const unsigned long long successfulEvaluationsBefore = g_nr.completedPipelineEvaluations;
 
     params->Set(NVSDK_NGX_Parameter_Output, g_nr.preSrScratch);
-    softResetTelemetry.attempted = true;
-    EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, true, cfg);
+    {
+        ScopedPreSrResetDispatch resetDispatch(authoritativeNativePreSr &&
+            (experimentalPolicy || g_nr.preSrSoftResetPending));
+        EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, true, cfg);
+    }
     params->Set(NVSDK_NGX_Parameter_Output, originalOutputVoid);
 
     if (g_nr.failed && g_nr.feature != nullptr)
@@ -5093,6 +5183,13 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     }
 
     softResetTelemetry.succeeded = true;
+    if (authoritativeNativePreSr && g_nr.preSrSoftResetPending && !g_nr.reset)
+    {
+        bool pending = false;
+        for (size_t index = 0; index + 1 < RequestedPassCount(cfg); ++index)
+            pending = pending || AdditionalLayer(index).reset;
+        g_nr.preSrSoftResetPending = pending;
+    }
     device->Release();
     return color;
 }// Reads the game's parameter block and runs the pass on what it finds.
@@ -5944,6 +6041,8 @@ bool Shutdown()
     g_nr.preSrAwaitingEvaluation = false;
     g_nr.preSrResetPolicy = {};
     g_nr.preSrStructuralResetHeld = false;
+    g_nr.preSrSoftResetPending = false;
+    g_nr.preSrSoftResetDispatch = false;
     g_nr.preSrSoftResetBurstActive = false;
     g_nr.preSrSoftResetBurstCount = 0;
     g_nr.preSrSoftResetBurstFrames = 0;
