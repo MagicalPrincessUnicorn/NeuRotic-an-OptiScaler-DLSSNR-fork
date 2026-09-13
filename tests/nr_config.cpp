@@ -44,6 +44,10 @@ struct TestConfig
     NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
     NrOptional<bool> DlssNrEnabled { false };
     NrOptional<bool> DlssNrMultipassEnabled { false };
+    NrOptional<bool> DlssNrExperimentalMode { false };
+    NrOptional<bool> DlssNrOverrideMultipassGuardrails { false };
+    NrOptional<bool> DlssNrOverrideHdrGuardrails { false };
+    NrOptional<bool> DlssNrOverrideFgGuardrails { false };
     NrOptional<DlssNr::BasicMultipass::Profile> DlssNrBasicMultipass { {} };
     NrOptional<bool> DlssNrSecondLayer { false };
     NrOptional<float> DlssNrSecondLayerWorkingScale { 1.0f };
