@@ -9,6 +9,10 @@ assert copy.index('runtime.context11->Signal') < copy.index('if (!copied)')
 assert 'runtime.failed = true' in copy and 'runtime.context11->Flush();' in copy
 assert 's.nativePreSr && !Dx11Transport::SupportedShape(colorDesc)' in native
 assert 's.copyGuides, nullptr, 0, proof' in native
+assert 'native NR delivered with transported depth/motion' in native
+present = read('OptiScaler/dlssnr/DlssNr_Present.cpp')
+for extent in ['DepthSubrectWidth', 'DepthSubrectHeight', 'MotionSubrectWidth', 'MotionSubrectHeight']:
+    assert 'next.' + extent + ' != old.' + extent in present
 dx = read('OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp')
 assert dx.count('primaryPlacement.RequiresRetirement(currentRouteIsPreSr)') == 1
 assert 'privateCommandList && !nativeTemporalDomain' in dx

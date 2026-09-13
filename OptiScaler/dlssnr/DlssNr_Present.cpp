@@ -971,6 +971,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         const auto& old = g_present.nativeFrame;
         if (enhanced && (next.DepthSubrectX != old.DepthSubrectX || next.DepthSubrectY != old.DepthSubrectY ||
             next.MotionSubrectX != old.MotionSubrectX || next.MotionSubrectY != old.MotionSubrectY ||
+            next.DepthSubrectWidth != old.DepthSubrectWidth || next.DepthSubrectHeight != old.DepthSubrectHeight ||
+            next.MotionSubrectWidth != old.MotionSubrectWidth || next.MotionSubrectHeight != old.MotionSubrectHeight ||
             next.DepthInverted != old.DepthInverted || next.MvScaleX != old.MvScaleX || next.MvScaleY != old.MvScaleY))
             InvalidateHistory("Native guide convention or subrect origin changed");
         if (enhanced && next.Reset) InvalidateHistory("Native reset requested");

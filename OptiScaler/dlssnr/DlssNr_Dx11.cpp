@@ -561,7 +561,11 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
                 slot.depth.directSource,
                 slot.motion.directSource, slot.ready,
                 runtime.completed12->GetCompletedValue(), slot.retired, delivered, guides.captures,
-                guides.matched, guides.evaluated, guides.status);
+                guides.matched, guides.evaluated,
+                (s.nativePostSr || s.nativePreSr)
+                    ? (delivered ? "native NR delivered with transported depth/motion"
+                                 : "native NR not delivered; native DLSS image retained")
+                    : guides.status.c_str());
         s.lastReason.clear();
     };
 
