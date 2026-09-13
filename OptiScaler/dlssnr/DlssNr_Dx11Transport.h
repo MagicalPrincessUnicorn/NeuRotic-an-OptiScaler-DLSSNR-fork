@@ -252,7 +252,7 @@ struct Output
                 if (mip + 1 != d.MipLevels) return 0; // invalid mip chain
                 break;
             }
-            width = std::max(1u, width / 2); height = std::max(1u, height / 2);
+            width = (std::max)(1u, width / 2); height = (std::max)(1u, height / 2);
         }
         return pixels * FormatBytes(d.Format);
     }
