@@ -46,16 +46,35 @@ struct ExternalWait
         if (status && !status->applied.load()) status->Fail();
     }
 };
+static std::atomic<unsigned int> observationCookies {0};
+struct ExecutionObservation
+{
+    std::shared_ptr<ExternalExecutionStatus> status = std::make_shared<ExternalExecutionStatus>();
+    ExecutionObservation() { ++observationCookies; }
+    ~ExecutionObservation()
+    {
+        if (!status->submitted.load()) status->failed = true;
+        --observationCookies;
+    }
+};
 namespace
 {
 constexpr GUID recordingGuid = {0x5ee0e247, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
 constexpr GUID timelineGuid = {0x5ee0e248, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
 constexpr GUID externalWaitGuid = {0x5ee0e249, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
+constexpr GUID executionObservationGuid = {0x5ee0e24a, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
+constexpr GUID hookProofGuid = {0x5ee0e24b, 0xe5ab, 0x450c, {0x96,0x09,0x13,0xbe,0xe3,0xab,0x11,0x89}};
 using ExecuteFn = void (STDMETHODCALLTYPE*)(ID3D12CommandQueue*, UINT, ID3D12CommandList* const*);
 using ResetFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, ID3D12CommandAllocator*, ID3D12PipelineState*);
 ExecuteFn originalExecute = nullptr;
 ResetFn originalReset = nullptr;
 void* resetTarget = nullptr;
+ExecuteFn alternateExecute = nullptr;
+ResetFn alternateReset = nullptr;
+void* executeTarget = nullptr;
+void* alternateExecuteTarget = nullptr;
+void* alternateResetTarget = nullptr;
+struct HookProof { void* reset; D3D12_COMMAND_LIST_TYPE type; };
 // Callbacks can outlive explicit NGX sessions. This small registry and its hooks have process
 // lifetime; individual tickets/fences are reclaimed. No owning reference back to a list/queue.
 struct Registry
@@ -154,12 +173,13 @@ bool Completed(const Ticket& t)
     return true;
 }
 
-void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* lists)
+void ExecuteOn(ExecuteFn forward, ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* lists)
 {
     auto& s = State();
     std::lock_guard lock(s.mutex);
     CompletionSet uses;
     std::vector<std::pair<ID3D12CommandList*, std::shared_ptr<ExternalWait>>> waits;
+    std::vector<std::pair<ID3D12CommandList*, std::shared_ptr<ExecutionObservation>>> observations;
     for (UINT i = 0; i < count; ++i)
     {
         auto ticket = Get<Recording>(lists[i], recordingGuid);
@@ -168,12 +188,18 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
         if (ticket) uses.push_back(ticket);
         if (auto dependency = Get<ExternalWait>(lists[i], externalWaitGuid))
             waits.push_back({lists[i], std::move(dependency)});
+        if (observationCookies.load(std::memory_order_relaxed))
+            if (auto observation = Get<ExecutionObservation>(lists[i], executionObservationGuid))
+                observations.push_back({lists[i], std::move(observation)});
     }
-    if (uses.empty() && waits.empty()) { originalExecute(queue, count, lists); return; }
+    if (uses.empty() && waits.empty() && observations.empty()) { forward(queue, count, lists); return; }
+    const auto queueType = waits.empty() && observations.empty() ? D3D12_COMMAND_LIST_TYPE_DIRECT : queue->GetDesc().Type;
+    for (const auto& [list, observation] : observations)
+        if (!SupportedExternalType(queueType) || list->GetType() != queueType) observation->status->failed = true;
 
     for (const auto& [list, dependency] : waits)
     {
-        bool ok = queue->GetDesc().Type == D3D12_COMMAND_LIST_TYPE_DIRECT;
+        bool ok = SupportedExternalType(queueType) && list->GetType() == queueType;
         ComPtr<ID3D12Device> producerDevice, consumerDevice;
         if (ok)
             ok = SUCCEEDED(dependency->fence->GetDevice(IID_PPV_ARGS(&producerDevice))) &&
@@ -190,6 +216,7 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
             dependency->sequence, static_cast<unsigned int>(waitResult), ok);
         if (!ok)
         {
+            for (const auto& observation : observations) observation.second->status->failed = true;
             for (const auto& pending : waits)
                 if (pending.second->status) pending.second->status->Fail();
             // Never submit provider work after its required ordering failed. This
@@ -220,7 +247,9 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     // Recording tickets only observe host ordering. The wait above is the narrow exception: an
     // explicit, exact-resource NR-to-native-FG handoff attached to the provider command list.
     bool ok = uses.empty() || (timeline != nullptr && timeline->next < UINT64_MAX - 1);
-    originalExecute(queue, count, lists);
+    forward(queue, count, lists);
+    for (const auto& observation : observations)
+        if (!observation.second->status->failed.load()) observation.second->status->submitted = true;
     const UINT64 value = !uses.empty() && ok ? ++timeline->next : 0;
     if (!uses.empty() && ok) ok = SUCCEEDED(queue->Signal(timeline->fence.Get(), value));
     NR_FRAME_TRACE("queue-execute-signaled", "queue={:p} fence={:p} value={} ok={} tickets={}",
@@ -229,6 +258,7 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     if (!ok)
     {
         s.failed = true;
+        for (const auto& observation : observations) observation.second->status->failed = true;
         for (const auto& pending : waits)
             if (pending.second->status) pending.second->status->Fail();
     }
@@ -246,14 +276,23 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     }
 }
 
-HRESULT STDMETHODCALLTYPE Reset(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator,
+void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* lists)
+{ ExecuteOn(originalExecute, queue, count, lists); }
+void STDMETHODCALLTYPE ExecuteAlternate(ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* lists)
+{ ExecuteOn(alternateExecute, queue, count, lists); }
+
+HRESULT ResetOn(ResetFn forward, ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator,
                                  ID3D12PipelineState* pipeline)
 {
     std::lock_guard lock(State().mutex);
-    const HRESULT hr = originalReset(list, allocator, pipeline);
+    const HRESULT hr = forward(list, allocator, pipeline);
     NR_FRAME_TRACE("command-list-reset", "list={:p} result={}", static_cast<void*>(list), static_cast<unsigned int>(hr));
     if (SUCCEEDED(hr))
     {
+        if (observationCookies.load(std::memory_order_relaxed))
+            if (auto observation = Get<ExecutionObservation>(list, executionObservationGuid))
+                if (FAILED(list->SetPrivateDataInterface(executionObservationGuid, nullptr)))
+                    observation->status->failed = true;
         if (auto t = Get<Recording>(list, recordingGuid))
         {
             if (SUCCEEDED(list->SetPrivateDataInterface(recordingGuid, nullptr))) t->sealed = true;
@@ -268,35 +307,93 @@ HRESULT STDMETHODCALLTYPE Reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
     }
     return hr;
 }
+HRESULT STDMETHODCALLTYPE Reset(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator,
+                                 ID3D12PipelineState* pipeline)
+{ return ResetOn(originalReset, list, allocator, pipeline); }
+HRESULT STDMETHODCALLTYPE ResetAlternate(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator,
+                                          ID3D12PipelineState* pipeline)
+{ return ResetOn(alternateReset, list, allocator, pipeline); }
 
-bool EnsureHooks(ID3D12GraphicsCommandList* list)
+bool EnsureHooks(ID3D12GraphicsCommandList* list, bool verifyQueue = false)
 {
     std::lock_guard lock(State().hookMutex);
     void* target = (*(void***)list)[10];
-    if (originalReset) return target == resetTarget;
+    // Preserve the established NR recording fast path. External FG consumers
+    // additionally prove the queue implementation for their actual list type.
+    if (!verifyQueue && originalReset && target == resetTarget) return true;
+    const auto type = list->GetType();
+    if (!SupportedExternalType(type)) return false;
+    if (auto proof = Get<HookProof>(list, hookProofGuid))
+        if (proof->reset == target && proof->type == type) return true;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12CommandQueue> queue;
     D3D12_COMMAND_QUEUE_DESC desc {};
-    desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    desc.Type = type;
     if (FAILED(list->GetDevice(IID_PPV_ARGS(&device))) ||
         FAILED(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&queue)))) return false;
     ID3D12CommandQueue* nativeQueue = NativeObject(queue.Get());
-    originalExecute = reinterpret_cast<ExecuteFn>((*(void***)nativeQueue)[10]);
-    originalReset = reinterpret_cast<ResetFn>(target);
-    resetTarget = target;
+    void* queueTarget = (*(void***)nativeQueue)[10];
+    const bool haveExecute = (originalExecute && queueTarget == executeTarget) ||
+                             (alternateExecute && queueTarget == alternateExecuteTarget);
+    const bool haveReset = (originalReset && target == resetTarget) ||
+                           (alternateReset && target == alternateResetTarget);
+    if ((!haveExecute && originalExecute && alternateExecute) ||
+        (!haveReset && originalReset && alternateReset)) return false;
+    // DIRECT and COMPUTE can share implementation addresses, or have distinct
+    // ones. Hook each address once, retaining the correct original trampoline.
+    ExecuteFn* executeSlot = haveExecute ? nullptr : !originalExecute ? &originalExecute : &alternateExecute;
+    ResetFn* resetSlot = haveReset ? nullptr : !originalReset ? &originalReset : &alternateReset;
     HMODULE self = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-                           reinterpret_cast<LPCWSTR>(&Execute), &self))
-    { originalExecute = nullptr; originalReset = nullptr; return false; }
-    if (DetourTransactionBegin() != NO_ERROR) { originalExecute = nullptr; originalReset = nullptr; return false; }
-    LONG result = DetourUpdateThread(GetCurrentThread());
-    if (result == NO_ERROR) result = DetourAttach(reinterpret_cast<PVOID*>(&originalExecute), Execute);
-    if (result == NO_ERROR) result = DetourAttach(reinterpret_cast<PVOID*>(&originalReset), Reset);
-    if (result == NO_ERROR) result = DetourTransactionCommit();
-    else DetourTransactionAbort();
-    if (result != NO_ERROR) { originalExecute = nullptr; originalReset = nullptr; return false; }
-    return true;
+                           reinterpret_cast<LPCWSTR>(&Execute), &self)) return false;
+    if (executeSlot || resetSlot)
+    {
+        if (DetourTransactionBegin() != NO_ERROR) return false;
+        LONG result = DetourUpdateThread(GetCurrentThread());
+        if (executeSlot)
+        {
+            *executeSlot = reinterpret_cast<ExecuteFn>(queueTarget);
+            if (result == NO_ERROR) result = DetourAttach(reinterpret_cast<PVOID*>(executeSlot),
+                executeSlot == &originalExecute ? Execute : ExecuteAlternate);
+        }
+        if (resetSlot)
+        {
+            *resetSlot = reinterpret_cast<ResetFn>(target);
+            if (result == NO_ERROR) result = DetourAttach(reinterpret_cast<PVOID*>(resetSlot),
+                resetSlot == &originalReset ? Reset : ResetAlternate);
+        }
+        if (result == NO_ERROR) result = DetourTransactionCommit();
+        else DetourTransactionAbort();
+        if (result != NO_ERROR)
+        {
+            if (executeSlot) *executeSlot = nullptr;
+            if (resetSlot) *resetSlot = nullptr;
+            return false;
+        }
+        if (executeSlot) (executeSlot == &originalExecute ? executeTarget : alternateExecuteTarget) = queueTarget;
+        if (resetSlot) (resetSlot == &originalReset ? resetTarget : alternateResetTarget) = target;
+    }
+    return Put(list, hookProofGuid, std::make_shared<HookProof>(HookProof {target, type}));
 }
+}
+
+std::shared_ptr<ExternalExecutionStatus> ObserveExternalExecution(ID3D12GraphicsCommandList* list, const char** reason)
+{
+    if (reason) *reason = "null-list";
+    if (!list) return {};
+    list = NativeObject(list);
+    if (reason) *reason = "unsupported-list-type";
+    if (!SupportedExternalType(list->GetType())) return {};
+    if (reason) *reason = "submission/reset-hooks-unavailable";
+    if (!EnsureHooks(list, true)) return {};
+    std::lock_guard lock(State().mutex);
+    if (reason) *reason = "gpu-safety-registry-failed";
+    if (State().failed) return {};
+    auto observation = std::make_shared<ExecutionObservation>();
+    if (reason) *reason = "observation-cookie-write-failed";
+    if (!Put(list, executionObservationGuid, observation)) return {};
+    if (reason) *reason = "waiting for successful FG evaluation and queue submission";
+    return observation->status;
 }
 
 Ticket Record(ID3D12GraphicsCommandList* list)
@@ -388,14 +485,14 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
 {
     const auto refuse = [&](const char* reason) {
         if (status) status->Fail();
-        NR_FRAME_TRACE("nr-fg-wait-bind-refused", "reason={} list={:p} token={} sequence={}",
-            reason, static_cast<void*>(list), token, sequence);
+        NR_FRAME_TRACE("nr-fg-wait-bind-refused", "reason={} list={:p} type={} token={} sequence={}",
+            reason, static_cast<void*>(list), list ? static_cast<unsigned int>(list->GetType()) : UINT_MAX, token, sequence);
 #ifndef NR_GPU_SAFETY_TEST
         static std::atomic<uint64_t> refusals {0};
         const auto count = ++refusals;
         if (count <= 8 || count % 120 == 0)
-            LOG_WARN("NR Present wait binding refused: reason={} list={:p} token={} sequence={} count={}",
-                reason, static_cast<void*>(list), token, sequence, count);
+            LOG_WARN("NR Present wait binding refused: reason={} list={:p} type={} token={} sequence={} count={}",
+                reason, static_cast<void*>(list), list ? static_cast<unsigned int>(list->GetType()) : UINT_MAX, token, sequence, count);
 #else
         (void)reason;
 #endif
@@ -403,10 +500,10 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
     };
     if (!list || !producerFence || !producerValue || producerValue == UINT64_MAX)
         return refuse("invalid-dependency");
-    if (list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT) return refuse("non-direct-list");
     list = NativeObject(list);
+    if (!SupportedExternalType(list->GetType())) return refuse("unsupported-list-type");
     producerFence = NativeObject(producerFence);
-    if (!EnsureHooks(list)) return refuse("completion-hooks-unavailable");
+    if (!EnsureHooks(list, true)) return refuse("completion-hooks-unavailable");
     std::lock_guard lock(State().mutex);
     if (State().failed) return refuse("gpu-safety-registry-failed");
     auto previous = Get<ExternalWait>(list, externalWaitGuid);

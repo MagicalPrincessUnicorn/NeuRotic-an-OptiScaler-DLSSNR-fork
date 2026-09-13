@@ -18,6 +18,17 @@ struct ExternalWaitStatus
     }
 };
 struct Recording;
+struct ExternalExecutionStatus
+{
+    std::atomic<bool> evaluated {false}, submitted {false}, failed {false};
+    bool Ready() const { return evaluated.load() && submitted.load() && !failed.load(); }
+};
+// Observe an unmodified provider recording. No wait or NR work is introduced.
+// Null means that this list/queue implementation cannot be safely observed.
+std::shared_ptr<ExternalExecutionStatus> ObserveExternalExecution(ID3D12GraphicsCommandList* list,
+                                                                 const char** reason = nullptr);
+inline bool SupportedExternalType(D3D12_COMMAND_LIST_TYPE type)
+{ return type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE; }
 using Ticket = std::shared_ptr<Recording>;
 using CompletionSet = std::vector<Ticket>;
 

@@ -356,6 +356,66 @@ int main()
     capture.release();
     list.Reset();
 
+    // Exercise actual DIRECT -> COMPUTE -> DIRECT provider queues. CPU admission
+    // stays non-blocking while a different GPU queue holds the producer fence.
+    for (auto providerType : {D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                              D3D12_COMMAND_LIST_TYPE_DIRECT})
+    {
+        ComPtr<ID3D12CommandQueue> providerQueue;
+        D3D12_COMMAND_QUEUE_DESC desc {}; desc.Type = providerType;
+        Check(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&providerQueue)));
+        ComPtr<ID3D12CommandAllocator> providerAllocator;
+        ComPtr<ID3D12GraphicsCommandList> providerList;
+        Check(device->CreateCommandAllocator(providerType, IID_PPV_ARGS(&providerAllocator)));
+        Check(device->CreateCommandList(0, providerType, providerAllocator.Get(), nullptr, IID_PPV_ARGS(&providerList)));
+        auto observation = Safety::ObserveExternalExecution(providerList.Get());
+        assert(observation && !observation->Ready());
+        observation->evaluated = true;
+        assert(!observation->Ready()); // successful evaluate alone is not submission
+        ComPtr<ID3D12Fence> producer, blocker, consumer;
+        Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&producer)));
+        Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&blocker)));
+        Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&consumer)));
+        Check(queue->Wait(blocker.Get(), 1));
+        Check(queue->Signal(producer.Get(), 1));
+        auto status = std::make_shared<Safety::ExternalWaitStatus>();
+        assert(Safety::BindExternalWait(providerList.Get(), producer.Get(), 1, 100, 101, status));
+        Check(providerList->Close());
+        ID3D12CommandList* batch[] = {providerList.Get()};
+        providerQueue->ExecuteCommandLists(1, batch);
+        assert(observation->Ready() && status->applied && !status->failed);
+        Check(providerQueue->Signal(consumer.Get(), 1));
+        assert(consumer->GetCompletedValue() == 0);
+        Check(blocker->Signal(1));
+        HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr); assert(done);
+        Check(consumer->SetEventOnCompletion(1, done));
+        assert(WaitForSingleObject(done, 5000) == WAIT_OBJECT_0);
+        // Replay retains the exact dependency on the same compatible queue.
+        providerQueue->ExecuteCommandLists(1, batch);
+        Check(providerQueue->Signal(consumer.Get(), 2));
+        Check(consumer->SetEventOnCompletion(2, done));
+        assert(WaitForSingleObject(done, 5000) == WAIT_OBJECT_0);
+        CloseHandle(done);
+        Check(providerList->Reset(providerAllocator.Get(), nullptr));
+        assert(observation->Ready());
+        auto canceled = Safety::ObserveExternalExecution(providerList.Get());
+        assert(canceled); canceled->evaluated = true;
+        Check(providerList->Close());
+        Check(providerList->Reset(providerAllocator.Get(), nullptr));
+        assert(canceled->failed && !canceled->Ready());
+    }
+    {
+        ComPtr<ID3D12CommandAllocator> copyAllocator;
+        ComPtr<ID3D12GraphicsCommandList> copyList;
+        Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&copyAllocator)));
+        Check(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, copyAllocator.Get(), nullptr,
+                                       IID_PPV_ARGS(&copyList)));
+        assert(!Safety::ObserveExternalExecution(copyList.Get()));
+        assert(!Safety::BindExternalWait(copyList.Get(), externalProducer.Get(), 1, 110, 111));
+        Check(copyList->Close());
+    }
+    std::puts("PASS: DIRECT/COMPUTE/DIRECT actual queue handoffs, cross-queue waits, replay, observation cancellation and COPY refusal");
+
     if (debugEnabled)
     {
         ComPtr<ID3D12InfoQueue> messages;

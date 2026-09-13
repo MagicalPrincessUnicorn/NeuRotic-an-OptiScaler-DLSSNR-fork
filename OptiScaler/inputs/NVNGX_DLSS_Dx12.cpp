@@ -1406,8 +1406,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
             if (isSuperResolution && nrSettings)
                 DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, true);
 
+            std::shared_ptr<DlssNr::GpuSafety::ExternalExecutionStatus> consumerObservation;
             if (feature == NVSDK_NGX_Feature_FrameGeneration)
             {
+                consumerObservation = DlssNr::PreFg::ObserveConsumer(handleId, InCmdList);
                 ID3D12Resource* nativeBackbuffer = nullptr;
                 if (fgBackbufferResult == NVSDK_NGX_Result_Success && fgBackbuffer)
                 {
@@ -1417,6 +1419,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 }
                 if (!nativeBackbuffer && DlssNr::PreFg::PendingCompletions())
                 {
+                    if (consumerObservation) consumerObservation->failed = true;
                     DlssNr::PreFg::RevokeReadiness();
                     NR_FRAME_TRACE("nr-fg-handoff-refused", "reason=missing-native-backbuffer handle={} list={:p}",
                         handleId, static_cast<void*>(InCmdList));
@@ -1438,6 +1441,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 }
                 if (handoffFailed)
                 {
+                    if (consumerObservation) consumerObservation->failed = true;
                     NR_FRAME_TRACE("nr-fg-handoff-refused", "reason={} handle={} list={:p} backbuffer={:p} "
                         "token={} sequence={}", completion.result == DlssNr::PreFg::CompletionClaimResult::Refused ?
                         "identity-mismatch" : "wait-bind-failed", handleId, static_cast<void*>(InCmdList),
@@ -1449,6 +1453,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
             NVSDK_NGX_Result result =
                 NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            if (consumerObservation)
+            {
+                if (result == NVSDK_NGX_Result_Success) consumerObservation->evaluated = true;
+                else consumerObservation->failed = true;
+            }
             if (feature == NVSDK_NGX_Feature_FrameGeneration && result != NVSDK_NGX_Result_Success)
                 DlssNr::PreFg::RevokeReadiness();
             NR_FRAME_TRACE("ngx-native-return", "handle={} feature={} result={} list={:p}", handleId,

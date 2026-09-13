@@ -168,6 +168,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         // own lifetime until completion even after the visible policy is disabled.
         if (owner->presentPolicyActive)
         {
+            StopConsumerObservation();
             owner->startup.Reset();
             ResetCompletions();
             PresentGuides::Instance().Enable(false);
@@ -197,6 +198,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     owner->previousPresentMs = start;
     const auto provider = Provider();
     const bool fg = provider.known ? provider.enabled : ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff;
+    State().observeConsumer = fg;
     if (owner->lastFg != fg || owner->providerGeneration != provider.generation)
     {
         std::lock_guard lock(State().mutex);
@@ -227,6 +229,12 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     if (fg)
     {
+        if (!ConsumerReady(frame))
+        {
+            frame.valid = false;
+            frame.refusal = "FG execution path not ready; NR paused while original game frames continue";
+            owner->startup.Reset();
+        }
         if (!provider.known || !provider.supported || ::State::Instance().activeFgOutput != FGOutput::NoFG ||
             ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOn ||
             ::State::Instance().dlssgDetectedInterpolationCount > 1 ||

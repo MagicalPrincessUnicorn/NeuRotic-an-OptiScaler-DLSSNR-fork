@@ -6,6 +6,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <climits>
 #include <mutex>
 #include "NativeIdentity.h"
 #include "FgLifecycleContract.h"
@@ -372,6 +373,25 @@ struct ProviderState
     bool known = false, enabled = false, supported = false;
     uint64_t generation = 0;
 };
+struct ConsumerKey
+{
+    uint64_t provider = 0, generation = 0, instance = 0;
+    bool operator==(const ConsumerKey&) const = default;
+};
+struct ConsumerPath
+{
+    ConsumerKey key {};
+    unsigned int type = UINT_MAX;
+    uintptr_t implementation = 0;
+    uint64_t revision = 0;
+    std::shared_ptr<GpuSafety::ExternalExecutionStatus> observation;
+    bool Ready(const ConsumerKey& expected) const
+    {
+        return key == expected && GpuSafety::SupportedExternalType(static_cast<D3D12_COMMAND_LIST_TYPE>(type)) &&
+            observation && observation->Ready();
+    }
+    void Clear() { key = {}; type = UINT_MAX; implementation = 0; observation.reset(); ++revision; }
+};
 struct Registry
 {
     std::mutex mutex;
@@ -382,9 +402,70 @@ struct Registry
     std::atomic<unsigned int> swapchains {0};
     std::atomic<uint64_t> realCalls {0}, submitted {0}, bypassed {0}, rejected {0};
     std::atomic<uint64_t> readinessEpoch {1};
+    std::atomic<bool> observeConsumer {false};
+    ConsumerPath consumer;
 };
 inline Registry& State() { static auto* state = new Registry; return *state; }
 inline void RevokeReadiness() { ++State().readinessEpoch; }
+inline void StopConsumerObservation()
+{
+    State().observeConsumer = false;
+    std::lock_guard lock(State().mutex);
+    State().consumer.Clear();
+}
+inline bool ConsumerReady(const Frame& frame)
+{
+    std::lock_guard lock(State().mutex);
+    return State().consumer.Ready({frame.providerGeneration, frame.nativeFgGeneration, frame.nativeFgInstance});
+}
+inline std::shared_ptr<GpuSafety::ExternalExecutionStatus> ObserveConsumer(uintptr_t handle,
+                                                                        ID3D12GraphicsCommandList* list)
+{
+    if (!State().observeConsumer.load() || !list) return {};
+    const auto nativeList = NativeIdentity::Resolve<ID3D12GraphicsCommandList>(list);
+    if (!nativeList.object)
+    {
+        std::lock_guard lock(State().mutex);
+        State().consumer.Clear(); RevokeReadiness(); return {};
+    }
+    const auto type = static_cast<unsigned int>(nativeList.object->GetType());
+    const auto implementation = reinterpret_cast<uintptr_t>((*(void***)nativeList.object.Get())[10]);
+    ConsumerKey key;
+    uint64_t revision;
+    bool changed;
+    {
+        std::lock_guard lock(State().mutex);
+        const auto native = State().nativeFg.Read();
+        if (!State().provider.enabled || native.active != 1 ||
+            State().nativeFg.Find(handle) != native.instance || !State().observeConsumer.load()) return {};
+        key = {State().provider.generation, native.generation, native.instance};
+        auto& path = State().consumer;
+        changed = path.key != key || path.type != type || path.implementation != implementation;
+        // An unsupported implementation stays bypassed until the provider/type
+        // changes. Do not create queues or submit NR probes on every failed frame.
+        if (!changed && !path.observation) return {};
+        if (!changed && path.observation && !path.observation->failed.load()) return path.observation;
+        path.key = key; path.type = type; path.implementation = implementation;
+        path.observation.reset(); revision = ++path.revision;
+        RevokeReadiness();
+    }
+    // Never acquire GPU hook locks while holding the frame ledger lock.
+    const char* reason = nullptr;
+    auto observation = GpuSafety::ObserveExternalExecution(nativeList.object.Get(), &reason);
+    {
+        std::lock_guard lock(State().mutex);
+        auto& path = State().consumer;
+        if (path.revision != revision || path.key != key || !State().observeConsumer.load()) return {};
+        path.observation = observation;
+    }
+#if defined(LOG_INFO) && !defined(NR_GPU_SAFETY_TEST)
+    if (changed)
+        LOG_INFO("NR Present FG consumer: listType={} provider={} generation={} instance={} observation={} reason={}",
+            type, key.provider, key.generation, key.instance, observation != nullptr, reason);
+#endif
+    (void)changed;
+    return observation;
+}
 // Optional scalar observer called under the existing ledger lock. It cannot affect Claim.
 using LedgerObserver = void(*)(const char*, uint32_t, uint32_t, Ledger::Snapshot, Ledger::Snapshot) noexcept;
 inline std::atomic<LedgerObserver> ledgerObserver {nullptr};

@@ -8,6 +8,26 @@
 static void TestReadiness(ID3D12Device* device)
 {
     using namespace DlssNr::PreFg;
+    ConsumerPath consumer;
+    ConsumerKey consumerKey {7,8,9};
+    assert(!consumer.Ready(consumerKey));
+    consumer.key = consumerKey;
+    consumer.type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+    consumer.observation = std::make_shared<DlssNr::GpuSafety::ExternalExecutionStatus>();
+    for (unsigned int i = 0; i < 1000; ++i) assert(!consumer.Ready(consumerKey));
+    consumer.observation->evaluated = true;
+    assert(!consumer.Ready(consumerKey));
+    consumer.observation->submitted = true;
+    assert(consumer.Ready(consumerKey));
+    assert(!consumer.Ready({8,8,9}) && !consumer.Ready({7,9,9}) && !consumer.Ready({7,8,10}));
+    consumer.type = D3D12_COMMAND_LIST_TYPE_COPY;
+    assert(!consumer.Ready(consumerKey));
+    consumer.type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    assert(consumer.Ready(consumerKey));
+    consumer.observation->failed = true;
+    assert(!consumer.Ready(consumerKey));
+    consumer.Clear();
+    assert(!consumer.Ready(consumerKey));
     Microsoft::WRL::ComPtr<ID3D12Fence> fence;
     assert(SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))));
     ReadinessIdentity key {1,2,3,4,5,6,7,8,9,10,11,2,1920,1080,28,1,0,1280,720,0};
