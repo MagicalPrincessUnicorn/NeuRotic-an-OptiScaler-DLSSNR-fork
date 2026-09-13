@@ -1,4 +1,4 @@
-NEUROTIC ALPHA 0.9.6 - MENU AND EXPERIMENTAL CONTROLS REVIEW
+NEUROTIC ALPHA 0.9.6 - HARDENED PRE-SR RESET INTEGRATION REVIEW
 
 Keep experimental. This matched folder is for review and separately authorized
 runtime testing. It is not a release, stable promotion or selected public candidate.
@@ -7,9 +7,17 @@ support\BUILD-MANIFEST.json. Keep this complete folder outside the game folder.
 No archive extraction or Downloads location is required.
 
 WHAT CHANGED
+The optional Preserve NR During Camera Cuts setting imports the hardened native
+DirectX 12 Pre-SR reset policy from enhancement NR-PRESR-SOFT-RESET-HARDENED-02.
+It is off by default and requires Unlock Experimental Mode. Compatible camera-cut
+reset bursts retain NR while structural changes, failures and unsupported routes
+keep the conservative reset behavior. Its transition quality and stability remain
+unverified in games.
+
 Analyze All Routes tests each compatible route in sequence. Test This Route on an
 individual card tests only that route. Both use the selected resolution preference
-and restore the original settings. Unsupported routes are skipped with a reason;
+and restore the original settings. Analyze All temporarily disables Multipass;
+unsupported routes are skipped with a reason;
 unknown native cadence, stalls and incomplete samples cannot produce a successful
 measurement. Changing routes may still interrupt rendering, so the reported hitch
 needs exact-binary tests. Frame Generation settings do not prove actual generated-
@@ -20,7 +28,8 @@ Manual (25-200%). Incompatible placement choices show a reason. Existing explici
 profiles are retained. Very low Manual resolution can lose detail and the NR effect.
 Neural Rendering sections start collapsed and their headings show ON, OFF or BLOCKED
 status. OptiClip is visible by default, speaks above its avatar and can be hidden in
-General.
+General. Its bubble and avatar use separate click bounds so transparent space does
+not cover the settings behind them. New installations start Multipass in Basic mode.
 
 General has separate gameplay-input controls while the menu is open. Defaults:
 mouse blocked, keyboard allowed, controller allowed. Checkbox edits remain pending

@@ -27,7 +27,15 @@ Crimson Desert with no showstopper crashes observed. This revised build still ne
 runtime confirmation. DD2 first-menu/shop VRAM/stall concerns and Present face
 artifacts remain unresolved.
 
-MULTI-PASS (DIRECTX 12)
+CAMERA-CUT RESET EXPERIMENT (DIRECTX 12 NATIVE PRE-SR ONLY)
+Under Neural Rendering, open Neural Rendering experimental settings, confirm Unlock
+Experimental Mode, select Preserve NR During Camera Cuts, and save the experimental
+settings. Compare repeatable camera cuts and worldspace loads against a fresh run
+with Preserve NR During Camera Cuts off. Record visible NR continuity, any hitch,
+route/placement, Reset burst counters and every crash or device loss. The option is
+off by default and an unclean prior session disables it on the next launch.
+
+MULTI-PASS (DIRECTX 12; BASIC MODE IS THE NEW-INSTALL DEFAULT)
 Choose two passes, then enable Multi-Pass. Pass 1 is configured in the main section.
 Shared Model Resolution, Model Strength and Detail Strength apply to Pass 2 through
 the selected final pass, including while Multi-Pass is off. Values beyond that
