@@ -157,15 +157,19 @@ int main()
     PresentStart(25); assert(Claim(true).valid); PresentEnd(25);
     State().swapchains = 0;
     assert(!Provider().known);
+    State().swapchains = 1;
     PublishProvider(true, true);
     const auto provider = Provider();
     assert(provider.known && provider.enabled && provider.supported && provider.generation);
+    ObserveConstants(26, 0); ObserveTags(26, 0);
+    assert(CurrentFrame() == 27); // Exact provider identity is available while FG is enabled.
     PublishProvider(true, true);
     assert(Provider().generation == provider.generation);
     PublishProvider(true, false);
     assert(Provider().generation > provider.generation && !Provider().supported);
     PublishProvider(false, false);
-    assert(!Provider().enabled);
+    assert(!Provider().enabled && !CurrentFrame()); // DD2 dialogue/menu FG-off frames use interval identity.
+    State().swapchains = 0;
 
     NativeFgState nativeFg;
     const auto firstNativeInstance = nativeFg.Create(77);
