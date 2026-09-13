@@ -70,6 +70,7 @@ enum class DirectInputDeviceKind
     Other,
     Keyboard,
     Mouse,
+    Controller,
 };
 
 struct DirectInputDeviceSlot
@@ -131,6 +132,7 @@ struct InputState
     bool BlockMouse = false;
     bool BlockKeyboard = false;
     bool BlockCursor = false;
+    bool BlockController = false;
 
     bool IsUwp = false;
     bool UseWndProcSubclass = true;

@@ -96,6 +96,11 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
     X(DlssNrRoute) \
     X(DlssNrUiManualResolution) \
     X(DlssNrUiManualScale) \
+    X(DlssNrUiPresentManualScale) \
+    X(DlssNrUiEnhancedManualScale) \
+    X(DlssNrUiResolutionPreset) \
+    X(DlssNrUiPresentResolutionPreset) \
+    X(DlssNrUiEnhancedResolutionPreset) \
     X(DlssNrUiAfterMethod) \
     X(DlssNrPresentResolution) \
     X(DlssNrPresentCustomScale) \

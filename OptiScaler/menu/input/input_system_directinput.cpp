@@ -52,7 +52,7 @@ bool ShouldBlockDirectInputMouseLocked()
 bool ShouldBlockDirectInputOtherLocked()
 {
     return _state.Initialized && _state.Focused && ShouldApplyBlockingPolicyLocked() &&
-           (_state.BlockKeyboard || _state.BlockMouse);
+           _state.BlockController;
 }
 
 bool ShouldBlockDirectInputDeviceLocked(DirectInputDeviceKind kind)
@@ -65,9 +65,10 @@ bool ShouldBlockDirectInputDeviceLocked(DirectInputDeviceKind kind)
     case DirectInputDeviceKind::Mouse:
         return ShouldBlockDirectInputMouseLocked();
 
-    case DirectInputDeviceKind::Other:
-    default:
+    case DirectInputDeviceKind::Controller:
         return ShouldBlockDirectInputOtherLocked();
+    default:
+        return false; // Unknown transports are not advertised as controlled.
     }
 }
 
@@ -81,6 +82,8 @@ const char* DirectInputDeviceKindName(DirectInputDeviceKind kind)
     case DirectInputDeviceKind::Mouse:
         return "mouse";
 
+    case DirectInputDeviceKind::Controller:
+        return "controller";
     case DirectInputDeviceKind::Other:
     default:
         return "other";
@@ -206,6 +209,19 @@ bool HookDirectInputDeviceLocked(void* device, DirectInputDeviceKind kind)
         return false;
 
     PVOID* vtable = *reinterpret_cast<PVOID**>(device);
+    if (kind == DirectInputDeviceKind::Other)
+    {
+        DIDEVCAPS caps {}; caps.dwSize = sizeof(caps);
+        using GetCaps = HRESULT (STDMETHODCALLTYPE*)(void*, DIDEVCAPS*);
+        if (SUCCEEDED(reinterpret_cast<GetCaps>(vtable[3])(device, &caps)))
+        {
+            const auto type = GET_DIDEVICE_TYPE(caps.dwDevType);
+            if (type == DI8DEVTYPE_KEYBOARD || type == DIDEVTYPE_KEYBOARD) kind = DirectInputDeviceKind::Keyboard;
+            else if (type == DI8DEVTYPE_MOUSE || type == DIDEVTYPE_MOUSE) kind = DirectInputDeviceKind::Mouse;
+            else if (type == DIDEVTYPE_JOYSTICK || (type >= DI8DEVTYPE_JOYSTICK && type <= DI8DEVTYPE_SUPPLEMENTAL))
+                kind = DirectInputDeviceKind::Controller;
+        }
+    }
 
     auto release = reinterpret_cast<DirectInputDeviceRelease_t>(vtable[2]);
     auto getDeviceState = reinterpret_cast<DirectInputGetDeviceState_t>(vtable[9]);

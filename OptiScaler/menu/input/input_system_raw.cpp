@@ -293,7 +293,7 @@ void HandleRawMouseButtonPairLocked(USHORT flags, USHORT downFlag, USHORT upFlag
 {
     if ((flags & downFlag) != 0)
     {
-        _state.RawMouseBlockedDown[button] = true;
+        if (!_state.MouseButtons[button].Down) _state.RawMouseBlockedDown[button] = true;
         shouldSanitize = true;
     }
 

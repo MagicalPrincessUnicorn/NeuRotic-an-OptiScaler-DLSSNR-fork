@@ -64,11 +64,16 @@ struct TestConfig
     ExtraLayers DlssNrExtraLayers;
     NrOptional<uint32_t> DlssNrRoute { 2 };
     NrOptional<bool> DlssNrUiManualResolution { false };
-    NrOptional<float> DlssNrUiManualScale { 1.0f };
+    NrOptional<float> DlssNrUiManualScale { 0.25f };
+    NrOptional<float> DlssNrUiPresentManualScale { 0.25f };
+    NrOptional<float> DlssNrUiEnhancedManualScale { 0.25f };
+    NrOptional<uint32_t> DlssNrUiResolutionPreset { 0 };
+    NrOptional<uint32_t> DlssNrUiPresentResolutionPreset { 0 };
+    NrOptional<uint32_t> DlssNrUiEnhancedResolutionPreset { 0 };
     NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
-    NrOptional<uint32_t> DlssNrPresentResolution { 1 };
+    NrOptional<uint32_t> DlssNrPresentResolution { 0 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
     NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
@@ -421,7 +426,7 @@ void StageFirstContract()
         }
         CHECK(c.DlssNrWorkingScale.value_or_default() == scale);
         U::SelectManual(c, false); CHECK(c.DlssNrWorkingScale.value_or_default() == 1.0f);
-        U::SelectManual(c, true); CHECK(c.DlssNrWorkingScale.value_or_default() == scale);
+        U::SelectManual(c, true); CHECK(c.DlssNrWorkingScale.value_or_default() == (scale == 1.0f && !hint ? 0.77f : scale));
     }
     for (uint32_t route : {1u, 2u})
     for (int preset = 0; preset < 7; ++preset)
@@ -447,7 +452,7 @@ void StageFirstContract()
         TestConfig c; U::LoadHints(c, {}, hint, 99u);
         CHECK(!U::Manual(c) && c.DlssNrWorkingScale.value_or_default() == 1.0f);
         CHECK(c.DlssNrRoute.value_or_default() == 2 && !c.GetDlssNrRuntimeSnapshot().enabled);
-        U::SelectManual(c, true); CHECK(c.DlssNrWorkingScale.value_or_default() == 1.0f);
+        U::SelectManual(c, true); CHECK(c.DlssNrWorkingScale.value_or_default() == 0.25f);
     }
     TestConfig c;
     U::SelectMethod(c, 2);

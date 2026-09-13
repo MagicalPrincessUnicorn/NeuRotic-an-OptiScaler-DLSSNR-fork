@@ -138,7 +138,7 @@ class PresentStages
                 created = std::filesystem::create_directory(directory, ec);
                 continue;
             }
-            directory = root;
+            directory = root.parent_path();
             SYSTEMTIME now {};
             GetLocalTime(&now);
             char stamp[64] {};
@@ -159,13 +159,16 @@ class PresentStages
                 continue;
             }
             created = true;
-            if (std::filesystem::exists(directory / (prefix + "_manifest.json"), ec)) created = false;
+            directory = root.parent_path() / ("." + prefix + "_staging");
+            created = std::filesystem::create_directory(directory, ec);
+            const bool ownDirectory = created;
             for (const auto& stage : stages_)
                 for (unsigned int i = 0; !ec && i < captured_; ++i)
-                    if (std::filesystem::exists(directory / screenshotName(prefix, stage.name, i), ec))
+                    if (std::filesystem::exists(root / screenshotName(prefix, stage.name, i), ec))
                         created = false;
             if (!created || ec)
             {
+                if (ownDirectory) { std::error_code cleanup; std::filesystem::remove(directory, cleanup); }
                 CloseHandle(reservation);
                 reservation = INVALID_HANDLE_VALUE;
             }
@@ -175,11 +178,13 @@ class PresentStages
             for (unsigned int i = 0; ok && i < captured_; ++i)
                 ok = dump(directory / (png_ ? screenshotName(prefix, stage.name, i) :
                     stage.name + "_" + std::to_string(i) + ".raw"), stage, i, png_);
-        // Publish the matching manifest last. A partial batch cannot claim success.
+        std::vector<std::filesystem::path> published;
+        // Every image contains its matching provenance; no user-facing sidecar.
         if (ok && png_)
         {
             std::ostringstream manifest;
-            manifest << "{\n  \"schema\": 1,\n  \"build_identity\": " << Screenshots::JsonString(buildIdentity_)
+            manifest << "{\n  \"schema\": 1,\n  \"batch\": " << Screenshots::JsonString(prefix)
+                     << ",\n  \"build_identity\": " << Screenshots::JsonString(buildIdentity_)
                      << ",\n  \"settings\": " << Screenshots::JsonString(settings_)
                      << ",\n  \"brightness_adjustment\": false,\n  \"frames\": [";
             for (size_t i = 0; i < frames_.size(); ++i)
@@ -193,7 +198,9 @@ class PresentStages
                          << ",\"resource_generation\":" << frame.identity.resourceGeneration
                          << ",\"backbuffer\":" << frame.identity.backbuffer << '}';
             }
-            manifest << "],\n  \"images\": [";
+            manifest << "],\n  \"limitations\": " << Screenshots::JsonString(
+                "Native Temporal original-image display conversion can produce a darker reference; experimental. Performance request-only pairs use fresh history, not accumulated live history. Present Enhanced runtime acceptance is pending. No brightness adjustment.")
+                << ",\n  \"images\": [";
             bool first = true;
             for (const auto& stage : stages_)
                 for (unsigned int i = 0; i < captured_; ++i)
@@ -206,17 +213,17 @@ class PresentStages
                 }
             manifest << "]\n}\n";
             const auto bytes = manifest.str();
-            const auto path = directory / (prefix + "_manifest.json");
-            HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-            DWORD written = 0;
-            ok = file != INVALID_HANDLE_VALUE;
-            if (ok)
-            {
-                ok = bytes.size() <= MAXDWORD && WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr)
-                    && written == bytes.size() && FlushFileBuffers(file);
-                ok = CloseHandle(file) && ok;
-                if (!ok) std::filesystem::remove(path, ec);
-            }
+            for (const auto& stage : stages_)
+                for (unsigned int i = 0; ok && i < captured_; ++i)
+                    ok = Screenshots::EmbedPngManifest(directory / screenshotName(prefix, stage.name, i), bytes);
+            for (const auto& stage : stages_)
+                for (unsigned int i = 0; ok && i < captured_; ++i)
+                {
+                    const auto name = screenshotName(prefix, stage.name, i);
+                    const auto destination = root / name;
+                    ok = MoveFileExW((directory / name).c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE;
+                    if (ok) published.push_back(destination);
+                }
         }
         if (ok && !png_)
         {
@@ -239,12 +246,17 @@ class PresentStages
             else ok = false;
         }
         if (reservation != INVALID_HANDLE_VALUE) CloseHandle(reservation);
-        if (!ok && png_ && created)
+        if (!ok && png_)
+            for (const auto& path : published) std::filesystem::remove(path, ec);
+        if (png_ && created)
+        {
             for (const auto& stage : stages_)
                 for (unsigned int i = 0; i < captured_; ++i)
                     std::filesystem::remove(directory / screenshotName(prefix, stage.name, i), ec);
+            std::filesystem::remove(directory, ec);
+        }
         release();
-        status_ = ok ? "Saved: " + (png_ ? directory / prefix : directory).string() :
+        status_ = ok ? "Saved: " + (png_ ? root / prefix : directory).string() :
                       "Capture could not be saved completely. Check disk space and permissions.";
     }
 

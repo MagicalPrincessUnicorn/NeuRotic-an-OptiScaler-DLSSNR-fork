@@ -67,7 +67,10 @@ inline float ResponsiveBasicResolutionWidth(float available, float menuScale,
                                             float resetWidth, float spacing,
                                             float preferredWidth = 320.0f)
 {
-    const float safeWidth = (std::max)(1.0f, available - resetWidth - spacing);
+    // Keep the complete slider/reset row in the left three quarters of the
+    // panel. OptiClip owns the lower-right corner and must never cover either
+    // control, even at narrow widths or large UI scales.
+    const float safeWidth = (std::max)(1.0f, available * 0.75f - resetWidth - spacing);
     return (std::min)(preferredWidth * menuScale, safeWidth);
 }
 
@@ -80,6 +83,18 @@ inline float ResponsiveCumulativeStrengthWidth(float available, float resetWidth
                                                float spacing, unsigned int maximumPasses)
 {
     const float safeFullWidth = (std::max)(1.0f, available - resetWidth - spacing);
-    return safeFullWidth * CumulativeStrengthWidthFraction(maximumPasses);
+    const float optiClipSafeWidth =
+        (std::max)(1.0f, available * 0.75f - resetWidth - spacing);
+    return (std::min)(safeFullWidth * CumulativeStrengthWidthFraction(maximumPasses),
+                      optiClipSafeWidth);
+}
+
+inline float ResponsiveMultipassControlWidth(float available, float menuScale,
+                                             float resetWidth, float spacing,
+                                             float preferredWidth = 440.0f)
+{
+    const float optiClipSafeWidth =
+        (std::max)(1.0f, available * 0.75f - resetWidth - spacing);
+    return (std::min)(preferredWidth * menuScale, optiClipSafeWidth);
 }
 }

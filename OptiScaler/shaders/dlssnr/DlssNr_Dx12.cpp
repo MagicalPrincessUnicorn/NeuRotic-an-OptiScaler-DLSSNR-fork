@@ -6277,6 +6277,11 @@ void RequestComparisonScreenshot()
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     if (g_screenshots.active()) return;
+    if (AdvisorSampling::TemporarySettings.load())
+    {
+        g_screenshots.setIdleStatus("Comparisons are unavailable during temporary Advisor settings. Finish or cancel analysis first.");
+        return;
+    }
     if (!capturedSettings || route > 2)
     {
         g_screenshots.setIdleStatus("Screenshot unavailable: NR settings could not be captured.");

@@ -16,6 +16,8 @@ namespace R = DlssNr::PresentResolution;
 struct Config
 {
     NrOptional<uint32_t> DlssNrUiAfterMethod {0};
+    NrOptional<uint32_t> DlssNrUiResolutionPreset {0}, DlssNrUiPresentResolutionPreset {0}, DlssNrUiEnhancedResolutionPreset {0};
+    NrOptional<float> DlssNrUiPresentManualScale {0.25f}, DlssNrUiEnhancedManualScale {0.25f};
     NrOptional<int32_t> DlssNrRenderingMode {1};
     NrOptional<bool> DlssNrRunBeforeSr {false}, DlssNrUiManualResolution {false};
     NrOptional<float> DlssNrWorkingScale {1.0f}, DlssNrUiManualScale {1.0f};
@@ -54,7 +56,7 @@ int main()
     // Continuous preview policy preserves old stored profiles and independent method memory.
     Config preview;
     R::LoadConfig(preview, [](const char*) -> std::optional<uint32_t> { return {}; }, false);
-    assert(R::Selected(preview).mode == R::FullOutput);
+    assert(R::Selected(preview).mode == R::FollowNative);
     for (int route : {1, 2})
     for (uint32_t percent : {25u, 67u, 100u, 125u, 200u})
     {

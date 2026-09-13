@@ -47,6 +47,10 @@ inline void SentenceHelpMarker(const char* tip)
     }
 }
 
+inline float ManualSliderWidth(float available, float resetAndHelpWidth, float spacing)
+{
+    return 0.5f * (std::max)(1.0f, available - resetAndHelpWidth - spacing * 3.0f);
+}
 inline float ResponsiveSliderWidth(float available, float menuScale, float resetWidth,
                                    float helpWidth, float spacing)
 {
@@ -130,14 +134,27 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
     }
     if (stage == 0) ImGui::TextWrapped("Present methods require After. Your After method is remembered.");
     snapshot = config.GetDlssNrConfigSnapshot();
-    int resolution = basicOwnsResolution ? 1 : ResolutionSelection(snapshot);
+    int resolution = basicOwnsResolution ? ManualChoice : ResolutionChoiceSelection(snapshot);
     ImGui::BeginDisabled(basicOwnsResolution);
-    if (SentenceCombo("##NrResolution", "", "Neural Rendering Resolution", &resolution, Resolutions,
-                      resolution == 2 ? 3 : 2))
+    ImGui::TextUnformatted("Neural Rendering Resolution");
+    if (ImGui::BeginCombo("##NrResolution", ResolutionChoices[resolution]))
     {
-        SelectResolution(config, resolution);
-        changed = true;
+        for (int choice = 0; choice < 3; ++choice)
+        {
+            const char* refusal = ResolutionRefusal(snapshot, choice);
+            ImGui::BeginDisabled(refusal != nullptr);
+            if (ImGui::Selectable(ResolutionChoices[choice], choice == resolution))
+            {
+                SelectResolutionChoice(config, choice);
+                changed = true;
+            }
+            ImGui::EndDisabled();
+            if (refusal && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("%s", refusal);
+        }
+        ImGui::EndCombo();
     }
+    ImGui::TextWrapped("Full Output uses final game output dimensions. Match Game Render follows the game's render input where supported. Manual scales the selected stage; very low values reduce detail and the NR effect.");
     ImGui::EndDisabled();
     return changed;
 }

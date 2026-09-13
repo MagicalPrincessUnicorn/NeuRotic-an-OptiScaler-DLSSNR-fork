@@ -14,6 +14,18 @@ inline constexpr const char* Stages[] = { "Before", "After" };
 inline constexpr const char* Methods[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
 inline constexpr const char* NativeResolutions[] = { "Automatic", "Manual" };
 inline constexpr const char* Resolutions[] = { "Automatic", "Manual", "Legacy" };
+enum class NrResolutionPreference { AlwaysFullOutput, MatchGameRender, Manual };
+inline constexpr int ManualChoice = 2, LegacyChoice = 3;
+inline constexpr const char* ResolutionChoices[] = {
+    "Always Full Output", "Match Game Render - Recommended", "Manual - Advanced / Low-end"
+};
+// Existing NR percentages; these do not alter the game's DLSS SR selection.
+inline constexpr int ResolutionPercentages[] = {100, 100, 67, 58, 50, 33};
+template<class C> auto& ResolutionPresetHint(C& c)
+{
+    return c.DlssNrRoute.value_or_default() == 0 ? c.DlssNrUiResolutionPreset :
+        c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrUiEnhancedResolutionPreset : c.DlssNrUiPresentResolutionPreset;
+}
 inline constexpr const char* PresentPresets[] = {
     "Follow Game Render Resolution (Automatic)", "Full Output (100%)", "Ultra Quality (77%)",
     "Quality (67%)", "Balanced (58%)", "Performance (50%)", "Ultra Performance (33%)"
@@ -58,13 +70,15 @@ template<class C> void SelectMethod(C& c, int method)
 template<class C> void SelectManual(C& c, bool manual)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
-    if (!manual) c.DlssNrUiManualScale = c.DlssNrWorkingScale.value_or_default();
+    c.DlssNrUiResolutionPreset = 0u;
+    if (!manual && Manual(c)) c.DlssNrUiManualScale = c.DlssNrWorkingScale.value_or_default();
     c.DlssNrUiManualResolution = manual;
     c.DlssNrWorkingScale = manual ? c.DlssNrUiManualScale.value_or_default() : 1.0f;
 }
 template<class C> void SelectScale(C& c, float scale)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    c.DlssNrUiResolutionPreset = 0u;
     c.DlssNrWorkingScale = std::clamp(scale, 0.25f, 2.0f);
     c.DlssNrUiManualScale = c.DlssNrWorkingScale.value_or_default();
     c.DlssNrUiManualResolution = true;
@@ -72,6 +86,7 @@ template<class C> void SelectScale(C& c, float scale)
 template<class C> void SelectPreset(C& c, int preset)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    ResolutionPresetHint(c) = 0u;
     auto& mode = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedResolution : c.DlssNrPresentResolution;
     auto& scale = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedCustomScale : c.DlssNrPresentCustomScale;
     preset = std::clamp(preset, 0, 6);
@@ -94,6 +109,7 @@ template<class C> float ResolutionScale(const C& c)
 template<class C> void SelectResolution(C& c, int selection)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    ResolutionPresetHint(c) = 0u;
     if (c.DlssNrRoute.value_or_default() == 0) { SelectManual(c, selection == 1); return; }
     const auto p = PresentResolution::Selected(c);
     auto& mode = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedResolution : c.DlssNrPresentResolution;
@@ -104,11 +120,54 @@ template<class C> void SelectResolution(C& c, int selection)
 template<class C> void SelectResolutionScale(C& c, float value)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    ResolutionPresetHint(c) = 0u;
     if (c.DlssNrRoute.value_or_default() == 0) { SelectScale(c, value); return; }
     auto& mode = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedResolution : c.DlssNrPresentResolution;
     auto& scale = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedCustomScale : c.DlssNrPresentCustomScale;
     scale = uint32_t(DisplayPercent(value));
     mode = PresentResolution::Manual;
+}
+template<class C> int ResolutionChoiceSelection(const C& c)
+{
+    const int selection = ResolutionSelection(c);
+    if (selection == 1) return ManualChoice;
+    if (selection == 2 || (c.DlssNrRoute.value_or_default() == 0 && Stage(c) == 0)) return 1;
+    return 0;
+}
+template<class C> const char* ResolutionRefusal(const C& c, int choice)
+{
+    if (choice < 0 || choice > 2) return "Unknown NR resolution preference";
+    if (c.DlssNrRoute.value_or_default() != 0) return nullptr;
+    if (Stage(c) == 0 && choice == 0)
+        return "Full output resolution requires an After route. Before placement is preserved.";
+    if (Stage(c) == 1 && choice == 1)
+        return "Match Game Render is unavailable for Native Temporal After. Select Before or a Present route explicitly.";
+    return nullptr;
+}
+template<class C> void SelectResolutionChoice(C& c, int choice)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    if (ResolutionRefusal(c, choice)) return;
+    if (c.DlssNrRoute.value_or_default() == 0) { SelectManual(c, choice == ManualChoice); return; }
+    const auto old = PresentResolution::Selected(c);
+    auto& memory = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrUiEnhancedManualScale : c.DlssNrUiPresentManualScale;
+    if (old.mode == PresentResolution::Manual || old.mode == PresentResolution::Custom)
+        memory = PresentResolution::ManualPercent(old) / 100.0f;
+    auto& mode = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedResolution : c.DlssNrPresentResolution;
+    auto& scale = c.DlssNrRoute.value_or_default() == 2 ? c.DlssNrEnhancedCustomScale : c.DlssNrPresentCustomScale;
+    mode = choice == 1 ? PresentResolution::FollowNative : choice == 0 ? PresentResolution::Automatic : PresentResolution::Manual;
+    scale = uint32_t(DisplayPercent(memory.value_or_default()));
+}
+template<class C, class Read> void LoadResolutionPresets(C& c, Read read)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    const auto load = [&](auto& field, const char* key) {
+        const auto value = read(key).value_or(0u);
+        field.set_from_config(value < ManualChoice ? value : 0u);
+    };
+    load(c.DlssNrUiResolutionPreset, "UiResolutionPreset");
+    load(c.DlssNrUiPresentResolutionPreset, "UiPresentResolutionPreset");
+    load(c.DlssNrUiEnhancedResolutionPreset, "UiEnhancedResolutionPreset");
 }
 template<class C> void LoadHints(C& c, std::optional<bool> manual, std::optional<float> scale,
                                   std::optional<uint32_t> afterMethod)
@@ -116,8 +175,8 @@ template<class C> void LoadHints(C& c, std::optional<bool> manual, std::optional
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
     c.DlssNrUiManualResolution.set_from_config(manual.value_or(false));
     const auto working = c.DlssNrWorkingScale.value_or_default();
-    const auto remembered = scale && std::isfinite(*scale) && *scale >= 0.25f && *scale <= 2.0f ? *scale : 1.0f;
-    c.DlssNrUiManualScale.set_from_config(working != 1.0f ? DisplayPercent(working) / 100.0f : remembered);
+    const auto remembered = scale && std::isfinite(*scale) && *scale >= 0.25f && *scale <= 2.0f ? *scale : 0.25f;
+    c.DlssNrUiManualScale.set_from_config(working != 1.0f || manual.value_or(false) ? DisplayPercent(working) / 100.0f : remembered);
     c.DlssNrUiAfterMethod.set_from_config(Stage(c) == 1 ? c.DlssNrRoute.value_or_default() :
         afterMethod && *afterMethod <= 2 ? *afterMethod : 0u);
 }
@@ -127,5 +186,10 @@ template<class Ini, class C> void SaveHints(Ini& ini, const C& c)
     ini.SetBoolValue("DlssNr", "UiManualResolution", Manual(c));
     ini.SetDoubleValue("DlssNr", "UiManualScale", c.DlssNrUiManualScale.value_or_default());
     ini.SetLongValue("DlssNr", "UiAfterMethod", c.DlssNrUiAfterMethod.value_or_default());
+    ini.SetDoubleValue("DlssNr", "UiPresentManualScale", c.DlssNrUiPresentManualScale.value_or_default());
+    ini.SetDoubleValue("DlssNr", "UiEnhancedManualScale", c.DlssNrUiEnhancedManualScale.value_or_default());
+    ini.SetLongValue("DlssNr", "UiResolutionPreset", c.DlssNrUiResolutionPreset.value_or_default());
+    ini.SetLongValue("DlssNr", "UiPresentResolutionPreset", c.DlssNrUiPresentResolutionPreset.value_or_default());
+    ini.SetLongValue("DlssNr", "UiEnhancedResolutionPreset", c.DlssNrUiEnhancedResolutionPreset.value_or_default());
 }
 }

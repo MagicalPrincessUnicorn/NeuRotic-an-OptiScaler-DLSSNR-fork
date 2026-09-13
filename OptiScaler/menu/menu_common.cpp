@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "menu_common.h"
 #include "Localization.h"
+#include "OptiClipAdvisor.h"
 #include <dlssnr/DlssNr_ExposureScan.h>
 
 #include <algorithm>
@@ -403,6 +404,7 @@ class Keybind
         {
             waitingForKey = true;
             capturingKey = true;
+            OptiInput::SetGameplayPolicy(false, false, false, true);
             lastKey = 0;
         }
         ImGui::PopID();
@@ -1327,14 +1329,21 @@ void MenuCommon::UpdateRenderTiming(RenderMenuContext& ctx)
 void MenuCommon::UpdateMenuInputMode(RenderMenuContext& ctx)
 {
     auto& io = ctx.io;
+    const bool allowKeyboard = ctx.config->AllowGameKeyboard.value_or_default() && !capturingKey;
+    const bool allowController = ctx.config->AllowGameController.value_or_default() && !capturingKey;
+    OptiInput::SetGameplayPolicy(ctx.config->AllowGameMouse.value_or_default(),
+        ctx.config->AllowGameKeyboard.value_or_default(), ctx.config->AllowGameController.value_or_default(),
+        capturingKey);
 
     // Moved here to prevent gamepad key replay
     if (_isVisible)
     {
-        if (hasGamepad)
+        if (hasGamepad && !allowController)
             io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
-
-        io.ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+        else
+            io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
+        io.ConfigFlags = allowKeyboard ? ImGuiConfigFlags_NoKeyboard : ImGuiConfigFlags_NavEnableKeyboard;
+        if (!allowController) io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     }
     else
     {
@@ -1385,7 +1394,7 @@ void MenuCommon::HandleMenuShortcuts(RenderMenuContext& ctx)
             inputDlssNr = false;
             const bool enabled = !config->GetDlssNrRuntimeSnapshot().enabled;
             config->SetDlssNrEnabled(enabled);
-            DlssNr::NoteNrUserToggle();
+            DlssNr::NoteNrUserToggle(OptiClip::ToggleOrigin::Hotkey);
             LOG_DEBUG("Neural Rendering toggle key pressed, setting DlssNrEnabled to {}",
                       enabled);
 
@@ -7143,6 +7152,27 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
             ImGui::TextUnformatted("NeuRotic is up to date.");
     }
     DlssNr::RenderScreenshotMenu(ctx.config);
+    bool showOptiClip = ctx.config->OptiClip.value_or_default();
+    if (ImGui::Checkbox("Show OptiClip advisor", &showOptiClip)) ctx.config->OptiClip = showOptiClip;
+    if (auto input = ScopedCollapsingHeader("Gameplay input while menu is open", ImGuiTreeNodeFlags_DefaultOpen);
+        input.IsHeaderOpen())
+    {
+        bool mouse = ctx.config->AllowGameMouse.value_or_default();
+        bool keyboard = ctx.config->AllowGameKeyboard.value_or_default();
+        bool controller = ctx.config->AllowGameController.value_or_default();
+        bool changed = ImGui::Checkbox("Allow mouse input in game", &mouse);
+        changed |= ImGui::Checkbox("Allow keyboard input in game", &keyboard);
+        changed |= ImGui::Checkbox("Allow controller input in game", &controller);
+        if (changed)
+        {
+            ctx.config->AllowGameMouse = mouse;
+            ctx.config->AllowGameKeyboard = keyboard;
+            ctx.config->AllowGameController = controller;
+            UpdateMenuInputMode(ctx);
+        }
+        ImGui::TextWrapped("Allowed devices continue controlling the game. Mouse clicks can affect both the menu and the game. Keyboard and controller gameplay disable their menu navigation. Save Settings remembers these choices.");
+        ImGui::TextDisabled("Controller blocking covers XInput and DirectInput. Other controller transports may bypass it.");
+    }
     RenderKeybindSettings(ctx);
     RenderThemeSettings(ctx);
     RenderVsyncSettings(ctx);
@@ -7888,8 +7918,14 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
 
         // Keep the compact support prompt anchored to the window's final, bottom-right row.
         RenderMainMenuSupportLink();
-
+        const auto position = ImGui::GetWindowPos();
+        const auto size = ImGui::GetWindowSize();
+        const auto& io = ImGui::GetIO();
+        if (ImGui::IsAnyItemActive() || ImGui::IsMouseClicked(ImGuiMouseButton_Left) || io.MouseWheel != 0.0f)
+            OptiClip::Interaction(ctx.now / 1000.0);
         ImGui::End();
+        OptiClip::Render({position.x, position.y, size.x, size.y}, menuResScale,
+            ctx.now / 1000.0, config->OptiClip.value_or_default());
     }
 
     // Detached utility windows owned by the main menu.

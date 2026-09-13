@@ -275,7 +275,8 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
             frame.outputSubmitted, owner->startup.Count(), StartupGate::required);
     }
     const double end = Util::MillisecondsNow();
-    ReportPresentCallTiming({identity, interval, beforeProvider - start, end - start, end - beforeProvider, result});
+    ReportPresentCallTiming({identity, interval, beforeProvider - start, end - start, end - beforeProvider, result,
+        provider.known && (!fg || frame.valid), provider.generation});
     if (frame.sequence <= 4 || frame.sequence % 120 == 0)
         LOG_INFO("NR pre-FG: real={} submitted={} bypassedOutputs={} rejected={} token={} source={} result={:X}",
             State().realCalls.load(), State().submitted.load(), State().bypassed.load(), State().rejected.load(),

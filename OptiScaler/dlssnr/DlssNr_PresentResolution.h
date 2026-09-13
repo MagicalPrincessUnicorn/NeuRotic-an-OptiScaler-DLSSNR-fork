@@ -25,8 +25,9 @@ inline Policy Load(std::optional<uint32_t> mode, std::optional<uint32_t> scale,
 }
 template<class C, class Reader> void LoadConfig(C& cfg, Reader read, bool existingProfile = true)
 {
-    const auto image = Load(read("PresentResolution"), read("PresentCustomScale"), read("PresentWorkload"));
-    const auto enhanced = Load(read("EnhancedResolution").value_or(existingProfile ? FollowNative : FullOutput), read("EnhancedCustomScale"));
+    const auto image = Load(read("PresentResolution").value_or(!existingProfile ? FollowNative :
+        read("PresentWorkload").value_or(0u) != 0 ? Custom : FullOutput), read("PresentCustomScale"), read("PresentWorkload"));
+    const auto enhanced = Load(read("EnhancedResolution").value_or(FollowNative), read("EnhancedCustomScale"));
     cfg.DlssNrPresentResolution.set_from_config(image.mode);
     cfg.DlssNrPresentCustomScale.set_from_config(image.scale);
     cfg.DlssNrEnhancedResolution.set_from_config(enhanced.mode);

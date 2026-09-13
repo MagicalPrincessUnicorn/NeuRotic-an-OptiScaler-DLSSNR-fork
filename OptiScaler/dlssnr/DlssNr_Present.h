@@ -2,6 +2,7 @@
 
 #include "DlssNr_PresentPacing.h"
 #include "PreFg.h"
+#include "NrAdvisorSampling.h"
 
 #include <dxgi1_4.h>
 #include <string>
@@ -18,6 +19,7 @@ enum class PresentApi : unsigned int
 
 struct PresentTelemetrySnapshot
 {
+    AdvisorSampling::Cadence cadence;
     bool requested = false;
     bool active = false;
     bool failed = false;
@@ -74,6 +76,7 @@ struct PresentTelemetrySnapshot
 
 struct PresentCallIdentity
 {
+    uint64_t advisorConfigurationGeneration = 0;
     PresentPacing::CallToken pacing;
     unsigned long long presentAttempt = 0;
     // Set only after the complete private output path has reached the game backbuffer.  The original
@@ -98,6 +101,8 @@ struct PresentCallTimingSample
     double hookCpuMs = 0.0;
     double originalPresentCpuMs = 0.0;
     HRESULT result = S_OK;
+    bool verifiedNative = false;
+    uint64_t providerGeneration = 0;
 };
 
 // Called immediately before the one original Present/Present1 call. The adapter never presents.

@@ -587,6 +587,19 @@ void ReportPresentCallTiming(const PresentCallTimingSample& sample)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
     g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;
+    auto& cadence = g_present.telemetry.cadence;
+    ++cadence.sequence;
+    cadence.route = static_cast<unsigned int>(sample.identity.pacing.route);
+    cadence.providerGeneration = sample.providerGeneration;
+    cadence.resourceGeneration = g_present.telemetry.resourceGeneration;
+    cadence.intervalMs = sample.frameIntervalMs;
+    const auto& host = State::Instance();
+    const bool fgMayBeActive = host.dlssgLastSetMode.load() != sl::DLSSGMode::eOff ||
+        host.activeFgInput != FGInput::NoFG || host.activeFgOutput != FGOutput::NoFG;
+    cadence.native = SUCCEEDED(sample.result) && (sample.verifiedNative || !fgMayBeActive);
+    cadence.configurationGeneration = sample.identity.advisorConfigurationGeneration;
+    cadence.source = !cadence.native ? AdvisorSampling::CadenceSource::Unknown : sample.verifiedNative
+        ? AdvisorSampling::CadenceSource::VerifiedPreFgPresent : AdvisorSampling::CadenceSource::ApplicationPresentFgOff;
     if (sample.identity.pacing.route != PresentPacing::Route::NativeTemporal &&
         sample.identity.completedOutput)
     {
@@ -648,6 +661,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         static_cast<void*>(swapChain), static_cast<void*>(presentDevice), presentFlags);
     FrameTrace::Context traceContext(FrameTrace::presentObservation, tracePresent);
     const auto* config = Config::Instance();
+    const auto advisorEpoch = AdvisorSampling::ConfigurationGeneration.load();
     const auto capturedSettings = TryNrConfigSnapshot(*config);
     if (!capturedSettings)
     {
@@ -690,6 +704,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     RefreshCompletionTelemetry();
 
     PresentCallIdentity identity {};
+    identity.advisorConfigurationGeneration = advisorEpoch;
     identity.presentAttempt = presentRequested ? g_present.telemetry.presentAttempts : 0;
     const auto pacingRoute = !presentRequested ? PresentPacing::Route::NativeTemporal :
         enhanced ? PresentPacing::Route::PresentEnhanced : PresentPacing::Route::PresentImageOnly;

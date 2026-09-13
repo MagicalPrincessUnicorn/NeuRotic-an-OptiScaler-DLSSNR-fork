@@ -72,6 +72,12 @@ void SetFocusStateLocked(bool focused, const char* reason, HWND foreground, DWOR
 {
     const bool oldFocused = _state.Focused;
     _state.Focused = focused;
+    if (oldFocused && !focused)
+    {
+        ResetButtonBlockedStateLocked();
+        ResetRawInputBlockStateLocked();
+        ResetRawInputSanitizeCacheLocked();
+    }
 
     if (oldFocused != focused)
     {

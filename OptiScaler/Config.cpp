@@ -398,6 +398,13 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrWorkingScale.set_from_config(readFloat("DlssNr", "WorkingScale"));
             DlssNr::StageUi::LoadHints(*this, readBool("DlssNr", "UiManualResolution"),
                 readFloat("DlssNr", "UiManualScale"), readUInt("DlssNr", "UiAfterMethod"));
+            const auto manualMemory = [&](const char* key) -> std::optional<float> {
+                auto value = readFloat("DlssNr", key);
+                if (!value || !std::isfinite(*value)) return {};
+                return std::clamp(*value, 0.25f, 2.0f);
+            };
+            DlssNrUiPresentManualScale.set_from_config(manualMemory("UiPresentManualScale"));
+            DlssNrUiEnhancedManualScale.set_from_config(manualMemory("UiEnhancedManualScale"));
 
             if (auto v = readEnum<Scaler>("DlssNr", "ScalingDownscaler"))
                 DlssNrScalingDownscaler.set_from_config(*v);
@@ -695,6 +702,10 @@ bool Config::Reload(std::filesystem::path iniPath)
         // Menu
         {
             MenuLanguage.set_from_config(readString("Menu", "Language", true));
+            OptiClip.set_from_config(readBool("Menu", "OptiClip"));
+            AllowGameMouse.set_from_config(readBool("Menu", "AllowGameMouse"));
+            AllowGameKeyboard.set_from_config(readBool("Menu", "AllowGameKeyboard"));
+            AllowGameController.set_from_config(readBool("Menu", "AllowGameController"));
             if (auto setting = readFloat("Menu", "Scale"); setting.has_value())
                 MenuScale.set_from_config(std::clamp(setting.value(), 0.5f, 2.0f));
 
@@ -1621,6 +1632,10 @@ bool Config::SaveIni()
     {
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
         ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());
+        ini.SetBoolValue("Menu", "OptiClip", Instance()->OptiClip.value_or_default());
+        ini.SetBoolValue("Menu", "AllowGameMouse", Instance()->AllowGameMouse.value_or_default());
+        ini.SetBoolValue("Menu", "AllowGameKeyboard", Instance()->AllowGameKeyboard.value_or_default());
+        ini.SetBoolValue("Menu", "AllowGameController", Instance()->AllowGameController.value_or_default());
         ini.SetValue("Menu", "OverlayMenu", GetBoolValue(Instance()->OverlayMenu.value_for_config()).c_str());
 
         auto setting = Instance()->ShortcutKey.value_for_config();

@@ -64,13 +64,14 @@ void SetMouseDownFromRawState(int button, DWORD messageTime, bool blocked)
     ButtonState& mouseButton = _state.MouseButtons[button];
 
     if (!mouseButton.Down)
+    {
         mouseButton.Pressed = true;
+        if (blocked) mouseButton.BlockedDown = true;
+    }
 
     mouseButton.Down = true;
     mouseButton.LastMessageTime = messageTime;
 
-    if (blocked)
-        mouseButton.BlockedDown = true;
 }
 
 void SetMouseUpFromRawState(int button, DWORD messageTime)
@@ -268,13 +269,14 @@ void SetMouseDown(int button, DWORD messageTime, bool blocked)
     ButtonState& mouseButton = _state.MouseButtons[button];
 
     if (!mouseButton.Down)
+    {
         mouseButton.Pressed = true;
+        if (blocked) mouseButton.BlockedDown = true;
+    }
 
     mouseButton.Down = true;
     mouseButton.LastMessageTime = messageTime;
 
-    if (blocked)
-        mouseButton.BlockedDown = true;
 }
 
 bool SetMouseUp(int button, DWORD messageTime)
@@ -498,6 +500,9 @@ bool HandleWindowMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, Inpu
     case WM_KILLFOCUS:
     {
         _state.Focused = false;
+        ResetButtonBlockedStateLocked();
+        ResetRawInputBlockStateLocked();
+        ResetRawInputSanitizeCacheLocked();
         break;
     }
 

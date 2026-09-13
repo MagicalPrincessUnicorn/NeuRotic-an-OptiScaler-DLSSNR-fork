@@ -229,13 +229,18 @@ class Config
     NrOptional<uint32_t> DlssNrRoute { 2 };
     // UI memory only; legacy route/placement/working scale remain authoritative.
     NrOptional<bool> DlssNrUiManualResolution { false };
-    NrOptional<float> DlssNrUiManualScale { 1.0f };
+    NrOptional<float> DlssNrUiManualScale { 0.25f };
+    NrOptional<float> DlssNrUiPresentManualScale { 0.25f };
+    NrOptional<float> DlssNrUiEnhancedManualScale { 0.25f };
+    NrOptional<uint32_t> DlssNrUiResolutionPreset { 0 };
+    NrOptional<uint32_t> DlssNrUiPresentResolutionPreset { 0 };
+    NrOptional<uint32_t> DlssNrUiEnhancedResolutionPreset { 0 };
     NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
     // Independent Present policies: 0 legacy native, 1 output, 2 fixed preset,
     // 3 continuous Manual, 4 Automatic with remembered Manual percentage.
-    NrOptional<uint32_t> DlssNrPresentResolution { 1 };
+    NrOptional<uint32_t> DlssNrPresentResolution { 0 };
     NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 1 };
+    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
     NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     // 0 = Quality (post-SR), 1 = Performance (pre-SR).
@@ -566,6 +571,10 @@ class Config
 
     // Menu
     CustomOptional<std::string> MenuLanguage { "en" };
+    CustomOptional<bool> OptiClip { true };
+    CustomOptional<bool> AllowGameMouse { false };
+    CustomOptional<bool> AllowGameKeyboard { true };
+    CustomOptional<bool> AllowGameController { true };
     CustomOptional<float, NoDefault> MenuScale;
     CustomOptional<bool> OverlayMenu { true };
     CustomOptional<int> ShortcutKey { VK_INSERT };

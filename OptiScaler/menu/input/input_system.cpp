@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "MenuInputPolicy.h"
 #include "input_system_internal.h"
 
 #include <include/imgui/imgui.h>
@@ -7,6 +8,7 @@ namespace OptiInput
 {
 
 InputState _state;
+static MenuInputPolicy gameplayPolicy;
 
 GetAsyncKeyState_t o_GetAsyncKeyState = ::GetAsyncKeyState;
 GetKeyState_t o_GetKeyState = ::GetKeyState;
@@ -691,11 +693,31 @@ void PollInputFallbackLocked()
 void ApplyMenuVisibilityChangeLocked(bool visible)
 {
     const bool wasMenuVisible = _state.MenuVisible;
+    const bool wasCursorBlocked = _state.BlockCursor;
+    const bool wasKeyboardBlocked = _state.BlockKeyboard;
 
     _state.MenuVisible = visible;
-    _state.BlockMouse = visible;
-    _state.BlockKeyboard = visible;
-    _state.BlockCursor = visible;
+    const auto policy = gameplayPolicy;
+    _state.BlockMouse = policy.Mouse(visible);
+    _state.BlockKeyboard = policy.Keyboard(visible);
+    _state.BlockController = policy.Controller(visible);
+    _state.BlockCursor = _state.BlockMouse;
+    // Releasing a device's policy also releases its event ownership. A held key
+    // may start repeating into gameplay again, so its eventual up must pass too.
+    if (wasKeyboardBlocked && !_state.BlockKeyboard)
+    {
+        for (auto& key : _state.Keys) key.BlockedDown = false;
+        _state.RawKeyboardBlockedDown = {};
+        _state.WindowsHookKeyboardBlockedDown = {};
+        ResetRawInputSanitizeCacheLocked();
+    }
+    if (wasCursorBlocked && !_state.BlockMouse)
+    {
+        for (auto& button : _state.MouseButtons) button.BlockedDown = false;
+        _state.RawMouseBlockedDown = {};
+        _state.WindowsHookMouseBlockedDown = {};
+        ResetRawInputSanitizeCacheLocked();
+    }
 
     if (wasMenuVisible != visible)
     {
@@ -708,7 +730,7 @@ void ApplyMenuVisibilityChangeLocked(bool visible)
     if (!visible && _state.ImGuiMouseDrawCursorForced && ImGui::GetCurrentContext() != nullptr)
         UpdateImGuiMouseDrawCursorLocked(ImGui::GetIO());
 
-    if (!wasMenuVisible && visible)
+    if (!wasCursorBlocked && _state.BlockCursor)
     {
         POINT blockedCursorPos {};
         if (o_GetCursorPos != nullptr && o_GetCursorPos(&blockedCursorPos))
@@ -723,18 +745,13 @@ void ApplyMenuVisibilityChangeLocked(bool visible)
 
         BeginCursorClipBlockLocked();
     }
-    else if (wasMenuVisible && !visible)
+    else if (wasCursorBlocked && !_state.BlockCursor)
     {
         EndCursorClipBlockLocked();
 
         _state.HasBlockedCursorScreenPos = false;
         _state.BlockedCursorScreenPos = {};
 
-        // Drop synthetic down/up suppression that only existed while the
-        // overlay owned input. New raw handles will rebuild sanitize decisions.
-        ResetButtonBlockedStateLocked();
-        ResetRawInputBlockStateLocked();
-        ResetRawInputSanitizeCacheLocked();
     }
 }
 
@@ -868,6 +885,7 @@ void ResetStateAfterShutdown()
     _state.MenuVisible = false;
     _state.BlockMouse = false;
     _state.BlockKeyboard = false;
+    _state.BlockController = false;
     _state.BlockCursor = false;
 
     _state.RawMouseTargetHwnd = nullptr;
@@ -1266,6 +1284,13 @@ void SetMenuVisible(bool visible)
     std::unique_lock lock(_state.Mutex);
 
     ApplyMenuVisibilityChangeLocked(visible);
+}
+
+void SetGameplayPolicy(bool allowMouse, bool allowKeyboard, bool allowController, bool captureKey)
+{
+    std::unique_lock lock(_state.Mutex);
+    gameplayPolicy = {allowMouse, allowKeyboard, allowController, captureKey};
+    ApplyMenuVisibilityChangeLocked(_state.MenuVisible);
 }
 
 bool IsFocused()

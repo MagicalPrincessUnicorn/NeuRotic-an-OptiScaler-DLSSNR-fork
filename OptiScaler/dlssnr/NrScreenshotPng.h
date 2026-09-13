@@ -11,12 +11,70 @@
 #include <bit>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <string>
 
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
 
 namespace DlssNr::Screenshots
 {
+inline uint32_t PngCrc(const unsigned char* data, size_t length)
+{
+    uint32_t crc = 0xffffffffu;
+    for (size_t i = 0; i < length; ++i)
+    {
+        crc ^= data[i];
+        for (int bit = 0; bit < 8; ++bit) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+inline std::string ReadPngManifest(const std::filesystem::path& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    const std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(file)), {});
+    const auto read32 = [&](size_t p) { return uint32_t(bytes[p]) << 24 | uint32_t(bytes[p+1]) << 16 |
+        uint32_t(bytes[p+2]) << 8 | bytes[p+3]; };
+    const std::string key = "NeuRotic.CaptureManifest";
+    for (size_t pos = 8; pos + 12 <= bytes.size();)
+    {
+        const auto size = read32(pos);
+        if (size > bytes.size() - pos - 12) return {};
+        if (std::memcmp(bytes.data()+pos+4, "iTXt", 4) == 0 && size >= key.size()+5 &&
+            std::memcmp(bytes.data()+pos+8, key.c_str(), key.size()+1) == 0 &&
+            PngCrc(bytes.data()+pos+4, size+4) == read32(pos+size+8))
+            return std::string(reinterpret_cast<const char*>(bytes.data()+pos+8+key.size()+5), size-key.size()-5);
+        pos += size + 12;
+    }
+    return {};
+}
+inline bool EmbedPngManifest(const std::filesystem::path& path, const std::string& manifest)
+{
+    std::ifstream input(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(input)), {});
+    input.close();
+    if (bytes.size() < 20 || manifest.size() > 1024*1024 ||
+        std::memcmp(bytes.data()+bytes.size()-8, "IEND", 4) != 0) return false;
+    std::string payload = "NeuRotic.CaptureManifest";
+    payload.append(5, '\0'); // keyword, uncompressed, compression method, language, translated keyword
+    payload += manifest;
+    std::vector<unsigned char> chunk;
+    const auto append32 = [&](uint32_t value) {
+        for (int shift = 24; shift >= 0; shift -= 8) chunk.push_back(static_cast<unsigned char>(value >> shift));
+    };
+    append32(static_cast<uint32_t>(payload.size()));
+    for (const char c : std::string("iTXt")) chunk.push_back(static_cast<unsigned char>(c));
+    chunk.insert(chunk.end(), payload.begin(), payload.end());
+    append32(PngCrc(chunk.data()+4, chunk.size()-4));
+    bytes.insert(bytes.end()-12, chunk.begin(), chunk.end());
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    DWORD written = 0;
+    bool ok = bytes.size() <= MAXDWORD && WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr)
+        && written == bytes.size() && FlushFileBuffers(file);
+    ok = CloseHandle(file) && ok;
+    return ok && ReadPngManifest(path) == manifest;
+}
 inline float HalfToFloat(unsigned short h)
 {
     const unsigned int sign = unsigned(h & 0x8000u) << 16;

@@ -204,6 +204,7 @@ void FeedImGui(bool menuVisible);
 void EndFrame(bool menuVisible);
 
 void SetMenuVisible(bool visible);
+void SetGameplayPolicy(bool allowMouse, bool allowKeyboard, bool allowController, bool captureKey);
 void ResetMenuInputTransientState();
 
 bool IsFocused();
