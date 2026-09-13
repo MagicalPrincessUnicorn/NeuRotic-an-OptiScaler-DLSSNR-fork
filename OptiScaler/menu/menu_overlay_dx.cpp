@@ -252,7 +252,7 @@ static void RenderImGui_DX11(IDXGISwapChain* pSwapChain)
 
             if (MenuOverlayBase::RenderMenu())
             {
-                ImGui::Render();
+                MenuCommon::FinalizeFrame();
 
                 g_pd3dDeviceContext->OMSetRenderTargets(1, &g_pd3dRenderTarget, NULL);
                 ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -440,7 +440,7 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain)
 
             if (MenuOverlayBase::RenderMenu())
             {
-                ImGui::Render();
+                MenuCommon::FinalizeFrame();
 
                 UINT backBufferIdx = pSwapChain->GetCurrentBackBufferIndex();
                 ID3D12CommandAllocator* commandAllocator = g_commandAllocators[backBufferIdx];

@@ -1,4 +1,22 @@
-NEUROTIC ALPHA 0.9.6
+NEUROTIC ALPHA 0.9.6 - PUBLIC RELEASE CANDIDATE FOR TESTING / REVIEW
+
+This local candidate adds the Native Temporal input audit fixes and menu updates.
+Native DX12 DLSS now uses its exact backend to activate optional hardened Pre-SR
+resets, retains feature-owned creation flags, and forwards depth/motion origins
+and low/high-resolution motion-vector dimensions. Out-of-bounds guides refuse NR.
+Reset behavior stays experimental and off by default. Color/output active subrects
+under dynamic resolution and vendor-driven scaling remain separate follow-on work.
+
+Show OptiClip advisor is always in the bottom-left footer beside Send Coffee.
+Comparison screenshots and Interface brightness are under Tools. UI brightness
+changes only interface colors, defaults to 1x, and persists through Save Settings.
+It does not change game HDR, rendering, or screenshot pixels. Very high UI values
+may reduce color contrast. Automatic display compensation is not assumed.
+The orange, bold Neural Rendering - Experimental Overrides section remains below
+Multipass in Neural Rendering. Existing save/confirmation/crash-recovery rules apply.
+
+This candidate is for testing and review. Game/HDR visual acceptance remains
+Inconclusive until this exact binary is tested. It has not been published or installed.
 
 This public-format Alpha combines the coherent Neural Rendering integration,
 native DirectX 11 transport, the revised NR interface and Advisor, comparison
@@ -34,7 +52,7 @@ choose recovery first; then retry uninstall. A normal write failure automaticall
 restores the pre-uninstall state. Keep the recovery folders until recovery completes.
 
 INSTALL
-1. Extract the complete ZIP to a folder outside the game folder.
+1. Keep this complete package folder outside the game folder.
 2. Close the game and double-click NeuRotic-Setup.cmd.
 3. Select the game's actual executable, rather than its launcher.
 4. Choose the proxy filename your game should load. DirectX games normally use

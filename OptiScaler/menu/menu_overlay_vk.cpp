@@ -556,7 +556,7 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
                     vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
                 }
 
-                ImGui::Render();
+                MenuCommon::FinalizeFrame();
                 ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), fd->CommandBuffer);
 
                 // Submit command buffer
@@ -595,7 +595,7 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
             else
             {
                 // To make RenderMenu happy as it expects this
-                ImGui::Render();
+                MenuCommon::FinalizeFrame();
             }
         }
     }

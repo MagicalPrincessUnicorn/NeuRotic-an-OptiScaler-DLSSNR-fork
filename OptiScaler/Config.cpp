@@ -728,6 +728,8 @@ bool Config::Reload(std::filesystem::path iniPath)
         {
             MenuLanguage.set_from_config(readString("Menu", "Language", true));
             OptiClip.set_from_config(readBool("Menu", "OptiClip"));
+            if (auto brightness = readFloat("Menu", "Brightness"); brightness.has_value())
+                MenuBrightness.set_from_config(std::isfinite(*brightness) ? std::clamp(*brightness, 1.0f, 3.0f) : 1.0f);
             AllowGameMouse.set_from_config(readBool("Menu", "AllowGameMouse"));
             AllowGameKeyboard.set_from_config(readBool("Menu", "AllowGameKeyboard"));
             AllowGameController.set_from_config(readBool("Menu", "AllowGameController"));
@@ -1667,6 +1669,7 @@ bool Config::SaveIni()
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
         ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());
         ini.SetBoolValue("Menu", "OptiClip", Instance()->OptiClip.value_or_default());
+        ini.SetValue("Menu", "Brightness", GetFloatValue(Instance()->MenuBrightness).c_str());
         ini.SetBoolValue("Menu", "AllowGameMouse", Instance()->AllowGameMouse.value_or_default());
         ini.SetBoolValue("Menu", "AllowGameKeyboard", Instance()->AllowGameKeyboard.value_or_default());
         ini.SetBoolValue("Menu", "AllowGameController", Instance()->AllowGameController.value_or_default());

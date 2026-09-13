@@ -2,6 +2,7 @@
 #include "menu_common.h"
 #include "Localization.h"
 #include "OptiClipAdvisor.h"
+#include "UiBrightness.h"
 #include <dlssnr/DlssNr_ExposureScan.h>
 
 #include <algorithm>
@@ -7173,9 +7174,6 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
         else
             ImGui::TextUnformatted("NeuRotic is up to date.");
     }
-    DlssNr::RenderScreenshotMenu(ctx.config);
-    bool showOptiClip = ctx.config->OptiClip.value_or_default();
-    if (ImGui::Checkbox("Show OptiClip advisor", &showOptiClip)) ctx.config->OptiClip = showOptiClip;
     if (auto input = ScopedCollapsingHeader("Gameplay input while menu is open", ImGuiTreeNodeFlags_DefaultOpen);
         input.IsHeaderOpen())
     {
@@ -7226,7 +7224,8 @@ void MenuCommon::RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ct
 {
     auto& draft = DlssNr::ExperimentalPolicy::Draft;
     DlssNr::ExperimentalPolicy::EnsureDraft(*ctx.config);
-    if (auto section = ScopedCollapsingHeader("Neural Rendering experimental settings"); section.IsHeaderOpen())
+    if (auto section = ScopedCollapsingHeader("Neural Rendering - Experimental Overrides", 0,
+                                             nullptr, "Enabled", true); section.IsHeaderOpen())
     {
         bool requested = draft.active;
         if (ImGui::Checkbox("Unlock Experimental Mode", &requested))
@@ -7319,6 +7318,16 @@ void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
 
 void MenuCommon::RenderToolsPage(RenderMenuContext& ctx)
 {
+    DlssNr::RenderScreenshotMenu(ctx.config);
+    if (auto section = ScopedCollapsingHeader("Interface brightness"); section.IsHeaderOpen())
+    {
+        float brightness = ctx.config->MenuBrightness.value_or_default();
+        if (ImGui::SliderFloat("UI brightness", &brightness, 1.0f, 3.0f, "%.2fx"))
+            ctx.config->MenuBrightness = brightness;
+        ImGui::TextWrapped("Brightens only the NeuRotic interface, including HDR menus. Game rendering, HDR settings and comparison images are unchanged. Save Settings remembers this value.");
+        ImGui::TextWrapped("Automatic HDR compensation is unavailable because games use different display mappings. Adjust for readability; high values can reduce interface color contrast.");
+        if (ImGui::Button("Reset UI brightness")) ctx.config->MenuBrightness = 1.0f;
+    }
     RenderMagnifierSettings(ctx);
     RenderMipmapBiasSettings(ctx);
 }
@@ -7704,6 +7713,9 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
 
 void MenuCommon::RenderMainMenuSupportLink()
 {
+    bool showOptiClip = Config::Instance()->OptiClip.value_or_default();
+    if (ImGui::Checkbox("Show OptiClip advisor", &showOptiClip)) Config::Instance()->OptiClip = showOptiClip;
+    ImGui::SameLine();
     constexpr const char* prompt = "Enjoying NeuRotic?";
     constexpr const char* button = "Send Coffee";
     const auto& style = ImGui::GetStyle();
@@ -7713,8 +7725,12 @@ void MenuCommon::RenderMainMenuSupportLink()
     if (available > width)
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + available - width);
 
-    ImGui::TextUnformatted(prompt);
-    ImGui::SameLine();
+    // At narrow/localized widths, keep both actions on the footer row by omitting only the prompt.
+    if (available >= width)
+    {
+        ImGui::TextUnformatted(prompt);
+        ImGui::SameLine();
+    }
     if (ImGui::Button(button))
     {
         auto& platform = ImGui::GetPlatformIO();
@@ -8242,6 +8258,18 @@ bool MenuCommon::RenderMenu()
         ImGui::EndFrame();
 
     return ctx.newFrame;
+}
+
+void MenuCommon::FinalizeFrame()
+{
+    ImGui::Render();
+    const float gain = Neurotic::UiBrightness::Clamp(Config::Instance()->MenuBrightness.value_or_default());
+    auto* data = ImGui::GetDrawData();
+    if (!data || gain == 1.0f) return;
+    // Only this frame's UI vertex colors change. Never touch scene textures, NR settings or PNG data.
+    for (auto* list : data->CmdLists)
+        for (auto& vertex : list->VtxBuffer)
+            vertex.col = Neurotic::UiBrightness::Apply(vertex.col, gain);
 }
 
 void MenuCommon::Init(HWND InHwnd, bool isUWP)

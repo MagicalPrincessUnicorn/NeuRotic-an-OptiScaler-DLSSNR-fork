@@ -4496,7 +4496,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 namespace DlssNr
 {
 static void EvaluateAfterUpscaleWithConfig(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
-    ID3D12CommandQueue* timingQueue, bool forceAfterUpscale, const NrConfigSnapshot<Config>& cfg);
+    ID3D12CommandQueue* timingQueue, bool forceAfterUpscale, const NrConfigSnapshot<Config>& cfg,
+    const NativeTemporalInputs::Metadata* nativeInputs = nullptr);
 
 void RetryAfterFailure()
 {
@@ -4990,7 +4991,8 @@ void RestoreAfterUpscale(NVSDK_NGX_Parameter* params)
 ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                                       ID3D12CommandQueue* timingQueue,
                                       const NrConfigSnapshot<Config>* settings,
-                                      bool authoritativeNativePreSr)
+                                      bool authoritativeNativePreSr,
+                                      const NativeTemporalInputs::Metadata* nativeInputs)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     g_screenshotPreSrFrame.reset();
@@ -5429,7 +5431,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     {
         ScopedPreSrResetDispatch resetDispatch(authoritativeNativePreSr &&
             (experimentalPolicy || g_nr.preSrSoftResetPending));
-        EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, true, cfg);
+        EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, true, cfg, nativeInputs);
     }
     params->Set(NVSDK_NGX_Parameter_Output, originalOutputVoid);
 
@@ -5692,7 +5694,8 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
 // RunPass directly and never touches an NGX parameter block.
 void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                           ID3D12CommandQueue* timingQueue, bool forceAfterUpscale,
-                          const NrConfigSnapshot<Config>* settings)
+                          const NrConfigSnapshot<Config>* settings,
+                          const NativeTemporalInputs::Metadata* nativeInputs)
 {
     const auto localSettings = settings == nullptr ? TryNrConfigSnapshot(*Config::Instance())
                                                    : std::optional<NrConfigSnapshot<Config>>{};
@@ -5775,11 +5778,12 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
         }
         return;
     }
-    EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, forceAfterUpscale, cfg);
+    EvaluateAfterUpscaleWithConfig(cmdList, params, timingQueue, forceAfterUpscale, cfg, nativeInputs);
 }
 
 static void EvaluateAfterUpscaleWithConfig(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
-    ID3D12CommandQueue* timingQueue, bool forceAfterUpscale, const NrConfigSnapshot<Config>& cfg)
+    ID3D12CommandQueue* timingQueue, bool forceAfterUpscale, const NrConfigSnapshot<Config>& cfg,
+    const NativeTemporalInputs::Metadata* nativeInputs)
 {
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
     if (g_sessionClosed || g_shutdownFailed)
@@ -5842,7 +5846,10 @@ static void EvaluateAfterUpscaleWithConfig(ID3D12GraphicsCommandList* cmdList, N
     }
 
     unsigned int createFlags = 0;
-    params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &createFlags);
+    const bool haveEvalFlags = params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &createFlags) == NVSDK_NGX_Result_Success;
+    const auto evalFlags = createFlags;
+    createFlags = NativeTemporalInputs::ResolveFlags(nativeInputs ? std::optional<unsigned>(nativeInputs->flags) : std::nullopt,
+        haveEvalFlags ? std::optional<unsigned>(evalFlags) : std::nullopt);
 
     DlssNrFrameInfo frame {};
     frame.DepthInverted = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
@@ -5866,6 +5873,51 @@ static void EvaluateAfterUpscaleWithConfig(ID3D12GraphicsCommandList* cmdList, N
     // How much of the guides is real. See DlssNrFrameInfo -- zero means the game did not say.
     params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &frame.RenderSubrectWidth);
     params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, &frame.RenderSubrectHeight);
+
+    if (nativeInputs)
+    {
+        params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, &frame.DepthSubrectX);
+        params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, &frame.DepthSubrectY);
+        params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, &frame.MotionSubrectX);
+        params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, &frame.MotionSubrectY);
+        const bool lowResMotion = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
+        const bool jitteredMotion = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered) != 0;
+        const auto depthDesc = depth->GetDesc(), motionDesc = motion->GetDesc();
+        auto* colour = GetResource(params, NVSDK_NGX_Parameter_Color, "DLSSD.Color");
+        const auto colourDesc = colour ? colour->GetDesc() : D3D12_RESOURCE_DESC{};
+        const unsigned renderWidth = frame.RenderSubrectWidth ? frame.RenderSubrectWidth : static_cast<unsigned>(colourDesc.Width);
+        const unsigned renderHeight = frame.RenderSubrectHeight ? frame.RenderSubrectHeight : colourDesc.Height;
+        const auto depthRegion = NativeTemporalInputs::GuideRect(frame.DepthSubrectX, frame.DepthSubrectY,
+            renderWidth, renderHeight, nativeInputs->outputWidth, nativeInputs->outputHeight, true);
+        const auto motionRegion = NativeTemporalInputs::GuideRect(frame.MotionSubrectX, frame.MotionSubrectY,
+            renderWidth, renderHeight, nativeInputs->outputWidth, nativeInputs->outputHeight, lowResMotion);
+        if (!NativeTemporalInputs::Fits(depthRegion, depthDesc.Width, depthDesc.Height) ||
+            !NativeTemporalInputs::Fits(motionRegion, motionDesc.Width, motionDesc.Height))
+        {
+            ReportSkipOnce("native depth/motion active region is missing or outside its resource");
+            return;
+        }
+        frame.DepthSubrectWidth = depthRegion.width;
+        frame.DepthSubrectHeight = depthRegion.height;
+        frame.MotionSubrectWidth = motionRegion.width;
+        frame.MotionSubrectHeight = motionRegion.height;
+        // Lifecycle lock above serializes this bounded diagnostic signature. No borrowed feature survives the call.
+        auto signature = std::make_tuple(nativeInputs->handle, nativeInputs->generation, createFlags,
+            haveEvalFlags, evalFlags, depthRegion.x, depthRegion.y, depthRegion.width, depthRegion.height,
+            motionRegion.x, motionRegion.y, motionRegion.width, motionRegion.height, frame.RenderSubrectWidth,
+            frame.RenderSubrectHeight);
+        static decltype(signature) previous {};
+        if (signature != previous)
+        {
+            previous = signature;
+            LOG_INFO("NR native inputs handle={} generation={} authoritativeNativeDlss=true flags={} evalFlagsPresent={} evalFlags={} mismatch={} depth=({},{} {}x{}) motion=({},{} {}x{}) depthSource={} motionSource={} MVJittered={} (unchanged)",
+                nativeInputs->handle, nativeInputs->generation, createFlags, haveEvalFlags, evalFlags,
+                haveEvalFlags && evalFlags != createFlags, depthRegion.x, depthRegion.y, depthRegion.width,
+                depthRegion.height, motionRegion.x, motionRegion.y, motionRegion.width, motionRegion.height,
+                frame.RenderSubrectWidth && frame.RenderSubrectHeight ? "render-subrect" : "render-subrect/color-allocation-fallback",
+                lowResMotion ? "render-region" : "feature-output", jitteredMotion);
+        }
+    }
 
     if (params->Get(NVSDK_NGX_Parameter_MV_Scale_X, &frame.MvScaleX) != NVSDK_NGX_Result_Success)
         frame.MvScaleX = 1.0f;

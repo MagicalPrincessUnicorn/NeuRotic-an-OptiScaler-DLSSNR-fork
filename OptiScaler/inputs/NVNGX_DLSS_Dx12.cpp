@@ -1486,14 +1486,19 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     // OptiScaler internal handling
     const auto nrContext = Dx12Contexts.find(handleId);
-    const auto* nrFeature = nrContext != Dx12Contexts.end() ? nrContext->second.feature.get() : nullptr;
+    auto* nrFeature = nrContext != Dx12Contexts.end() ? nrContext->second.feature.get() : nullptr;
     const bool authoritativeNativePreSr = nrFeature && DlssNr::NativeTemporalInputs::Authoritative(
         isSuperResolution, nrFeature->GetUpscalerType() == Upscaler::DLSS,
         nrFeature->Api() == API::DX12, nrContext->second.feature->IsWithDx12());
     NR_FRAME_TRACE("nr-native-authority", "handle={} generation={} authoritative={}",
         handleId, featureSnapshot.generation, authoritativeNativePreSr);
+    std::optional<DlssNr::NativeTemporalInputs::Metadata> nativeInputs;
+    if (authoritativeNativePreSr)
+        nativeInputs = {static_cast<unsigned>(nrFeature->GetFeatureFlags()),
+                        nrFeature->DisplayWidth(), nrFeature->DisplayHeight(), handleId, featureSnapshot.generation};
     if (isSuperResolution && nrSettings)
-        DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, authoritativeNativePreSr);
+        DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, authoritativeNativePreSr,
+                                     nativeInputs ? &*nativeInputs : nullptr);
 
     const NVSDK_NGX_Result optiResult =
         TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
@@ -1504,7 +1509,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     // Same pass, for OptiScaler's own upscalers rather than native DLSS.
     if (optiResult == NVSDK_NGX_Result_Success && isNrPipelineFeature && nrSettings)
-        DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings);
+        DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings,
+                                    nativeInputs ? &*nativeInputs : nullptr);
 
     return optiResult;
 }

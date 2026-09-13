@@ -4,6 +4,7 @@
 #include <Config.h>
 
 #include <imgui/imgui.h>
+#include "Localization.h"
 
 class ScopedIndent
 {
@@ -20,7 +21,8 @@ class ScopedCollapsingHeader
 {
   public:
     explicit ScopedCollapsingHeader(const char* label, ImGuiTreeNodeFlags flags = 0,
-                                   bool* enabled = nullptr, const char* toggleLabel = "Enabled")
+                                   bool* enabled = nullptr, const char* toggleLabel = "Enabled",
+                                   bool orangeBold = false)
     {
         ImGui::PushID(label);
 
@@ -41,7 +43,21 @@ class ScopedCollapsingHeader
         }
         else
         {
+            if (orangeBold) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.48f, 0.10f, 1.0f));
+            auto* draw = ImGui::GetWindowDrawList();
+            const auto titlePosition = ImGui::GetCursorScreenPos();
             _headerOpen = ImGui::CollapsingHeader(label, flags);
+            if (orangeBold)
+            {
+                // A second subpixel-offset text stroke gives the current localized font a bold face.
+                const ImU32 orange = ImGui::GetColorU32(ImGuiCol_Text);
+                const auto padding = ImGui::GetStyle().FramePadding;
+                draw->PushClipRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), true);
+                draw->AddText(ImVec2(titlePosition.x + ImGui::GetFontSize() + padding.x * 3.0f + 0.6f,
+                                    titlePosition.y + padding.y), orange, Neurotic::Translate(label).c_str());
+                draw->PopClipRect();
+                ImGui::PopStyleColor();
+            }
             if (enabled) ImGui::Checkbox(toggleLabel, enabled);
         }
         _active = true;
@@ -226,6 +242,7 @@ class MenuCommon
     static HWND Handle() { return _handle; }
 
     static bool RenderMenu();
+    static void FinalizeFrame();
     static void Init(HWND InHwnd, bool isUWP);
     static void Shutdown();
     static void HideMenu();

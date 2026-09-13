@@ -11,7 +11,7 @@ This is a source integration handoff for a separately selected 0.9.6 tree, not a
 - Configuration member: `Config::DlssNrPreSrSoftReset`
 - INI key: `[DlssNr] PreSrSoftReset`
 - Default: off
-- UI location: `Neural Rendering > Neural Rendering experimental settings`
+- UI location: `Neural Rendering > Neural Rendering - Experimental Overrides`
 - Intended control type: persistent checkbox
 - Title: `Preserve NR During Camera Cuts`
 - Description: `Potential fix for situations where camera cuts cause the NR layer to reload, leading to a jarring presentation. This might lead to crashes when loading between worldspaces. Requires more testing.`

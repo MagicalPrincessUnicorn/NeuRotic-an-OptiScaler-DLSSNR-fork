@@ -6,6 +6,7 @@
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <nvsdk_ngx.h>
 #include "DlssNr_MenuStatus.h"
+#include "NativeTemporalInputs.h"
 
 // DLSS 5 Neural Rendering, run over the upscaler's output.
 //
@@ -38,7 +39,8 @@ namespace DlssNr
 ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                                       ID3D12CommandQueue* timingQueue = nullptr,
                                       const NrConfigSnapshot<Config>* settings = nullptr,
-                                      bool authoritativeNativePreSr = false);
+                                      bool authoritativeNativePreSr = false,
+                                      const NativeTemporalInputs::Metadata* nativeInputs = nullptr);
 
 // V10 preserves original final-SR jitter; RestoreAfterUpscale only restores the temporary Reset override.
 void RestoreAfterUpscale(NVSDK_NGX_Parameter* params);
@@ -46,7 +48,8 @@ void RestoreAfterUpscale(NVSDK_NGX_Parameter* params);
 void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                           ID3D12CommandQueue* timingQueue = nullptr,
                           bool forceAfterUpscale = false,
-                          const NrConfigSnapshot<Config>* settings = nullptr);
+                          const NrConfigSnapshot<Config>* settings = nullptr,
+                          const NativeTemporalInputs::Metadata* nativeInputs = nullptr);
 
 // Narrow surface used by the DX12 Present adapter. It accepts only OptiScaler-owned resources and a
 // private command list. Optional test metadata accompanies owned copies of Native guides, never

@@ -218,4 +218,11 @@ foreach ($iniPath in @('OptiScaler.ini', 'integration/OptiScaler.ini')) {
     Assert-Ui ($ini -match '(?m)^LogToFile\s*=\s*false\s*$') "$iniPath explicitly disables file logging"
 }
 Assert-Ui ($header.Contains('MenuLanguage { "en" }')) 'English default'
+Assert-Ui ($menu -match '(?s)void MenuCommon::RenderToolsPage.*?RenderScreenshotMenu\(ctx.config\)' -and
+           ([regex]::Matches($menu, 'RenderScreenshotMenu\(ctx.config\)').Count -eq 1)) 'comparison screenshots have one home in Tools'
+Assert-Ui ($menu -match '(?s)void MenuCommon::RenderMainMenuSupportLink.*?Checkbox\("Show OptiClip advisor".*?SameLine\(\).*?Send Coffee') 'OptiClip toggle shares the persistent footer row'
+Assert-Ui ($menu.Contains('Neural Rendering - Experimental Overrides') -and
+           $menu.Contains('nullptr, "Enabled", true)')) 'experimental title uses the exact wording and static bold-orange style'
+Assert-Ui ($header.Contains('MenuBrightness { 1.0f }') -and $menu.Contains('void MenuCommon::FinalizeFrame()') -and
+           $config.Contains('readFloat("Menu", "Brightness")') -and $menu.Contains('SliderFloat("UI brightness"')) 'UI brightness is neutral by default, persistent, and applied only when finalizing UI draw colors'
 Assert-Ui ($config.Contains('readString("Menu", "Language", true)') -and $config.Contains('ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());')) 'language loads and saves in Menu section'

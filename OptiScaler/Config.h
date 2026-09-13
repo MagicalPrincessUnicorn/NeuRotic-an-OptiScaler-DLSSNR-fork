@@ -579,6 +579,7 @@ class Config
     // Menu
     CustomOptional<std::string> MenuLanguage { "en" };
     CustomOptional<bool> OptiClip { true };
+    CustomOptional<float> MenuBrightness { 1.0f };
     CustomOptional<bool> AllowGameMouse { false };
     CustomOptional<bool> AllowGameKeyboard { true };
     CustomOptional<bool> AllowGameController { true };
