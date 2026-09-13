@@ -469,7 +469,12 @@ inline uint64_t CurrentFrame()
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
-    return state.swapchains == 1 ? state.ledger.Current(state.provider.generation) : 0;
+    // Native capture only carries a provider token while that provider will also
+    // select an exact frame at Present. Games such as DD2 disable FG for dialogue
+    // and menus while continuing to publish Streamline constants; retaining that
+    // unclaimed token would reject the otherwise unique Native/Present interval.
+    return state.swapchains == 1 && state.provider.enabled
+        ? state.ledger.Current(state.provider.generation) : 0;
 }
 inline void ObserveConstants(uint32_t frame, uint32_t viewport)
 {

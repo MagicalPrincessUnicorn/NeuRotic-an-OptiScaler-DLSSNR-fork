@@ -361,6 +361,7 @@ class Bridge
               UINT width, UINT height, Inputs& inputs, UINT64 providerFrame = 0)
     {
         std::lock_guard lock(mutex);
+        (void)backbuffer; // diagnostic only when provider-frame identity is unavailable
         if (!telemetry.enabled || !selection.enabled || selection.generation != telemetry.generation)
         { Reject("Native guide selection belongs to an inactive/stale test generation"); return false; }
         if (!selection.captureError.empty())
@@ -370,11 +371,15 @@ class Bridge
         if (selection.count != 1 || selection.slot < 0 || selection.slot >= static_cast<int>(slots.size()))
         { Reject("No unique completed Native capture for this Present interval"); return false; }
         auto& slot = slots[selection.slot];
+        // GetCurrentBackBufferIndex is sampled at Native evaluation and again at Present.
+        // Some flip-model games advance that observable index between the two hooks even though
+        // the unique capture still belongs to this Present interval. Keep provider-frame identity
+        // exact when available; otherwise the interval, swapchain, size and GPU order are the proof.
         if (slot.epoch != selection.epoch || slot.generation != selection.generation ||
             slot.swapchain.Get() != swapchain ||
-            (providerFrame ? slot.providerFrame != providerFrame : slot.backbuffer != backbuffer) ||
+            ((slot.providerFrame || providerFrame) && slot.providerFrame != providerFrame) ||
             slot.width != width || slot.height != height || slot.consumer)
-        { Reject("Native guide frame/swapchain/size mismatch"); return false; }
+        { Reject("Native guide provider-frame/swapchain/size mismatch"); return false; }
         if (!(providerFrame ? GpuSafety::OrderBefore(slot.producer, queue) :
                               GpuSafety::OrderedOn(slot.producer, queue)))
         { Reject("Native copy not uniquely submitted on Present queue"); return false; }
@@ -392,15 +397,18 @@ class Bridge
                        UINT64 providerFrame = 0)
     {
         std::lock_guard lock(mutex);
+        (void)backbuffer; // diagnostic only when provider-frame identity is unavailable
         if (!telemetry.enabled || !selection.enabled || selection.generation != telemetry.generation)
         { Reject("Native metadata belongs to an inactive/stale route or resolution"); return false; }
         if (!selection.captureError.empty()) { Reject(selection.captureError); return false; }
         if (selection.count != 1 || !selection.producer)
         { Reject("No fresh unique Native render metadata in this Present interval"); return false; }
+        // The non-provider path is already tied to exactly one Native evaluation since the prior
+        // BeginPresent. Its two DXGI index observations are diagnostic, not a stable frame token.
         if (selection.swapchain.Get() != swapchain ||
-            (providerFrame ? selection.providerFrame != providerFrame : selection.backbuffer != backbuffer) ||
+            ((selection.providerFrame || providerFrame) && selection.providerFrame != providerFrame) ||
             selection.width != width || selection.height != height)
-        { Reject("Native metadata frame/swapchain/output-size mismatch"); return false; }
+        { Reject("Native metadata provider-frame/swapchain/output-size mismatch"); return false; }
         if (!(providerFrame ? GpuSafety::OrderBefore(selection.producer, queue) :
                               GpuSafety::OrderedOn(selection.producer, queue)))
         { Reject("Native metadata not uniquely submitted on Present queue"); return false; }

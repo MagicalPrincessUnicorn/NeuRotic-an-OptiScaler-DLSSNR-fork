@@ -320,7 +320,7 @@ int main(int argc, char** argv)
         Check(producer->Close()); ID3D12CommandList* lists[]={producer.Get()}; queue->ExecuteCommandLists(1,lists);
         assert(guides.MatchMetadata(selection,queue.Get(),d11.Get(),0,128,72));
         assert(!guides.MatchMetadata(selection,other.Get(),d11.Get(),0,128,72));
-        assert(!guides.MatchMetadata(selection,queue.Get(),d11.Get(),1,128,72));
+        assert(guides.MatchMetadata(selection,queue.Get(),d11.Get(),1,128,72)); // flip index may rotate before Present
         assert(!guides.MatchMetadata(selection,queue.Get(),d12.Get(),0,128,72));
         assert(guides.Bind(selection,consumer.Get(),queue.Get(),d11.Get(),0,128,72,inputs));
         assert(inputs.frame.MotionSubrectX==3 && inputs.frame.MotionSubrectWidth==mw-3 &&

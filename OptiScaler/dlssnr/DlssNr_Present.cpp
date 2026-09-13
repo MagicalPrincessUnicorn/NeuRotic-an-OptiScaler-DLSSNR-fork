@@ -1011,6 +1011,18 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             SetFallback(api, status.status.c_str());
             return identity;
         }
+        if (!preFgFrame && guideSelection.backbuffer != bufferIndex)
+        {
+            static UINT64 acceptedRotations = 0;
+            const auto accepted = ++acceptedRotations;
+            NR_FRAME_TRACE("guide-backbuffer-rotation",
+                "captured={} present={} accepted={} association=unique-present-interval",
+                guideSelection.backbuffer, bufferIndex, accepted);
+            if (accepted <= 3 || accepted % 300 == 0)
+                LOG_INFO("DLSS-NR Present: accepted rotated DXGI backbuffer index {} -> {} "
+                         "using unique Present-interval association ({} so far)",
+                         guideSelection.backbuffer, bufferIndex, accepted);
+        }
         if (g_present.nativeWidth != guideSelection.frame.RenderSubrectWidth ||
             g_present.nativeHeight != guideSelection.frame.RenderSubrectHeight)
             InvalidateHistory("Native render subrect changed");

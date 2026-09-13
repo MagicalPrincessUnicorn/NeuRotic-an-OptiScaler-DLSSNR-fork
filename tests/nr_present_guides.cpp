@@ -121,8 +121,7 @@ int main(int argc, char** argv)
     Check(queue->Wait(gate.Get(), 1));
     submit(producer.Get());
     assert(!bind(selected, inputs, other.Get())); // no fabricated queue dependency
-    assert(!bind(selected, inputs, queue.Get(), 1)); // wrong backbuffer
-    assert(bind(selected, inputs)); // pending producer, ordered GPU consumer
+    assert(bind(selected, inputs, queue.Get(), 1)); // DXGI index rotated between Native and Present
     assert(inputs.depth.Get() != depth.Get() && inputs.motion.Get() != motion.Get());
     assert(inputs.frame.DepthInverted && inputs.frame.Reset && inputs.frame.MvScaleY == -4 &&
            inputs.frame.JitterX == 0.25f && inputs.frame.RenderSubrectWidth == 8 && !inputs.frame.ExposureTexture);
@@ -167,6 +166,7 @@ int main(int argc, char** argv)
         // Cross-queue still needs sealing; DD2's same-queue consumer must work
         // before the game resets its producer command list.
         if (targetQueue == other.Get()) Check(producer->Reset(pa.Get(), nullptr));
+        assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 0));
         assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 124));
         assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 32, 8, 123));
         assert(handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 123));
@@ -382,7 +382,7 @@ int main(int argc, char** argv)
     assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 16, 8)); // not submitted
     submit(producer.Get());
     assert(!metadata.MatchMetadata(meta, other.Get(), device.Get(), 2, 16, 8));
-    assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 1, 16, 8));
+    assert(metadata.MatchMetadata(meta, queue.Get(), device.Get(), 1, 16, 8));
     assert(!metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 32, 16));
     assert(metadata.MatchMetadata(meta, queue.Get(), device.Get(), 2, 16, 8));
     assert(meta.frame.RenderSubrectWidth == 13 && !meta.frame.ExposureTexture);
@@ -420,7 +420,7 @@ int main(int argc, char** argv)
     offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     assert(offsets.BeginPresent().captureError.find("non-finite") != std::string::npos);
-    std::puts("PASS fresh metadata-only dimensions, same-queue/output matching, resolution generation, subrect origins/bounds and missing temporal metadata.");
+    std::puts("PASS fresh metadata-only dimensions, rotated-index/same-queue matching, resolution generation, subrect origins/bounds and missing temporal metadata.");
     producer.Reset(); consumer.Reset();
     assert(Safety::Drain(5000));
     if (debugEnabled)
