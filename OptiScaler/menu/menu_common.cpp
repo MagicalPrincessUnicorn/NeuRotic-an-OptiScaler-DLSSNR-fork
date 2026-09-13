@@ -7222,35 +7222,14 @@ void MenuCommon::RenderUpscalingPage(RenderMenuContext& ctx)
     RenderUpscalerInputsSettings(ctx);
 }
 
-void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
+static void RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ctx)
 {
-    const char* gpuName = ctx.primaryGpu ? ctx.primaryGpu->name.c_str() : "Detecting graphics card...";
-    DlssNr::RenderMenu(ctx.config, ctx.menuResScale, std::nullopt, gpuName);
-}
-
-void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
-{
-    RenderFrameGenerationSelection(ctx);
-    RenderFrameGenerationRuntimeSettings(ctx);
-    RenderFramerateSettings(ctx);
-#ifdef LOW_LATENCY_INPUTS
-    RenderLowLatencySettings(ctx);
-#else
-    RenderFakenvapiSettings(ctx);
-#endif
-}
-
-void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
-{
-    RenderAdvancedSettings(ctx);
     auto& draft = DlssNr::ExperimentalPolicy::Draft;
     DlssNr::ExperimentalPolicy::EnsureDraft(*ctx.config);
     if (auto section = ScopedCollapsingHeader("Neural Rendering experimental settings"); section.IsHeaderOpen())
     {
         bool requested = draft.active;
-        const char* state = ctx.config->DlssNrExperimentalMode.value_or_default()
-            ? "Experimental Mode - Active" : "Experimental Mode - Inactive";
-        if (ImGui::Checkbox(state, &requested))
+        if (ImGui::Checkbox("Unlock Experimental Mode", &requested))
         {
             if (requested)
                 ImGui::OpenPopup("Enable Experimental Mode?");
@@ -7277,10 +7256,15 @@ void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
         }
 
         ImGui::BeginDisabled(!draft.active);
+        const float childIndent = ImGui::GetFontSize() * 1.5f;
+        ImGui::Indent(childIndent);
         draft.dirty |= ImGui::Checkbox("Override Multipass NR Guardrails (Experimental)", &draft.multipass);
         draft.dirty |= ImGui::Checkbox("Override HDR Guardrails (Experimental)", &draft.hdr);
         draft.dirty |= ImGui::Checkbox("Override FG Guardrails (Experimental, Probably don't need this)",
                                        &draft.frameGeneration);
+        draft.dirty |= ImGui::Checkbox("Preserve NR During Camera Cuts", &draft.preSrSoftReset);
+        ShowHelpMarker("Potential fix for situations where camera cuts cause the NR layer to reload, leading to a jarring presentation. This might lead to crashes when loading between worldspaces. Requires more testing.");
+        ImGui::Unindent(childIndent);
         ImGui::EndDisabled();
         ImGui::TextWrapped("Only implemented paths can be unlocked. Device, resource, format, synchronization, ownership, completion, and confirmed corruption-safety checks always remain active.");
         if (ImGui::Button("Save experimental settings"))
@@ -7288,7 +7272,7 @@ void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
             DlssNr::CancelAdvisorAnalysis(ctx.config,
                 "Experimental settings save requested; analysis stopped and original settings restored.");
             if (ctx.config->SaveExperimentalSettings(draft.active, draft.multipass, draft.hdr,
-                                                     draft.frameGeneration))
+                                                     draft.frameGeneration, draft.preSrSoftReset))
             {
                 if (DlssNr::ExperimentalSession::Applied(*ctx.config)) draft.dirty = false;
                 else DlssNr::ExperimentalPolicy::ResetDraft(*ctx.config);
@@ -7307,6 +7291,30 @@ void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
             ImGui::EndPopup();
         }
     }
+}
+
+void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
+{
+    const char* gpuName = ctx.primaryGpu ? ctx.primaryGpu->name.c_str() : "Detecting graphics card...";
+    DlssNr::RenderMenu(ctx.config, ctx.menuResScale, std::nullopt, gpuName);
+    RenderNeuralRenderingExperimentalSettings(ctx);
+}
+
+void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
+{
+    RenderFrameGenerationSelection(ctx);
+    RenderFrameGenerationRuntimeSettings(ctx);
+    RenderFramerateSettings(ctx);
+#ifdef LOW_LATENCY_INPUTS
+    RenderLowLatencySettings(ctx);
+#else
+    RenderFakenvapiSettings(ctx);
+#endif
+}
+
+void MenuCommon::RenderAdvancedPage(RenderMenuContext& ctx)
+{
+    RenderAdvancedSettings(ctx);
 }
 
 void MenuCommon::RenderToolsPage(RenderMenuContext& ctx)
@@ -7599,6 +7607,7 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
         const auto oldMultipassOverride = config->DlssNrOverrideMultipassGuardrails.snapshot();
         const auto oldHdrOverride = config->DlssNrOverrideHdrGuardrails.snapshot();
         const auto oldFgOverride = config->DlssNrOverrideFgGuardrails.snapshot();
+        const auto oldPreSrSoftReset = config->DlssNrPreSrSoftReset.snapshot();
         config->AllowGameMouse = menuInputDraft.mouse;
         config->AllowGameKeyboard = menuInputDraft.keyboard;
         config->AllowGameController = menuInputDraft.controller;
@@ -7620,6 +7629,7 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
             config->DlssNrOverrideMultipassGuardrails = oldMultipassOverride;
             config->DlssNrOverrideHdrGuardrails = oldHdrOverride;
             config->DlssNrOverrideFgGuardrails = oldFgOverride;
+            config->DlssNrPreSrSoftReset = oldPreSrSoftReset;
         }
     }
 

@@ -2028,18 +2028,21 @@ bool Config::SaveMenuInputSettings(bool mouse, bool keyboard, bool controller)
     return true;
 }
 
-bool Config::SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration)
+bool Config::SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration,
+                                      bool preSrSoftReset)
 {
     if (!SaveIniSubset(absoluteFileName, [&](CSimpleIniA& file) {
         file.SetBoolValue("DlssNr", "ExperimentalMode", active);
         file.SetBoolValue("DlssNr", "OverrideMultipassGuardrails", multipass);
         file.SetBoolValue("DlssNr", "OverrideHdrGuardrails", hdr);
         file.SetBoolValue("DlssNr", "OverrideFgGuardrails", frameGeneration);
+        file.SetBoolValue("DlssNr", "PreSrSoftReset", preSrSoftReset);
     })) return false;
     DlssNrExperimentalMode = active;
     DlssNrOverrideMultipassGuardrails = multipass;
     DlssNrOverrideHdrGuardrails = hdr;
     DlssNrOverrideFgGuardrails = frameGeneration;
+    DlssNrPreSrSoftReset = preSrSoftReset;
     DlssNr::ExperimentalPolicy::Changed();
     return true;
 }

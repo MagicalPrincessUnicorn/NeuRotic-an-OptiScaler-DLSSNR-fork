@@ -252,7 +252,7 @@ class Config
     NrOptional<int32_t> DlssNrRenderingMode { 1 };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR
     // Experimental opt-in: evaluate compatible reset-only Pre-SR frames instead of conservatively
-    // withdrawing NR for the complete Reset interval. Future UI placement is Advanced > Experimental.
+    // withdrawing NR for the complete Reset interval. The master experimental switch must also be active.
     NrOptional<bool> DlssNrPreSrSoftReset { false };
     // Toggles the pass in game. Unbound by default -- a key that does something unexpected is worse
     // than one that does nothing.
@@ -913,7 +913,8 @@ class Config
     bool LoadFromPath(const wchar_t* InPath);
     bool SaveIni();
     bool SaveMenuInputSettings(bool mouse, bool keyboard, bool controller);
-    bool SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration);
+    bool SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration,
+                                  bool preSrSoftReset);
     bool SaveXeFG();
 
     void CheckUpscalerFiles();

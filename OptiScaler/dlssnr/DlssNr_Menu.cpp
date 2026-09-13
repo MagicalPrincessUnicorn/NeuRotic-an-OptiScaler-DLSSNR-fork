@@ -433,15 +433,24 @@ bool BeginNextAdvisorRoute(Config& config)
     while (advisor.nextRoute < 3)
     {
         const int route = advisor.nextRoute++;
+        // Analyze All owns a reversible single-pass setup for every trial. Capture first so
+        // an enabled Multipass profile is restored exactly after each route or refusal.
+        CaptureAdvisorSettings(config, advisor.original);
+        AdvisorSampling::TemporarySettings.store(true);
+        {
+            NrConfigSynchronization::Transaction transaction;
+            config.DlssNrMultipassEnabled = false;
+            config.DlssNrSecondLayer = false;
+            config.DlssNrPasses = 1u;
+        }
         if (const auto* refusal = AdvisorRouteRefusal(config, route))
         {
             advisor.routes[route] = {};
             advisor.routes[route].level = AdvisorResultLevel::Unavailable;
             advisor.routes[route].detail = std::string("Skipped: ") + refusal;
+            RestoreAdvisorSettings(config, advisor.original);
             continue;
         }
-        CaptureAdvisorSettings(config, advisor.original);
-        AdvisorSampling::TemporarySettings.store(true);
         advisor.routes[route] = {};
         advisor.routes[route].level = AdvisorResultLevel::Analyzing;
         advisor.routes[route].detail = "Waiting for matching completed evaluations...";
@@ -646,7 +655,7 @@ void StartAdvisorAllRoutes(Config& config)
     advisor.appliedRoute = -1;
     advisor.analyzeAll = true;
     advisor.nextRoute = 0;
-    advisor.reason = "Each supported route uses the selected resolution preference. Original settings are restored between trials and at the end.";
+    advisor.reason = "Multipass is temporarily disabled. Each supported route uses the selected resolution preference, and original settings are restored between trials and at the end.";
     const auto present = DlssNr::PresentTelemetry();
     advisor.originalWidth = present.backbufferWidth;
     advisor.originalHeight = present.backbufferHeight;
@@ -883,8 +892,10 @@ void RenderAdvisor(Config* config, float menuResScale)
     };
 
     if (wide && ImGui::BeginTable("##AdvisorOverview", 2,
-        ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV))
+        ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
     {
+        ImGui::TableSetupColumn("##AdvisorSignalsColumn", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+        ImGui::TableSetupColumn("##AdvisorRecommendationColumn", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableNextColumn(); renderSignals();
         ImGui::TableNextColumn(); renderRecommendation();
         ImGui::EndTable();
@@ -955,7 +966,7 @@ void RenderAdvisor(Config* config, float menuResScale)
     }
     ImGui::EndDisabled();
     ImGui::Spacing();
-    ImGui::TextColored(orange, "Analyze temporarily turns Neural Rendering on and tests supported routes sequentially.");
+    ImGui::TextColored(orange, "Analyze temporarily turns Neural Rendering on, turns Multipass off, and tests supported routes sequentially.");
     ImGui::TextWrapped("The model effect stays hidden, and your current settings are restored when analysis ends or is cancelled.");
     if (advisor.running)
     {
@@ -2787,7 +2798,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
         HelpMarker("Enables a bounded chain of one to ten Neural Rendering passes on D3D12. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count.");
         if (blockedMultipass)
             ImGui::TextColored(ImVec4(0.95f, 0.30f, 0.28f, 1.0f),
-                "NR deactivated due to this rendering combination being untested and potentially broken or unstable. To override guardrails and render anyways, activate Experimental mode in the Advanced settings.");
+                "NR deactivated due to this rendering combination being untested and potentially broken or unstable. To override guardrails and render anyways, use Unlock Experimental Mode in the Neural Rendering tab below.");
 
         if (!basic.advanced)
         {

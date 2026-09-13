@@ -32,8 +32,9 @@ can affect both menu and game. Standard XInput/DirectInput are covered; custom
 DirectInput, GameInput, Windows.Gaming.Input and raw HID controllers may bypass it.
 Held-input/focus behavior still needs exact-binary game testing.
 
-Advanced Settings has a separate Experimental Mode master switch and Multipass,
-HDR and Frame Generation overrides. Activation requires a warning confirmation.
+The Neural Rendering tab has an Unlock Experimental Mode master switch below
+Multipass, with Multipass, HDR, Frame Generation and camera-cut reset options.
+Activation requires a warning confirmation.
 Edits apply only after Save Experimental Settings or the global Save Settings.
 An unclean prior session automatically disables the master and every override on
 the next launch. Hard checks that protect against known GPU corruption remain in

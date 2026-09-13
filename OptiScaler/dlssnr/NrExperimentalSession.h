@@ -93,6 +93,7 @@ inline void DisableInMemory(Config& config)
     config.DlssNrOverrideMultipassGuardrails = false;
     config.DlssNrOverrideHdrGuardrails = false;
     config.DlssNrOverrideFgGuardrails = false;
+    config.DlssNrPreSrSoftReset = false;
     ExperimentalPolicy::Changed();
 }
 
@@ -110,7 +111,7 @@ inline void Initialize(Config* config)
         if (unclean)
         {
             DisableInMemory(*config);
-            config->SaveExperimentalSettings(false, false, false, false);
+            config->SaveExperimentalSettings(false, false, false, false, false);
             Detail::WriteMarker(false);
             Detail::recoveredUnclean.store(true, std::memory_order_release);
         }
@@ -122,7 +123,7 @@ inline void Initialize(Config* config)
         else if (config->DlssNrExperimentalMode.value_or_default() && !Detail::WriteMarker(true))
         {
             DisableInMemory(*config);
-            config->SaveExperimentalSettings(false, false, false, false);
+            config->SaveExperimentalSettings(false, false, false, false, false);
             Detail::markerUnavailable.store(true, std::memory_order_release);
         }
         ExperimentalPolicy::SessionReady.store(true, std::memory_order_release);
@@ -139,7 +140,7 @@ inline bool Applied(Config& config)
         if (!Detail::WriteMarker(true))
         {
             DisableInMemory(config);
-            config.SaveExperimentalSettings(false, false, false, false);
+            config.SaveExperimentalSettings(false, false, false, false, false);
             Detail::markerUnavailable.store(true, std::memory_order_release);
             return false;
         }

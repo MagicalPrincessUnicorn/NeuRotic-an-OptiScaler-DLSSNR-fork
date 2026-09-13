@@ -45,6 +45,7 @@ struct UiDraft
     bool multipass = false;
     bool hdr = false;
     bool frameGeneration = false;
+    bool preSrSoftReset = false;
 };
 
 inline UiDraft Draft;
@@ -55,7 +56,8 @@ template<class C> void ResetDraft(const C& config) noexcept
         config.DlssNrExperimentalMode.value_or_default(),
         config.DlssNrOverrideMultipassGuardrails.value_or_default(),
         config.DlssNrOverrideHdrGuardrails.value_or_default(),
-        config.DlssNrOverrideFgGuardrails.value_or_default() };
+        config.DlssNrOverrideFgGuardrails.value_or_default(),
+        config.DlssNrPreSrSoftReset.value_or_default() };
 }
 
 template<class C> void EnsureDraft(const C& config) noexcept
@@ -70,6 +72,7 @@ template<class C> void ApplyDraft(C& config) noexcept
     config.DlssNrOverrideMultipassGuardrails = Draft.multipass;
     config.DlssNrOverrideHdrGuardrails = Draft.hdr;
     config.DlssNrOverrideFgGuardrails = Draft.frameGeneration;
+    config.DlssNrPreSrSoftReset = Draft.preSrSoftReset;
 }
 
 inline void DiscardDraft() noexcept { Draft.initialized = false; Draft.dirty = false; }

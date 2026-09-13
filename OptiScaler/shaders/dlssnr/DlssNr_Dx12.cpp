@@ -5009,8 +5009,11 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
 
     // CPU-only observation precedes every resource/tracking-dependent exit. Non-native adapters
     // and default-off calls keep the original late-observation path below.
+    const bool preSrSoftResetEnabled = authoritativeNativePreSr &&
+        cfg.DlssNrExperimentalMode.value_or_default() &&
+        cfg.DlssNrPreSrSoftReset.value_or_default();
     const bool observeEarly = authoritativeNativePreSr &&
-        (cfg.DlssNrPreSrSoftReset.value_or_default() || g_nr.preSrResetPolicy.softResetForBurst);
+        (preSrSoftResetEnabled || g_nr.preSrResetPolicy.softResetForBurst);
     int resetValue = 0;
     bool resetRequested = false;
     PreSrResetPolicyDecision resetPolicy {};
@@ -5020,7 +5023,7 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
         resetRequested = params->Get(NVSDK_NGX_Parameter_Reset, &resetValue) ==
                              NVSDK_NGX_Result_Success && resetValue != 0;
         resetPolicy = AdvancePreSrResetPolicy(g_nr.preSrResetPolicy, resetRequested,
-                                             cfg.DlssNrPreSrSoftReset.value_or_default());
+                                             preSrSoftResetEnabled);
         if (resetRequested && resetPolicy.softResetForBurst)
         {
             BeginPreSrSoftResetBurst();
@@ -5133,13 +5136,13 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
     }
     const bool experimentalPolicy = authoritativeNativePreSr &&
         (resetPolicy.softResetForBurst ||
-         (!resetRequested && cfg.DlssNrPreSrSoftReset.value_or_default()));
+         (!resetRequested && preSrSoftResetEnabled));
 
     if (resetPolicy.resetStarted)
     {
         LOG_INFO("DLSS-NR Pre-SR Reset burst policy: {} (experimental PreSrSoftReset={})",
                  resetPolicy.softResetForBurst ? "soft reset" : "conservative transition",
-                 cfg.DlssNrPreSrSoftReset.value_or_default() ? 1 : 0);
+                  preSrSoftResetEnabled ? 1 : 0);
     }
 
     const bool inputChanged =

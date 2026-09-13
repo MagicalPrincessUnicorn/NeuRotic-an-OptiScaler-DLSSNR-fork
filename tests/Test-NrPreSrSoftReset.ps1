@@ -34,6 +34,8 @@ foreach ($forbidden in @("ParkNrFeature(", "ParkNrResource(", "CreateNrFeature("
 
 Require-Literal $source "if (resetRequested && !softResetFrame)" "Held structural resets are not kept on the conservative bypass."
 Require-Literal $source "cfg.DlssNrPreSrSoftReset.value_or_default()" "Soft-reset behavior is not gated by the experimental option."
+Require-Literal $source "cfg.DlssNrExperimentalMode.value_or_default()" "Soft-reset behavior is not gated by the experimental master switch."
+Require-Literal $source "preSrSoftResetEnabled || g_nr.preSrResetPolicy.softResetForBurst" "Disabling the option can abandon an accepted burst debt."
 Require-Literal $source "resetPolicy.softResetForBurst && event == PreSrEvent::SoftReset" "The burst-latched policy does not gate soft-reset frames."
 Require-Literal $source "firstObservation || inputChanged || outputChanged || qualityChanged ||" "Structural size/format/quality classification is missing."
 Require-Literal $source "experimentalPolicy, configurationChanged, nrRestart);" "New transitions are not isolated behind the experimental policy."
@@ -43,7 +45,7 @@ Require-Literal $source "params->Set(NVSDK_NGX_Parameter_Output, originalOutputV
 Require-Literal $configHeader "NrOptional<bool> DlssNrPreSrSoftReset { false };" "Experimental soft-reset option is not default-off."
 Require-Literal $configSource 'readBool("DlssNr", "PreSrSoftReset")' "Experimental soft-reset option is not loaded."
 Require-Literal $configSource 'ini.SetValue("DlssNr", "PreSrSoftReset"' "Experimental soft-reset option is not saved."
-Require-Literal $handoff 'Intended UI location: `Advanced > Experimental`' "The future UI placement contract is missing."
+Require-Literal $handoff 'UI location: `Neural Rendering > Neural Rendering experimental settings`' "The integrated UI placement contract is missing."
 Require-Literal $handoff 'Potential fix for situations where camera cuts cause the NR layer to reload, leading to a jarring presentation. This might lead to crashes when loading between worldspaces. Requires more testing.' "The approved experimental description changed."
 
 $entry = $source.Substring($source.IndexOf('ID3D12Resource* EvaluateBeforeUpscale('))

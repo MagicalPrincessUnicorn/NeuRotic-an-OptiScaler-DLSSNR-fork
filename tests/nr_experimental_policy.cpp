@@ -16,6 +16,7 @@ struct FakeConfig
     BoolSetting DlssNrOverrideMultipassGuardrails;
     BoolSetting DlssNrOverrideHdrGuardrails;
     BoolSetting DlssNrOverrideFgGuardrails;
+    BoolSetting DlssNrPreSrSoftReset;
 };
 
 int main()
@@ -48,6 +49,7 @@ int main()
     config.DlssNrOverrideMultipassGuardrails = true;
     config.DlssNrOverrideHdrGuardrails = false;
     config.DlssNrOverrideFgGuardrails = false;
+    config.DlssNrPreSrSoftReset = true;
     ResetDraft(config);
     Draft.active = false;
     Draft.multipass = false;
@@ -56,6 +58,7 @@ int main()
     ApplyDraft(config);
     assert(!config.DlssNrExperimentalMode.value);
     assert(config.DlssNrOverrideHdrGuardrails.value);
+    assert(config.DlssNrPreSrSoftReset.value);
     assert(!Capture(config).Allows(Guardrail::Hdr));
 
     Draft.active = true;

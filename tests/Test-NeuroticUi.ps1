@@ -44,7 +44,7 @@ Assert-Ui ($nr.Contains('config.DlssNrApplyModel = false;') -and
            $nr.Contains('config.DlssNrMultipassEnabled = false;') -and
            $nr.Contains('config.DlssNrPasses = 1u;') -and
            $nr.Contains('StageUi::SelectResolutionChoice(config, Advisor().resolutionPreference)')) 'route analysis hides the effect and tests only the selected resolution preference at one pass'
-Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on and tests supported routes sequentially.') -and
+Assert-Ui ($nr.Contains('Analyze temporarily turns Neural Rendering on, turns Multipass off, and tests supported routes sequentially.') -and
            $nr.Contains('your current settings are restored when analysis ends or is cancelled.')) 'Analyze visibly discloses temporary NR activation and restoration before the action'
 Assert-Ui ($nr.Contains('advisor.sampling.Consume(present.cadence)') -and
            (Get-Content -Raw (Join-Path $root 'OptiScaler/dlssnr/DlssNr_Present.cpp')).Contains('g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;')) 'Advisor scores each route from its current live frame interval rather than a stale completed route window'
@@ -140,10 +140,13 @@ Assert-Ui ($stage.IndexOf('SentenceCombo("##NrStage"') -lt $stage.IndexOf('Sente
 Assert-Ui ($stage.Contains('ImGui::TextDisabled("(?)")') -and $stage.Contains('Always Full Output uses the final game output dimensions.')) 'NR resolution explanation is contained in its adjacent tooltip'
 Assert-Ui ($menu.Contains('Save Input Settings') -and $menu.Contains('SaveMenuInputSettings') -and
            $menu.Contains('Pending changes apply only after saving.')) 'gameplay input choices remain drafts until targeted or global save succeeds'
-Assert-Ui ($menu.Contains('Experimental Mode - Active') -and $menu.Contains('Enable Experimental Mode?') -and
-           -not $menu.Contains('Override All Guardrails')) 'experimental settings use a confirmed master switch without an override-all control'
+Assert-Ui ($menu.Contains('Checkbox("Unlock Experimental Mode"') -and $menu.Contains('Enable Experimental Mode?') -and
+           -not $menu.Contains('Override All Guardrails')) 'experimental settings use the requested confirmed master switch without an override-all control'
+Assert-Ui ($menu -match '(?s)RenderNeuralRenderingPage.*?RenderMenu\(.*?RenderNeuralRenderingExperimentalSettings.*?RenderAdvancedPage.*?RenderAdvancedSettings' -and
+           $menu.Contains('Indent(childIndent)') -and $menu.Contains('Checkbox("Preserve NR During Camera Cuts"')) 'experimental settings are below the Neural Rendering content and child options are indented'
 Assert-Ui ($session.Contains('MarkerOwnerAlive') -and $session.Contains('recoveredUnclean') -and
-           $session.Contains('SaveExperimentalSettings(false, false, false, false)') -and
+           $session.Contains('SaveExperimentalSettings(false, false, false, false, false)') -and
+           $session.Contains('DlssNrPreSrSoftReset = false') -and
            $menu.Contains('Last session ended unexpectedly. Experimental options have been disabled.')) 'an unclean active experimental session clears the master and child overrides and reports it after startup'
 Assert-Ui ($session.Contains('markerUnavailable') -and $session.Contains('if (!Detail::WriteMarker(true))') -and
            $session.Contains('DisableInMemory(config)') -and
@@ -151,8 +154,13 @@ Assert-Ui ($session.Contains('markerUnavailable') -and $session.Contains('if (!D
 Assert-Ui ($nr.Contains('NR deactivated due to this rendering combination being untested') -and
            $nr.Contains('presentStatus.policyBlocked')) 'guarded Multipass combinations show the requested red explanation'
 Assert-Ui ($clip.Contains('bubbleAvailable = availableHeight - avatarHeight - padding') -and
-           $clip.Contains('bubbleHeight + padding + avatarHeight') -and
-           $clip.Contains('origin.y + bubbleHeight - buttonHeight - padding')) 'OptiClip speech and dismissal occupy a bubble above the anchored avatar'
+           $clip.Contains('Begin("##OptiClipBubble"') -and $clip.Contains('Begin("##OptiClipAvatar"') -and
+           $clip.Contains('flags | ImGuiWindowFlags_NoInputs') -and
+           -not $clip.Contains('bubbleHeight + padding + avatarHeight')) 'OptiClip uses tight independent bubble and no-input avatar windows without a transparent input-blocking layer'
+Assert-Ui ($nr.Contains('config.DlssNrMultipassEnabled = false') -and
+           $nr.Contains('Multipass is temporarily disabled.') -and
+           $nr.Contains('TableSetupColumn("##AdvisorSignalsColumn", ImGuiTableColumnFlags_WidthStretch, 2.0f)') -and
+           $nr.Contains('TableSetupColumn("##AdvisorRecommendationColumn", ImGuiTableColumnFlags_WidthStretch, 1.0f)')) 'Analyze All disables Multipass per reversible trial and Advisor overview uses a two-thirds signal column'
 Assert-Ui ($stage.Contains('"Neural Rendering Injection", "upscaling"') -and
            -not $stage.Contains('"Neural Rendering Injection", "Upscaling"') -and
            $stage.Contains('stageHelp, ImGui::GetFontSize() * 8.0f')) 'stage sentence uses lowercase upscaling and a scale-aware wider selector'

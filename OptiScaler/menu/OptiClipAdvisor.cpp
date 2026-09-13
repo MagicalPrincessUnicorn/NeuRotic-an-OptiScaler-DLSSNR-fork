@@ -115,48 +115,45 @@ void Render(const Bounds& menu, float menuScale, double nowSeconds, bool enabled
     const auto textSize = ImGui::CalcTextSize(text.c_str(), nullptr, false, (std::max)(1.0f, textWidth));
     const float bubbleHeight = showMessage ? (std::min)(bubbleAvailable,
         textSize.y + buttonHeight + padding * 3) : 0.0f;
-    const float height = showMessage ? bubbleHeight + padding + avatarHeight : avatarHeight;
-
-    ImGui::SetNextWindowViewport(viewport->ID);
-    ImGui::SetNextWindowPos({ maxRight, maxBottom }, ImGuiCond_Always, { 1.0f, 1.0f });
-    ImGui::SetNextWindowSize({ showMessage ? width : avatarWidth, height }, ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.0f);
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration |
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing |
         ImGuiWindowFlags_NoNav;
-    if (!showMessage) flags |= ImGuiWindowFlags_NoInputs;
-    if (!ImGui::Begin("##OptiClipAdvisor", nullptr, flags))
-    {
-        ImGui::End();
-        return;
-    }
 
-    // Focusing the host raises it above independent windows. Restore display order
-    // without taking navigation focus, and keep active popups above the mascot.
-    auto* window = ImGui::GetCurrentWindow();
-    ImGui::BringWindowToDisplayFront(window);
-    for (const auto& popup : ImGui::GetCurrentContext()->OpenPopupStack)
-        if (popup.Window && popup.Window->Active)
-        {
-            ImGui::BringWindowToDisplayBehind(window, popup.Window);
-            break;
-        }
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const ImVec2 origin = ImGui::GetWindowPos();
+    // Independent tightly bounded windows prevent the transparent space between the
+    // speech bubble and mascot from intercepting mouse input intended for the menu.
+    const auto keepAboveHostBelowPopups = []()
+    {
+        auto* window = ImGui::GetCurrentWindow();
+        ImGui::BringWindowToDisplayFront(window);
+        for (const auto& popup : ImGui::GetCurrentContext()->OpenPopupStack)
+            if (popup.Window && popup.Window->Active)
+            {
+                ImGui::BringWindowToDisplayBehind(window, popup.Window);
+                break;
+            }
+    };
+
     if (showMessage)
     {
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowPos({ maxRight, maxBottom - avatarHeight - padding },
+                                ImGuiCond_Always, { 1.0f, 1.0f });
+        ImGui::SetNextWindowSize({ width, bubbleHeight }, ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        if (!ImGui::Begin("##OptiClipBubble", nullptr, flags))
+        {
+            ImGui::End();
+            return;
+        }
+        keepAboveHostBelowPopups();
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        const ImVec2 origin = ImGui::GetWindowPos();
         draw->AddRectFilled(origin, {origin.x + width, origin.y + bubbleHeight},
                             ImGui::GetColorU32(ImGuiCol_WindowBg, 0.97f), 8.0f * menuScale);
         draw->AddRect(origin, {origin.x + width, origin.y + bubbleHeight},
                       ImGui::GetColorU32(ImGuiCol_Border), 8.0f * menuScale);
-    }
-    DrawMascot(draw, { maxRight - avatarWidth, maxBottom - avatarHeight }, avatarScale, nowSeconds);
-    if (showMessage)
-    {
         const float bodyHeight = (std::max)(1.0f, bubbleHeight - buttonHeight - padding * 3);
         ImGui::SetCursorScreenPos({origin.x + padding, origin.y + padding});
-        // The full-width speech bubble remains above the bottom-right mascot, so neither
-        // translated prose nor its dismiss control can cover settings beside OptiClip.
         if (ImGui::BeginChild("##OptiClipText", {textWidth, bodyHeight}, ImGuiChildFlags_None,
                               ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav))
         {
@@ -168,7 +165,20 @@ void Render(const Bounds& menu, float menuScale, double nowSeconds, bool enabled
         ImGui::EndChild();
         ImGui::SetCursorScreenPos({origin.x + padding, origin.y + bubbleHeight - buttonHeight - padding});
         if (ImGui::SmallButton("Dismiss##OptiClip")) controller.Dismiss(nowSeconds);
+        ImGui::End();
     }
+
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::SetNextWindowPos({ maxRight, maxBottom }, ImGuiCond_Always, { 1.0f, 1.0f });
+    ImGui::SetNextWindowSize({ avatarWidth, avatarHeight }, ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    if (!ImGui::Begin("##OptiClipAvatar", nullptr, flags | ImGuiWindowFlags_NoInputs))
+    {
+        ImGui::End();
+        return;
+    }
+    keepAboveHostBelowPopups();
+    DrawMascot(ImGui::GetWindowDrawList(), ImGui::GetWindowPos(), avatarScale, nowSeconds);
     ImGui::End();
 }
 } // namespace OptiClip

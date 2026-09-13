@@ -369,12 +369,19 @@ int main()
             OptiClip::SetEnabled(true, 500);
             OptiClip::ReportRapidToggle(OptiClip::ToggleOrigin::Checkbox, "Show OptiClip advisor", 500);
             OptiClip::Render({16, 16, width, height}, scale, 500, true);
-            const auto* mascot = ImGui::FindWindowByName("##OptiClipAdvisor");
-            Check(mascot && mascot->Active, "OptiClip renders at each language/scale");
+            const auto* mascot = ImGui::FindWindowByName("##OptiClipAvatar");
+            const auto* bubble = ImGui::FindWindowByName("##OptiClipBubble");
+            Check(mascot && mascot->Active && bubble && bubble->Active,
+                  "OptiClip avatar and message render at each language/scale");
             Check(mascot->Pos.x >= 16 && mascot->Pos.y >= 16 &&
                 mascot->Pos.x + mascot->Size.x <= 16 + width && mascot->Pos.y + mascot->Size.y <= 16 + height,
                 "OptiClip remains anchored inside the host at each scale");
             Check((mascot->Flags & ImGuiWindowFlags_NoNav) != 0, "OptiClip never steals device navigation");
+            Check((mascot->Flags & ImGuiWindowFlags_NoMouseInputs) != 0 &&
+                  (bubble->Flags & ImGuiWindowFlags_NoMouseInputs) == 0,
+                  "Only the tightly bounded speech bubble accepts input");
+            Check(bubble->Pos.y + bubble->Size.y <= mascot->Pos.y,
+                  "OptiClip leaves no input window between speech and avatar");
             ImGui::Render();
         }
         ImGui::DestroyContext();
