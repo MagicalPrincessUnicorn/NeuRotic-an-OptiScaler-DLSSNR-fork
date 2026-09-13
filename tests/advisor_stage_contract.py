@@ -41,7 +41,7 @@ require(menu.count('advisor.providerGeneration = AdvisorProviderGeneration(prese
         menu.count('AdvisorProviderGeneration(present) != advisor.providerGeneration') == 1 and
         'return provider.known ? provider.generation : present.cadence.providerGeneration;' in menu,
         'current provider identity seeds and checks a trial even after native fast exits')
-native = section(dispatch, 'if (AdvisorSampling::TemporarySettings.load() && runtime.enabled && route == 0)',
+native = section(dispatch, 'if (AdvisorSampling::ObserveNativeCadence(runtime.enabled, route, State().swapchains))',
                  'owner->presentPolicyActive = true;')
 require('ReportPresentCallTiming(' in native and 'identity.advisorConfigurationGeneration =' in native and
         'provider.known && !provider.enabled && State().swapchains == 1' in native,

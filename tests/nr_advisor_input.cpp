@@ -19,6 +19,16 @@ struct AdvisorSnapshot
 int main()
 {
     using namespace DlssNr::AdvisorSampling;
+    for (bool temporary : {false, true})
+        for (bool enabled : {false, true})
+            for (unsigned int route = 0; route < 3; ++route)
+                for (uint32_t chains = 0; chains < 3; ++chains)
+                {
+                    TemporarySettings.store(temporary);
+                    assert(ObserveNativeCadence(enabled, route, chains) ==
+                           (temporary && enabled && route == 0 && chains == 1));
+                }
+    TemporarySettings.store(false);
     for (unsigned mask = 0; mask < 8; ++mask)
     {
         OptiInput::MenuInputPolicy p {bool(mask & 1), bool(mask & 2), bool(mask & 4)};

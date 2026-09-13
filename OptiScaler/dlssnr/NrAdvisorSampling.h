@@ -8,6 +8,8 @@ namespace DlssNr::AdvisorSampling
 {
 inline std::atomic_bool TemporarySettings { false };
 inline std::atomic_uint64_t ConfigurationGeneration { 0 };
+inline bool ObserveNativeCadence(bool enabled, unsigned int route, uint32_t swapchains)
+{ return TemporarySettings.load() && enabled && route == 0 && swapchains == 1; }
 enum class CadenceSource { Unknown, ApplicationPresentFgOff, VerifiedPreFgPresent };
 struct Cadence
 {

@@ -189,7 +189,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
                 end - exitStart, end - beforeForward, result, false, 0});
             return result;
         }
-        if (AdvisorSampling::TemporarySettings.load() && runtime.enabled && route == 0)
+        if (AdvisorSampling::ObserveNativeCadence(runtime.enabled, route, State().swapchains))
         {
             // Advisor-only native cadence. No Present NR admission, resource queries,
             // probes or FG input changes; ordinary Native/Off retains its fast exit.
