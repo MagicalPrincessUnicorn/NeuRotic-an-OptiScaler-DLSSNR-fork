@@ -21,6 +21,11 @@ menu = read('OptiScaler/dlssnr/DlssNr_Menu.cpp')
 assert 'Screenshots::BackendRefusal(route, enabled, State::Instance().api == API::DX12)' in menu
 assert 'busy || analysis || backendRefusal != nullptr' in menu
 assert 'Native NR on###ScreenshotNative' in menu and 'Current full output###ScreenshotNative' in menu
+assert 'Compatibility: DX11 games can compare active Present Image Only and Present Enhanced routes.' in menu
+assert 'the original/reference image can come out darker than it should' in menu
+assert 'Comparison unavailable for the current route: %s' in menu
+assert 'Unavailable for this route###TakeComparisonScreenshots' in menu
+assert 'Take comparison screenshots###TakeComparisonScreenshots' in menu
 assert 'g_timingSettings->SameConfiguration(cfg)' in dx
 assert 'g_timingSettings->SameConfiguration(*currentSettings)' in dx
 assert 'timingCapture != g_timingCapture || frame.Reset' in dx

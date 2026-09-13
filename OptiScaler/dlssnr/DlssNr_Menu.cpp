@@ -2799,7 +2799,7 @@ static void RenderMultipassMenu(Config* config, float menuResScale)
 
 void RenderScreenshotMenu(Config* config)
 {
-    if (auto section = ScopedCollapsingHeader("Screenshots", ImGuiTreeNodeFlags_DefaultOpen); section.IsHeaderOpen())
+    if (auto section = ScopedCollapsingHeader("Comparison screenshots", ImGuiTreeNodeFlags_DefaultOpen); section.IsHeaderOpen())
     {
         ScopedIndent indent {};
         ScopedNestedTextWrap wrap {};
@@ -2810,6 +2810,7 @@ void RenderScreenshotMenu(Config* config)
         const bool nativePair = NativeComparisonScreenshotAvailable();
         const char* backendRefusal = Screenshots::BackendRefusal(route, enabled, State::Instance().api == API::DX12);
         ImGui::TextWrapped("Save full-resolution PNG comparisons and matching JSON manifests in NeuroticScreenshots beside the game.");
+        ImGui::TextWrapped("Compatibility: DX11 games can compare active Present Image Only and Present Enhanced routes. Native Temporal and NR-off comparisons require DX12.");
         const bool analysis = Advisor().running;
         ImGui::BeginDisabled(busy || analysis || backendRefusal != nullptr);
         bool before = config->ScreenshotNrOff.value_or_default();
@@ -2825,9 +2826,9 @@ void RenderScreenshotMenu(Config* config)
         if (ImGui::Checkbox("Present NR on", &imageOnly)) config->ScreenshotPresentNr = imageOnly;
         ImGui::EndDisabled();
         if (route == 0)
-            ImGui::TextWrapped("Experimental Native comparison: display conversion remains under investigation. Brightness may differ; no brightness adjustment is applied.");
+            ImGui::TextWrapped("Experimental Native Temporal limitation: the original/reference image can come out darker than it should because display conversion is currently incorrect. No brightness workaround is applied.");
         if (backendRefusal)
-            ImGui::TextWrapped("%s", backendRefusal);
+            ImGui::TextWrapped("Comparison unavailable for the current route: %s", backendRefusal);
         else if (nativePair && config->DlssNrRunBeforeSr.value_or_default() && !Telemetry().nativeRayReconstructionActive)
         {
             ImGui::TextWrapped("Performance compares one frame using two temporary DLSS evaluations with fresh history, then stops. Live history is unchanged. Capture can briefly pause rendering and use extra memory.");
@@ -2846,7 +2847,9 @@ void RenderScreenshotMenu(Config* config)
         if (analysis)
             ImGui::TextWrapped("Finish or cancel analysis before taking comparisons.");
         ImGui::TextWrapped("Capture starts on the next ready frame. You can leave this menu open; it is excluded automatically. In-game HUD and other overlays already in the image remain.");
-        if (ImGui::Button("Take screenshots")) RequestComparisonScreenshot();
+        if (ImGui::Button(backendRefusal ? "Unavailable for this route###TakeComparisonScreenshots"
+                                         : "Take comparison screenshots###TakeComparisonScreenshots"))
+            RequestComparisonScreenshot();
         ImGui::EndDisabled();
         if (busy && ImGui::Button("Cancel screenshots")) CancelComparisonScreenshot();
         ImGui::TextWrapped("%s", ComparisonScreenshotStatus().c_str());
