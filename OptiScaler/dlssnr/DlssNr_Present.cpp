@@ -753,7 +753,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
-    const auto experimental = ExperimentalPolicy::Capture(*config);
+    const auto experimental = ExperimentalPolicy::Capture(settings);
     const bool frameGeneration = config->FGEnabled.value_or_default() ||
         State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive;
     if (enhanced && settings.DlssNrMultipassEnabled.value_or_default() &&

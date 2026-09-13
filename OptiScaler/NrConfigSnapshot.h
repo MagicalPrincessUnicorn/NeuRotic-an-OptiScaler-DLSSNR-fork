@@ -75,6 +75,10 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
     X(DlssNrMultipassEnabled) \
+    X(DlssNrExperimentalMode) \
+    X(DlssNrOverrideMultipassGuardrails) \
+    X(DlssNrOverrideHdrGuardrails) \
+    X(DlssNrOverrideFgGuardrails) \
     X(DlssNrBasicMultipass) \
     X(DlssNrSecondLayer) \
     X(DlssNrSecondLayerWorkingScale) \
