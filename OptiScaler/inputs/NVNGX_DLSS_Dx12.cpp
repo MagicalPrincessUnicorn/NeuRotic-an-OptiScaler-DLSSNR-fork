@@ -1417,6 +1417,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 }
                 if (!nativeBackbuffer && DlssNr::PreFg::PendingCompletions())
                 {
+                    DlssNr::PreFg::RevokeReadiness();
                     NR_FRAME_TRACE("nr-fg-handoff-refused", "reason=missing-native-backbuffer handle={} list={:p}",
                         handleId, static_cast<void*>(InCmdList));
                     return NVSDK_NGX_Result_FAIL_InvalidParameter;
@@ -1427,8 +1428,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 if (completion.result == DlssNr::PreFg::CompletionClaimResult::Ready &&
                     !DlssNr::GpuSafety::BindExternalWait(InCmdList, completion.dependency.fence.Get(),
                         completion.dependency.value, completion.dependency.token,
-                        completion.dependency.sequence))
+                        completion.dependency.sequence, completion.dependency.status))
                 {
+                    if (completion.dependency.status) completion.dependency.status->Fail();
+                    DlssNr::PreFg::RevokeReadiness();
                     DlssNr::PreFg::RejectCompletion(nativeBackbuffer, provider.generation, handleId,
                         completion.dependency.token, completion.dependency.sequence);
                     handoffFailed = true;
@@ -1446,6 +1449,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
             NVSDK_NGX_Result result =
                 NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            if (feature == NVSDK_NGX_Feature_FrameGeneration && result != NVSDK_NGX_Result_Success)
+                DlssNr::PreFg::RevokeReadiness();
             NR_FRAME_TRACE("ngx-native-return", "handle={} feature={} result={} list={:p}", handleId,
                 static_cast<unsigned int>(feature), static_cast<unsigned int>(result), static_cast<void*>(InCmdList));
 

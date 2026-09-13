@@ -120,8 +120,11 @@ inline sl::Result LegacyTags(const sl::ViewportHandle& viewport, const sl::Resou
 inline bool PrepareFullFrame(const Frame& frame)
 {
     const auto provider = Provider();
+    const auto native = NativeFg();
     if (!provider.known || !provider.enabled || !provider.supported ||
-        provider.generation != frame.providerGeneration) return false;
+        provider.generation != frame.providerGeneration || native.active != 1 ||
+        native.generation != frame.nativeFgGeneration || native.instance != frame.nativeFgInstance ||
+        (frame.readiness && frame.readinessIdentity.invalidation != State().readinessEpoch.load())) return false;
     sl::ResourceTag fullFrame[] = {
         {nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent},
         {nullptr, sl::kBufferTypeUIColorAndAlpha, sl::ResourceLifecycle::eValidUntilPresent},
@@ -148,12 +151,14 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     std::unique_lock ownerLock(owner->presentationMutex, std::try_to_lock);
     if (!ownerLock.owns_lock())
     {
+        RevokeReadiness();
         ++State().rejected;
         NR_FRAME_TRACE("nr-before-fg-refused", "reason=concurrent-application-present");
         return forward();
     }
     struct ForwardScope { ForwardScope() { forwardingPresent = true; } ~ForwardScope() { forwardingPresent = false; } } scope;
     const double start = Util::MillisecondsNow();
+    const auto previousReadiness = owner->startup.State();
     const double interval = owner->previousPresentMs != 0.0 ? start - owner->previousPresentMs : 0.0;
     owner->previousPresentMs = start;
     auto* config = Config::Instance();
@@ -166,8 +171,10 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         owner->lastFg = fg;
         owner->providerGeneration = provider.generation;
         owner->startup.Reset();
+        owner->providerChangedMs = start;
     }
     auto frame = Claim(fg);
+    if (State().swapchains != 1) owner->startup.Reset();
     frame.providerGeneration = provider.generation;
     frame.diagnosticClaim = FgLifecycle::Read();
     const auto nativeFg = NativeFg();
@@ -187,7 +194,11 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         owner->startup.Reset();
     owner->startupRoute = route;
     owner->startupResume = runtime.resumeGeneration;
-    if (fg) frame.allowOutput = owner->startup.Ready();
+    if (fg)
+    {
+        frame.readiness = &owner->startup;
+        frame.allowOutput = false; // decided against exact resources inside evaluation
+    }
     if (fg)
     {
         if (!provider.known || !provider.supported || ::State::Instance().activeFgOutput != FGOutput::NoFG ||
@@ -197,8 +208,9 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         {
             frame.valid = false;
             frame.refusal = "Pre-FG adapter requires one native Streamline 2x provider with NR Multipass off";
+            owner->startup.Reset();
         }
-        if (frame.valid && frame.allowOutput)
+        if (frame.valid)
         {
             ComPtr<IDXGISwapChain3> chain3;
             ComPtr<ID3D12Resource> backbuffer;
@@ -207,16 +219,17 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
             {
                 frame.valid = false;
                 frame.refusal = "Could not identify the native FG backbuffer for this Present";
+                owner->startup.Reset();
             }
             else
             {
                 const auto nativeBuffer = NativeIdentity::Resolve<ID3D12Resource>(backbuffer.Get());
                 frame.outputResource = nativeBuffer.object.Get();
-                frame.completionReservation = ReserveCompletion(frame.outputResource, frame);
-                if (!frame.outputResource || !frame.completionReservation)
+                if (!frame.outputResource)
                 {
                     frame.valid = false;
-                    frame.refusal = "Could not reserve the native FG completion handoff for this Present";
+                    frame.refusal = "Could not identify the native FG backbuffer for this Present";
+                    owner->startup.Reset();
                 }
             }
         }
@@ -226,17 +239,31 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     // FG off uses the existing admission contract. Native mode still performs no Present model work.
     auto identity = EvaluatePresentImageOnly(chain, owner->queue.Get(), flags, parameters, fg ? &frame : nullptr);
-    if (frame.completionReservation && !identity.copybackSubmitted)
+    if (frame.completionReservation && !identity.copybackSubmitted && !identity.probeSubmitted)
         CancelCompletion(frame.completionReservation);
     bool completionPublished = false;
-    if (identity.completedOutput && frame.completionReservation)
+    if ((identity.completedOutput || identity.probeSubmitted) && frame.completionReservation)
     {
         const auto nativeOutput = NativeIdentity::Resolve<ID3D12Resource>(identity.outputResource);
         completionPublished = nativeOutput.object.Get() == frame.outputResource &&
             CommitCompletion(frame.completionReservation, frame.outputResource,
-                             identity.completionFence.Get(), identity.completionValue);
+                             identity.completionFence.Get(), identity.completionValue,
+                             identity.probeSubmitted ? CompletionKind::Probe : CompletionKind::Output);
+        if (identity.probeSubmitted)
+        {
+            ++owner->probes;
+            owner->probeSubmittedMs = Util::MillisecondsNow();
+            if (!completionPublished || !owner->startup.Submit(frame.readinessIdentity,
+                    identity.completionFence.Get(), identity.completionValue, frame.sequence,
+                    CompletionStatus(frame.completionReservation)))
+            { owner->startup.Reset(); RevokeReadiness(); }
+        }
     }
     frame.outputSubmitted = identity.completedOutput && (!fg || completionPublished);
+    // A metadata-only refusal forwards the untouched image. Completed packets
+    // from older Presents must not turn that refusal into a duplicate FG claim.
+    // The one pending probe retains its packet until its exact acknowledgement.
+    if (!frame.outputSubmitted && !owner->startup.Pending()) RetireFrameCompletions(frame.sequence);
     const bool unsafeHandoff = fg && identity.copybackSubmitted && !completionPublished;
     if (unsafeHandoff)
         NR_FRAME_TRACE("nr-fg-handoff-refused", "reason=completion-publish-failed token={} sequence={} "
@@ -259,6 +286,11 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     // Copyback may already be on the GPU even if its signal/publication failed.
     // Do not enter a provider Present with an unorderable modified input.
     const HRESULT result = unsafeHandoff ? E_FAIL : forward();
+    if (FAILED(result) || unsafeHandoff)
+    {
+        owner->startup.Reset();
+        ResetCompletions();
+    }
     FgLifecycle::Present(frame.diagnosticClaim, provider.generation, frame.key, chain, owner->queue.Get(),
         frame.outputSubmitted, result);
     if (DredDiagnostics::Enabled() && FAILED(result) && owner->queue)
@@ -269,10 +301,27 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     if (fg && requested)
     {
-        owner->startup.Observe(frame.valid && identity.modelPrepared && SUCCEEDED(result));
+        ComPtr<ID3D12Device> readinessDevice;
+        if (!owner->queue || FAILED(owner->queue->GetDevice(IID_PPV_ARGS(&readinessDevice))) ||
+            readinessDevice->GetDeviceRemovedReason() != S_OK)
+        { owner->startup.Reset(); ResetCompletions(); }
+        owner->startup.Presented(frame.sequence, SUCCEEDED(result));
+        owner->startup.CheckEpoch(State().readinessEpoch.load());
+        if (previousReadiness != owner->startup.State())
+        {
+            const auto transition = ++owner->readinessTransitions;
+            if (transition <= 16 || transition % 120 == 0)
+                LOG_INFO("NR readiness: phase={} reason={} token={} sequence={} probes={} transitions={} "
+                    "providerAgeMs={:.3f} probeAgeMs={:.3f} output={}",
+                    static_cast<unsigned int>(owner->startup.State()), owner->startup.Reason(),
+                    frame.key, frame.sequence, owner->probes, transition,
+                    start - owner->providerChangedMs, Util::MillisecondsNow() - owner->probeSubmittedMs,
+                    frame.outputSubmitted);
+        }
         NR_FRAME_TRACE("nr-startup-admission", "token={} modelPrepared={} outputAllowed={} outputSubmitted={} "
-            "qualified={} required={}", frame.key, identity.modelPrepared, frame.allowOutput,
-            frame.outputSubmitted, owner->startup.Count(), StartupGate::required);
+            "probeSubmitted={} phase={} epoch={}", frame.key, identity.modelPrepared, frame.allowOutput,
+            frame.outputSubmitted, identity.probeSubmitted, static_cast<unsigned int>(owner->startup.State()),
+            State().readinessEpoch.load());
     }
     const double end = Util::MillisecondsNow();
     ReportPresentCallTiming({identity, interval, beforeProvider - start, end - start, end - beforeProvider, result,
@@ -291,6 +340,7 @@ inline HRESULT STDMETHODCALLTYPE Present1(IDXGISwapChain1* chain, UINT sync, UIN
 inline void Invalidate()
 {
     std::lock_guard lock(State().mutex);
+    RevokeReadiness();
     State().ledger.Reset();
     State().completions.Reset();
 }

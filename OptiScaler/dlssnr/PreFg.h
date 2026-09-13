@@ -9,6 +9,7 @@
 #include <mutex>
 #include "NativeIdentity.h"
 #include "FgLifecycleContract.h"
+#include "StartupReadiness.h"
 
 namespace DlssNr::PreFg
 {
@@ -30,6 +31,8 @@ struct Frame
     ID3D12Resource* outputResource = nullptr; // borrowed while the swapchain owns its buffers
     bool (*prepareInputs)(const Frame&) = nullptr;
     bool allowOutput = true;
+    StartupReadiness* readiness = nullptr; // owner presentation mutex held
+    ReadinessIdentity readinessIdentity {};
 };
 
 // Native DLSSG can evaluate asynchronously on a provider-owned queue after the
@@ -81,12 +84,16 @@ struct NativeFgState
     }
 };
 
+enum class CompletionKind { Output, Probe };
 struct CompletionDependency
 {
     Microsoft::WRL::ComPtr<ID3D12Fence> fence;
     uint64_t value = 0;
     uint64_t token = 0;
     uint64_t sequence = 0;
+    uint64_t reservation = 0;
+    CompletionKind kind = CompletionKind::Output;
+    std::shared_ptr<GpuSafety::ExternalWaitStatus> status;
 };
 enum class CompletionClaimResult { None, Ready, Refused };
 struct CompletionClaim
@@ -110,6 +117,8 @@ class CompletionLedger
         bool ready = false;
         bool claimed = false;
         bool invalidated = false;
+        CompletionKind kind = CompletionKind::Output;
+        std::shared_ptr<GpuSafety::ExternalWaitStatus> status;
     };
     std::array<Entry, 8> entries {};
     uint64_t nextReservation = 0;
@@ -127,7 +136,8 @@ class CompletionLedger
   public:
     uint64_t Reserve(ID3D12Resource* resource, uint64_t providerGeneration,
                      uint64_t nativeFgGeneration, uint64_t nativeFgInstance,
-                     uint64_t token, uint64_t sequence)
+                     uint64_t token, uint64_t sequence, CompletionKind kind = CompletionKind::Output,
+                     std::atomic<uint64_t>* failureEpoch = nullptr)
     {
         if (!resource || !providerGeneration || !nativeFgGeneration || !nativeFgInstance || !token || !sequence)
             return 0;
@@ -152,17 +162,21 @@ class CompletionLedger
                 entry.nativeFgInstance = nativeFgInstance;
                 entry.token = token;
                 entry.sequence = sequence;
+                entry.kind = kind;
+                entry.status = std::make_shared<GpuSafety::ExternalWaitStatus>();
+                entry.status->failureEpoch = failureEpoch;
                 return reservation;
             }
         return 0;
     }
-    bool Commit(uint64_t reservation, ID3D12Resource* resource, ID3D12Fence* fence, uint64_t value)
+    bool Commit(uint64_t reservation, ID3D12Resource* resource, ID3D12Fence* fence, uint64_t value,
+                CompletionKind kind = CompletionKind::Output)
     {
         if (!reservation || !resource || !fence || !value || value == UINT64_MAX) return false;
         for (auto& entry : entries)
             if (entry.reservation == reservation && entry.resource == resource && !entry.ready)
             {
-                entry.fence = fence; entry.value = value; entry.ready = true;
+                entry.fence = fence; entry.value = value; entry.ready = true; entry.kind = kind;
                 return !entry.invalidated;
             }
         return false;
@@ -172,8 +186,20 @@ class CompletionLedger
         for (auto& entry : entries)
             if (entry.reservation == reservation) { entry = {}; return; }
     }
+    void RetireBefore(uint64_t sequence)
+    {
+        for (auto& entry : entries)
+            if (entry.reservation && entry.sequence < sequence && Completed(entry)) entry = {};
+    }
+    std::shared_ptr<GpuSafety::ExternalWaitStatus> Status(uint64_t reservation) const
+    {
+        for (const auto& entry : entries)
+            if (entry.reservation == reservation && !entry.invalidated) return entry.status;
+        return {};
+    }
     CompletionClaim Claim(ID3D12Resource* resource, uint64_t providerGeneration,
-                          uint64_t nativeFgGeneration, uint64_t nativeFgInstance)
+                          uint64_t nativeFgGeneration, uint64_t nativeFgInstance,
+                          uint64_t exactToken = 0, uint64_t exactSequence = 0)
     {
         CompletionClaim claim;
         RetireInvalidated();
@@ -183,13 +209,17 @@ class CompletionLedger
             if (entry.providerGeneration != providerGeneration ||
                 entry.nativeFgGeneration != nativeFgGeneration ||
                 entry.nativeFgInstance != nativeFgInstance || entry.invalidated || entry.claimed || !entry.ready ||
-                !entry.fence || !entry.value)
+                !entry.fence || !entry.value || (exactToken && entry.token != exactToken) ||
+                (exactSequence && entry.sequence != exactSequence))
             { claim.result = CompletionClaimResult::Refused; return claim; }
             claim.result = CompletionClaimResult::Ready;
             claim.dependency.fence = entry.fence;
             claim.dependency.value = entry.value;
             claim.dependency.token = entry.token;
             claim.dependency.sequence = entry.sequence;
+            claim.dependency.reservation = entry.reservation;
+            claim.dependency.kind = entry.kind;
+            claim.dependency.status = entry.status;
             entry.claimed = true;
             return claim;
         }
@@ -207,22 +237,6 @@ class CompletionLedger
         unsigned int count = 0;
         for (const auto& entry : entries) if (entry.reservation) ++count;
         return count;
-    }
-};
-// Keep the game's original image visible while private model initialization and
-// frame admission settle. A failure restarts qualification, never reuses output.
-class StartupGate
-{
-    unsigned int successful = 0;
-  public:
-    static constexpr unsigned int required = 8;
-    bool Ready() const { return successful >= required; }
-    unsigned int Count() const { return successful; }
-    void Reset() { successful = 0; }
-    void Observe(bool validModelAndPresent)
-    {
-        if (!validModelAndPresent) Reset();
-        else if (successful < required) ++successful;
     }
 };
 // Present-scoped provenance only; zero outside the provider's synchronous call.
@@ -367,8 +381,10 @@ struct Registry
     CompletionLedger completions;
     std::atomic<unsigned int> swapchains {0};
     std::atomic<uint64_t> realCalls {0}, submitted {0}, bypassed {0}, rejected {0};
+    std::atomic<uint64_t> readinessEpoch {1};
 };
 inline Registry& State() { static auto* state = new Registry; return *state; }
+inline void RevokeReadiness() { ++State().readinessEpoch; }
 // Optional scalar observer called under the existing ledger lock. It cannot affect Claim.
 using LedgerObserver = void(*)(const char*, uint32_t, uint32_t, Ledger::Snapshot, Ledger::Snapshot) noexcept;
 inline std::atomic<LedgerObserver> ledgerObserver {nullptr};
@@ -384,6 +400,7 @@ inline void PublishProvider(bool enabled, bool supported)
     if (!provider.known || provider.enabled != enabled || provider.supported != supported)
     {
         ++provider.generation;
+        RevokeReadiness();
         State().completions.Reset();
     }
     provider.known = true; provider.enabled = enabled; provider.supported = supported;
@@ -392,6 +409,7 @@ inline void PublishNativeFgCreated(uintptr_t handle)
 {
     std::lock_guard lock(State().mutex);
     State().nativeFg.Create(handle);
+    RevokeReadiness();
     State().completions.Reset();
 }
 inline uint64_t NativeFgInstance(uintptr_t handle)
@@ -402,7 +420,8 @@ inline uint64_t NativeFgInstance(uintptr_t handle)
 inline void PublishNativeFgReleased(uintptr_t handle, uint64_t expected)
 {
     std::lock_guard lock(State().mutex);
-    if (State().nativeFg.Release(handle, expected)) State().completions.Reset();
+    if (State().nativeFg.Release(handle, expected))
+    { RevokeReadiness(); State().completions.Reset(); }
 }
 inline FgLifecycle::Snapshot NativeFg()
 {
@@ -419,12 +438,19 @@ inline uint64_t ReserveCompletion(ID3D12Resource* resource, const Frame& frame)
         native.generation != frame.nativeFgGeneration || native.instance != frame.nativeFgInstance)
         return 0;
     return State().completions.Reserve(resource, frame.providerGeneration, frame.nativeFgGeneration,
-        frame.nativeFgInstance, frame.key, frame.sequence);
+        frame.nativeFgInstance, frame.key, frame.sequence,
+        frame.allowOutput ? CompletionKind::Output : CompletionKind::Probe, &State().readinessEpoch);
 }
-inline bool CommitCompletion(uint64_t reservation, ID3D12Resource* resource, ID3D12Fence* fence, uint64_t value)
+inline bool CommitCompletion(uint64_t reservation, ID3D12Resource* resource, ID3D12Fence* fence, uint64_t value,
+                             CompletionKind kind = CompletionKind::Output)
 {
     std::lock_guard lock(State().mutex);
-    return State().completions.Commit(reservation, resource, fence, value);
+    return State().completions.Commit(reservation, resource, fence, value, kind);
+}
+inline std::shared_ptr<GpuSafety::ExternalWaitStatus> CompletionStatus(uint64_t reservation)
+{
+    std::lock_guard lock(State().mutex);
+    return State().completions.Status(reservation);
 }
 inline void CancelCompletion(uint64_t reservation)
 {
@@ -437,13 +463,22 @@ inline CompletionClaim ClaimCompletion(ID3D12Resource* resource, uint64_t provid
     std::lock_guard lock(State().mutex);
     const auto native = State().nativeFg.Read();
     const auto instance = State().nativeFg.Find(nativeHandle);
-    return State().completions.Claim(resource, providerGeneration, native.generation,
-        native.active == 1 && instance == native.instance ? instance : 0);
+    const auto* frame = forwardingFrame;
+    auto result = State().completions.Claim(resource, providerGeneration, native.generation,
+        native.active == 1 && instance == native.instance ? instance : 0,
+        frame ? frame->key : 0, frame ? frame->sequence : 0);
+    if (result.result == CompletionClaimResult::Refused) RevokeReadiness();
+    return result;
 }
 inline unsigned int PendingCompletions()
 {
     std::lock_guard lock(State().mutex);
     return State().completions.Count();
+}
+inline void RetireFrameCompletions(uint64_t sequence)
+{
+    std::lock_guard lock(State().mutex);
+    State().completions.RetireBefore(sequence);
 }
 inline void RejectCompletion(ID3D12Resource* resource, uint64_t providerGeneration,
                              uintptr_t nativeHandle, uint64_t token, uint64_t sequence)
@@ -458,6 +493,7 @@ inline void RejectCompletion(ID3D12Resource* resource, uint64_t providerGenerati
 inline void ResetCompletions()
 {
     std::lock_guard lock(State().mutex);
+    RevokeReadiness();
     State().completions.Reset();
 }
 inline ProviderState Provider()
@@ -540,9 +576,11 @@ class Owner final : public IUnknown
     bool lastFg = false;
     uint64_t providerGeneration = 0;
     double previousPresentMs = 0.0;
-    StartupGate startup;
+    StartupReadiness startup;
     unsigned int startupRoute = 0;
     uint64_t startupResume = 0;
+    uint64_t probes = 0, readinessTransitions = 0;
+    double providerChangedMs = 0.0, probeSubmittedMs = 0.0;
     explicit Owner(ID3D12CommandQueue* value) : queue(value) { ++State().swapchains; }
     ~Owner() { --State().swapchains; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override

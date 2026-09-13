@@ -5,6 +5,79 @@
 #include <thread>
 #include <vector>
 
+static void TestReadiness(ID3D12Device* device)
+{
+    using namespace DlssNr::PreFg;
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+    assert(SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))));
+    ReadinessIdentity key {1,2,3,4,5,6,7,8,9,10,11,2,1920,1080,28,1,0,1280,720,0};
+    StartupReadiness readiness;
+    auto status = std::make_shared<DlssNr::GpuSafety::ExternalWaitStatus>();
+    assert(!readiness.Poll(key, device, 1));
+    assert(!readiness.Submit(key, fence.Get(), UINT64_MAX, 1, status));
+    assert(readiness.Submit(key, fence.Get(), 1, 1, status));
+    assert(!readiness.Submit(key, fence.Get(), 1, 2, status)); // one pending probe
+    status->bound = status->applied = true;
+    for (uint64_t i = 2; i != 10002; ++i) assert(!readiness.Poll(key, device, i));
+    assert(SUCCEEDED(fence->Signal(1)));
+    assert(!readiness.Poll(key, device, 2)); // successful original Present is independent evidence
+    readiness.Presented(2, true);
+    assert(!readiness.Poll(key, device, 2)); // wrong sequence cannot complete probe Present
+    readiness.Presented(1, true);
+    assert(!readiness.Poll(key, device, 1)); // never publish the probe itself
+    status->bound = false;
+    assert(!readiness.Poll(key, device, 2));
+    status->bound = true; status->applied = false;
+    assert(!readiness.Poll(key, device, 2));
+    status->applied = true;
+    assert(readiness.Poll(key, device, 2));
+
+    // Exact DD2 token/refusal runs are an admission replay, not GPU timing data.
+    const int runs[] = {-7,1,-6,1,-5,1,-4,1,-3,1,-3,1,-2,1,-2,1,-2,1,-2,1,-2,1,
+        -3,1,-2,1,-2,2,-3,2,-2,2,-2,2,-2,3,-2,4,-2,6,-2,429};
+    Ledger frames;
+    unsigned int attempts = 0, admitted = 0;
+    for (int run : runs)
+        for (int i = 0; i < (run < 0 ? -run : run); ++i)
+        {
+            frames.Constants(++attempts, 0);
+            if (run > 0) frames.Tags(attempts, 0);
+            const auto frame = frames.Claim();
+            if (frame.valid) ++admitted;
+            assert(readiness.Ready()); // frame-local refusals never reset generation readiness
+        }
+    assert(attempts == 523 && admitted == 463);
+    readiness.Presented(3, false); assert(!readiness.Ready());
+
+    const auto prepare = [&] {
+        readiness.Reset();
+        status = std::make_shared<DlssNr::GpuSafety::ExternalWaitStatus>();
+        status->bound = status->applied = true;
+        assert(readiness.Submit(key, fence.Get(), 1, 1, status));
+        readiness.Presented(1, true);
+        assert(readiness.Poll(key, device, 2));
+    };
+    // Every certificate field is independently structural, including model,
+    // effective configuration, resource size, MSAA quality, and unique FG instance.
+    const auto change = [&](auto member) {
+        prepare(); auto other = key; ++(other.*member);
+        assert(!readiness.Poll(other, device, 3));
+        assert(readiness.State() == StartupReadiness::Phase::AwaitingFrame);
+    };
+#define CHECK_ID(field) change(&ReadinessIdentity::field)
+    CHECK_ID(swapchain); CHECK_ID(device); CHECK_ID(queue); CHECK_ID(provider);
+    CHECK_ID(nativeGeneration); CHECK_ID(nativeInstance); CHECK_ID(configuration);
+    CHECK_ID(resume); CHECK_ID(resources); CHECK_ID(model); CHECK_ID(invalidation);
+    CHECK_ID(route); CHECK_ID(width); CHECK_ID(height); CHECK_ID(format);
+    CHECK_ID(samples); CHECK_ID(quality); CHECK_ID(workWidth); CHECK_ID(workHeight); CHECK_ID(colorSpace);
+    CHECK_ID(modelLifecycle);
+#undef CHECK_ID
+    prepare(); status->Fail(); assert(!readiness.Ready() && !readiness.Poll(key, device, 3));
+    prepare(); readiness.CheckEpoch(key.invalidation + 1); assert(!readiness.Ready());
+    prepare(); assert(!readiness.Poll(key, nullptr, 3));
+    std::puts("Readiness: 10000 stalled polls, exact proof, next-frame activation, all identities, DD2 replay PASS");
+}
+
 int main()
 {
     using namespace DlssNr::PreFg;
@@ -29,39 +102,6 @@ int main()
         });
     for (auto& thread : registryWorkers) thread.join();
     assert(!features.Has(11) && !features.Has(13));
-    StartupGate startup;
-    assert(!startup.Ready());
-    // The observed startup had short success bursts interspersed with refusals.
-    for (int burst = 1; burst <= 7; ++burst)
-    {
-        for (int i = 0; i < burst; ++i) { assert(!startup.Ready()); startup.Observe(true); }
-        assert(!startup.Ready()); startup.Observe(false);
-    }
-    for (unsigned int i = 0; i < StartupGate::required; ++i)
-    { assert(!startup.Ready()); startup.Observe(true); }
-    assert(startup.Ready());
-    for (int i = 0; i < 1000; ++i) startup.Observe(true);
-    assert(startup.Count() == StartupGate::required);
-    startup.Observe(false); assert(!startup.Ready()); // token/model/Present failure
-    startup.Observe(true); startup.Reset(); assert(!startup.Count()); // route/resize/off/provider change
-    // Exact success/refusal runs from DD2 session 378c3ac68c034ac3bfc4e77f3848281d
-    // (68d7b76f, 523 Image Only attempts). Positive = successful model/output;
-    // negative = initialization/token refusal. Replay does not predict new GPU timing.
-    const int capturedRuns[] = {-7,1,-6,1,-5,1,-4,1,-3,1,-3,1,-2,1,-2,1,-2,1,-2,1,-2,1,
-        -3,1,-2,1,-2,2,-3,2,-2,2,-2,2,-2,3,-2,4,-2,6,-2,429};
-    unsigned int attempts = 0, published = 0, transitions = 0;
-    bool previousPublished = false;
-    for (int run : capturedRuns)
-        for (int i = 0; i < (run < 0 ? -run : run); ++i)
-        {
-            ++attempts;
-            const bool publish = startup.Ready() && run > 0;
-            if (publish) { ++published; assert(attempts >= 103); }
-            if (publish != previousPublished) ++transitions;
-            previousPublished = publish;
-            startup.Observe(run > 0);
-        }
-    assert(attempts == 523 && published == 421 && transitions == 1);
     Ledger ledger;
     // Captured Wilds interleaving: N is complete and being presented when the
     // producer publishes N+1 constants. Select N without consuming N+1.
@@ -196,6 +236,7 @@ int main()
     assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
     assert(SUCCEEDED(D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))));
     assert(SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))));
+    TestReadiness(device.Get());
     auto* resourceA = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x1000));
     auto* resourceB = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x2000));
     CompletionLedger completions;

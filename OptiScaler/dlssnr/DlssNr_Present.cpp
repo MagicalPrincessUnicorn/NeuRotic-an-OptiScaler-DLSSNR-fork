@@ -57,6 +57,8 @@ struct PresentState
     UINT64 historyGeneration = 0;
     UINT64 resourceGeneration = 0;
     UINT64 resourceRouteKey = 0;
+    UINT64 readinessConfiguration = 0;
+    std::optional<NrConfigSnapshot<Config>> readinessSettings;
     UINT nativeWidth = 0, nativeHeight = 0;
     DlssNrFrameInfo nativeFrame;
     PresentTelemetrySnapshot telemetry;
@@ -657,7 +659,7 @@ void ReportPresentUnavailable(PresentApi api, const char* reason)
 PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown* presentDevice,
                                              UINT presentFlags,
                                              const DXGI_PRESENT_PARAMETERS* presentParameters,
-                                             const PreFg::Frame* preFgFrame)
+                                             PreFg::Frame* preFgFrame)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
     const auto tracePresent = FrameTrace::Event("nr-present-enter", "swapchain={:p} presentDevice={:p} flags={}",
@@ -668,12 +670,21 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const auto capturedSettings = TryNrConfigSnapshot(*config);
     if (!capturedSettings)
     {
+        if (preFgFrame && preFgFrame->readiness) preFgFrame->readiness->Reset();
         PresentGuides::Instance().BeginPresent();
         const char* reason = "NR settings snapshot unavailable";
         SetFallback(PresentApi::Unknown, reason);
         return {};
     }
     const auto& settings = *capturedSettings;
+    if (!g_present.readinessSettings || !settings.SameConfiguration(*g_present.readinessSettings))
+    {
+        g_present.readinessSettings = settings;
+        ++g_present.readinessConfiguration;
+        if (preFgFrame && preFgFrame->readiness) preFgFrame->readiness->Reset();
+    }
+    if (preFgFrame && preFgFrame->readiness)
+        preFgFrame->readiness->CheckEpoch(PreFg::State().readinessEpoch.load());
     const auto runtime = settings.GetDlssNrRuntimeSnapshot();
     const auto resolution = PresentResolution::Selected(settings);
     const bool enhanced = settings.DlssNrRoute.value_or_default() == 2;
@@ -741,6 +752,19 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::D3D12, preFgFrame->refusal);
         return identity;
     }
+    // Frame-token refusal above is local. All subsequent structural/model/submit
+    // failures revoke readiness unless this call is explicitly waiting for proof.
+    struct ReadinessAttempt
+    {
+        PreFg::Frame* frame;
+        PresentCallIdentity& identity;
+        bool waiting = false;
+        ~ReadinessAttempt()
+        {
+            if (frame && frame->readiness && !waiting && !identity.completedOutput && !identity.probeSubmitted)
+                frame->readiness->Reset();
+        }
+    } readinessAttempt {preFgFrame, identity};
     if (preFgFrame && settings.DlssNrMultipassEnabled.value_or_default())
     {
         SetFallback(PresentApi::D3D12, "Pre-FG adapter supports native Streamline 2x with NR Multipass off");
@@ -1063,6 +1087,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         g_present.resourceRouteKey != routeKey;
     if (signatureChanged)
     {
+        if (preFgFrame && preFgFrame->readiness) preFgFrame->readiness->Reset();
         InvalidateHistory("Present target signature changed");
         if (!AllComplete())
         {
@@ -1084,6 +1109,52 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     {
         SetFallback(api, "direct Feature 18 entry-point/capability probe failed", true);
         return identity;
+    }
+
+    if (preFgFrame && preFgFrame->readiness)
+    {
+        auto& key = preFgFrame->readinessIdentity;
+        const auto nativeChain = NativeIdentity::Resolve<IDXGISwapChain>(swapChain);
+        const auto nativeDevice = NativeIdentity::Resolve<ID3D12Device>(device.Get());
+        key.swapchain = reinterpret_cast<uintptr_t>(nativeChain.object.Get());
+        key.device = reinterpret_cast<uintptr_t>(nativeDevice.object.Get());
+        key.queue = reinterpret_cast<uintptr_t>(queue.Get());
+        key.provider = preFgFrame->providerGeneration;
+        key.nativeGeneration = preFgFrame->nativeFgGeneration;
+        key.nativeInstance = preFgFrame->nativeFgInstance;
+        key.configuration = g_present.readinessConfiguration;
+        key.resume = runtime.resumeGeneration;
+        key.resources = g_present.resourceGeneration;
+        const auto model = Telemetry();
+        key.model = model.featureBuilds;
+        key.modelLifecycle = model.lifecycleGeneration;
+        if (!model.lifecycleOpen || !model.modelLoaded) preFgFrame->readiness->Reset();
+        key.invalidation = PreFg::State().readinessEpoch.load();
+        key.route = route; key.width = width; key.height = height;
+        key.format = backDesc.Format; key.samples = backDesc.SampleDesc.Count;
+        key.quality = backDesc.SampleDesc.Quality;
+        key.workWidth = workWidth; key.workHeight = workHeight; key.colorSpace = colorSpace;
+        if (!key.swapchain || !key.device || device->GetDeviceRemovedReason() != S_OK)
+        {
+            SetFallback(api, "swapchain or Present device unavailable", true);
+            return identity;
+        }
+        preFgFrame->allowOutput = preFgFrame->readiness->Poll(key, device.Get(), preFgFrame->sequence);
+        if (preFgFrame->readiness->Pending())
+        {
+            readinessAttempt.waiting = true;
+            NR_FRAME_TRACE("nr-readiness-wait", "token={} sequence={} reason={} epoch={}",
+                preFgFrame->key, preFgFrame->sequence, preFgFrame->readiness->Reason(), key.invalidation);
+            SetFallback(api, "Waiting for the selected route. Image unchanged.");
+            return identity;
+        }
+        const auto nativeOutput = NativeIdentity::Resolve<ID3D12Resource>(backbuffer12.Get());
+        if (nativeOutput.object.Get() != preFgFrame->outputResource ||
+            !(preFgFrame->completionReservation = PreFg::ReserveCompletion(preFgFrame->outputResource, *preFgFrame)))
+        {
+            SetFallback(api, "Could not reserve the native FG completion handoff for this Present", true);
+            return identity;
+        }
     }
 
     ID3D12Resource* presentInput = backbuffer12.Get();
@@ -1221,7 +1292,6 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),
         static_cast<void*>(presentOutput), workWidth, workHeight, enhanced, modelSucceeded);
     ++g_present.telemetry.modelSubmissions;
-    if (modelSucceeded && modelRecordingSealed && enhanced) PresentGuides::Instance().Evaluated();
     if (uploadingGuides)
         g_present.guidesNeedUpload = false;
 
@@ -1246,6 +1316,31 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
+    if (preFgFrame && preFgFrame->readiness)
+    {
+        // Model creation/replacement can occur inside evaluation. Such work is a
+        // new probe, even if the old generation was ready at entry.
+        const auto model = Telemetry();
+        if (model.featureBuilds != preFgFrame->readinessIdentity.model ||
+            model.lifecycleGeneration != preFgFrame->readinessIdentity.modelLifecycle)
+        {
+            preFgFrame->readiness->Reset();
+            preFgFrame->allowOutput = false;
+            preFgFrame->readinessIdentity.model = model.featureBuilds;
+            preFgFrame->readinessIdentity.modelLifecycle = model.lifecycleGeneration;
+        }
+        const auto current = TryNrConfigSnapshot(*config);
+        if (!current || !settings.SameConfiguration(*current) || !model.lifecycleOpen || !model.modelLoaded ||
+            preFgFrame->readinessIdentity.invalidation != PreFg::State().readinessEpoch.load() ||
+            device->GetDeviceRemovedReason() != S_OK)
+        {
+            preFgFrame->readiness->Reset();
+            preFgFrame->allowOutput = false;
+            // Track the already submitted work, but do not certify this changed attempt.
+            readinessAttempt.waiting = false;
+            preFgFrame->readinessIdentity.invalidation = 0;
+        }
+    }
     if (preFgFrame && !preFgFrame->allowOutput)
     {
         const UINT64 signal = g_present.nextFence++;
@@ -1255,6 +1350,10 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             slot.completionObserved = false;
             RecordSubmission(signal);
             identity.modelPrepared = true;
+            identity.probeSubmitted = preFgFrame->readinessIdentity.invalidation != 0;
+            identity.completionFence = g_present.fence.Get();
+            identity.completionValue = signal;
+            identity.outputResource = presentOutput;
         }
         else
             g_present.completionUntrackable = true;
@@ -1265,6 +1364,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "Waiting for the selected route. Image unchanged.");
         return identity;
     }
+    if (enhanced) PresentGuides::Instance().Evaluated();
 
     if (FAILED(slot.compositeAllocator->Reset()) ||
         FAILED(g_present.list->Reset(slot.compositeAllocator.Get(), nullptr)))

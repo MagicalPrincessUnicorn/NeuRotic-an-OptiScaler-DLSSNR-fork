@@ -39,6 +39,12 @@ struct ExternalWait
     UINT64 value = 0;
     UINT64 token = 0;
     UINT64 sequence = 0;
+    std::shared_ptr<ExternalWaitStatus> status;
+    ~ExternalWait()
+    {
+        // Reset/destruction before execution is cancellation, not wait evidence.
+        if (status && !status->applied.load()) status->Fail();
+    }
 };
 namespace
 {
@@ -184,6 +190,8 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
             dependency->sequence, static_cast<unsigned int>(waitResult), ok);
         if (!ok)
         {
+            for (const auto& pending : waits)
+                if (pending.second->status) pending.second->status->Fail();
             // Never submit provider work after its required ordering failed. This
             // API has no HRESULT: retain the dependency and pin affected tickets.
             s.failed = true;
@@ -196,6 +204,7 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
 #endif
             return;
         }
+        if (dependency->status) dependency->status->applied = true;
     }
 
     auto timeline = uses.empty() ? std::shared_ptr<Timeline>{} : Get<Timeline>(queue, timelineGuid);
@@ -217,7 +226,12 @@ void STDMETHODCALLTYPE Execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
     NR_FRAME_TRACE("queue-execute-signaled", "queue={:p} fence={:p} value={} ok={} tickets={}",
         static_cast<void*>(queue), timeline ? static_cast<void*>(timeline->fence.Get()) : nullptr,
         value, ok, uses.size());
-    if (!ok) s.failed = true;
+    if (!ok)
+    {
+        s.failed = true;
+        for (const auto& pending : waits)
+            if (pending.second->status) pending.second->status->Fail();
+    }
     for (auto& ticket : uses)
     {
         ++ticket->submissions;
@@ -245,9 +259,12 @@ HRESULT STDMETHODCALLTYPE Reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
             if (SUCCEEDED(list->SetPrivateDataInterface(recordingGuid, nullptr))) t->sealed = true;
             else { t->failed = true; State().failed = true; }
         }
-        if (Get<ExternalWait>(list, externalWaitGuid) &&
-            FAILED(list->SetPrivateDataInterface(externalWaitGuid, nullptr)))
-            State().failed = true;
+        if (auto dependency = Get<ExternalWait>(list, externalWaitGuid))
+            if (FAILED(list->SetPrivateDataInterface(externalWaitGuid, nullptr)))
+            {
+                State().failed = true;
+                if (dependency->status) dependency->status->Fail();
+            }
     }
     return hr;
 }
@@ -366,7 +383,8 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
     return SUCCEEDED(result);
 }
 bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
-                      UINT64 producerValue, UINT64 token, UINT64 sequence)
+                      UINT64 producerValue, UINT64 token, UINT64 sequence,
+                      std::shared_ptr<ExternalWaitStatus> status)
 {
     if (!list || !producerFence || !producerValue || producerValue == UINT64_MAX ||
         list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT) return false;
@@ -384,7 +402,13 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
     dependency->value = producerValue;
     dependency->token = token;
     dependency->sequence = sequence;
+    dependency->status = std::move(status);
     const bool bound = Put(list, externalWaitGuid, dependency);
+    if (dependency->status)
+    {
+        if (bound) dependency->status->bound = true;
+        else dependency->status->Fail();
+    }
     NR_FRAME_TRACE("nr-fg-wait-bound", "list={:p} fence={:p} value={} token={} sequence={} ok={}",
         static_cast<void*>(list), static_cast<void*>(producerFence), producerValue, token, sequence, bound);
     return bound;

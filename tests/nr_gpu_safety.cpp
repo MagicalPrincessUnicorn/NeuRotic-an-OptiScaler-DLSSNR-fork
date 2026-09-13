@@ -2,6 +2,7 @@
 #define NR_GPU_SAFETY_TEST
 #include "../OptiScaler/dlssnr/NrGpuSafety.cpp"
 #include "../OptiScaler/dlssnr/DlssNr_Capture.h"
+#include "../OptiScaler/dlssnr/PreFg.h"
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
 #include <cassert>
@@ -43,26 +44,55 @@ int main()
     assert(!Safety::BindExternalWait(list.Get(), nullptr, 1, 41, 42));
     assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 0, 41, 42));
     assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), UINT64_MAX, 41, 42));
-    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 41, 42));
+    namespace PreFg = DlssNr::PreFg;
+    PreFg::CompletionLedger probeLedger;
+    auto* probeResource = reinterpret_cast<ID3D12Resource*>(uintptr_t(0x1000));
+    const auto probeReservation = probeLedger.Reserve(probeResource, 3, 4, 5, 41, 42, PreFg::CompletionKind::Probe);
+    assert(probeReservation && probeLedger.Commit(probeReservation, probeResource,
+        externalProducer.Get(), 1, PreFg::CompletionKind::Probe));
+    assert(probeLedger.Claim(probeResource, 3, 4, 5, 40, 42).result == PreFg::CompletionClaimResult::Refused);
+    assert(probeLedger.Claim(probeResource, 3, 4, 6, 41, 42).result == PreFg::CompletionClaimResult::Refused);
+    const auto probe = probeLedger.Claim(probeResource, 3, 4, 5, 41, 42);
+    assert(probe.result == PreFg::CompletionClaimResult::Ready &&
+        probe.dependency.kind == PreFg::CompletionKind::Probe && probe.dependency.reservation == probeReservation);
+    assert(probeLedger.Claim(probeResource, 3, 4, 5, 41, 42).result == PreFg::CompletionClaimResult::Refused);
+    auto waitStatus = probe.dependency.status;
+    PreFg::StartupReadiness certificate;
+    PreFg::ReadinessIdentity certificateKey {};
+    certificateKey.provider = 3; certificateKey.nativeGeneration = 4; certificateKey.nativeInstance = 5;
+    assert(certificate.Submit(certificateKey, probe.dependency.fence.Get(), probe.dependency.value,
+        probe.dependency.sequence, waitStatus));
+    certificate.Presented(42, true);
+    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 41, 42, waitStatus));
+    assert(waitStatus->bound && !waitStatus->applied && !waitStatus->failed);
     assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 43, 44));
     Check(list->Close());
     submit(otherQueue.Get());
     assert(Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid));
     Check(otherQueue->Signal(externalConsumer.Get(), 1));
     assert(externalConsumer->GetCompletedValue() == 0);
+    for (unsigned int i = 0; i < 1000; ++i) assert(!certificate.Poll(certificateKey, device.Get(), 43 + i));
     Check(externalProducer->Signal(1));
+    assert(waitStatus->applied && !waitStatus->failed);
     HANDLE externalDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     assert(externalDone);
     Check(externalConsumer->SetEventOnCompletion(1, externalDone));
     assert(WaitForSingleObject(externalDone, 5000) == WAIT_OBJECT_0);
     CloseHandle(externalDone);
+    assert(certificate.Poll(certificateKey, device.Get(), 43));
+    probeLedger.RetireBefore(43);
+    assert(probeLedger.Claim(probeResource, 3, 4, 5, 43, 43).result == PreFg::CompletionClaimResult::None);
+    assert(certificate.Ready()); // retained proof survives ordinary packet retirement
     Check(list->Reset(allocator.Get(), nullptr));
     assert(!Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid));
 
     // Reset before submission cancels the borrowed dependency.
     ComPtr<ID3D12Fence> canceledProducer;
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&canceledProducer)));
-    assert(Safety::BindExternalWait(list.Get(), canceledProducer.Get(), 1, 45, 46));
+    std::atomic<uint64_t> failureEpoch {1};
+    auto canceledStatus = std::make_shared<Safety::ExternalWaitStatus>();
+    canceledStatus->failureEpoch = &failureEpoch;
+    assert(Safety::BindExternalWait(list.Get(), canceledProducer.Get(), 1, 45, 46, canceledStatus));
     Check(list->Close());
     Check(list->Reset(nextAllocator.Get(), nullptr));
     Check(list->Close());
@@ -331,7 +361,10 @@ int main()
                                    IID_PPV_ARGS(&refusedList)));
     auto refusedTicket = Safety::Record(refusedList.Get());
     assert(refusedTicket);
-    assert(Safety::BindExternalWait(refusedList.Get(), externalProducer.Get(), 2, 47, 48));
+    assert(canceledStatus->failed && !canceledStatus->applied && failureEpoch == 2);
+    auto refusedStatus = std::make_shared<Safety::ExternalWaitStatus>();
+    refusedStatus->failureEpoch = &failureEpoch;
+    assert(Safety::BindExternalWait(refusedList.Get(), externalProducer.Get(), 2, 47, 48, refusedStatus));
     Check(refusedList->Close());
     ComPtr<ID3D12CommandQueue> computeQueue;
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
@@ -343,6 +376,7 @@ int main()
     Safety::Execute(computeQueue.Get(), 1, refusedBatch);
     Safety::originalExecute = savedExecute;
     assert(forwarded == 0 && Safety::State().failed && refusedTicket->failed);
+    assert(refusedStatus->bound && !refusedStatus->applied && refusedStatus->failed && failureEpoch == 3);
     assert(Safety::Get<Safety::ExternalWait>(refusedList.Get(), Safety::externalWaitGuid));
     assert(!Safety::Reusable(refusedTicket) && !Safety::Readable(refusedTicket));
     refusedList.Reset();
@@ -355,6 +389,7 @@ int main()
     ComPtr<ID3D12Device5> removable;
     Check(device.As(&removable));
     removable->RemoveDevice();
+    assert(!certificate.Poll(certificateKey, device.Get(), 44));
     // The sentinel UINT64_MAX is device loss, not a very large successful fence value.
     assert(!Safety::Reusable(pending) && !Safety::Readable(pending));
     std::puts("PASS: unsubmitted cancellation, 1000 premature reuse/read checks, delayed GPU completion,");

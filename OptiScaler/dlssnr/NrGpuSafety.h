@@ -3,9 +3,20 @@
 #include <d3d12.h>
 #include <memory>
 #include <vector>
+#include <atomic>
 
 namespace DlssNr::GpuSafety
 {
+// Shared by the exact completion packet and provider list, never by frame age.
+struct ExternalWaitStatus
+{
+    std::atomic<bool> bound {false}, applied {false}, failed {false};
+    std::atomic<uint64_t>* failureEpoch = nullptr; // process-lifetime registry
+    void Fail()
+    {
+        if (!failed.exchange(true) && failureEpoch) ++*failureEpoch;
+    }
+};
 struct Recording;
 using Ticket = std::shared_ptr<Recording>;
 using CompletionSet = std::vector<Ticket>;
@@ -41,7 +52,8 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer);
 // list. Its first submission receives a GPU queue wait immediately before the
 // provider list executes; Reset before submission cancels the dependency.
 bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
-                      UINT64 producerValue, UINT64 token, UINT64 sequence);
+                      UINT64 producerValue, UINT64 token, UINT64 sequence,
+                      std::shared_ptr<ExternalWaitStatus> status = {});
 UINT64 TimestampFrequency(const Ticket& ticket);
 CompletionSet Pending();
 bool Reusable(const CompletionSet& tickets);

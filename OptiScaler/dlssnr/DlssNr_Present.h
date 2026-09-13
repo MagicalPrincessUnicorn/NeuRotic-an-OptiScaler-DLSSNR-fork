@@ -87,6 +87,7 @@ struct PresentCallIdentity
     // Successful model recording/submission with a tracked completion signal;
     // warmup can prepare work without publishing it or clearing the game's FG tags.
     bool modelPrepared = false;
+    bool probeSubmitted = false;
     // A submitted copyback must not be canceled as if the backbuffer were unchanged,
     // even when its signal fails. Own the fence across the Present lock boundary.
     bool copybackSubmitted = false;
@@ -111,7 +112,7 @@ struct PresentCallTimingSample
 PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown* presentDevice,
                                              UINT presentFlags,
                                              const DXGI_PRESENT_PARAMETERS* presentParameters,
-                                             const PreFg::Frame* preFgFrame = nullptr);
+                                             PreFg::Frame* preFgFrame = nullptr);
 void ReportPresentUnavailable(PresentApi api, const char* reason);
 // One behavior-neutral CPU observation reported after the original game Present call. GPU timing is
 // collected separately from non-blocking timestamps and the existing completion fence.
