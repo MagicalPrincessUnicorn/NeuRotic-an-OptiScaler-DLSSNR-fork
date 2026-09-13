@@ -13,8 +13,10 @@ template<class C> void SelectPlacement(C& config, int stage, int route)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
     config.DlssNrRoute = uint32_t(route);
-    NrConfigState::SetRoutingMode(config.DlssNrRenderingMode, config.DlssNrRunBeforeSr,
-                                 stage == Before ? 1 : 0);
+    // Live Config uses synchronized optionals; immutable preflight snapshots use
+    // CustomOptional. Assign the same pair under the shared lock for either type.
+    config.DlssNrRenderingMode = int32_t(stage == Before ? 1 : 0);
+    config.DlssNrRunBeforeSr = stage == Before;
 }
 
 template<class C> const char* Refusal(C proposed, int stage, int route, int resolution,

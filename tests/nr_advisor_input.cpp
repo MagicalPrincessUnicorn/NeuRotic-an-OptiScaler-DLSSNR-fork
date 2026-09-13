@@ -10,6 +10,12 @@ struct AdvisorConfig
     NrOptional<int32_t> DlssNrRenderingMode {1};
     NrOptional<bool> DlssNrRunBeforeSr {true};
 };
+struct AdvisorSnapshot
+{
+    CustomOptional<uint32_t> DlssNrRoute {2};
+    CustomOptional<int32_t> DlssNrRenderingMode {1};
+    CustomOptional<bool> DlssNrRunBeforeSr {true};
+};
 int main()
 {
     using namespace DlssNr::AdvisorSampling;
@@ -75,6 +81,23 @@ int main()
     assert(Refusal(cfg, Before, 0, 1, true, false)); // Vulkan cannot be forced Before
     assert(Refusal(cfg, After, 1, 0, true, false)); // no Vulkan Present adapter
     assert(!Refusal(cfg, After, 0, 0, false, true));
+    AdvisorSnapshot snapshot;
+    for (int stage : {Before, After})
+        for (int route = 0; route < 3; ++route)
+            for (int resolution = 0; resolution < 3; ++resolution)
+            {
+                const auto before = snapshot;
+                assert(bool(Refusal(snapshot, stage, route, resolution, false, false)) ==
+                       bool(Refusal(cfg, stage, route, resolution, false, false)));
+                assert(std::optional<uint32_t>(snapshot.DlssNrRoute) == std::optional<uint32_t>(before.DlssNrRoute) &&
+                       std::optional<int32_t>(snapshot.DlssNrRenderingMode) == std::optional<int32_t>(before.DlssNrRenderingMode) &&
+                       std::optional<bool>(snapshot.DlssNrRunBeforeSr) == std::optional<bool>(before.DlssNrRunBeforeSr));
+                if (Contains(stage, route))
+                {
+                    SelectPlacement(snapshot, stage, route);
+                    assert(DlssNr::StageUi::Stage(snapshot) == stage);
+                }
+            }
     Window startup;
     assert(!startup.RejectStall(false, 1200, true, 1200)); // model startup is not a scored frame
     assert(!startup.WarmupFrame(true, true, 1200, 1200) && startup.warmFrames == 0);
