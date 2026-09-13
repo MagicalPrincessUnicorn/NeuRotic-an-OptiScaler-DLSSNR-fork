@@ -6,6 +6,7 @@
 #include "DlssNr_PresentHistory.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
+#include "HdrObservation.h"
 #include "NrExperimentalPolicy.h"
 #include "NativeIdentity.h"
 
@@ -95,6 +96,7 @@ struct PresentState
     bool presentWasRequested = false;
     unsigned int experimentalFlags = 0;
     UINT64 resumeGeneration = 0;
+    UINT64 lastHdrObservationSequence = 0;
     bool guidesNeedUpload = true;
     // Set when submitted work can no longer be paired with a trustworthy completion value, or when
     // an unsubmitted command list has already been registered with the shared GPU-safety tracker.
@@ -843,16 +845,50 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::Unknown, "IDXGISwapChain3 or swapchain description unavailable");
         return identity;
     }
-    // DXGI exposes SetColorSpace1 but no getter. The wrapper records every color-space change in this
-    // process; combine that state with the strict 8-bit format gate below and fail closed for HDR.
-    colorSpace = State::Instance().isHdrActive ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
-                                                : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    // DXGI exposes SetColorSpace1 but no getter. Use the successful per-swapchain observation when
+    // this chain is wrapped. Preserve the parent's legacy inference only for unobserved bypass paths.
+    const auto hdrObservation = HdrObservation::Registry::Instance().Read(swapChain);
+    colorSpace = hdrObservation.registered
+        ? hdrObservation.colorSpace
+        : (State::Instance().isHdrActive ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+                                         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
     g_present.telemetry.backbufferWidth = swapDesc.Width;
     g_present.telemetry.backbufferHeight = swapDesc.Height;
     g_present.telemetry.backbufferFormat = swapDesc.Format;
     g_present.telemetry.backbufferSampleCount = swapDesc.SampleDesc.Count;
     g_present.telemetry.swapEffect = swapDesc.SwapEffect;
     g_present.telemetry.colorSpace = colorSpace;
+    g_present.telemetry.colorSpaceObserved = hdrObservation.colorSpaceObserved;
+    g_present.telemetry.hdrDescriptorTransitioning = hdrObservation.transitioning;
+    g_present.telemetry.hdrObservationSequence = hdrObservation.observationSequence;
+    g_present.telemetry.hdrDescriptorGeneration = hdrObservation.generation;
+    g_present.telemetry.hdrResizeGeneration = hdrObservation.resizeGeneration;
+    g_present.telemetry.lastColorSpaceResult = hdrObservation.colorSpaceResult;
+    g_present.telemetry.hdrMetadataType = hdrObservation.metadataType;
+    g_present.telemetry.hdrMetadataSize = hdrObservation.metadataSize;
+    g_present.telemetry.hdrMetadataHash = hdrObservation.metadataHash;
+    g_present.telemetry.lastHdrMetadataResult = hdrObservation.metadataResult;
+    if (hdrObservation.registered &&
+        hdrObservation.observationSequence != g_present.lastHdrObservationSequence)
+    {
+        g_present.lastHdrObservationSequence = hdrObservation.observationSequence;
+        LOG_INFO("DLSS-NR HDR diagnostic: Present swapchain {:p}, observation {}, generation {}, resize generation {}, "
+                 "format {} (current {}), color space {}, class {}, source {}, transitioning {}, color result {:X}, "
+                 "metadata type {}, size {}, result {:X}, bounded hash {:X}",
+                 static_cast<void*>(swapChain), hdrObservation.observationSequence,
+                 hdrObservation.generation, hdrObservation.resizeGeneration,
+                 (UINT) hdrObservation.format, (UINT) swapDesc.Format, (UINT) colorSpace,
+                 HdrObservation::ColorClassName(HdrObservation::Classify(colorSpace)),
+                 hdrObservation.colorSpaceObserved ? "successful SetColorSpace1" : "DXGI SDR default",
+                 hdrObservation.transitioning, (UINT) hdrObservation.colorSpaceResult,
+                 (UINT) hdrObservation.metadataType, hdrObservation.metadataSize,
+                 (UINT) hdrObservation.metadataResult, hdrObservation.metadataHash);
+    }
+    if (hdrObservation.transitioning)
+    {
+        SetFallback(PresentApi::Unknown, "swapchain HDR descriptor is transitioning after resize");
+        return identity;
+    }
     if (swapDesc.SampleDesc.Count != 1 ||
         (swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_DISCARD &&
          swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL))

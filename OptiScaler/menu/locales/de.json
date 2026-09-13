@@ -1524,6 +1524,7 @@
   "running": "aktiv",
   "setting disabled": "Einstellung deaktiviert",
   "shutdown could not safely complete; restart the process": "sicheres Abschalten nicht möglich; Prozess neu starten",
+  "swapchain HDR descriptor is transitioning after resize": "Der HDR-Deskriptor der Swapchain befindet sich nach der Größenänderung im Übergang",
   "swapchain is not a single-sample flip-model swapchain": "Swapchain verwendet kein Flip-Modell mit einem Sample",
   "swapchain or Present device unavailable": "Swapchain oder Present-Gerät nicht verfügbar",
   "target is not single-sample flip-model": "Das Ziel verwendet kein Flip-Modell mit einem Sample",

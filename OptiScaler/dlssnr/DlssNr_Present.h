@@ -4,7 +4,7 @@
 #include "PreFg.h"
 #include "NrAdvisorSampling.h"
 
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <string>
 
 namespace DlssNr
@@ -32,6 +32,16 @@ struct PresentTelemetrySnapshot
     unsigned int backbufferSampleCount = 0;
     DXGI_SWAP_EFFECT swapEffect = DXGI_SWAP_EFFECT_DISCARD;
     DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
+    bool colorSpaceObserved = false;
+    bool hdrDescriptorTransitioning = false;
+    unsigned long long hdrObservationSequence = 0;
+    unsigned long long hdrDescriptorGeneration = 0;
+    unsigned long long hdrResizeGeneration = 0;
+    HRESULT lastColorSpaceResult = S_FALSE;
+    DXGI_HDR_METADATA_TYPE hdrMetadataType = DXGI_HDR_METADATA_TYPE_NONE;
+    unsigned int hdrMetadataSize = 0;
+    unsigned long long hdrMetadataHash = 0;
+    HRESULT lastHdrMetadataResult = S_FALSE;
     unsigned int workload = 0;
     unsigned int resolution = 1;
     unsigned int workWidth = 0;

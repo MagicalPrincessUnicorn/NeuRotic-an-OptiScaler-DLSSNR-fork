@@ -7,6 +7,7 @@
 #include <dlssnr/DlssNr_Present.h>
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_Dx11.h>
+#include <dlssnr/HdrObservation.h>
 
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
@@ -489,7 +490,15 @@ WrappedIDXGISwapChain4::WrappedIDXGISwapChain4(IDXGISwapChain* real, IUnknown* p
 
     DlssNr::NativeDx11::RegisterSwapchain(_real);
 
-    LOG_INFO("{} created, real: {:X}, refCount: {}", _id, (UINT64) real, refCount);
+    DXGI_SWAP_CHAIN_DESC1 observationDesc {};
+    const DXGI_FORMAT observationFormat =
+        _real1 != nullptr && SUCCEEDED(_real1->GetDesc1(&observationDesc))
+            ? observationDesc.Format : DXGI_FORMAT_UNKNOWN;
+    const auto observation = DlssNr::HdrObservation::Registry::Instance().Register(_real, observationFormat);
+
+    LOG_INFO("{} created, real: {:X}, refCount: {}, HDR observation {} generation {} format {}",
+             _id, (UINT64) real, refCount, observation.observationSequence, observation.generation,
+             (UINT) observation.format);
 }
 
 WrappedIDXGISwapChain4::~WrappedIDXGISwapChain4() {}
@@ -602,6 +611,7 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
     if (ret == 0)
     {
         DlssNr::NativeDx11::UnregisterSwapchain(_real);
+        DlssNr::HdrObservation::Registry::Instance().Unregister(_real);
 #ifdef USE_LOCAL_MUTEX
         OwnedLockGuard lock(_localMutex, 999);
 #endif
@@ -781,6 +791,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
                                                                 DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
     DlssNr::NativeDx11::ResizeSwapchain(_real);
+    DlssNr::HdrObservation::Registry::Instance().BeginResize(_real);
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -903,6 +914,17 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
         result = _real->ResizeBuffers(BufferCount, Width, Height, NewFormat, SwapChainFlags);
     }
 
+    DXGI_SWAP_CHAIN_DESC1 observationDesc {};
+    const DXGI_FORMAT observationFormat = SUCCEEDED(result) && _real1 != nullptr &&
+        SUCCEEDED(_real1->GetDesc1(&observationDesc)) ? observationDesc.Format : DXGI_FORMAT_UNKNOWN;
+    const auto resizeObservation =
+        DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, result, observationFormat);
+    LOG_INFO("DLSS-NR HDR diagnostic: swapchain {:X} resize result {:X}, observation {}, generation {}, "
+             "resize generation {}, format {}",
+             (UINT64) _real, (UINT) result, resizeObservation.observationSequence,
+             resizeObservation.generation, resizeObservation.resizeGeneration,
+             (UINT) resizeObservation.format);
+
     if (result == DXGI_ERROR_DEVICE_REMOVED && State::Instance().currentD3D12Device != nullptr)
         Util::GetDeviceRemovedReason(State::Instance().currentD3D12Device);
 
@@ -954,6 +976,15 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
                 if (DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT & css)
                 {
                     result = _real3->SetColorSpace1(hdrCS);
+
+                    const auto hdrObservation =
+                        DlssNr::HdrObservation::Registry::Instance().RecordColorSpace(_real, hdrCS, result);
+                    LOG_INFO("DLSS-NR HDR diagnostic: ForceHDR color-space request {} result {:X}, observation {}, "
+                             "generation {}, class {}",
+                             (UINT) hdrCS, (UINT) result, hdrObservation.observationSequence,
+                             hdrObservation.generation,
+                             DlssNr::HdrObservation::ColorClassName(
+                                 DlssNr::HdrObservation::Classify(hdrObservation.colorSpace)));
 
                     if (result != S_OK)
                     {
@@ -1148,49 +1179,21 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::CheckColorSpaceSupport(DXGI_CO
 
 HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::SetColorSpace1(DXGI_COLOR_SPACE_TYPE ColorSpace)
 {
-    State::Instance().isHdrActive = ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ||
-                                    ColorSpace == DXGI_COLOR_SPACE_YCBCR_FULL_GHLG_TOPLEFT_P2020 ||
-                                    ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020 ||
-                                    ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+    const HRESULT result = _real3 != nullptr ? _real3->SetColorSpace1(ColorSpace)
+                                              : DXGI_ERROR_DEVICE_REMOVED;
+    const auto observation =
+        DlssNr::HdrObservation::Registry::Instance().RecordColorSpace(_real, ColorSpace, result);
+    if (SUCCEEDED(result))
+        State::Instance().isHdrActive = DlssNr::HdrObservation::IsHdr(
+            DlssNr::HdrObservation::Classify(ColorSpace));
 
-    // What one unit of the buffer means, which is the question the white point is really asking.
-    //
-    // Two of these encodings are absolute. PQ (ST.2084) puts 1.0 at 10,000 nits by definition, and
-    // scRGB -- linear, Rec.709 primaries -- puts 1.0 at 80 nits. In either the divisor this pass
-    // wants is arithmetic rather than a guess or a reading: paper white in nits over the unit. The
-    // rest are relative and say nothing about scale.
-    //
-    // Logged rather than used, for now. Whether a game that reports one of these actually honours it
-    // is the thing worth knowing before anything is built on it.
-    const char* meaning = "relative -- no scale to be had";
-    const char* name = "other";
-
-    switch (ColorSpace)
-    {
-    case DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020:
-        name = "PQ / ST.2084 (HDR10)";
-        meaning = "absolute: 1.0 = 10000 nits, so 203-nit paper white = 0.0203";
-        break;
-    case DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709:
-        name = "scRGB (linear, Rec.709)";
-        meaning = "absolute: 1.0 = 80 nits, so 203-nit paper white = 2.5375";
-        break;
-    case DXGI_COLOR_SPACE_YCBCR_FULL_GHLG_TOPLEFT_P2020:
-        name = "HLG";
-        break;
-    case DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020:
-        name = "Rec.2020, gamma 2.2";
-        break;
-    case DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709:
-        name = "sRGB (SDR)";
-        break;
-    default:
-        break;
-    }
-
-    LOG_INFO("DLSS-NR: swapchain colour space {} -- {} ({})", (int) ColorSpace, name, meaning);
-
-    return _real3->SetColorSpace1(ColorSpace);
+    LOG_INFO("DLSS-NR HDR diagnostic: swapchain {:X} color-space request {} result {:X}, observation {}, "
+             "generation {}, active {} class {}. PQ values are encoded ST.2084 signals; scRGB uses "
+             "linear 80-nit reference units.",
+             (UINT64) _real, (UINT) ColorSpace, (UINT) result, observation.observationSequence,
+             observation.generation, SUCCEEDED(result),
+             DlssNr::HdrObservation::ColorClassName(DlssNr::HdrObservation::Classify(ColorSpace)));
+    return result;
 }
 
 HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height,
@@ -1199,6 +1202,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
                                                                  IUnknown* const* ppPresentQueue)
 {
     DlssNr::NativeDx11::ResizeSwapchain(_real);
+    DlssNr::HdrObservation::Registry::Instance().BeginResize(_real);
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -1352,6 +1356,17 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
                                         ppPresentQueue);
     }
 
+    DXGI_SWAP_CHAIN_DESC1 observationDesc {};
+    const DXGI_FORMAT observationFormat = SUCCEEDED(result) && _real1 != nullptr &&
+        SUCCEEDED(_real1->GetDesc1(&observationDesc)) ? observationDesc.Format : DXGI_FORMAT_UNKNOWN;
+    const auto resizeObservation =
+        DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, result, observationFormat);
+    LOG_INFO("DLSS-NR HDR diagnostic: swapchain {:X} ResizeBuffers1 result {:X}, observation {}, generation {}, "
+             "resize generation {}, format {}",
+             (UINT64) _real, (UINT) result, resizeObservation.observationSequence,
+             resizeObservation.generation, resizeObservation.resizeGeneration,
+             (UINT) resizeObservation.format);
+
     if (result == DXGI_ERROR_DEVICE_REMOVED && State::Instance().currentD3D12Device != nullptr)
         Util::GetDeviceRemovedReason(State::Instance().currentD3D12Device);
 
@@ -1400,6 +1415,15 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
                 if (DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT & css)
                 {
                     result = _real3->SetColorSpace1(hdrCS);
+
+                    const auto hdrObservation =
+                        DlssNr::HdrObservation::Registry::Instance().RecordColorSpace(_real, hdrCS, result);
+                    LOG_INFO("DLSS-NR HDR diagnostic: ForceHDR color-space request {} result {:X}, observation {}, "
+                             "generation {}, class {}",
+                             (UINT) hdrCS, (UINT) result, hdrObservation.observationSequence,
+                             hdrObservation.generation,
+                             DlssNr::HdrObservation::ColorClassName(
+                                 DlssNr::HdrObservation::Classify(hdrObservation.colorSpace)));
 
                     if (result != S_OK)
                     {
@@ -1451,5 +1475,13 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
 HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size,
                                                                  void* pMetaData)
 {
-    return _real4->SetHDRMetaData(Type, Size, pMetaData);
+    const HRESULT result = _real4 != nullptr ? _real4->SetHDRMetaData(Type, Size, pMetaData)
+                                              : DXGI_ERROR_DEVICE_REMOVED;
+    const auto observation =
+        DlssNr::HdrObservation::Registry::Instance().RecordMetadata(_real, Type, Size, pMetaData, result);
+    LOG_INFO("DLSS-NR HDR diagnostic: swapchain {:X} metadata type {} size {} result {:X}, observation {}, "
+             "generation {}, metadata generation {}, bounded hash {:X}",
+             (UINT64) _real, (UINT) Type, Size, (UINT) result, observation.observationSequence,
+             observation.generation, observation.metadataGeneration, observation.requestedMetadataHash);
+    return result;
 }
