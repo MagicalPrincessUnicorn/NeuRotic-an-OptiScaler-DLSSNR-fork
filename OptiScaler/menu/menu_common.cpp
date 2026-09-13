@@ -7588,9 +7588,12 @@ void MenuCommon::RenderMainMenuBottomBar(RenderMenuContext& ctx)
         DlssNr::CancelAdvisorAnalysis(config, "Settings save requested; analysis stopped and original settings restored.");
         if (!menuInputDraft.initialized) ResetMenuInputDraft(*config);
         DlssNr::ExperimentalPolicy::EnsureDraft(*config);
-        const auto oldMouse = config->AllowGameMouse.snapshot();
-        const auto oldKeyboard = config->AllowGameKeyboard.snapshot();
-        const auto oldController = config->AllowGameController.snapshot();
+        const std::optional<bool> oldMouse = config->AllowGameMouse.has_value()
+            ? std::optional<bool>(config->AllowGameMouse.value()) : std::nullopt;
+        const std::optional<bool> oldKeyboard = config->AllowGameKeyboard.has_value()
+            ? std::optional<bool>(config->AllowGameKeyboard.value()) : std::nullopt;
+        const std::optional<bool> oldController = config->AllowGameController.has_value()
+            ? std::optional<bool>(config->AllowGameController.value()) : std::nullopt;
         const auto oldExperimental = config->DlssNrExperimentalMode.snapshot();
         const auto oldMultipassOverride = config->DlssNrOverrideMultipassGuardrails.snapshot();
         const auto oldHdrOverride = config->DlssNrOverrideHdrGuardrails.snapshot();

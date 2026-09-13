@@ -30,7 +30,6 @@ inline HANDLE markerHandle = INVALID_HANDLE_VALUE;
 inline std::atomic<bool> recoveredUnclean { false };
 inline std::atomic<bool> concurrentOwner { false };
 inline std::atomic<bool> noticeConsumed { false };
-inline std::atomic<bool> concurrentOwner { false };
 inline std::atomic<double> initializedAtMs { 0.0 };
 
 inline std::filesystem::path MarkerPath()

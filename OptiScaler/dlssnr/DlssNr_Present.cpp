@@ -7,7 +7,6 @@
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
 #include "NrExperimentalPolicy.h"
-#include "NrExperimentalSession.h"
 #include "NativeIdentity.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
