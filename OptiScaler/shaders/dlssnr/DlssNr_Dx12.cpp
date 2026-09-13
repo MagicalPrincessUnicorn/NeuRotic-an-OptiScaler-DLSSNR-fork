@@ -27,6 +27,7 @@
 
 #include <Config.h>
 #include <dlssnr/NrReadiness.h>
+#include <dlssnr/NrExperimentalPolicy.h>
 #include <State.h>
 #include <Util.h>
 
@@ -5009,8 +5010,9 @@ ID3D12Resource* EvaluateBeforeUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_
 
     // CPU-only observation precedes every resource/tracking-dependent exit. Non-native adapters
     // and default-off calls keep the original late-observation path below.
+    const auto experimentalPolicySnapshot = DlssNr::ExperimentalPolicy::Capture(cfg);
     const bool preSrSoftResetEnabled = authoritativeNativePreSr &&
-        cfg.DlssNrExperimentalMode.value_or_default() &&
+        experimentalPolicySnapshot.active &&
         cfg.DlssNrPreSrSoftReset.value_or_default();
     const bool observeEarly = authoritativeNativePreSr &&
         (preSrSoftResetEnabled || g_nr.preSrResetPolicy.softResetForBurst);
