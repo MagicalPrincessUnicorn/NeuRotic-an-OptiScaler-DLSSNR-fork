@@ -1,0 +1,10 @@
+LIBRARY dxgi.dll
+EXPORTS
+NVSDK_NGX_D3D11_Init_with_ProjectID
+NVSDK_NGX_D3D11_GetCapabilityParameters
+NVSDK_NGX_D3D11_AllocateParameters
+NVSDK_NGX_D3D11_CreateFeature
+NVSDK_NGX_D3D11_EvaluateFeature
+NVSDK_NGX_D3D11_ReleaseFeature
+NVSDK_NGX_D3D11_DestroyParameters
+NVSDK_NGX_D3D11_Shutdown1

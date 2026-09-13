@@ -864,7 +864,8 @@ static int evaluateWithGuideOrigins(ID3D12GraphicsCommandList *cmd, void *featur
                                                ID3D12Resource *depth, ID3D12Resource *motion,
                                                ID3D12Resource *output, unsigned int width,
                                                unsigned int height, unsigned int guideWidth,
-                                               unsigned int guideHeight, int depthInverted, int reset,
+                                               unsigned int guideHeight, unsigned int motionWidth,
+                                               unsigned int motionHeight, int depthInverted, int reset,
                                                float intensity, int style, float localStructure,
                                                float localTone, float skinStructure, int useAutoMask,
                                                float mvScaleX, float mvScaleY,
@@ -900,8 +901,8 @@ static int evaluateWithGuideOrigins(ID3D12GraphicsCommandList *cmd, void *featur
     setUInt(capabilityParams, "DLSSNR.DepthSubrectHeight", guideHeight);
     setUInt(capabilityParams, "DLSSNR.MVecSubrectBaseX", 0);
     setUInt(capabilityParams, "DLSSNR.MVecSubrectBaseY", 0);
-    setUInt(capabilityParams, "DLSSNR.MVecSubrectWidth", guideWidth);
-    setUInt(capabilityParams, "DLSSNR.MVecSubrectHeight", guideHeight);
+    setUInt(capabilityParams, "DLSSNR.MVecSubrectWidth", motionWidth);
+    setUInt(capabilityParams, "DLSSNR.MVecSubrectHeight", motionHeight);
 
     if (origins) {
         setUInt(capabilityParams, "DLSSNR.DepthSubrectBaseX", origins[0]);
@@ -941,7 +942,8 @@ __declspec(dllexport) int dlssnr_call_evaluate(ID3D12GraphicsCommandList* cmd, v
     unsigned int guideHeight, int inverted, int reset, float intensity, int style,
     float structure, float tone, float skin, int mask, float mvX, float mvY, float jitterX, float jitterY) {
     return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
-        guideWidth, guideHeight, inverted, reset, intensity, style, structure, tone, skin, mask,
+        guideWidth, guideHeight, guideWidth, guideHeight, inverted, reset, intensity, style,
+        structure, tone, skin, mask,
         mvX, mvY, jitterX, jitterY, nullptr);
 }
 __declspec(dllexport) int dlssnr_call_evaluate_guided(ID3D12GraphicsCommandList* cmd, void* feature,
@@ -952,8 +954,24 @@ __declspec(dllexport) int dlssnr_call_evaluate_guided(ID3D12GraphicsCommandList*
     const unsigned int* origins) {
     if (!origins) return 0;
     return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
-        guideWidth, guideHeight, inverted, reset, intensity, style, structure, tone, skin, mask,
+        guideWidth, guideHeight, guideWidth, guideHeight, inverted, reset, intensity, style,
+        structure, tone, skin, mask,
         mvX, mvY, jitterX, jitterY, origins);
+}
+
+// V2 preserves independent active rectangles for depth and motion. Native DLSS may supply depth at
+// render resolution and dilated motion vectors at output resolution; Feature 18 exposes separate
+// subrect parameters for exactly that standard contract.
+__declspec(dllexport) int dlssnr_call_evaluate_guides_v2(ID3D12GraphicsCommandList* cmd, void* feature,
+    void* params, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
+    ID3D12Resource* output, unsigned int width, unsigned int height, unsigned int depthWidth,
+    unsigned int depthHeight, unsigned int motionWidth, unsigned int motionHeight,
+    int inverted, int reset, float intensity, int style, float structure, float tone, float skin,
+    int mask, float mvX, float mvY, float jitterX, float jitterY, const unsigned int* origins) {
+    if (!origins) return 0;
+    return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
+        depthWidth, depthHeight, motionWidth, motionHeight, inverted, reset, intensity, style,
+        structure, tone, skin, mask, mvX, mvY, jitterX, jitterY, origins);
 }
 
 // Inputs NVIDIA's own Streamline plugin sets that the positional exports predate: the model's global

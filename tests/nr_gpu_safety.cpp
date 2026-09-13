@@ -358,5 +358,6 @@ int main()
     // The sentinel UINT64_MAX is device loss, not a very large successful fence value.
     assert(!Safety::Reusable(pending) && !Safety::Readable(pending));
     std::puts("PASS: unsubmitted cancellation, 1000 premature reuse/read checks, delayed GPU completion,");
-    std::puts("      replay, independent queues/host dependencies, retirement, capture shape changes, failure and device loss.");
+    std::puts("      replay, explicit owned-list sealing, independent queues/host dependencies, retirement,");
+    std::puts("      capture shape changes, failure and device loss.");
 }

@@ -69,7 +69,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
                   ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
                   ID3D12CommandQueue* timingQueue, const NrConfigSnapshot<Config>& cfg,
                   bool privateCommandList = false, unsigned int exactWorkWidth = 0,
-                  unsigned int exactWorkHeight = 0);
+                  unsigned int exactWorkHeight = 0, bool nativeTemporalDomain = false,
+                  bool nativePreSrRoute = false);
 
     // Records one pass. Resources that a given mode does not read may be null; a stand-in is bound in
     // their place so every descriptor in the table is valid.

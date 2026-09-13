@@ -177,6 +177,10 @@ using PFN_NrEvaluateGuided = int(__cdecl*) (ID3D12GraphicsCommandList*, void*, v
     ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, unsigned int, unsigned int, unsigned int,
     unsigned int, int, int, float, int, float, float, float, int, float, float, float, float,
     const unsigned int*);
+using PFN_NrEvaluateGuidesV2 = int(__cdecl*) (ID3D12GraphicsCommandList*, void*, void*, ID3D12Resource*,
+    ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, unsigned int, unsigned int, unsigned int,
+    unsigned int, unsigned int, unsigned int, int, int, float, int, float, float, float, int,
+    float, float, float, float, const unsigned int*);
 using PFN_NrSetExtras = void(__cdecl*) (void*, float, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*,
                                         unsigned int, unsigned int, unsigned int, unsigned int);
 using PFN_NrSetFloatSlot = void(__cdecl*) (int);
@@ -289,6 +293,7 @@ struct NrState
     PFN_NrCreate create = nullptr;
     PFN_NrEvaluate evaluate = nullptr;
     PFN_NrEvaluateGuided evaluateGuided = nullptr;
+    PFN_NrEvaluateGuidesV2 evaluateGuidesV2 = nullptr;
     PFN_NrRelease release = nullptr;
     int (*shutdown)() = nullptr;
     PFN_NrSetExtras setExtras = nullptr;
@@ -489,6 +494,8 @@ struct NrState
     // long after that call has returned.
     unsigned int guideWidth = 0;
     unsigned int guideHeight = 0;
+    unsigned int motionGuideWidth = 0;
+    unsigned int motionGuideHeight = 0;
 
     // How the game encodes its guides, as the game itself reports it. Captured with the guides, since
     // the finished-frame path runs long after the upscaler's call has returned.
@@ -777,6 +784,8 @@ bool EnsureForwarder()
     g_nr.create = (PFN_NrCreate) GetProcAddress(g_nr.forwarder, "dlssnr_call_create");
     g_nr.evaluate = (PFN_NrEvaluate) GetProcAddress(g_nr.forwarder, "dlssnr_call_evaluate");
     g_nr.evaluateGuided = (PFN_NrEvaluateGuided) GetProcAddress(g_nr.forwarder, "dlssnr_call_evaluate_guided");
+    g_nr.evaluateGuidesV2 = (PFN_NrEvaluateGuidesV2) GetProcAddress(
+        g_nr.forwarder, "dlssnr_call_evaluate_guides_v2");
     g_nr.release = (PFN_NrRelease) GetProcAddress(g_nr.forwarder, "dlssnr_call_release");
     g_nr.shutdown = (int (*)()) GetProcAddress(g_nr.forwarder, "dlssnr_call_shutdown");
     // Optional: an older forwarder simply lacks it, and the model runs as before.
@@ -2241,7 +2250,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                            ID3D12Resource* depth, ID3D12Resource* motion, ID3D12Resource* output,
                            const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue,
                            const NrConfigSnapshot<Config>& cfg, bool privateCommandList,
-                           unsigned int exactWorkWidth, unsigned int exactWorkHeight)
+                           unsigned int exactWorkWidth, unsigned int exactWorkHeight,
+                           bool nativeTemporalDomain, bool nativePreSrRoute)
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
@@ -2335,14 +2345,17 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
     bool secondLayerHealthy = healthyPassCount > 1;
     auto use = DlssNr::GpuSafety::Record(cmdList);
-    // Pre-SR reserved before touching its scratch/output path; Post-SR admits here.
-    const bool preSr = output == g_nr.preSrScratch;
-    const auto admission = preSr
+    ID3D12Resource* target = output;
+    const bool reservedPreSr = target == g_nr.preSrScratch;
+    const bool currentRouteIsPreSr = reservedPreSr || nativePreSrRoute;
+    // The legacy D3D12 Pre-SR path reserves before touching its scratch/output path.
+    // Native-DX11 Pre-SR owns its carrier and enters through the ordinary bounded admission.
+    const auto admission = reservedPreSr
         ? (_pool.ReservedFor(use) ? DlssNr::CompositionPool::Admission::Accepted
                                  : DlssNr::CompositionPool::Admission::Tracking)
         : _pool.Begin(_device, use, &DlssNr::CompositionPool::CreateSlot,
                       DlssNr::CompositionPool::RequiredSlots(healthyPassCount));
-    if (!preSr) ReportPool(admission, false);
+    if (!reservedPreSr) ReportPool(admission, currentRouteIsPreSr);
     if (admission != DlssNr::CompositionPool::Admission::Accepted || !_init)
     {
         g_nr.reset = true;
@@ -2356,9 +2369,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // Native Temporal and Present Image-Only are distinct history domains. A route transition parks
     // every opaque feature before recording against the other domain, even when dimensions match.
-    if (g_nr.imageOnlyDomain != privateCommandList)
+    const bool imageOnlyDomain = privateCommandList && !nativeTemporalDomain;
+    if (g_nr.imageOnlyDomain != imageOnlyDomain)
     {
-        g_nr.imageOnlyDomain = privateCommandList;
+        g_nr.imageOnlyDomain = imageOnlyDomain;
         g_nr.reset = true;
         if (g_nr.feature != nullptr)
         {
@@ -2366,7 +2380,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             ParkNrFeature(g_nr.feature);
         }
         ParkAllAdditionalLayerFeatures("NR route domain changed");
-        LOG_INFO("DLSS-NR route domain changed to {}", privateCommandList ? "Present Image-Only" : "Native Temporal");
+        LOG_INFO("DLSS-NR route domain changed to {}", imageOnlyDomain ? "Present Image-Only" : "Native Temporal");
     }
 
     // ParkNrFeature captured every known recording that could reference the old session, including
@@ -2395,17 +2409,17 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return;
     }
 
-    ID3D12Resource* target = output;
-    const bool currentRouteIsPreSr = target == g_nr.preSrScratch;
-
-    // Placement belongs to the current opaque feature, never to cumulative telemetry.
+    // Placement belongs to the current opaque feature generation. The old global evaluation serial
+    // remains cumulative for telemetry, so using it here would retire a newly created replacement
+    // every frame after a Pre-SR/Post-SR switch.
     if (g_nr.feature != nullptr && g_nr.primaryPlacement.RequiresRetirement(currentRouteIsPreSr))
     {
         g_nr.reset = true;
         g_nr.resumeFeatureAwaitingRelease = g_nr.feature;
         ParkNrFeature(g_nr.feature);
-        ParkAllAdditionalLayerFeatures("Primary Pre-SR/Post-SR placement changed");
-        LOG_INFO("DLSS-NR primary placement changed; retiring the owning feature generation");
+        ParkAllAdditionalLayerFeatures("Pre-SR/Post-SR route changed");
+        LOG_INFO("DLSS-NR Native Temporal placement changed to {}; retiring the previous model session",
+                 currentRouteIsPreSr ? "Pre-SR" : "Post-SR");
         return;
     }
 
@@ -2461,21 +2475,25 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const auto width = (unsigned int) desc.Width;
     const auto height = desc.Height;
 
-    // Depth and motion vectors are the upscaler's inputs and so are at render resolution, while colour
-    // and output are at display resolution. The model takes that as a subrect per resource rather than
-    // needing them resampled, which is why nothing here rescales anything.
-    // The guides are the upscaler's inputs and so are at render resolution, while colour and output
-    // are at display resolution. Their sizes come from the resources rather than from the caller:
-    // one less thing a call site can get wrong, and the model takes the difference as a subrect per
-    // resource rather than needing anything resampled.
+    // Each guide carries its own active rectangle. Most games use render-resolution depth and motion;
+    // native DLSS also permits dilated output-resolution motion while depth remains render-resolution.
     const D3D12_RESOURCE_DESC guideDesc = depth->GetDesc();
+    const D3D12_RESOURCE_DESC motionDesc = motion->GetDesc();
     unsigned int guideWidth = (unsigned int) guideDesc.Width;
     unsigned int guideHeight = guideDesc.Height;
+    unsigned int motionGuideWidth = (unsigned int) motionDesc.Width;
+    unsigned int motionGuideHeight = motionDesc.Height;
 
     if (guideWidth == 0 || guideHeight == 0)
     {
         guideWidth = width;
         guideHeight = height;
+    }
+
+    if (motionGuideWidth == 0 || motionGuideHeight == 0)
+    {
+        motionGuideWidth = guideWidth;
+        motionGuideHeight = guideHeight;
     }
 
     // What the game rendered wins over how big the texture is.
@@ -2488,10 +2506,14 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     //
     // Bounded by the resource because a subrect larger than the texture is a game bug that would
     // otherwise become a read off the end of it.
-    if (frame.RenderSubrectWidth != 0 && frame.RenderSubrectHeight != 0)
+    const auto requestedDepthWidth = frame.DepthSubrectWidth ? frame.DepthSubrectWidth : frame.RenderSubrectWidth;
+    const auto requestedDepthHeight = frame.DepthSubrectHeight ? frame.DepthSubrectHeight : frame.RenderSubrectHeight;
+    const auto requestedMotionWidth = frame.MotionSubrectWidth ? frame.MotionSubrectWidth : frame.RenderSubrectWidth;
+    const auto requestedMotionHeight = frame.MotionSubrectHeight ? frame.MotionSubrectHeight : frame.RenderSubrectHeight;
+    if (requestedDepthWidth != 0 && requestedDepthHeight != 0)
     {
-        const unsigned int subW = std::min(frame.RenderSubrectWidth, guideWidth);
-        const unsigned int subH = std::min(frame.RenderSubrectHeight, guideHeight);
+        const unsigned int subW = std::min(requestedDepthWidth, guideWidth);
+        const unsigned int subH = std::min(requestedDepthHeight, guideHeight);
 
         if (subW != guideWidth || subH != guideHeight)
         {
@@ -2511,8 +2533,29 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         guideHeight = subH;
     }
 
+    if (requestedMotionWidth != 0 && requestedMotionHeight != 0)
+    {
+        motionGuideWidth = std::min(requestedMotionWidth, motionGuideWidth);
+        motionGuideHeight = std::min(requestedMotionHeight, motionGuideHeight);
+    }
+
+    if (!guideWidth || !guideHeight || !motionGuideWidth || !motionGuideHeight ||
+        frame.DepthSubrectX > guideDesc.Width || frame.DepthSubrectY > guideDesc.Height ||
+        guideWidth > guideDesc.Width - frame.DepthSubrectX ||
+        guideHeight > guideDesc.Height - frame.DepthSubrectY ||
+        frame.MotionSubrectX > motionDesc.Width || frame.MotionSubrectY > motionDesc.Height ||
+        motionGuideWidth > motionDesc.Width - frame.MotionSubrectX ||
+        motionGuideHeight > motionDesc.Height - frame.MotionSubrectY)
+    {
+        ReportSkipOnce("the active depth or motion-vector rectangle exceeds its resource");
+        device->Release();
+        return;
+    }
+
     g_nr.guideWidth = guideWidth;
     g_nr.guideHeight = guideHeight;
+    g_nr.motionGuideWidth = motionGuideWidth;
+    g_nr.motionGuideHeight = motionGuideHeight;
     g_nr.guideDepthInverted = frame.DepthInverted;
 
     // The game's own encoding, passed through. Every resource already carries a subrect saying how
@@ -2548,8 +2591,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         bool depthInverted;
         float mvScaleX;
         float mvScaleY;
-        unsigned int guideW;
-        unsigned int guideH;
+        unsigned int depthW;
+        unsigned int depthH;
+        unsigned int motionW;
+        unsigned int motionH;
         unsigned int frameW;
         unsigned int frameH;
     };
@@ -2557,18 +2602,21 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     static GuideReport loggedGuides {};
 
     const GuideReport guidesNow { true,       g_nr.guideDepthInverted, g_nr.guideMvScaleX,
-                                  g_nr.guideMvScaleY, guideWidth,      guideHeight,
-                                  width,      (unsigned int) height };
+                                  g_nr.guideMvScaleY, guideWidth, guideHeight,
+                                  motionGuideWidth, motionGuideHeight,
+                                  width, (unsigned int) height };
 
     if (!loggedGuides.valid || loggedGuides.depthInverted != guidesNow.depthInverted ||
         loggedGuides.mvScaleX != guidesNow.mvScaleX || loggedGuides.mvScaleY != guidesNow.mvScaleY ||
-        loggedGuides.guideW != guidesNow.guideW || loggedGuides.guideH != guidesNow.guideH ||
+        loggedGuides.depthW != guidesNow.depthW || loggedGuides.depthH != guidesNow.depthH ||
+        loggedGuides.motionW != guidesNow.motionW || loggedGuides.motionH != guidesNow.motionH ||
         loggedGuides.frameW != guidesNow.frameW || loggedGuides.frameH != guidesNow.frameH)
     {
         loggedGuides = guidesNow;
-        LOG_INFO("DLSS-NR guides: depth {}, motion vector scale {} x {}, guides {}x{} for a {}x{} frame",
+        LOG_INFO("DLSS-NR guides: depth {}, motion vector scale {} x {}, depth {}x{}, motion {}x{} for a {}x{} frame",
                  g_nr.guideDepthInverted ? "inverted" : "not inverted", g_nr.guideMvScaleX,
-                 g_nr.guideMvScaleY, guideWidth, guideHeight, width, height);
+                 g_nr.guideMvScaleY, guideWidth, guideHeight, motionGuideWidth, motionGuideHeight,
+                 width, height);
     }
 
     if (cfg.DlssNrProxyProbe.value_or_default())
@@ -3413,27 +3461,48 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // evaluation advances display readiness; proxy success alone previously exited too early.
     const unsigned int guideOrigins[] = {frame.DepthSubrectX, frame.DepthSubrectY,
                                          frame.MotionSubrectX, frame.MotionSubrectY};
-    const bool enhanced = privateCommandList && cfg.DlssNrRoute.value_or_default() == 2;
-    const int result = enhanced ? (g_nr.evaluateGuided ? g_nr.evaluateGuided(
-        cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
-        workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
-        g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
-        (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
-        cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
-        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
-        g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY, guideOrigins) : 0) :
-        useProxy ? static_cast<int>(DlssNr::Proxy::Run(
+    const bool enhanced = imageOnlyDomain && cfg.DlssNrRoute.value_or_default() == 2;
+    int result = 0;
+    if (useProxy)
+    {
+        result = static_cast<int>(DlssNr::Proxy::Run(
         cmdList, device, modelInput, depthIn, motionIn, g_nr.output, workWidth, workHeight,
-        guideWidth, guideHeight, g_nr.guideDepthInverted, g_nr.reset,
+        guideWidth, guideHeight, motionGuideWidth, motionGuideHeight,
+        g_nr.guideDepthInverted, g_nr.reset,
         g_nr.guideMvScaleX * mvToWork.x, g_nr.guideMvScaleY * mvToWork.y,
-        frame.JitterX, frame.JitterY, cfg)) : g_nr.evaluate(
-        cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
-        workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
-        g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
-        (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
-        cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
-        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
-        g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY);
+        frame.JitterX, frame.JitterY, frame.DepthSubrectX, frame.DepthSubrectY,
+        frame.MotionSubrectX, frame.MotionSubrectY, cfg));
+    }
+    else if (g_nr.evaluateGuidesV2)
+    {
+        result = g_nr.evaluateGuidesV2(
+            cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
+            workWidth, workHeight, guideWidth, guideHeight, motionGuideWidth, motionGuideHeight,
+            g_nr.guideDepthInverted ? 1 : 0, g_nr.reset ? 1 : 0,
+            cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
+            cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
+            cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0,
+            g_nr.guideMvScaleX * mvToWork.x, g_nr.guideMvScaleY * mvToWork.y,
+            frame.JitterX, frame.JitterY, guideOrigins);
+    }
+    else if (motionGuideWidth == guideWidth && motionGuideHeight == guideHeight)
+    {
+        result = enhanced ? (g_nr.evaluateGuided ? g_nr.evaluateGuided(
+            cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
+            workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
+            g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+            (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+            cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+            cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
+            g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY, guideOrigins) : 0) : g_nr.evaluate(
+            cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthIn, motionIn, g_nr.output,
+            workWidth, workHeight, guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
+            g_nr.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+            (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+            cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+            cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, g_nr.guideMvScaleX * mvToWork.x,
+            g_nr.guideMvScaleY * mvToWork.y, frame.JitterX, frame.JitterY);
+    }
 
     if (g_ngxTime != nullptr)
         g_ngxTime->End(cmdList);
@@ -3739,16 +3808,28 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     if (g_ngxTimeLayer2 != nullptr)
                         g_ngxTimeLayer2->Start(cmdList);
 
-                    const int layer2Result = g_nr.evaluate(
+                    const int layer2Result = g_nr.evaluateGuidesV2 ? g_nr.evaluateGuidesV2(
                         cmdList, g_nr.layer2.feature, g_nr.capabilityParams, layer2ModelInput,
-                        depthIn, motionIn, g_nr.layer2.output, layer2WorkWidth, layer2WorkHeight, guideWidth,
-                        guideHeight, g_nr.guideDepthInverted ? 1 : 0,
+                        depthIn, motionIn, g_nr.layer2.output, layer2WorkWidth, layer2WorkHeight,
+                        guideWidth, guideHeight, motionGuideWidth, motionGuideHeight,
+                        g_nr.guideDepthInverted ? 1 : 0, g_nr.layer2.reset ? 1 : 0,
+                        layer2Tuning.intensity, (int) layer2Tuning.style,
+                        layer2Tuning.localStructure, layer2Tuning.localTone,
+                        layer2Tuning.skinStructure, layer2Tuning.autoMask ? 1 : 0,
+                        g_nr.guideMvScaleX * mvToLayer2Work.x,
+                        g_nr.guideMvScaleY * mvToLayer2Work.y,
+                        frame.JitterX, frame.JitterY, guideOrigins) :
+                        (motionGuideWidth == guideWidth && motionGuideHeight == guideHeight ? g_nr.evaluate(
+                        cmdList, g_nr.layer2.feature, g_nr.capabilityParams, layer2ModelInput,
+                        depthIn, motionIn, g_nr.layer2.output, layer2WorkWidth, layer2WorkHeight,
+                        guideWidth, guideHeight, g_nr.guideDepthInverted ? 1 : 0,
                         g_nr.layer2.reset ? 1 : 0, layer2Tuning.intensity,
                         (int) layer2Tuning.style, layer2Tuning.localStructure,
                         layer2Tuning.localTone, layer2Tuning.skinStructure,
                         layer2Tuning.autoMask ? 1 : 0,
-                        g_nr.guideMvScaleX * mvToLayer2Work.x, g_nr.guideMvScaleY * mvToLayer2Work.y,
-                        frame.JitterX, frame.JitterY);
+                        g_nr.guideMvScaleX * mvToLayer2Work.x,
+                        g_nr.guideMvScaleY * mvToLayer2Work.y,
+                        frame.JitterX, frame.JitterY) : 0);
 
                     if (g_ngxTimeLayer2 != nullptr)
                         g_ngxTimeLayer2->End(cmdList);
@@ -3952,7 +4033,16 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 }
 
                 SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
-                const int passResult = g_nr.evaluate(
+                const int passResult = g_nr.evaluateGuidesV2 ? g_nr.evaluateGuidesV2(
+                    cmdList, layer.feature, g_nr.capabilityParams, passModelInput, depthIn, motionIn,
+                    layer.output, passWorkWidth, passWorkHeight, guideWidth, guideHeight,
+                    motionGuideWidth, motionGuideHeight, g_nr.guideDepthInverted ? 1 : 0,
+                    layer.reset ? 1 : 0, settings.tuning.intensity, (int) settings.tuning.style,
+                    settings.tuning.localStructure, settings.tuning.localTone,
+                    settings.tuning.skinStructure, settings.tuning.autoMask ? 1 : 0,
+                    g_nr.guideMvScaleX * mvToPassWork.x,
+                    g_nr.guideMvScaleY * mvToPassWork.y, frame.JitterX, frame.JitterY, guideOrigins) :
+                    (motionGuideWidth == guideWidth && motionGuideHeight == guideHeight ? g_nr.evaluate(
                     cmdList, layer.feature, g_nr.capabilityParams, passModelInput, depthIn, motionIn,
                     layer.output, passWorkWidth, passWorkHeight, guideWidth, guideHeight,
                     g_nr.guideDepthInverted ? 1 : 0, layer.reset ? 1 : 0,
@@ -3960,7 +4050,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     settings.tuning.localStructure, settings.tuning.localTone,
                     settings.tuning.skinStructure, settings.tuning.autoMask ? 1 : 0,
                     g_nr.guideMvScaleX * mvToPassWork.x,
-                    g_nr.guideMvScaleY * mvToPassWork.y, frame.JitterX, frame.JitterY);
+                    g_nr.guideMvScaleY * mvToPassWork.y, frame.JitterX, frame.JitterY) : 0);
                 if (passResult != NVSDK_NGX_Result_Success)
                 {
                     ++g_layer2EvaluateFailures;
@@ -5771,6 +5861,103 @@ bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12Comm
                         queue, cfg, true, workWidth, workHeight);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     return g_nr.successfulEvaluations > before;
+}
+
+bool EvaluateNativeDx11PostSrCommandList(ID3D12GraphicsCommandList* cmdList,
+                                         ID3D12CommandQueue* queue,
+                                         ID3D12Resource* output,
+                                         ID3D12Resource* depth,
+                                         ID3D12Resource* motion,
+                                         const DlssNrFrameInfo& frame,
+                                         const NrConfigSnapshot<Config>& settings)
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
+        output == nullptr || depth == nullptr || motion == nullptr ||
+        settings.DlssNrRoute.value_or_default() != 0 ||
+        settings.DlssNrRunBeforeSr.value_or_default() ||
+        !settings.GetDlssNrRuntimeSnapshot().enabled)
+        return false;
+
+    ID3D12Device* device = nullptr;
+    if (FAILED(output->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+        return false;
+    if (!AcceptGenerationDevice(device))
+    {
+        device->Release();
+        return false;
+    }
+    if (g_compose == nullptr)
+        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering - native DX11 Post-SR", device);
+    device->Release();
+    if (g_compose == nullptr)
+        return false;
+
+    unsigned long long before = 0;
+    {
+        std::lock_guard<std::mutex> nrLock(g_nrMutex);
+        before = g_nr.completedPipelineEvaluations;
+    }
+
+    // The private list needs no game-state restoration, while its temporal history remains in the
+    // Native domain. The caller transitions these owned carriers to the documented arrival states.
+    g_compose->Dispatch(cmdList, output, depth, motion, output, frame, queue, settings,
+                        true, 0, 0, true);
+
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return g_nr.completedPipelineEvaluations > before;
+}
+
+bool EvaluateNativeDx11PreSrCommandList(ID3D12GraphicsCommandList* cmdList,
+                                        ID3D12CommandQueue* queue,
+                                        ID3D12Resource* colour,
+                                        ID3D12Resource* depth,
+                                        ID3D12Resource* motion,
+                                        const DlssNrFrameInfo& frame,
+                                        const NrConfigSnapshot<Config>& settings)
+{
+    std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    if (g_sessionClosed || g_shutdownFailed || cmdList == nullptr || queue == nullptr ||
+        colour == nullptr || depth == nullptr || motion == nullptr ||
+        settings.DlssNrRoute.value_or_default() != 0 ||
+        !settings.DlssNrRunBeforeSr.value_or_default() ||
+        !settings.GetDlssNrRuntimeSnapshot().enabled)
+        return false;
+
+    ID3D12Device* device = nullptr;
+    if (FAILED(colour->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+        return false;
+    if (!AcceptGenerationDevice(device))
+    {
+        device->Release();
+        return false;
+    }
+    if (g_compose == nullptr)
+        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering - native DX11 Pre-SR", device);
+    device->Release();
+    if (g_compose == nullptr)
+        return false;
+
+    unsigned long long before = 0;
+    {
+        std::lock_guard<std::mutex> nrLock(g_nrMutex);
+        before = g_nr.completedPipelineEvaluations;
+        g_nr.preSrAwaitingEvaluation = true;
+    }
+
+    // The colour carrier is an owned render-resolution copy. NR edits it in place before the
+    // native DX11 DLSS evaluation consumes it; the original game texture is never transitioned.
+    g_compose->Dispatch(cmdList, colour, depth, motion, colour, frame, queue, settings,
+                        true, 0, 0, true, true);
+
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    const bool delivered = g_nr.completedPipelineEvaluations > before;
+    if (delivered)
+    {
+        g_nr.preSrScratchPrimed = true;
+        g_nr.preSrAwaitingEvaluation = false;
+    }
+    return delivered;
 }
 
 void ProbeD3D11(void* d3d11Device)

@@ -58,8 +58,9 @@ constexpr uint32_t kDlssNrMeterGrid = 64;
 // choices -- preset, intensity, strengths, paper white -- stay in Config, so a caller placing this
 // pass in a new pipeline does not have to plumb a dozen sliders through it.
 //
-// Sizes are deliberately absent. The output's dimensions come from its own descriptor and the guide
-// sizes from theirs, so there is one less thing for a call site to get wrong.
+// The output's dimensions come from its own descriptor. Explicit active guide rectangles are optional:
+// zero retains resource/render-size discovery, while native-DLSS capture records them when depth and
+// motion use different standard resolutions.
 struct DlssNrFrameInfo
 {
     // Which way round depth runs. The game states this when it creates its own upscaler.
@@ -98,7 +99,9 @@ struct DlssNrFrameInfo
     // undo it. Usually 1. Divided out before the exposure is applied, exactly as FSR's PrepareRgb does.
     float PreExposure = 1.0f;
 
-    // How much of the depth and motion vector textures the game actually rendered into.
+    // How much of the guide textures the game actually rendered into. Depth normally follows the
+    // render rectangle. Motion may instead follow the output rectangle when the upscaler advertises
+    // high-resolution vectors, so the two valid rectangles must remain independent.
     //
     // Not the same thing as how big those textures are, and the difference is the whole point. A game
     // with dynamic resolution allocates its guides once at the largest size it will ever need and
@@ -110,8 +113,9 @@ struct DlssNrFrameInfo
     // available and is what gets used.
     unsigned int RenderSubrectWidth = 0;
     unsigned int RenderSubrectHeight = 0;
-    // Present Enhanced retains full guide copies and forwards their valid origins.
-    // Native callers retain their existing zero-origin behavior.
+    unsigned int DepthSubrectWidth = 0, DepthSubrectHeight = 0;
+    unsigned int MotionSubrectWidth = 0, MotionSubrectHeight = 0;
+    // Present and native-DLSS adapters retain full guide copies and forward their valid origins.
     unsigned int DepthSubrectX = 0, DepthSubrectY = 0;
     unsigned int MotionSubrectX = 0, MotionSubrectY = 0;
 };
