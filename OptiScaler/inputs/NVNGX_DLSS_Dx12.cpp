@@ -4,6 +4,7 @@
 #include <dlssnr/FgLifecycle.h>
 #include <dlssnr/NrGpuSafety.h>
 #include <dlssnr/NativeFeatureRegistry.h>
+#include <dlssnr/NativeTemporalInputs.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -1484,8 +1485,15 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     if (cameraFar) InParameters->Set("DLSSG.CameraFar", *cameraFar);
 
     // OptiScaler internal handling
+    const auto nrContext = Dx12Contexts.find(handleId);
+    const auto* nrFeature = nrContext != Dx12Contexts.end() ? nrContext->second.feature.get() : nullptr;
+    const bool authoritativeNativePreSr = nrFeature && DlssNr::NativeTemporalInputs::Authoritative(
+        isSuperResolution, nrFeature->GetUpscalerType() == Upscaler::DLSS,
+        nrFeature->Api() == API::DX12, nrContext->second.feature->IsWithDx12());
+    NR_FRAME_TRACE("nr-native-authority", "handle={} generation={} authoritative={}",
+        handleId, featureSnapshot.generation, authoritativeNativePreSr);
     if (isSuperResolution && nrSettings)
-        DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings);
+        DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, authoritativeNativePreSr);
 
     const NVSDK_NGX_Result optiResult =
         TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
