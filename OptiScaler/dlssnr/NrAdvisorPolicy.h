@@ -1,5 +1,7 @@
 #pragma once
 #include "DlssNr_StageUi.h"
+#include "NrAdvisorSampling.h"
+#include "NrExperimentalPolicy.h"
 
 namespace DlssNr::AdvisorPolicy
 {
@@ -7,6 +9,32 @@ inline constexpr int Before = 0, After = 1;
 inline constexpr int RouteCount(int stage) { return stage == Before ? 1 : 3; }
 inline constexpr bool Contains(int stage, int route)
 { return (stage == Before || stage == After) && route >= 0 && route < RouteCount(stage); }
+
+// Requirements, not promises of compatibility. Only the implemented policy gates
+// may recommend an override; unknown cadence or an unsupported format must not.
+inline const char* ExperimentalAdvice(int route, const ExperimentalPolicy::Snapshot& policy,
+                                      bool frameGeneration, bool supportedHdr)
+{
+    if (route == 2 && frameGeneration && !policy.Allows(ExperimentalPolicy::Guardrail::FrameGeneration))
+        return "Experimental required: enable Unlock Experimental Mode and Override FG Guardrails, then Save experimental settings and retry. Safety checks still apply.";
+    if ((route == 1 || route == 2) && supportedHdr && !policy.Allows(ExperimentalPolicy::Guardrail::Hdr))
+        return "Experimental required: enable Unlock Experimental Mode and Override HDR Guardrails, then Save experimental settings and retry. Safety checks still apply.";
+    return nullptr;
+}
+
+inline bool CurrentFailure(int route, uint64_t trialGeneration, uint64_t startAttempt,
+                           const AdvisorSampling::Cadence& cadence, uint64_t fallbackAttempt)
+{
+    return (route == 1 || route == 2) && cadence.sequence != 0 && cadence.route == unsigned(route) &&
+        cadence.configurationGeneration == trialGeneration && fallbackAttempt > startAttempt;
+}
+
+inline const char* MissingFeedback(bool receivedOutput)
+{
+    return receivedOutput
+        ? "Model feedback arrived, but matching native frame timing was not verified within five seconds. Unmeasured."
+        : "No model feedback within five seconds. Check the route status and retry in live gameplay.";
+}
 
 // Used by both preflight and execution. Never inherit Native's previous placement.
 template<class C> void SelectPlacement(C& config, int stage, int route)

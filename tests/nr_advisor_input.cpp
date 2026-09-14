@@ -4,6 +4,7 @@
 #include <cassert>
 #include <limits>
 #include <iostream>
+#include <string_view>
 struct AdvisorConfig
 {
     NrOptional<uint32_t> DlssNrRoute {2};
@@ -111,7 +112,7 @@ int main()
     Window startup;
     assert(!startup.RejectStall(false, 1200, true, 1200)); // model startup is not a scored frame
     assert(!startup.WarmupFrame(true, true, 1200, 1200) && startup.warmFrames == 0);
-    assert(!startup.StartupExpired(14.999) && startup.StartupExpired(15));
+    assert(!startup.StartupExpired(4.999) && startup.StartupExpired(5) && startup.StartupExpired(15));
     for (int i=0; i<29; ++i) assert(!startup.WarmupFrame(true, true, 16, 16));
     assert(!startup.WarmupFrame(false, true, 16, 16) && startup.warmFrames == 0);
     for (int i=0; i<29; ++i) assert(!startup.WarmupFrame(true, true, 16, 16));
@@ -119,6 +120,36 @@ int main()
     assert(startup.RejectStall(true, 1200, true, 16)); // actual measurement stalls still fail
     assert(startup.RejectStall(true, 16, true, 1200));
     assert(!startup.RejectStall(true, 16, false, 1200)); // stale sample not counted
+    for (unsigned mask = 0; mask < 8; ++mask)
+        for (int route = 0; route < 3; ++route)
+            for (bool fg : {false, true})
+                for (bool hdr : {false, true})
+                {
+                    const DlssNr::ExperimentalPolicy::Snapshot policy {bool(mask & 1), false,
+                        bool(mask & 2), bool(mask & 4), 7};
+                    const bool needsFg = route == 2 && fg && !(mask & 1 && mask & 4);
+                    const bool needsHdr = route != 0 && hdr && !(mask & 1 && mask & 2);
+                    const char* advice = ExperimentalAdvice(route, policy, fg, hdr);
+                    assert(bool(advice) == (needsFg || needsHdr));
+                    if (advice)
+                    {
+                        assert(std::string_view(advice).find(needsFg ? "Override FG Guardrails" : "Override HDR Guardrails") != std::string_view::npos);
+                        assert(std::string_view(advice).find("Save experimental settings") != std::string_view::npos);
+                    }
+                }
+    Cadence failure {20, 4, 2, 2, 16.0, false, 10};
+    assert(CurrentFailure(2, 10, 30, failure, 31)); // failed/unknown cadence can carry a real policy refusal
+    assert(!CurrentFailure(2, 10, 30, failure, 30)); // old attempt
+    assert(!CurrentFailure(2, 11, 30, failure, 31)); // old trial
+    assert(!CurrentFailure(1, 10, 30, failure, 31)); // previous card
+    assert(!CurrentFailure(0, 10, 30, failure, 31)); // Native must not inherit Present reasons
+    failure.sequence = 0;
+    assert(!CurrentFailure(2, 10, 30, failure, 31));
+    assert(std::string_view(MissingFeedback(false)).find("No model feedback") != std::string_view::npos);
+    assert(std::string_view(MissingFeedback(true)).find("frame timing") != std::string_view::npos);
+    assert(std::string_view(MissingFeedback(false)).find("Experimental") == std::string_view::npos);
+    assert(std::string_view(MissingFeedback(true)).find("Experimental") == std::string_view::npos);
+    std::cout << "PASS five-second feedback boundary, exact FG/HDR option matrix, no blanket override advice, current-trial failure identity and model-vs-timing diagnosis\n";
     std::cout << "PASS Advisor stage/route/resolution matrix, pure preflight, explicit Native placement, forced-path limits, bounded startup, stable warmup and strict measurement stalls\n";
     std::cout << "PASS eight input policies, capture ownership, defaults, native cadence freshness, unknown/invalid refusal, sample bounds and stall thresholds\n";
 }

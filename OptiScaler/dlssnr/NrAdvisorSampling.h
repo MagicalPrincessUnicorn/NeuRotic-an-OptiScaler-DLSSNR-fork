@@ -40,7 +40,7 @@ struct Window
         else if (fresh || Stall(tickMs)) warmFrames = 0;
         return warmFrames >= 30;
     }
-    bool StartupExpired(double elapsed) const { return elapsed >= 15.0; }
+    bool StartupExpired(double elapsed) const { return elapsed >= 5.0; }
     bool Complete(double elapsed) const { return samples >= 120 && elapsed >= 3.0; }
     double Fps() const { return samples && totalMs > 0 ? 1000.0 * samples / totalMs : 0; }
 };

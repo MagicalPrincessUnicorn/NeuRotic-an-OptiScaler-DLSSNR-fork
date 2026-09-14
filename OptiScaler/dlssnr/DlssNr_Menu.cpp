@@ -279,11 +279,13 @@ struct AdvisorState
     bool rayReconstruction = false;
     int fgRatio = 0, xeRatio = 0;
     bool ready = false;
+    bool receivedOutput = false;
     std::vector<double> baselineIntervals;
     unsigned int originalWidth = 0;
     unsigned int originalHeight = 0;
     unsigned long long startNativeFrames = 0;
     unsigned long long startPresentEvaluations = 0;
+    unsigned long long startPresentAttempts = 0;
     unsigned long long startGuideEvaluations = 0;
     unsigned long long lastNativeGpuFrame = 0;
     unsigned long long lastPresentGpuSample = 0;
@@ -396,6 +398,7 @@ void BeginAdvisorRoute(Config& config, int route)
     advisor.phaseStarted = AdvisorNow();
     advisor.testStarted = advisor.lastTick = advisor.phaseStarted;
     advisor.ready = false;
+    advisor.receivedOutput = false;
     advisor.sampling = {};
     if (!advisor.baselineIntervals.empty())
     {
@@ -420,6 +423,7 @@ void BeginAdvisorRoute(Config& config, int route)
     const auto guides = DlssNr::PresentGuides::Instance().Inspect();
     advisor.startNativeFrames = native.completedPipelineEvaluations;
     advisor.startPresentEvaluations = present.modelEvaluations;
+    advisor.startPresentAttempts = present.presentAttempts;
     advisor.startGuideEvaluations = guides.evaluated;
     advisor.lastNativeGpuFrame = native.completedPipelineEvaluations;
     advisor.lastPresentGpuSample = present.presentGpuSamples;
@@ -520,7 +524,7 @@ void ChooseAdvisorRecommendation(AdvisorState& advisor)
     advisor.appliedRoute = -1;
     if (selected < 0)
     {
-        advisor.status = "No verified Neural Rendering route was available.";
+        advisor.status = "No measured recommendation. Check the requirements and feedback on each route card.";
         advisor.reason = "The original image was preserved. Review the route reasons below and try another scene.";
     }
     else
@@ -619,8 +623,39 @@ void FailAdvisorRoute(Config& config, const char* reason)
 const char* AdvisorRouteRefusal(const Config& config, int route)
 {
     // Both individual and all-route tests own the same reversible single-pass setup.
-    return AdvisorPolicy::Refusal(config.GetDlssNrConfigSnapshot(), Advisor().stage, route,
-        Advisor().resolutionPreference, IsVulkanInput(), DlssNr::Telemetry().nativeRayReconstructionActive);
+    const auto settings = config.GetDlssNrConfigSnapshot();
+    if (const auto* refusal = AdvisorPolicy::Refusal(settings, Advisor().stage, route,
+        Advisor().resolutionPreference, IsVulkanInput(), DlssNr::Telemetry().nativeRayReconstructionActive))
+        return refusal;
+    // Match the renderer's FG guard exactly; do not infer it from generated FPS.
+    const bool fg = config.FGEnabled.value_or_default() ||
+        State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive;
+    return AdvisorPolicy::ExperimentalAdvice(route, ExperimentalPolicy::Capture(settings), fg, false);
+}
+
+std::string AdvisorFeedbackFailure(const Config& config, const PresentTelemetrySnapshot& present)
+{
+    const auto& advisor = Advisor();
+    if (AdvisorPolicy::CurrentFailure(advisor.routeIndex, advisor.configurationGeneration,
+        advisor.startPresentAttempts, present.cadence, present.lastFallbackAttempt))
+    {
+        // The route, trial epoch and attempt must match before using a renderer
+        // refusal. Never reuse a prior card's HDR/FG warning after a route switch.
+        if (!present.failure.empty()) return present.failure;
+        if (present.policyBlocked)
+        {
+            const auto policy = ExperimentalPolicy::Capture(config.GetDlssNrConfigSnapshot());
+            const bool hdr = present.policyGuardrail == "HDR" && !present.hdrDescriptorTransitioning &&
+                present.backbufferFormat == DXGI_FORMAT_R10G10B10A2_UNORM &&
+                present.colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+            if (const auto* advice = AdvisorPolicy::ExperimentalAdvice(advisor.routeIndex, policy,
+                present.policyGuardrail == "Frame Generation", hdr)) return advice;
+            if (present.policyGuardrail == "HDR" && !hdr)
+                return "This HDR output has no supported Present conversion. Experimental settings cannot enable it.";
+        }
+        if (!present.fallbackReason.empty()) return present.fallbackReason;
+    }
+    return AdvisorPolicy::MissingFeedback(advisor.receivedOutput);
 }
 
 void StartAdvisorAnalysis(Config& config, int selectedRoute)
@@ -666,7 +701,7 @@ void StartAdvisorAllRoutes(Config& config)
     advisor.originalWidth = present.backbufferWidth;
     advisor.originalHeight = present.backbufferHeight;
     if (!BeginNextAdvisorRoute(config))
-        advisor.status = "No compatible routes were available to test.";
+        advisor.status = "No routes tested. Review the requirements shown on each card.";
 }
 
 void ApplyAdvisorRoute(Config& config, int route)
@@ -774,6 +809,8 @@ void RenderAdvisorRouteCard(Config& config, int route, float height)
                 ImGui::TextDisabled("NR route GPU timing unavailable");
         }
         const auto* refusal = AdvisorRouteRefusal(config, route);
+        if (refusal && !advisor.running)
+            ImGui::TextColored(ImVec4(1.00f, 0.72f, 0.25f, 1.00f), "%s", refusal);
         ImGui::BeginDisabled(advisor.running || refusal != nullptr);
         if (ImGui::Button((std::string("Test This Route##AdvisorTest") + std::to_string(route)).c_str()))
             StartAdvisorAnalysis(config, route);
@@ -1188,6 +1225,7 @@ void TickAdvisor(Config* config)
           present.modelEvaluations > advisor.startPresentEvaluations);
     const bool matchingCadence = fresh && present.cadence.route == unsigned(advisor.routeIndex) &&
         present.cadence.configurationGeneration == advisor.configurationGeneration;
+    advisor.receivedOutput = advisor.receivedOutput || matchingOutput;
     if (matchingCadence && matchingOutput) advisor.lastCompletedObservation = completedObservation;
     if (advisor.ready && present.resourceGeneration != advisor.resourceGeneration)
     {
@@ -1203,9 +1241,13 @@ void TickAdvisor(Config* config)
             advisor.transitionSeconds = now - advisor.testStarted;
             advisor.phaseStarted = now;
         }
-        if (!advisor.ready && advisor.sampling.StartupExpired(now - advisor.testStarted))
+        const bool policyBlocked = present.policyBlocked && AdvisorPolicy::CurrentFailure(
+            advisor.routeIndex, advisor.configurationGeneration, advisor.startPresentAttempts,
+            present.cadence, present.lastFallbackAttempt);
+        if (!advisor.ready && (policyBlocked || advisor.sampling.StartupExpired(now - advisor.testStarted)))
         {
-            FailAdvisorRoute(*config, "No matching output and verified native cadence within fifteen seconds; unmeasured.");
+            const auto reason = AdvisorFeedbackFailure(*config, present);
+            FailAdvisorRoute(*config, reason.c_str());
             return;
         }
         if (advisor.ready)

@@ -25,8 +25,24 @@ require('AdvisorPolicy::SelectPlacement(config, Advisor().stage, route)' in conf
         'StageUi::SelectResolutionChoice(config, Advisor().resolutionPreference)' in configure,
         'execution explicitly applies both selected placement and resolution')
 preflight = section(menu, 'const char* AdvisorRouteRefusal(const Config& config, int route)\n{', 'void StartAdvisorAnalysis(')
-require('AdvisorPolicy::Refusal(config.GetDlssNrConfigSnapshot(), Advisor().stage, route,' in preflight,
+require('AdvisorPolicy::Refusal(settings, Advisor().stage, route,' in preflight,
         'individual and batch preflight share the execution policy')
+require('config.FGEnabled.value_or_default() ||' in preflight and
+        'State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive' in preflight and
+        'AdvisorPolicy::ExperimentalAdvice(route, ExperimentalPolicy::Capture(settings), fg, false)' in preflight,
+        'FG prerequisite uses the renderer predicate and saved effective experimental policy')
+diagnosis = section(menu, 'std::string AdvisorFeedbackFailure(', 'void StartAdvisorAnalysis(')
+require('AdvisorPolicy::CurrentFailure(' in diagnosis and 'present.failure.empty()' in diagnosis and
+        'present.fallbackReason.empty()' in diagnosis and 'AdvisorPolicy::MissingFeedback(' in diagnosis,
+        'timeout shows a current renderer refusal or distinct model/timing feedback, never guesses a guardrail')
+require('DXGI_FORMAT_R10G10B10A2_UNORM' in diagnosis and
+        'DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020' in diagnosis,
+        'HDR advice requires the implemented conversion format; unsupported HDR stays blocked')
+require('if (refusal && !advisor.running)' in menu and
+        'ImGui::TextColored(ImVec4(1.00f, 0.72f, 0.25f, 1.00f), "%s", refusal)' in menu,
+        'card requirements are directly visible, not hidden only in a tooltip')
+require('SaveExperimentalSettings(' not in preflight and 'ApplyDraft(' not in preflight,
+        'Advisor recommends but never enables or saves experimental options')
 capture = section(menu, 'void CaptureAdvisorSettings(', 'void RestoreAdvisorSettings(')
 restore = section(menu, 'void RestoreAdvisorSettings(', 'void ConfigureAdvisorRoute(')
 for field in ('DlssNrUiResolutionPreset', 'DlssNrUiPresentResolutionPreset', 'DlssNrUiEnhancedResolutionPreset',
@@ -60,3 +76,6 @@ for token in ('!lifecycle.lifecycleOpen', 'lifecycle.lifecycleGeneration != advi
               'advisor.sampling.StartupExpired(', 'advisor.sampling.WarmupFrame('):
     require(token in tick, 'controller retains gate: '+token)
 print('PASS: Advisor stage production wiring; these are source contracts, not a live-game test')
+require('FailAdvisorRoute(*config, reason.c_str())' in tick and
+        'policyBlocked || advisor.sampling.StartupExpired(' in tick,
+        'current policy refusal exits promptly; otherwise five-second startup uses specific feedback')
