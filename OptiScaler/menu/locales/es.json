@@ -906,7 +906,7 @@
   "Overlay Type": "Tipo de indicador",
   "Override": "Sustituir",
   "Override DLSSG Ratio": "Sustituir relación DLSSG",
-  "Override FG Guardrails (Experimental, Probably don't need this)": "Anular protecciones FG (Experimental, probablemente no haga falta)",
+  "Override FG Guardrails (Experimental)": "Anular protecciones FG (Experimental)",
   "Override HDR Guardrails (Experimental)": "Anular protecciones HDR (Experimental)",
   "Override Maximum": "Sustituir máximo",
   "Override Minimum": "Sustituir mínimo",

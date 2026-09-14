@@ -79,3 +79,21 @@ print('PASS: Advisor stage production wiring; these are source contracts, not a 
 require('FailAdvisorRoute(*config, reason.c_str())' in tick and
         'policyBlocked || advisor.sampling.StartupExpired(' in tick,
         'current policy refusal exits promptly; otherwise five-second startup uses specific feedback')
+
+batch = section(menu, 'bool BeginNextAdvisorRoute(', 'double AdvisorTargetFps(')
+skip = section(batch, 'if (const auto* refusal = AdvisorRouteRefusal(config, route))',
+               'CaptureAdvisorSettings(config, advisor.original);')
+require('continue;' in skip and 'RestoreAdvisorSettings' not in skip and
+        batch.index('AdvisorRouteRefusal(config, route)') < batch.index('CaptureAdvisorSettings(') and
+        batch.index('AdvisorRouteRefusal(config, route)') < batch.index('TemporarySettings.store(true)'),
+        'refusal-only routes do not mutate settings, restore NR or enter temporary mode')
+start_all = section(menu, 'void StartAdvisorAllRoutes(', 'void ApplyAdvisorRoute(')
+require(start_all.index('CaptureAdvisorContext(config, present);') < start_all.index('BeginNextAdvisorRoute(config)'),
+        'all-skipped analysis captures current context before it can publish results')
+context = section(menu, 'void CaptureAdvisorContext(', 'void CaptureAdvisorSettings(')
+for field in ('providerGeneration', 'lifecycleGeneration', 'rayReconstruction',
+              'fgInput', 'fgOutput', 'fgMode', 'fgRatio', 'xeRatio'):
+    require('advisor.' + field + ' =' in context, 'refusal-only coverage initializes ' + field)
+require('CaptureAdvisorContext(config, present);' in section(menu, 'void BeginAdvisorRoute(',
+                                                          'const char* AdvisorRouteRefusal('),
+        'executed trials and refusal-only analysis share context capture')

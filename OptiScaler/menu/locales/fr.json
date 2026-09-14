@@ -906,7 +906,7 @@
   "Overlay Type": "Type d'affichage",
   "Override": "Remplacer",
   "Override DLSSG Ratio": "Remplacer le rapport DLSSG",
-  "Override FG Guardrails (Experimental, Probably don't need this)": "Contourner les protections FG (Expérimental, probablement inutile)",
+  "Override FG Guardrails (Experimental)": "Contourner les protections FG (Expérimental)",
   "Override HDR Guardrails (Experimental)": "Contourner les protections HDR (Expérimental)",
   "Override Maximum": "Remplacer le maximum",
   "Override Minimum": "Remplacer le minimum",

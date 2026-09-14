@@ -7259,7 +7259,7 @@ void MenuCommon::RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ct
         ImGui::Indent(childIndent);
         draft.dirty |= ImGui::Checkbox("Override Multipass NR Guardrails (Experimental)", &draft.multipass);
         draft.dirty |= ImGui::Checkbox("Override HDR Guardrails (Experimental)", &draft.hdr);
-        draft.dirty |= ImGui::Checkbox("Override FG Guardrails (Experimental, Probably don't need this)",
+        draft.dirty |= ImGui::Checkbox("Override FG Guardrails (Experimental)",
                                        &draft.frameGeneration);
         draft.dirty |= ImGui::Checkbox("Preserve NR During Camera Cuts", &draft.preSrSoftReset);
         ShowHelpMarker("Potential fix for situations where camera cuts cause the NR layer to reload, leading to a jarring presentation. This might lead to crashes when loading between worldspaces. Requires more testing.");

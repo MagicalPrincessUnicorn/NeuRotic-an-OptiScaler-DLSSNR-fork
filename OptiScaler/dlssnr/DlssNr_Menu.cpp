@@ -321,6 +321,20 @@ uint64_t AdvisorProviderGeneration(const PresentTelemetrySnapshot& present)
     return provider.known ? provider.generation : present.cadence.providerGeneration;
 }
 
+void CaptureAdvisorContext(const Config& config, const PresentTelemetrySnapshot& present)
+{
+    auto& advisor = Advisor();
+    const auto native = DlssNr::Telemetry();
+    advisor.providerGeneration = AdvisorProviderGeneration(present);
+    advisor.lifecycleGeneration = native.lifecycleGeneration;
+    advisor.rayReconstruction = native.nativeRayReconstructionActive;
+    advisor.fgInput = State::Instance().activeFgInput;
+    advisor.fgOutput = State::Instance().activeFgOutput;
+    advisor.fgMode = State::Instance().dlssgLastSetMode.load();
+    advisor.fgRatio = config.FGDLSSGInterpolationCount.value_or_default();
+    advisor.xeRatio = config.FGXeFGInterpolationCount.value_or_default();
+}
+
 void CaptureAdvisorSettings(Config& config, AdvisorOriginalSettings& out)
 {
     NrConfigSynchronization::Transaction transaction;
@@ -408,18 +422,11 @@ void BeginAdvisorRoute(Config& config, int route)
     }
     ConfigureAdvisorRoute(config, route);
     advisor.configurationGeneration = ++AdvisorSampling::ConfigurationGeneration;
-    advisor.fgInput = State::Instance().activeFgInput;
-    advisor.fgOutput = State::Instance().activeFgOutput;
-    advisor.fgMode = State::Instance().dlssgLastSetMode.load();
-    advisor.rayReconstruction = DlssNr::Telemetry().nativeRayReconstructionActive;
-    advisor.fgRatio = config.FGDLSSGInterpolationCount.value_or_default();
-    advisor.xeRatio = config.FGXeFGInterpolationCount.value_or_default();
     advisor.expectedSettings = TryNrConfigSnapshot(config);
     const auto native = DlssNr::Telemetry();
-    advisor.lifecycleGeneration = native.lifecycleGeneration;
     const auto present = DlssNr::PresentTelemetry();
+    CaptureAdvisorContext(config, present);
     advisor.sampling.lastSequence = present.cadence.sequence;
-    advisor.providerGeneration = AdvisorProviderGeneration(present);
     const auto guides = DlssNr::PresentGuides::Instance().Inspect();
     advisor.startNativeFrames = native.completedPipelineEvaluations;
     advisor.startPresentEvaluations = present.modelEvaluations;
@@ -443,24 +450,17 @@ bool BeginNextAdvisorRoute(Config& config)
     while (advisor.nextRoute < AdvisorPolicy::RouteCount(advisor.stage))
     {
         const int route = advisor.nextRoute++;
-        // Analyze All owns a reversible single-pass setup for every trial. Capture first so
-        // an enabled Multipass profile is restored exactly after each route or refusal.
-        CaptureAdvisorSettings(config, advisor.original);
-        AdvisorSampling::TemporarySettings.store(true);
-        {
-            NrConfigSynchronization::Transaction transaction;
-            config.DlssNrMultipassEnabled = false;
-            config.DlssNrSecondLayer = false;
-            config.DlssNrPasses = 1u;
-        }
+        // Preflight is pure and independent of Multipass. A skipped route must not
+        // bounce live NR settings or trigger a restore/lifecycle transition.
         if (const auto* refusal = AdvisorRouteRefusal(config, route))
         {
             advisor.routes[route] = {};
             advisor.routes[route].level = AdvisorResultLevel::Unavailable;
             advisor.routes[route].detail = std::string("Skipped: ") + refusal;
-            RestoreAdvisorSettings(config, advisor.original);
             continue;
         }
+        CaptureAdvisorSettings(config, advisor.original);
+        AdvisorSampling::TemporarySettings.store(true);
         advisor.routes[route] = {};
         advisor.routes[route].level = AdvisorResultLevel::Analyzing;
         advisor.routes[route].detail = "Waiting for matching completed evaluations...";
@@ -698,6 +698,8 @@ void StartAdvisorAllRoutes(Config& config)
     advisor.nextRoute = 0;
     advisor.reason = "Multipass is temporarily disabled. Each supported route uses the selected resolution preference, and original settings are restored between trials and at the end.";
     const auto present = DlssNr::PresentTelemetry();
+    // Keep refusal-only results tied to this session even when no trial begins.
+    CaptureAdvisorContext(config, present);
     advisor.originalWidth = present.backbufferWidth;
     advisor.originalHeight = present.backbufferHeight;
     if (!BeginNextAdvisorRoute(config))
