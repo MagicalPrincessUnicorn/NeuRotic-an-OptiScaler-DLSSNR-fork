@@ -55,6 +55,17 @@ The final Advisor pass also makes blocked routes much easier to understand. It n
 
 Read the [complete Alpha 0.9.6 patch notes](ALPHA-0.9.6.md) for the full feature list, experimental boundaries, and known limitations.
 
+## NEW LANGUAGE PATCH: 0.9.6.1
+
+[NeuRotic Alpha 0.9.6.1](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases#release-alpha-0.9.6.1) is an optional update, targeted at improving all non-english translations.
+- Spanish
+- French
+- German
+- Portuguese
+- Chinese (New)
+
+A special thank you to **Alfred**, for consulting on a few key Chinese translations.
+
 ## Important: Experimental Mode
 
 If Neural Rendering says **BLOCKED**, refuses to start, or returns to the original game image, it may be protecting you from a rendering combination that is not supported by the normal out-of-box configuration.
