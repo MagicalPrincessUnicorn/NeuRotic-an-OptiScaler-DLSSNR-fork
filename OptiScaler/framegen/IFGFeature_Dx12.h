@@ -10,6 +10,8 @@
 
 #include <dxgi1_6.h>
 #include <d3d12.h>
+#include <dlssnr/NrGpuSafety.h>
+#include <atomic>
 
 struct Dx12Resource
 {
@@ -45,6 +47,8 @@ struct LockedDx12Resource
 class IFGFeature_Dx12 : public virtual IFGFeature
 {
   private:
+    // Only Streamline scoped input uses this gate; other adapters start ready.
+    std::atomic<bool> _streamlineInputsReady[BUFFER_COUNT] { true, true, true, true };
     ID3D12GraphicsCommandList* _copyCommandList[BUFFER_COUNT] {};
     ID3D12CommandAllocator* _copyCommandAllocator[BUFFER_COUNT] {};
 
@@ -69,8 +73,17 @@ class IFGFeature_Dx12 : public virtual IFGFeature
     UINT64 _scAllocatorFenceValues[BUFFER_COUNT] {};
     ID3D12Fence* _scFence = nullptr;
     HANDLE _scFenceEvent = nullptr;
+    UINT64 _scFenceValue = 0;
+    bool _scCompletionUnknown = false;
+    std::vector<Microsoft::WRL::ComPtr<IUnknown>> _scPins;
+    bool RetireSCWork();
+    bool SubmitSCCommandList(UINT index);
+    void RetainSCObjectsOnFailure();
+    void PinSCResource(ID3D12Resource* resource) { if(resource) _scPins.emplace_back(resource); }
 
     ID3D12GraphicsCommandList* _uiCommandList[BUFFER_COUNT] {};
+    bool _uiBridgeReader[BUFFER_COUNT] {};
+    DlssNr::GpuSafety::Ticket _uiBridgeUse[BUFFER_COUNT];
     ID3D12CommandAllocator* _uiCommandAllocator[BUFFER_COUNT] {};
     bool _uiCommandListResetted[BUFFER_COUNT] { false, false, false, false };
     UINT64 _uiAllocatorFenceValues[BUFFER_COUNT] {};
@@ -102,11 +115,17 @@ class IFGFeature_Dx12 : public virtual IFGFeature
   protected:
     virtual void ReleaseObjects() = 0;
     virtual void CreateObjects(ID3D12Device* InDevice) = 0;
+    bool RetireUIBridgeReaders();
 
   public:
     virtual void* FrameGenerationContext() = 0;
     virtual void* SwapchainContext() = 0;
     virtual HWND Hwnd() = 0;
+    bool OwnsSwapchain(IUnknown* candidate) const;
+    IUnknown* SwapchainIdentity() const noexcept { return _swapChain; }
+    inline static std::atomic<uint64_t> nextInputOwner {1};
+    const uint64_t inputOwner = nextInputOwner.fetch_add(1);
+    bool OwnsBackbuffer(ID3D12Resource* resource) const;
 
     virtual bool CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQueue, DXGI_SWAP_CHAIN_DESC* desc,
                                  IDXGISwapChain** swapChain, bool readyToRelease) = 0;
@@ -118,12 +137,26 @@ class IFGFeature_Dx12 : public virtual IFGFeature
     virtual void EvaluateState(ID3D12Device* device, FG_Constants& fgConstants) = 0;
 
     virtual bool SetResource(Dx12Resource* inputResource) = 0;
+    bool CanDispatchInputs(int index) const noexcept override { return StreamlineInputsReady(index); }
+    bool StreamlineInputsReady(int index) const noexcept
+    {
+        return index >= 0 && index < BUFFER_COUNT &&
+               _streamlineInputsReady[index].load(std::memory_order_acquire);
+    }
+    void SetStreamlineInputsReady(int index, bool ready) noexcept
+    {
+        if (index >= 0 && index < BUFFER_COUNT)
+            _streamlineInputsReady[index].store(ready, std::memory_order_release);
+    }
     virtual void SetCommandQueue(FG_ResourceType type, ID3D12CommandQueue* queue) = 0;
 
-    ID3D12GraphicsCommandList* GetUICommandList(int index = -1);
+    ID3D12GraphicsCommandList* GetUICommandList(int index = -1, bool bridgeReader = false);
+    bool ObserveUIBridgeSubmission(UINT index);
+    bool RetainUIBridgeReader(const DlssNr::GpuSafety::LocalRecordingAction&);
     ID3D12GraphicsCommandList* GetSCCommandList(int index = -1);
 
     LockedDx12Resource GetResource(FG_ResourceType type, int index = -1);
+    void RevokeResource(FG_ResourceType type, int index);
     bool GetResourceCopy(FG_ResourceType type, D3D12_RESOURCE_STATES bufferState, ID3D12Resource* output);
     ID3D12CommandQueue* GetCommandQueue();
 

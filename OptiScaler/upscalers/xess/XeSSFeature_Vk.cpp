@@ -60,7 +60,7 @@ static xess_vk_image_view_info NV_to_XeSS(NVSDK_NGX_Resource_VK* nvResource)
 static void XeSSLogCallback(const char* Message, xess_logging_level_t Level)
 {
     auto logLevel = (int) Level + 1;
-    spdlog::log((spdlog::level::level_enum) logLevel, "XeSSFeature::LogCallback XeSS Runtime ({0})", Message);
+    LOG_WHILE_ACTIVE(log, (spdlog::level::level_enum) logLevel, "XeSSFeature::LogCallback XeSS Runtime ({0})", Message);
 }
 
 bool XeSSFeature_Vk::InitInternal(VkCommandBuffer InCmdList, NVSDK_NGX_Parameter* InParameters)

@@ -210,6 +210,7 @@ void PollMenuPlatform(void (*newFrame)());
 void ResetMenuInputTransientState();
 
 bool IsFocused();
+std::uint64_t GetFocusGeneration();
 
 DebugState GetDebugState();
 

@@ -7,6 +7,7 @@
 #include <Config.h>
 #include <State.h>
 #include <Util.h>
+#include <hooks/D3D12_Hooks.h>
 
 #include <menu/menu_overlay_dx.h>
 
@@ -758,7 +759,7 @@ HRESULT ResTrack_Dx12::hkCreateDescriptorHeap(ID3D12Device* This, D3D12_DESCRIPT
 {
     auto result = o_CreateDescriptorHeap(This, pDescriptorHeapDesc, riid, ppvHeap);
 
-    if (State::Instance().skipHeapCapture)
+    if (State::Instance().skipHeapCapture || D3D12Hooks::LegacyCaptureSuppressed())
         return result;
 
     // try to calculate handle ranges for heap
@@ -1034,7 +1035,8 @@ void ResTrack_Dx12::hkSetGraphicsRootDescriptorTable(ID3D12GraphicsCommandList* 
                                                      D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
     // Consistent early exit - always call original function
-    auto shouldTrack = !Config::Instance()->FGHudfixDisableSGR.value_or_default() && BaseDescriptor.ptr != 0 &&
+    auto shouldTrack = !D3D12Hooks::LegacyCaptureSuppressed() &&
+                       !Config::Instance()->FGHudfixDisableSGR.value_or_default() && BaseDescriptor.ptr != 0 &&
                        IsHudFixActive() && !Hudfix_Dx12::SkipHudlessChecks() &&
                        This != MenuOverlayDx::MenuCommandList();
 
@@ -1063,8 +1065,14 @@ void ResTrack_Dx12::hkSetGraphicsRootDescriptorTable(ID3D12GraphicsCommandList* 
 
     LOG_DEBUG_ONLY("CommandList: {:X}, Resource: {:X}", (size_t) This, (size_t) capturedBuffer.buffer);
 
-    // Only proceed with tracking if we have a valid buffer
-    capturedBuffer.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    // Binding never transitions a resource. Only an observed SRV whose entire
+    // image state is authenticated at this recording point can be copied.
+    const auto knownState=D3D12Hooks::KnownHudResourceState(This,capturedBuffer.buffer);
+    if(capturedBuffer.type!=SRV || !knownState || !(*knownState&D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)) {
+        o_SetGraphicsRootDescriptorTable(This,RootParameterIndex,BaseDescriptor);
+        return;
+    }
+    capturedBuffer.state = *knownState;
     capturedBuffer.captureInfo = CaptureInfo::SetGR;
 
     // Track the resource
@@ -1241,7 +1249,8 @@ void ResTrack_Dx12::hkSetComputeRootDescriptorTable(ID3D12GraphicsCommandList* T
                                                     D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
     // Consistent early exit - always call original function
-    auto shouldTrack = !Config::Instance()->FGHudfixDisableSCR.value_or_default() && BaseDescriptor.ptr != 0 &&
+    auto shouldTrack = !D3D12Hooks::LegacyCaptureSuppressed() &&
+                       !Config::Instance()->FGHudfixDisableSCR.value_or_default() && BaseDescriptor.ptr != 0 &&
                        IsHudFixActive() && !Hudfix_Dx12::SkipHudlessChecks() &&
                        This != MenuOverlayDx::MenuCommandList();
 

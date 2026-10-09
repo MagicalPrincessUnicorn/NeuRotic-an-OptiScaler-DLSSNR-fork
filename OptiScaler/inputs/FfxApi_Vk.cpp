@@ -1,5 +1,10 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/FsrObservationAdapter.h>
+// NR-FEED-001 END
 #include "FfxApi_Vk.h"
+#include <dlssnr/VulkanNrFfxFg.h>
+#include <ffx_framegeneration.h>
 
 #include <Util.h>
 #include <Config.h>
@@ -356,6 +361,10 @@ static std::optional<float> GetQualityOverrideRatioFfx(const uint32_t input)
 ffxReturnCode_t ffxCreateContext_Vk(ffxContext* context, ffxCreateContextDescHeader* desc,
                                     const ffxAllocationCallbacks* memCb)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(Neurotic::Feed::FindFfxCreation<ffxCreateContextDescUpscale>(
+        desc, FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE));
+    // NR-FEED-001 END
     if (desc == nullptr)
         return FFX_API_RETURN_ERROR_PARAMETER;
 
@@ -432,6 +441,9 @@ ffxReturnCode_t ffxCreateContext_Vk(ffxContext* context, ffxCreateContextDescHea
 
     LOG_INFO("context created: {:X}", (size_t) *context);
 
+    // NR-FEED-001 BEGIN
+    if (context) feedCreation.Publish({"FFX.API", Neurotic::Contracts::GraphicsApi::Vulkan, "create"}, *context);
+    // NR-FEED-001 END
     return FFX_API_RETURN_OK;
 }
 
@@ -513,7 +525,9 @@ ffxReturnCode_t ffxQuery_Vk(ffxContext* context, ffxQueryDescHeader* desc)
     if (type == FFXStructType::SwapchainVulkan || type == FFXStructType::FG)
     {
         LOG_DEBUG("FG dispatch, redirecting to real FfxApi");
-        return FfxApiProxy::VULKAN_Query()(context, desc);
+        const auto result=FfxApiProxy::VULKAN_Query()(context,desc);
+        if(desc->type==FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION){auto* v=reinterpret_cast<ffxQueryGetProviderVersion*>(desc);DlssNr::ObserveVkNrFfxVersion(context?reinterpret_cast<uintptr_t>(*context):0,v->versionId,v->versionName,result==FFX_API_RETURN_OK);}
+        return result;
     }
 
     if (desc->type == FFX_API_QUERY_DESC_TYPE_UPSCALE_GETRENDERRESOLUTIONFROMQUALITYMODE)
@@ -629,7 +643,9 @@ ffxReturnCode_t ffxQuery_Vk(ffxContext* context, ffxQueryDescHeader* desc)
     if (Config::Instance()->EnableHotSwapping.value_or_default() ||
         FfxApiProxy::GetType(desc->type) == FFXStructType::General)
     {
-        return FfxApiProxy::VULKAN_Query()(context, desc);
+        const auto result=FfxApiProxy::VULKAN_Query()(context,desc);
+        if(desc->type==FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION){auto* v=reinterpret_cast<ffxQueryGetProviderVersion*>(desc);DlssNr::ObserveVkNrFfxVersion(context?reinterpret_cast<uintptr_t>(*context):0,v->versionId,v->versionName,result==FFX_API_RETURN_OK);}
+        return result;
     }
 
     return FFX_API_RETURN_OK;
@@ -637,6 +653,11 @@ ffxReturnCode_t ffxQuery_Vk(ffxContext* context, ffxQueryDescHeader* desc)
 
 ffxReturnCode_t ffxDispatch_Vk(ffxContext* context, ffxDispatchDescHeader* desc)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FFX.API", Neurotic::Contracts::GraphicsApi::Vulkan, "dispatch"}, context ? *context : nullptr);
+    if (desc && desc->type == FFX_API_DISPATCH_DESC_TYPE_UPSCALE)
+        Neurotic::Feed::ObserveFsrDispatch(feedObservation, reinterpret_cast<const ffxDispatchDescUpscale*>(desc));
+    // NR-FEED-001 END
     if (desc == nullptr || context == nullptr)
         return FFX_API_RETURN_ERROR_PARAMETER;
 
@@ -646,7 +667,10 @@ ffxReturnCode_t ffxDispatch_Vk(ffxContext* context, ffxDispatchDescHeader* desc)
     if (type == FFXStructType::SwapchainVulkan || type == FFXStructType::FG)
     {
         LOG_DEBUG("FG dispatch, redirecting to real FfxApi");
-        return FfxApiProxy::VULKAN_Dispatch()(context, desc);
+        const auto result=FfxApiProxy::VULKAN_Dispatch()(context,desc);
+        if(desc->type==FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE){auto* p=reinterpret_cast<ffxDispatchDescFrameGenerationPrepare*>(desc);DlssNr::ObserveVkNrFfxDispatch(reinterpret_cast<uintptr_t>(*context),desc->type,p->frameID,reinterpret_cast<VkCommandBuffer>(p->commandList),result==FFX_API_RETURN_OK);}
+        else if(desc->type==FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION){auto* p=reinterpret_cast<ffxDispatchDescFrameGeneration*>(desc);DlssNr::ObserveVkNrFfxDispatch(reinterpret_cast<uintptr_t>(*context),desc->type,p->frameID,reinterpret_cast<VkCommandBuffer>(p->commandList),result==FFX_API_RETURN_OK);}
+        return result;
     }
 
     // Skip OptiScaler stuff
@@ -689,6 +713,9 @@ ffxReturnCode_t ffxDispatch_Vk(ffxContext* context, ffxDispatchDescHeader* desc)
     }
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FFX.API.to.NGX");
+    // NR-FEED-001 END
     auto contextId = (size_t) *context;
     if (!_contexts.contains(*context) && _initParams.contains(*context) && !CreateDLSSContext(*context, dispatchDesc))
     {

@@ -249,14 +249,17 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
     {
         for (uint32_t i = 0; i < logicalGpus.gpuHandleCount; i++)
         {
-            LUID luid;
+            LUID luid {};
             NV_LOGICAL_GPU_DATA logicalGpuData {};
             logicalGpuData.pOSAdapterId = &luid;
             logicalGpuData.version = NV_LOGICAL_GPU_DATA_VER;
             auto logicalGpu = logicalGpus.gpuHandleData[i].hLogicalGpu;
 
             if (auto result = getLogicalGpuInfo(logicalGpu, &logicalGpuData); result != NVAPI_OK)
+            {
                 LOG_ERROR("NvAPI_GPU_GetLogicalGpuInfo failed: {}", magic_enum::enum_name(result));
+                continue;
+            }
 
             // We are looking at the correct GPU for this gpuInfo.luid
             if (IsEqualLUID(luid, gpuInfo.luid) && logicalGpuData.physicalGpuCount > 0)
@@ -265,6 +268,8 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
                     LOG_WARN("A logical GPU has more than a single physical GPU, we are only checking one");
 
                 hPhysicalGpu = logicalGpuData.physicalGpuHandles[0];
+                if (logicalGpuData.physicalGpuCount == 1)
+                    gpuInfo.unspoofedPhysicalGpu = hPhysicalGpu;
             }
         }
     }
@@ -622,7 +627,7 @@ void IdentifyGpu::updateD3d12Capabilities(D3d12Proxy::PFN_D3D12CreateDevice o_D3
         gpus += std::format("{}    Upscaler support - fsr4: {}, dlss: {}\n", indent, fsr4Support, gpu.dlssCapable);
     }
 
-    spdlog::info(gpus);
+    LOG_WHILE_ACTIVE(info, gpus);
 
     auto primaryGpu = !detectedGpus.empty() ? detectedGpus.front() : GpuInformation {};
 

@@ -141,18 +141,18 @@ void DLSSDFeature::ProcessInitParams(NVSDK_NGX_Parameter* InParameters)
 
         if (Config::Instance()->DLSSDRenderPresetOverride.value_or_default())
         {
-            RenderPresetDLAA = Config::Instance()->DLSSDRenderPresetForAll.value_or(
-                Config::Instance()->DLSSDRenderPresetDLAA.value_or(RenderPresetDLAA));
-            RenderPresetUltraQuality = Config::Instance()->DLSSDRenderPresetForAll.value_or(
-                Config::Instance()->DLSSDRenderPresetUltraQuality.value_or(RenderPresetUltraQuality));
-            RenderPresetQuality = Config::Instance()->DLSSDRenderPresetForAll.value_or(
-                Config::Instance()->DLSSDRenderPresetQuality.value_or(RenderPresetQuality));
-            RenderPresetBalanced = Config::Instance()->DLSSDRenderPresetForAll.value_or(
-                Config::Instance()->DLSSDRenderPresetBalanced.value_or(RenderPresetBalanced));
-            RenderPresetPerformance = Config::Instance()->DLSSDRenderPresetForAll.value_or(
-                Config::Instance()->DLSSDRenderPresetPerformance.value_or(RenderPresetPerformance));
-            RenderPresetUltraPerformance = Config::Instance()->DLSSDRenderPresetForAll.value_or(
-                Config::Instance()->DLSSDRenderPresetUltraPerformance.value_or(RenderPresetUltraPerformance));
+            RenderPresetDLAA = Config::Instance()->DLSSDRenderPresetDLAA.value_or(
+                Config::Instance()->DLSSDRenderPresetForAll.value_or(RenderPresetDLAA));
+            RenderPresetUltraQuality = Config::Instance()->DLSSDRenderPresetUltraQuality.value_or(
+                Config::Instance()->DLSSDRenderPresetForAll.value_or(RenderPresetUltraQuality));
+            RenderPresetQuality = Config::Instance()->DLSSDRenderPresetQuality.value_or(
+                Config::Instance()->DLSSDRenderPresetForAll.value_or(RenderPresetQuality));
+            RenderPresetBalanced = Config::Instance()->DLSSDRenderPresetBalanced.value_or(
+                Config::Instance()->DLSSDRenderPresetForAll.value_or(RenderPresetBalanced));
+            RenderPresetPerformance = Config::Instance()->DLSSDRenderPresetPerformance.value_or(
+                Config::Instance()->DLSSDRenderPresetForAll.value_or(RenderPresetPerformance));
+            RenderPresetUltraPerformance = Config::Instance()->DLSSDRenderPresetUltraPerformance.value_or(
+                Config::Instance()->DLSSDRenderPresetForAll.value_or(RenderPresetUltraPerformance));
 
             LOG_DEBUG("Preset override active, config overrides:");
             LOG_DEBUG("Preset_DLAA {}", RenderPresetDLAA);
@@ -195,7 +195,7 @@ void DLSSDFeature::ProcessInitParams(NVSDK_NGX_Parameter* InParameters)
         }
         else
         {
-            if (State::Instance().dlssPresetsOverriddenExternally)
+            if (State::Instance().dlssdPresetsOverriddenExternally)
             {
                 InParameters->Set("RayReconstruction.Hint.Render.Preset.DLAA",
                                   State::Instance().dlssdRenderPresetExternal);

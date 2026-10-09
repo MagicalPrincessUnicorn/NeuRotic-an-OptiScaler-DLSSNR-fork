@@ -40,6 +40,11 @@ GpuTime_Dx12::GpuTime_Dx12(ID3D12Device* device, bool completionTracked) : _comp
 
 GpuTime_Dx12::~GpuTime_Dx12()
 {
+    // An executable host recording may still replay after this feature dies.
+    // Its query/readback objects remain owned until process teardown if the
+    // recording authority cannot prove terminal retirement.
+    for (const auto& use : _use)
+        if (!DlssNr::GpuSafety::Reusable(use)) { _queryHeap = nullptr; _readbackBuffer = nullptr; break; }
     SAFE_RELEASE(_queryHeap);
     SAFE_RELEASE(_readbackBuffer);
 }

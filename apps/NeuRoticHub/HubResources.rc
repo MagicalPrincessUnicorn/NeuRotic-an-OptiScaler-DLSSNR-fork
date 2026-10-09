@@ -1,0 +1,8 @@
+#include <windows.h>
+101 ICON "assets/NeuRotic.ico"
+102 RCDATA "assets/NeuRotic-header.png"
+5102 RCDATA "../../localization/fonts/NotoSansCJKsc-Regular.otf"
+5103 RCDATA "../../localization/fonts/NotoSans-Regular.ttf"
+5104 RCDATA "../../localization/fonts/OFL-NotoSansCJK.txt"
+5105 RCDATA "../../localization/fonts/OFL-NotoSans.txt"
+1 RT_MANIFEST "Hub.manifest"

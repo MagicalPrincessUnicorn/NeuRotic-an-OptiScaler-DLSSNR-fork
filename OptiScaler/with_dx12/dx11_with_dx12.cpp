@@ -55,9 +55,9 @@ void Dx11WithDx12::SetUpscalerFrameIndex(UINT frameIndex)
 
 UINT Dx11WithDx12::GetUpscalerFrameIndex() { return UpscalerFrameIndex; }
 
-UINT64 Dx11WithDx12::NextUpscalerFrameId() { return ++UpscalerLocalFrameId; }
+UINT64 Dx11WithDx12::NextUpscalerFrameId() { auto lock=LockUpscalerResources(); return UpscalerLocalFrameId==UINT64_MAX ? 0 : ++UpscalerLocalFrameId; }
 
-void Dx11WithDx12::ResetUpscalerFrameId() { UpscalerLocalFrameId = 0; }
+void Dx11WithDx12::ResetUpscalerFrameId() { ClearLastPreparedUpscalerFrameState(); }
 
 UINT64 Dx11WithDx12::GetLastPreparedUpscalerFrameId() { return LastPreparedUpscalerFrameId; }
 
@@ -65,6 +65,8 @@ Dx11WithDx12::ResourceMask Dx11WithDx12::GetLastPreparedUpscalerMask() { return 
 
 void Dx11WithDx12::ClearLastPreparedUpscalerFrameState()
 {
+    auto resourceLock = LockUpscalerResources();
+    UpscalerInputCompletion={};
     LastPreparedUpscalerFrameId = 0;
     LastPreparedUpscalerMask = ResourceMask::None;
 }
@@ -79,6 +81,7 @@ ID3D12CommandQueue* Dx11WithDx12::GetD3D12CommandQueue() { return Dx12CommandQue
 
 void Dx11WithDx12::ReleaseSharedResource(D3D11_TEXTURE2D_RESOURCE_C* resource)
 {
+    auto resourceLock = LockUpscalerResources();
     if (resource == nullptr)
         return;
 
@@ -208,13 +211,19 @@ bool Dx11WithDx12::EnsureSyncResourcesLocked()
     return true;
 }
 
-bool Dx11WithDx12::SyncDx11ToDx12()
+bool Dx11WithDx12::SyncDx11ToDx12(RetainedResources* retained, InputCompletion* input)
 {
     std::lock_guard<std::mutex> lock(SyncMutex);
 
     if (!EnsureSyncResourcesLocked())
         return false;
 
+    if (TextureCopyFenceValue == UINT64_MAX) return false;
+    if (retained)
+    {
+        retained->synchronization[0] = Dx11FenceTextureCopy;
+        retained->synchronization[1] = Dx12FenceTextureCopy;
+    }
     const auto fenceValue = TextureCopyFenceValue++;
 
     auto result = Dx11DeviceContext->Signal(Dx11FenceTextureCopy, fenceValue);
@@ -234,16 +243,23 @@ bool Dx11WithDx12::SyncDx11ToDx12()
         return false;
     }
 
+    if (input) { input->fence=Dx12FenceTextureCopy; input->value=fenceValue; }
     return true;
 }
 
-bool Dx11WithDx12::SyncDx12ToDx11()
+bool Dx11WithDx12::SyncDx12ToDx11(RetainedResources* retained)
 {
     std::lock_guard<std::mutex> lock(SyncMutex);
 
     if (!EnsureSyncResourcesLocked())
         return false;
 
+    if (TextureCopyFenceValue == UINT64_MAX) return false;
+    if (retained)
+    {
+        retained->synchronization[0] = Dx11FenceTextureCopy;
+        retained->synchronization[1] = Dx12FenceTextureCopy;
+    }
     const auto fenceValue = TextureCopyFenceValue++;
 
     auto result = Dx12CommandQueue->Signal(Dx12FenceTextureCopy, fenceValue);
@@ -267,6 +283,7 @@ bool Dx11WithDx12::SyncDx12ToDx11()
 
 void Dx11WithDx12::ResetUpscalerResourceCache(bool releaseSyncResources)
 {
+    auto resourceLock = LockUpscalerResources();
     ReleaseSharedResource(&UpscalerResourceCache.Color);
     ReleaseSharedResource(&UpscalerResourceCache.Mv);
     ReleaseSharedResource(&UpscalerResourceCache.Depth);
@@ -290,6 +307,7 @@ void Dx11WithDx12::ResetUpscalerResourceCache(bool releaseSyncResources)
 
 void Dx11WithDx12::Init(ID3D11Device* dx11Device, ID3D11DeviceContext* dx11Context)
 {
+    auto resourceLock = LockUpscalerResources();
     if (!WithDx12::PrepareD3D12ForD3D11(dx11Device, D3D_FEATURE_LEVEL_11_0))
     {
         LOG_ERROR("Dx11WithDx12::Init failed to resolve D3D12 device/queue");
@@ -302,6 +320,7 @@ void Dx11WithDx12::Init(ID3D11Device* dx11Device, ID3D11DeviceContext* dx11Conte
 void Dx11WithDx12::Init(ID3D11Device* dx11Device, ID3D11DeviceContext* dx11Context, ID3D12Device* dx12Device,
                         ID3D12CommandQueue* dx12CommandQueue)
 {
+    auto resourceLock = LockUpscalerResources();
     if (dx11Context == nullptr)
     {
         LOG_ERROR("Dx11WithDx12::Init called with null D3D11 context");
@@ -363,7 +382,7 @@ void Dx11WithDx12::Init(ID3D11Device* dx11Device, ID3D11DeviceContext* dx11Conte
         DepthTransferSourceDesc = {};
         DepthTransferSourceDescValid = false;
 
-        DT = std::make_unique<DepthTransfer_Dx11>("DT", newDx11Device);
+        DT = std::make_shared<DepthTransfer_Dx11>("DT", newDx11Device);
     }
 
     Dx11DeviceContext = newDx11Context;
@@ -375,6 +394,7 @@ void Dx11WithDx12::Init(ID3D11Device* dx11Device, ID3D11DeviceContext* dx11Conte
 bool Dx11WithDx12::CopyTextureFrom11To12(ID3D11Resource* InResource, D3D11_TEXTURE2D_RESOURCE_C* OutResource,
                                          bool InCopy, bool InDepth, bool InDontUseNTShared)
 {
+    auto resourceLock = LockUpscalerResources();
     if (InResource == nullptr || OutResource == nullptr || Dx11Device == nullptr || Dx11DeviceContext == nullptr)
         return false;
 
@@ -471,7 +491,7 @@ bool Dx11WithDx12::CopyTextureFrom11To12(ID3D11Resource* InResource, D3D11_TEXTU
             }
 
             if (DT == nullptr || DT.get() == nullptr)
-                DT = std::make_unique<DepthTransfer_Dx11>("DT", Dx11Device);
+                DT = std::make_shared<DepthTransfer_Dx11>("DT", Dx11Device);
 
             if (DT->Buffer() == nullptr)
                 DT->CreateBufferResource(Dx11Device, InResource);
@@ -501,8 +521,9 @@ bool Dx11WithDx12::CopyTextureFrom11To12(ID3D11Resource* InResource, D3D11_TEXTU
                 D3D11_TEXTURE2D_DESC transferDesc = {};
                 DT->Buffer()->GetDesc(&transferDesc);
                 ASSIGN_DESC(OutResource->Desc, transferDesc);
+                if (OutResource->SharedTexture!=DT->Buffer()) DT->Buffer()->AddRef();
                 OutResource->SharedTexture = DT->Buffer();
-                OutResource->OwnsSharedTexture = false;
+                OutResource->OwnsSharedTexture = true;
                 OutResource->UsesNTHandle = false;
 
                 result = resource->GetSharedHandle(&OutResource->Dx11Handle);
@@ -630,7 +651,8 @@ bool Dx11WithDx12::CopyTextureFrom11To12(ID3D11Resource* InResource, D3D11_TEXTU
 
             OutResource->Desc = sourceDescCache;
             OutResource->SharedTexture = originalTexture;
-            OutResource->OwnsSharedTexture = false;
+            originalTexture->AddRef();
+            OutResource->OwnsSharedTexture = true;
         }
     }
 
@@ -645,6 +667,7 @@ bool Dx11WithDx12::PrepareTextureFrom11To12(const std::string& name, ID3D12Devic
                                             D3D11_TEXTURE2D_RESOURCE_C* shared, bool copy, bool depth,
                                             bool dontUseNTShared, UINT64 frameId)
 {
+    auto resourceLock = LockUpscalerResources();
     if (resource == nullptr || shared == nullptr || dx12Device == nullptr)
         return false;
 
@@ -698,6 +721,7 @@ bool Dx11WithDx12::PrepareTextureFrom11To12(const std::string& name, ID3D12Devic
 bool Dx11WithDx12::OpenHandle(std::string name, ID3D12Device* dx12Device, ID3D11Resource* resource,
                               D3D11_TEXTURE2D_RESOURCE_C* shared)
 {
+    auto resourceLock = LockUpscalerResources();
     if (resource == nullptr || shared == nullptr || dx12Device == nullptr)
         return false;
 
@@ -841,9 +865,12 @@ Dx11WithDx12::PrepareResourcesResult Dx11WithDx12::PrepareUpscalerResources(cons
                                                                             ResourceMask mask, UINT frameIndex,
                                                                             UINT64 frameId, bool dontUseNTShared,
                                                                             bool reactiveRequired,
-                                                                            bool syncAfterPrepare)
+                                                                            bool syncAfterPrepare, RetainedResources* retained)
 {
+    auto resourceLock = LockUpscalerResources();
+    ClearLastPreparedUpscalerFrameState();
     PrepareResourcesResult result = {};
+    if (UpscalerCacheQuarantined || !UpscalerReadersReusable()) return result;
 
     if (parameters == nullptr)
     {
@@ -895,6 +922,7 @@ Dx11WithDx12::PrepareResourcesResult Dx11WithDx12::PrepareUpscalerResources(cons
 
     if (CheckMask(mask, ResourceMask::Output))
     {
+        cache.ParamOutput[outputIndex] = nullptr;
         ID3D11Resource* paramOutput = nullptr;
         if (GetNgxD3D11Resource(parameters, NVSDK_NGX_Parameter_Output, &paramOutput))
             cache.ParamOutput[outputIndex] = paramOutput;
@@ -922,7 +950,8 @@ Dx11WithDx12::PrepareResourcesResult Dx11WithDx12::PrepareUpscalerResources(cons
         result.MissingReactive = missing;
     }
 
-    if (ok && syncAfterPrepare && !SyncDx11ToDx12())
+    InputCompletion inputCompletion;
+    if (ok && syncAfterPrepare && !SyncDx11ToDx12(retained,&inputCompletion))
     {
         LOG_ERROR("PrepareUpscalerResources sync failed");
         ok = false;
@@ -932,6 +961,7 @@ Dx11WithDx12::PrepareResourcesResult Dx11WithDx12::PrepareUpscalerResources(cons
 
     if (ok)
     {
+        UpscalerInputCompletion=std::move(inputCompletion);
         UpscalerFrameIndex = outputIndex;
         LastPreparedUpscalerFrameId = frameId;
         LastPreparedUpscalerMask = mask;
@@ -940,8 +970,11 @@ Dx11WithDx12::PrepareResourcesResult Dx11WithDx12::PrepareUpscalerResources(cons
     return result;
 }
 
-bool Dx11WithDx12::CopyUpscalerOutputToDx11(UINT frameIndex)
+bool Dx11WithDx12::CopyUpscalerOutputToDx11(UINT frameIndex, DlssNr::Bridge::Outcome* outcome,
+    DlssNr::Bridge::Identity identity, RetainedResources* retained)
 {
+    auto resourceLock = LockUpscalerResources();
+    if (UpscalerCacheQuarantined) return false;
     if (Dx11DeviceContext == nullptr)
     {
         LOG_ERROR("CopyUpscalerOutputToDx11 called without resolved D3D11 context");
@@ -957,13 +990,86 @@ bool Dx11WithDx12::CopyUpscalerOutputToDx11(UINT frameIndex)
         return false;
     }
 
-    if (!SyncDx12ToDx11())
+    if (outcome)
+    {
+        identity.preparedFrame = LastPreparedUpscalerFrameId;
+        identity.slot = outputIndex;
+        identity.context = reinterpret_cast<uintptr_t>(Dx11DeviceContext);
+        identity.device = reinterpret_cast<uintptr_t>(Dx12Device);
+        identity.queue = reinterpret_cast<uintptr_t>(Dx12CommandQueue);
+        identity.output = reinterpret_cast<uintptr_t>(cache.ParamOutput[outputIndex]);
+        identity.sharedOutput = reinterpret_cast<uintptr_t>(cache.Output[outputIndex].Dx12Resource);
+        if (!outcome->CanCopyBack(identity)) return false;
+    }
+    if (!SyncDx12ToDx11(retained))
     {
         LOG_ERROR("CopyUpscalerOutputToDx11 sync failed for frame {}", outputIndex);
         return false;
     }
 
+    if (outcome && !outcome->QueueCopyBack(identity)) return false;
     Dx11DeviceContext->CopyResource(cache.ParamOutput[outputIndex], cache.Output[outputIndex].SharedTexture);
     Dx11DeviceContext->Flush();
     return true;
+}
+
+Dx11WithDx12::RetainedResources Dx11WithDx12::RetainUpscalerResources()
+{
+    auto resourceLock=LockUpscalerResources();
+    RetainedResources pins;
+    size_t i=0;
+    for (auto* resource : {&UpscalerResourceCache.Color, &UpscalerResourceCache.Mv,
+        &UpscalerResourceCache.Depth, &UpscalerResourceCache.Reactive, &UpscalerResourceCache.Exposure,
+        &UpscalerResourceCache.Output[0], &UpscalerResourceCache.Output[1]})
+    {
+        pins.objects[i++]=resource->SharedTexture;
+        pins.objects[i++]=resource->Dx12Resource;
+    }
+    pins.depthTransfer=DT;
+    return pins;
+}
+
+void Dx11WithDx12::QuarantineUpscalerCache()
+{
+    auto lock=LockUpscalerResources();
+    UpscalerCacheQuarantined=true;
+    ClearLastPreparedUpscalerFrameState();
+}
+bool Dx11WithDx12::UpscalerReadersReusable()
+{
+    auto lock=LockUpscalerResources();
+    std::erase_if(UpscalerReaders,[](const auto& use){return DlssNr::GpuSafety::Reusable(use);});
+    if (UpscalerCacheQuarantined || !UpscalerReaders.empty()) return false;
+    if (!UpscalerBridgeWriter.Reusable()) return false;
+    UpscalerBridgeWriter.ClearIfReusable();
+    return true;
+}
+std::unique_ptr<DlssNr::GpuSafety::LocalRecordingAction> Dx11WithDx12::RetainUpscalerReader(
+    ID3D12GraphicsCommandList* list,std::span<ID3D12Resource* const> resources)
+{
+    auto lock=LockUpscalerResources();
+    if (UpscalerCacheQuarantined || !list || resources.empty() || UpscalerReaders.size()>=64) return {};
+    auto ticket=DlssNr::GpuSafety::Record(list);
+    if (!ticket) return {};
+    // Enforce the actual D3D11 producer point on EVERY eventual reader
+    // submission, including a provider queue different from the SR bridge.
+    if (!UpscalerInputCompletion.fence || !UpscalerInputCompletion.value ||
+        !DlssNr::GpuSafety::BindExternalWait(list,UpscalerInputCompletion.fence.Get(),
+            UpscalerInputCompletion.value,LastPreparedUpscalerFrameId,LastPreparedUpscalerFrameId)) return {};
+    auto action=DlssNr::GpuSafety::BeginLocalAction(ticket,list,resources);
+    if (!action) return {};
+    auto pins=std::make_shared<RetainedResources>(RetainUpscalerResources());
+    if (!DlssNr::GpuSafety::RetainDerivedUse(*action,pins)) return {};
+    // Association stores this owner's existing use, never completion truth.
+    UpscalerReaders.push_back(ticket);
+    return action;
+}
+
+bool Dx11WithDx12::BindUpscalerUse(std::shared_ptr<DlssNr::Bridge::Use> use,ID3D11Fence* consumer)
+{
+    auto lock=LockUpscalerResources();
+    // One mutable cache representation has one admitted writer at a time.
+    // Retain the exact live use object; a copied status could miss copyback or
+    // a subsequent signal failure. Consumers continue using GpuSafety tickets.
+    return UpscalerBridgeWriter.Bind(std::move(use),consumer);
 }

@@ -1,4 +1,7 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/XessObservationAdapter.h>
+// NR-FEED-001 END
 #include "XeSS_Common.h"
 #include "XeSS_Base.h"
 
@@ -155,6 +158,10 @@ xess_result_t hk_xessSetVelocityScale(xess_context_handle_t hContext, float x, f
     LOG_DEBUG("hContext: {}, x: {}, y: {}", (size_t) hContext, x, y);
 
     _motionScales[hContext] = { x, y };
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedScale({"XeSS", Neurotic::Contracts::GraphicsApi::Other, "velocity-scale"}, hContext);
+    feedScale.Value("velocityScale.x", x);feedScale.Value("velocityScale.y", y);
+    // NR-FEED-001 END
 
     return XESS_RESULT_SUCCESS;
 }
@@ -397,6 +404,10 @@ xess_result_t hk_xessSetJitterScale(xess_context_handle_t hContext, float x, flo
     LOG_DEBUG("x: {}, y: {}", x, y);
 
     _jitterScales[hContext] = { x, y };
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedScale({"XeSS", Neurotic::Contracts::GraphicsApi::Other, "jitter-scale"}, hContext);
+    feedScale.Value("jitterScale.x", x);feedScale.Value("jitterScale.y", y);
+    // NR-FEED-001 END
 
     return XESS_RESULT_SUCCESS;
 }

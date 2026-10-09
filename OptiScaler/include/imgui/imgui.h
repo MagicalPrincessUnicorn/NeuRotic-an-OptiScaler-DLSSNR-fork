@@ -625,6 +625,7 @@ namespace ImGui
     IMGUI_API bool          InvisibleButton(const char* str_id, const ImVec2& size, ImGuiButtonFlags flags = 0); // flexible button behavior without the visuals, frequently useful to build custom behaviors using the public api (along with IsItemActive, IsItemHovered, etc.)
     IMGUI_API bool          ArrowButton(const char* str_id, ImGuiDir dir);                  // square button with an arrow shape
     IMGUI_API bool          Checkbox(const char* label, bool* v);
+    IMGUI_API bool          Checkbox(const char* label, bool* v, bool square); // Compact table cells can opt out of switch styling.
     IMGUI_API bool          CheckboxFlags(const char* label, int* flags, int flags_value);
     IMGUI_API bool          CheckboxFlags(const char* label, unsigned int* flags, unsigned int flags_value);
     IMGUI_API bool          RadioButton(const char* label, bool active);                    // use with e.g. if (RadioButton("one", my_value==1)) { my_value = 1; }

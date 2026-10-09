@@ -1,6 +1,11 @@
 #pragma once
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/PresentGuideObservationAdapter.h>
+// NR-FEED-001 END
 
 #include "NrGpuSafety.h"
+#include "NativeIdentity.h"
+#include <nr/lifecycle/NativeLeaseBinding.h>
 #include "DlssNr_PresentResolution.h"
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <dxgi1_4.h>
@@ -79,6 +84,7 @@ struct Selection
     DlssNrFrameInfo frame;
     ComPtr<IUnknown> swapchain;
     GpuSafety::Ticket producer;
+    std::shared_ptr<const unsigned char> reservation;
     std::shared_ptr<const Dx11Producer> dx11Producer;
     UINT backbuffer = 0, width = 0, height = 0;
 };
@@ -97,6 +103,8 @@ class Bridge
         ComPtr<ID3D12Resource> depth, motion, originalDepth, originalMotion;
         ComPtr<IUnknown> swapchain;
         GpuSafety::Ticket producer, consumer;
+        std::weak_ptr<const unsigned char> selectionReservation;
+        std::shared_ptr<Neurotic::Lifecycle::NativeLeaseRegistration> depthLease, motionLease;
         std::shared_ptr<const Dx11Producer> dx11Producer;
         DlssNrFrameInfo frame;
         UINT64 epoch = 0, generation = 0, bytes = 0;
@@ -112,6 +120,68 @@ class Bridge
     std::string epochError;
     Selection metadata;
     UINT64 configurationKey = 0;
+    struct PendingFrame
+    {
+        UINT64 token = 0, epoch = 0;
+        unsigned int count = 0;
+        int candidate = -1;
+        std::string error;
+        Selection metadata;
+    };
+    // Provider frames can be recorded ahead of Present. Retaining their metadata
+    // grants no GPU access: MatchMetadata/Bind still require the exact token and order.
+    std::array<PendingFrame, 16> pendingFrames;
+    UINT64 nextEpoch = 2;
+    UINT64 activeProviderGeneration = 0, lastPresentedProviderFrame = 0;
+    bool havePresentedProviderFrame = false;
+
+    bool SyncProviderGeneration(UINT64 generation)
+    {
+        if (!generation || generation == activeProviderGeneration) return true;
+        if (generation < activeProviderGeneration) return false;
+        CloseLeaseAdmissions();
+        activeProviderGeneration = generation;
+        pendingFrames = {};
+        havePresentedProviderFrame = false;
+        lastPresentedProviderFrame = 0;
+        ++telemetry.generation; epoch = nextEpoch++;
+        count = 0; candidate = -1; metadata = {}; epochError.clear();
+        return true;
+    }
+    bool AlreadyPresented(UINT64 token) const
+    {
+        return token && havePresentedProviderFrame &&
+            (token == lastPresentedProviderFrame || EarlierToken(token, lastPresentedProviderFrame));
+    }
+
+    PendingFrame* Pending(UINT64 token)
+    {
+        for (auto& frame : pendingFrames) if (frame.token == token) return &frame;
+        for (auto& frame : pendingFrames) if (!frame.token)
+        { frame.token = token; frame.epoch = nextEpoch++; return &frame; }
+        return nullptr;
+    }
+    bool PendingSlot(unsigned int index) const
+    {
+        for (const auto& frame : pendingFrames)
+            if (frame.token && frame.candidate == static_cast<int>(index)) return true;
+        return false;
+    }
+    static bool EarlierToken(UINT64 candidate, UINT64 selected)
+    {
+        const auto distance = static_cast<uint32_t>(selected - 1) - static_cast<uint32_t>(candidate - 1);
+        return distance != 0 && distance < (uint32_t{1} << 31);
+    }
+
+    void CloseLeaseAdmissions()
+    {
+        for(auto& slot:slots)
+        {
+            if(slot.depthLease)slot.depthLease->Close();
+            if(slot.motionLease)slot.motionLease->Close();
+            slot.selectionReservation.reset();
+        }
+    }
 
     void Reject(const std::string& reason) { telemetry.status = reason; ++telemetry.rejected; }
     void RejectCapture(const std::string& reason)
@@ -200,39 +270,95 @@ class Bridge
     void Invalidate()
     {
         std::lock_guard lock(mutex);
-        ++telemetry.generation; ++epoch; count = 0; candidate = -1;
+        CloseLeaseAdmissions();
+        ++telemetry.generation; epoch = nextEpoch++; count = 0; candidate = -1;
+        pendingFrames = {};
+        havePresentedProviderFrame = false;
         metadata = {}; epochError.clear();
         telemetry.status = "Native source lifecycle changed; waiting for fresh guides";
     }
-    void RejectNative(const std::string& reason)
+    void RejectNative(const std::string& reason, UINT64 providerFrame = 0, UINT64 providerGeneration = 0)
     {
         std::lock_guard lock(mutex);
         if (!telemetry.enabled) return;
-        ++telemetry.captureAttempts; ++count; candidate = -1;
-        RejectCapture(reason);
+        if (!SyncProviderGeneration(providerGeneration) || AlreadyPresented(providerFrame)) return;
+        ++telemetry.captureAttempts;
+        if (providerFrame)
+        {
+            if (auto* frame = Pending(providerFrame))
+            { ++frame->count; frame->candidate = -1; frame->error = reason; }
+            telemetry.captureError = reason; Reject(reason);
+        }
+        else
+        { ++count; candidate = -1; RejectCapture(reason); }
     }
     void Enable(bool enabled, UINT64 key = 0)
     {
         std::lock_guard lock(mutex);
         if (telemetry.enabled == enabled && configurationKey == key) return;
+        CloseLeaseAdmissions(); // administrative closure only; tickets/holds continue to own retirement
         configurationKey = key;
         telemetry.enabled = enabled;
         ++telemetry.generation;
-        ++epoch; count = 0; candidate = -1;
+        epoch = nextEpoch++; count = 0; candidate = -1;
+        pendingFrames = {};
+        havePresentedProviderFrame = false;
         metadata = {};
         epochError.clear(); telemetry.captureError.clear(); telemetry.inputDescription.clear();
         telemetry.status = enabled ? "Waiting for Native guides" : "Control: constant depth / zero motion";
     }
-    Selection BeginPresent()
+    Selection BeginPresent(UINT64 providerFrame = 0, UINT64 providerGeneration = 0)
     {
         std::lock_guard lock(mutex);
+        if (!SyncProviderGeneration(providerGeneration) || AlreadyPresented(providerFrame))
+        {
+            Selection refused;
+            refused.enabled = telemetry.enabled; refused.generation = telemetry.generation;
+            refused.captureError = "Native provider frame is stale or already presented";
+            return refused;
+        }
         Selection selection = metadata;
-        selection.enabled = telemetry.enabled; selection.epoch = epoch++;
+        selection.enabled = telemetry.enabled; selection.epoch = epoch;
         selection.generation = telemetry.generation; selection.count = count;
         selection.slot = candidate; selection.captureError = epochError;
         count = 0; candidate = -1;
         metadata = {};
         epochError.clear();
+        epoch = nextEpoch++;
+        if (providerFrame)
+        {
+            lastPresentedProviderFrame = providerFrame; havePresentedProviderFrame = true;
+            selection = {};
+            selection.enabled = telemetry.enabled;
+            selection.generation = telemetry.generation;
+            for (auto& frame : pendingFrames)
+            {
+                if (frame.token == providerFrame)
+                {
+                    selection = frame.metadata;
+                    selection.enabled = telemetry.enabled;
+                    selection.generation = telemetry.generation;
+                    selection.epoch = frame.epoch;
+                    selection.count = frame.count;
+                    selection.slot = frame.candidate;
+                    selection.captureError = frame.error;
+                    frame = {};
+                }
+                else if (frame.token && EarlierToken(frame.token, providerFrame)) frame = {};
+            }
+        }
+        // Hold a selected copy between selection and Bind even when its producer
+        // has already retired. A simultaneous Native callback must not recycle it.
+        if (selection.slot >= 0 && selection.slot < static_cast<int>(slots.size()))
+        {
+            try
+            {
+                selection.reservation = std::make_shared<const unsigned char>();
+                slots[selection.slot].selectionReservation = selection.reservation;
+            }
+            catch (...)
+            { selection.slot = -1; selection.captureError = "Native guide selection reservation unavailable"; }
+        }
         return selection;
     }
     void Capture(ID3D12GraphicsCommandList* list, ID3D12Resource* depth, ID3D12Resource* motion,
@@ -240,12 +366,30 @@ class Bridge
                  UINT width, UINT height, D3D12_RESOURCE_STATES depthState,
                  D3D12_RESOURCE_STATES motionState, bool copyGuides = true,
                  const char* metadataError = nullptr, UINT64 providerFrame = 0,
-                 std::shared_ptr<const Dx11Producer> dx11Producer = {})
+                 std::shared_ptr<const Dx11Producer> dx11Producer = {}, UINT64 providerGeneration = 0)
     {
         std::lock_guard lock(mutex);
+        // NR-FEED-001 BEGIN
+        Neurotic::Feed::Callback feedGuides({"PresentGuides", Neurotic::Contracts::GraphicsApi::D3D12,
+            "capture", telemetry.generation, Neurotic::Contracts::SourceClass::HostObserved}, this);
+        Neurotic::Feed::ObservePresentGuide(feedGuides, frame, depth, motion);
+        feedGuides.Value("bridge.epoch", epoch);feedGuides.Value("provider.frame", providerFrame);
+        // NR-FEED-001 END
         if (!telemetry.enabled) return;
+        if (!SyncProviderGeneration(providerGeneration) || AlreadyPresented(providerFrame))
+        { telemetry.captureError = "Native capture belongs to a stale provider frame"; Reject(telemetry.captureError); return; }
+        auto* pending = providerFrame ? Pending(providerFrame) : nullptr;
+        if (providerFrame && !pending)
+        { telemetry.captureError = "Native provider frame metadata capacity busy"; Reject(telemetry.captureError); return; }
+        auto& captureCount = pending ? pending->count : this->count;
+        auto& captureCandidate = pending ? pending->candidate : this->candidate;
+        auto& captureError = pending ? pending->error : this->epochError;
+        auto& captureMetadata = pending ? pending->metadata : this->metadata;
+        const auto captureEpoch = pending ? pending->epoch : this->epoch;
+        auto RejectCapture = [&](const std::string& reason)
+        { captureError = reason; telemetry.captureError = reason; Reject(reason); };
         ++telemetry.captureAttempts;
-        ++count; candidate = -1;
+        ++captureCount; captureCandidate = -1;
         const auto depthWidth = frame.DepthSubrectWidth ? frame.DepthSubrectWidth : frame.RenderSubrectWidth;
         const auto depthHeight = frame.DepthSubrectHeight ? frame.DepthSubrectHeight : frame.RenderSubrectHeight;
         const auto motionWidth = frame.MotionSubrectWidth ? frame.MotionSubrectWidth : frame.RenderSubrectWidth;
@@ -253,7 +397,7 @@ class Bridge
         telemetry.inputDescription = DescribeInput("Depth", depth) + " | " + DescribeInput("Motion", motion) +
             " | depthRect=" + std::to_string(depthWidth) + "x" + std::to_string(depthHeight) +
             " motionRect=" + std::to_string(motionWidth) + "x" + std::to_string(motionHeight);
-        if (count != 1) { RejectCapture("Multiple Native evaluations before Present; no guide pair used"); return; }
+        if (captureCount != 1) { RejectCapture("Multiple Native evaluations before Present; no guide pair used"); return; }
         D3D12_RESOURCE_DESC dd {}, md {};
         if (!list) { RejectCapture("Native capture: command list missing"); return; }
         if (!swapchain) { RejectCapture("Native capture: current swapchain/identity unavailable"); return; }
@@ -265,13 +409,13 @@ class Bridge
             !motionWidth || !motionHeight ||
             frame.RenderSubrectWidth > width || frame.RenderSubrectHeight > height)
         { RejectCapture("Native capture: missing or invalid render-subrect dimensions"); return; }
-        metadata.frame = frame; metadata.frame.ExposureTexture = nullptr;
-        metadata.providerFrame = providerFrame;
-        metadata.swapchain = swapchain; metadata.backbuffer = backbuffer;
-        metadata.width = width; metadata.height = height;
-        metadata.producer = GpuSafety::Record(list);
-        metadata.dx11Producer = dx11Producer;
-        if (!metadata.producer) { RejectCapture("Native metadata producer tracking unavailable"); return; }
+        captureMetadata.frame = frame; captureMetadata.frame.ExposureTexture = nullptr;
+        captureMetadata.providerFrame = providerFrame;
+        captureMetadata.swapchain = swapchain; captureMetadata.backbuffer = backbuffer;
+        captureMetadata.width = width; captureMetadata.height = height;
+        captureMetadata.producer = GpuSafety::Record(list);
+        captureMetadata.dx11Producer = dx11Producer;
+        if (!captureMetadata.producer) { RejectCapture("Native metadata producer tracking unavailable"); return; }
         if (!copyGuides) return;
         if (!Describe(depth, false, dd)) { RejectCapture("Native capture: unsupported depth: " + telemetry.inputDescription); return; }
         if (!Describe(motion, true, md)) { RejectCapture("Native capture: unsupported motion: " + telemetry.inputDescription); return; }
@@ -289,14 +433,18 @@ class Bridge
         if (FAILED(list->GetDevice(IID_PPV_ARGS(&device))) ||
             FAILED(depth->GetDevice(IID_PPV_ARGS(&depthDevice))) ||
             FAILED(motion->GetDevice(IID_PPV_ARGS(&motionDevice))) ||
-            device != depthDevice || device != motionDevice)
+            !NativeIdentity::CompareDevices(device.Get(), depthDevice.Get()).equal ||
+            !NativeIdentity::CompareDevices(device.Get(), motionDevice.Get()).equal)
         { RejectCapture("Native guide device mismatch"); return; }
         int freeSlot = -1;
         UINT64 resident = 0;
         for (unsigned int i = 0; i < slots.size(); ++i)
         {
             auto& slot = slots[i];
-            if (slot.epoch != epoch && GpuSafety::Reusable(slot.producer) && GpuSafety::Reusable(slot.consumer))
+            if (slot.epoch != captureEpoch && !PendingSlot(i) && slot.selectionReservation.expired() &&
+                GpuSafety::Reusable(slot.producer) && GpuSafety::Reusable(slot.consumer) &&
+                (!slot.depthLease || slot.depthLease->CanRecycle(slot.depth.Get(),slot.producer,slot.consumer)) &&
+                (!slot.motionLease || slot.motionLease->CanRecycle(slot.motion.Get(),slot.producer,slot.consumer)))
             {
                 if (freeSlot < 0) freeSlot = static_cast<int>(i);
                 // Keep reusable allocations of this shape/device, not the original game inputs.
@@ -313,6 +461,7 @@ class Bridge
                 else
                 {
                     slot.producer.reset(); slot.consumer.reset();
+                    slot.depthLease.reset(); slot.motionLease.reset();
                     slot.originalDepth.Reset(); slot.originalMotion.Reset(); slot.swapchain.Reset();
                 }
             }
@@ -346,19 +495,28 @@ class Bridge
         next.originalDepth = depth; next.originalMotion = motion;
         next.swapchain = swapchain; next.backbuffer = backbuffer;
         next.width = width; next.height = height;
-        next.epoch = epoch; next.generation = telemetry.generation; next.bytes = bytes;
+        next.epoch = captureEpoch; next.generation = telemetry.generation; next.bytes = bytes;
         next.providerFrame = providerFrame;
         next.frame = frame; next.frame.ExposureTexture = nullptr;
         Copy(list, depth, next.depth.Get(), depthState);
         Copy(list, motion, next.motion.Get(), motionState);
         slots[freeSlot] = std::move(next);
-        candidate = freeSlot; ++telemetry.captures;
+        // NR-FEED-001 BEGIN
+        {
+            Neurotic::Feed::TranslationScope feedCopy(feedGuides, "PresentGuides.private-copy");
+            Neurotic::Feed::Callback copyObservation({"PresentGuides", Neurotic::Contracts::GraphicsApi::D3D12,
+                "prepared-copy", telemetry.generation, Neurotic::Contracts::SourceClass::Derived}, this);
+            Neurotic::Feed::ObservePresentGuide(copyObservation, frame, slots[freeSlot].depth.Get(), slots[freeSlot].motion.Get());
+        }
+        // NR-FEED-001 END
+        captureCandidate = freeSlot; ++telemetry.captures;
         telemetry.captureError.clear();
         telemetry.status = "Captured Native guides; awaiting matching Present submission";
     }
     bool Bind(const Selection& selection, ID3D12GraphicsCommandList* list,
               ID3D12CommandQueue* queue, IUnknown* swapchain, UINT backbuffer,
-              UINT width, UINT height, Inputs& inputs, UINT64 providerFrame = 0)
+              UINT width, UINT height, Inputs& inputs, UINT64 providerFrame = 0,
+              std::shared_ptr<Neurotic::Lifecycle::NativeLeaseOwner> leaseOwner = {})
     {
         std::lock_guard lock(mutex);
         (void)backbuffer; // diagnostic only when provider-frame identity is unavailable
@@ -387,10 +545,64 @@ class Bridge
         { Reject("DX11 guide producer fence/queue mismatch"); return false; }
         slot.consumer = GpuSafety::Record(list);
         if (!slot.consumer) { Reject("Present guide consumer tracking unavailable"); return false; }
+        slot.selectionReservation.reset(); // the recorded consumer now retains the copy
+        if (leaseOwner)
+        {
+            try
+            {
+            // Retain both CPU wrappers before any admission. Partial failure pins the
+            // existing slot; dropping a wrapper cannot force release of owner resources.
+            slot.depthLease=std::make_shared<Neurotic::Lifecycle::NativeLeaseRegistration>(leaseOwner);
+            slot.motionLease=std::make_shared<Neurotic::Lifecycle::NativeLeaseRegistration>(std::move(leaseOwner));
+            if (!slot.depthLease->Begin(slot.depth.Get(),list,queue,slot.producer,slot.consumer,providerFrame!=0) ||
+                !slot.motionLease->Begin(slot.motion.Get(),list,queue,slot.producer,slot.consumer,providerFrame!=0))
+            { slot.depthLease->Close();slot.motionLease->Close();Reject("C03 private guide lease refused");return false; }
+            }
+            catch (...)
+            { Reject("C03 private guide metadata unavailable");return false; }
+        }
         inputs = {slot.depth, slot.motion, slot.frame};
         ++telemetry.matched;
         telemetry.status = "Matched Native guides bound; model success not yet confirmed";
         return true;
+    }
+    // Called by the consuming owner immediately before its existing submission while
+    // its list/identity scope is stable. This does not submit, seal or release anything.
+    bool ValidateLeasedSubmit(const Selection& selection,ID3D12GraphicsCommandList* list,
+                              ID3D12CommandQueue* queue)
+    {
+        std::lock_guard lock(mutex);
+        if (!telemetry.enabled || selection.generation!=telemetry.generation || selection.slot<0 ||
+            selection.slot>=static_cast<int>(slots.size()))return false;
+        auto& slot=slots[selection.slot];
+        if(slot.epoch!=selection.epoch || slot.generation!=selection.generation || !slot.depthLease || !slot.motionLease)
+            return false;
+        return slot.depthLease->ValidateSubmit(slot.depth.Get(),list,queue,slot.producer,slot.consumer,slot.providerFrame!=0) &&
+               slot.motionLease->ValidateSubmit(slot.motion.Get(),list,queue,slot.producer,slot.consumer,slot.providerFrame!=0);
+    }
+    void CloseLeasedAdmission(const Selection& selection)
+    {
+        std::lock_guard lock(mutex);
+        if(selection.slot<0 || selection.slot>=static_cast<int>(slots.size()))return;
+        auto& slot=slots[selection.slot];
+        if(slot.epoch!=selection.epoch || slot.generation!=selection.generation)return;
+        if(slot.depthLease)slot.depthLease->Close();if(slot.motionLease)slot.motionLease->Close();
+    }
+    // Readiness for arbitration only; never consumes a slot or grants resource access.
+    // Rechecked by Bind after BeginPresent, including its owner/lease checks.
+    bool CurrentQualified(ID3D12CommandQueue* queue, IUnknown* swapchain,
+                          UINT width, UINT height)
+    {
+        std::lock_guard lock(mutex);
+        if (!queue || !swapchain || !telemetry.enabled || !epochError.empty() || count != 1 ||
+            candidate < 0 || candidate >= static_cast<int>(slots.size())) return false;
+        const auto& slot = slots[candidate];
+        if (!slot.depth || !slot.motion || slot.consumer || slot.epoch != epoch ||
+            slot.generation != telemetry.generation || slot.swapchain.Get() != swapchain ||
+            slot.width != width || slot.height != height || slot.providerFrame) return false;
+        if (!GpuSafety::OrderedOn(slot.producer, queue)) return false;
+        return !slot.dx11Producer || (slot.dx11Producer->Valid() &&
+               slot.dx11Producer->orderedQueue.Get() == queue);
     }
     bool MatchMetadata(const Selection& selection, ID3D12CommandQueue* queue,
                        IUnknown* swapchain, UINT backbuffer, UINT width, UINT height,

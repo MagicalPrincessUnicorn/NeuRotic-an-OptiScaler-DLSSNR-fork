@@ -4,6 +4,8 @@
 #include <wincodec.h>
 #include <wrl/client.h>
 #include <dxgiformat.h>
+#include <dxgicommon.h>
+#include <optional>
 #include <filesystem>
 #include <vector>
 #include <limits>
@@ -19,6 +21,31 @@
 
 namespace DlssNr::Screenshots
 {
+enum class Encoding { DisplayEncoded, ScRgb, Hdr10Pq };
+struct DisplayTransform
+{
+    Encoding encoding = Encoding::DisplayEncoded;
+    float whitePoint = 0.0f;
+};
+// An explicit SDR preview recipe, not a monitor/HDR screenshot. Both sides of
+// an HDR comparison use a fixed 200-nit reference (2.5 linear scRGB units).
+inline std::optional<DisplayTransform> DisplayConversion(DXGI_FORMAT format, DXGI_COLOR_SPACE_TYPE space)
+{
+    if (space == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 &&
+        (format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+         format == DXGI_FORMAT_R10G10B10A2_UNORM)) return DisplayTransform {};
+    if (space == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 && format == DXGI_FORMAT_R16G16B16A16_FLOAT)
+        return DisplayTransform {Encoding::ScRgb, 2.5f};
+    if (space == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 && format == DXGI_FORMAT_R10G10B10A2_UNORM)
+        return DisplayTransform {Encoding::Hdr10Pq, 2.5f};
+    return std::nullopt;
+}
+inline const char* EncodingName(Encoding encoding, float whitePoint)
+{
+    if (encoding == Encoding::Hdr10Pq) return "HDR10-PQ2020 to SDR preview";
+    if (encoding == Encoding::ScRgb) return "scRGB709 to SDR preview";
+    return whitePoint > 0 ? "linear scene to SDR preview" : "SDR display encoded";
+}
 inline uint32_t PngCrc(const unsigned char* data, size_t length)
 {
     uint32_t crc = 0xffffffffu;
@@ -131,10 +158,37 @@ inline void SceneToSrgb(float (&rgb)[3], float whitePoint)
     }
 }
 
+inline void Pq2020ToScRgb(float (&rgb)[3])
+{
+    // Same PQ units and gamut transform as PresentColor.hlsl.
+    double linear[3];
+    for (unsigned c = 0; c < 3; ++c)
+    {
+        const double p = std::pow(std::clamp(double(rgb[c]), 0.0, 1.0), 32.0 / 2523.0);
+        linear[c] = 125.0 * std::pow((std::max)(p - 3424.0 / 4096.0, 0.0) /
+            (2413.0 / 128.0 - 2392.0 / 128.0 * p), 16384.0 / 2610.0);
+    }
+    rgb[0] = float(1.660491002108434 * linear[0] - 0.587641138788550 * linear[1] - 0.072849863319884 * linear[2]);
+    rgb[1] = float(-0.124550474521591 * linear[0] + 1.132899897125960 * linear[1] - 0.008349422604369 * linear[2]);
+    rgb[2] = float(-0.018150763354905 * linear[0] - 0.100578898008007 * linear[1] + 1.118729661362913 * linear[2]);
+}
+
+inline bool ValidConversion(DXGI_FORMAT format, float whitePoint, Encoding encoding)
+{
+    if (!std::isfinite(whitePoint) || whitePoint < 0) return false;
+    const bool floating = format == DXGI_FORMAT_R16G16B16A16_FLOAT || format == DXGI_FORMAT_R16G16B16A16_TYPELESS ||
+        format == DXGI_FORMAT_R32G32B32A32_FLOAT || format == DXGI_FORMAT_R32G32B32A32_TYPELESS ||
+        format == DXGI_FORMAT_R32G32B32_FLOAT || format == DXGI_FORMAT_R11G11B10_FLOAT;
+    if (encoding == Encoding::Hdr10Pq) return whitePoint > 0 && format == DXGI_FORMAT_R10G10B10A2_UNORM;
+    if (encoding == Encoding::ScRgb) return whitePoint > 0 && floating;
+    return encoding == Encoding::DisplayEncoded && (whitePoint == 0 || floating);
+}
+
 // whitePoint == 0 means already display encoded. Positive values explicitly
 // request the matched linear-scene conversion. Engine alpha is always omitted.
 inline bool WritePng(const std::filesystem::path& path, const unsigned char* pixels,
-                     UINT width, UINT height, UINT pitch, DXGI_FORMAT format, float whitePoint = 0.0f)
+                     UINT width, UINT height, UINT pitch, DXGI_FORMAT format, float whitePoint = 0.0f,
+                     Encoding encoding = Encoding::DisplayEncoded)
 {
     const bool half = format == DXGI_FORMAT_R16G16B16A16_FLOAT || format == DXGI_FORMAT_R16G16B16A16_TYPELESS;
     const bool full = format == DXGI_FORMAT_R32G32B32A32_FLOAT || format == DXGI_FORMAT_R32G32B32A32_TYPELESS ||
@@ -143,8 +197,7 @@ inline bool WritePng(const std::filesystem::path& path, const unsigned char* pix
     const unsigned int pixelBytes = PixelBytes(format);
     if (!pixels || !width || !height || !pixelBytes || UINT64(width) * pixelBytes > pitch ||
         UINT64(width) * height * 3 > (std::numeric_limits<UINT>::max)() ||
-        !std::isfinite(whitePoint) || whitePoint < 0 ||
-        (whitePoint > 0 && !half && !full && !packedFloat)) return false;
+        !ValidConversion(format, whitePoint, encoding)) return false;
     struct Apartment
     {
         HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -205,9 +258,21 @@ inline bool WritePng(const std::filesystem::path& path, const unsigned char* pix
             else if (format == DXGI_FORMAT_R10G10B10A2_UNORM)
             {
                 UINT packed = 0; std::memcpy(&packed, pixel, sizeof(packed));
-                out[2] = static_cast<unsigned char>(((packed & 1023u) * 255u + 511u) / 1023u);
-                out[1] = static_cast<unsigned char>((((packed >> 10) & 1023u) * 255u + 511u) / 1023u);
-                out[0] = static_cast<unsigned char>((((packed >> 20) & 1023u) * 255u + 511u) / 1023u);
+                if (encoding == Encoding::Hdr10Pq)
+                {
+                    float rgb[3] {float(packed & 1023u) / 1023.0f, float((packed >> 10) & 1023u) / 1023.0f,
+                                  float((packed >> 20) & 1023u) / 1023.0f};
+                    Pq2020ToScRgb(rgb);
+                    SceneToSrgb(rgb, whitePoint);
+                    for (unsigned c = 0; c < 3; ++c)
+                        out[2 - c] = static_cast<unsigned char>(std::clamp(rgb[c], 0.0f, 1.0f) * 255.0f + 0.5f);
+                }
+                else
+                {
+                    out[2] = static_cast<unsigned char>(((packed & 1023u) * 255u + 511u) / 1023u);
+                    out[1] = static_cast<unsigned char>((((packed >> 10) & 1023u) * 255u + 511u) / 1023u);
+                    out[0] = static_cast<unsigned char>((((packed >> 20) & 1023u) * 255u + 511u) / 1023u);
+                }
             }
             else
             {

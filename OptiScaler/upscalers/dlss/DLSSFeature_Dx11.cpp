@@ -1,6 +1,7 @@
 #include <pch.h>
 #include "DLSSFeature_Dx11.h"
 #include <Config.h>
+#include <dlssnr/FinalFallbackControl.h>
 
 #include <dxgi.h>
 
@@ -37,7 +38,8 @@ bool DLSSFeatureDx11::InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Par
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
 
-        LOG_INFO("Creating DLSS feature");
+        LOG_INFO("Creating DLSS feature: device={} context={} NGX initialized={}",
+                 static_cast<void*>(Device), static_cast<void*>(InContext), NVNGXProxy::IsDx11Inited());
 
         if (NVNGXProxy::D3D11_CreateFeature() != nullptr)
         {
@@ -50,6 +52,9 @@ bool DLSSFeatureDx11::InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Par
             if (nvResult != NVSDK_NGX_Result_Success)
             {
                 LOG_ERROR("NVNGXProxy::D3D11_CreateFeature result: {0:X}", (unsigned int) nvResult);
+                if (nvResult == NVSDK_NGX_Result_FAIL_NotInitialized)
+                    LOG_ERROR("Native DLSS creation refused: NGX reports NotInitialized despite cached init={}; device={} context={}. Native Temporal cannot attach to this failed DLSS feature.",
+                              NVNGXProxy::IsDx11Inited(), static_cast<void*>(Device), static_cast<void*>(InContext));
                 break;
             }
         }
@@ -74,6 +79,9 @@ bool DLSSFeatureDx11::InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Par
 
 bool DLSSFeatureDx11::EvaluateInternal(ID3D11DeviceContext* InDeviceContext, NVSDK_NGX_Parameter* InParameters)
 {
+    // Keep NR admission across Prepare, the game DLSS call, and completion.
+    // Suppression skips NR only; the game's ordinary DLSS evaluation continues.
+    DlssNr::FinalFallback::RenderScope renderAdmission;
     if (!_moduleLoaded)
     {
         LOG_ERROR("nvngx.dll or _nvngx.dll is not loaded!");
@@ -86,19 +94,23 @@ bool DLSSFeatureDx11::EvaluateInternal(ID3D11DeviceContext* InDeviceContext, NVS
     {
         ProcessEvaluateParams(InParameters);
 
-        _nrDx11.Prepare(InDeviceContext, InParameters);
+        if (renderAdmission.Admitted()) _nrDx11.Prepare(InDeviceContext, InParameters);
 
         struct RestoreNativeDx11Parameters
         {
             DlssNr::NativeDx11::Feature& feature;
             NVSDK_NGX_Parameter* parameters;
-            ~RestoreNativeDx11Parameters() { feature.Restore(parameters); }
-        } restore {_nrDx11, InParameters};
+            bool admitted;
+            ~RestoreNativeDx11Parameters() { if (admitted) feature.Restore(parameters); }
+        } restore {_nrDx11, InParameters, renderAdmission.Admitted()};
 
         nvResult = NVNGXProxy::D3D11_EvaluateFeature()(InDeviceContext, _p_dlssHandle, InParameters, NULL);
 
-        _nrDx11.Restore(InParameters);
-        _nrDx11.Complete(InDeviceContext, nvResult == NVSDK_NGX_Result_Success);
+        if (renderAdmission.Admitted())
+        {
+            _nrDx11.Restore(InParameters);
+            _nrDx11.Complete(InDeviceContext, nvResult == NVSDK_NGX_Result_Success);
+        }
 
         if (nvResult != NVSDK_NGX_Result_Success)
         {

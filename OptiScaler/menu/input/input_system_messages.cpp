@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <nr/diagnostics/HostCost.h>
 #include "input_system_internal.h"
 
 #include <include/imgui/imgui.h>
@@ -43,6 +44,18 @@ void SetMouseUpStateOnly(int button, DWORD messageTime)
     // Do not clear mouseButton.BlockedDown here.
     // Polling/raw input are internal state producers. The game-facing
     // WM_*BUTTONUP path must be the one that consumes BlockedDown.
+}
+
+void ResetKeyboardEdgesForFocusLocked()
+{
+    // Keep held state and blocked-pair ownership intact. Only discard edges
+    // queued before this focus boundary, including presses not yet rendered.
+    for (ButtonState& key : _state.Keys)
+    {
+        key.Pressed = false;
+        key.Released = false;
+    }
+    _state.LastPressedKey = 0;
 }
 
 void ResetButtonBlockedStateLocked()
@@ -493,12 +506,16 @@ bool HandleWindowMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, Inpu
     {
     case WM_SETFOCUS:
     {
+        ++_state.FocusGeneration;
+        ResetKeyboardEdgesForFocusLocked();
         _state.Focused = true;
         break;
     }
 
     case WM_KILLFOCUS:
     {
+        ++_state.FocusGeneration;
+        ResetKeyboardEdgesForFocusLocked();
         _state.Focused = false;
         ResetButtonBlockedStateLocked();
         ResetRawInputBlockStateLocked();
@@ -720,12 +737,17 @@ LRESULT CALLBACK OptiInputWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         WNDPROC originalWndProc = nullptr;
 
         {
+            Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputWindow);
             std::unique_lock lock(_state.Mutex);
+            nrHostCost.Acquired();
             originalWndProc = _state.OriginalWndProc;
         }
 
         if (originalWndProc != nullptr)
-            return CallWindowProcW(originalWndProc, hwnd, msg, wParam, lParam);
+    {
+        Neurotic::HostCost::Scope nrGameCost(Neurotic::HostCost::Kind::WindowOriginal);
+        return CallWindowProcW(originalWndProc, hwnd, msg, wParam, lParam);
+    }
 
         return DefWindowProcW(hwnd, msg, wParam, lParam);
     }
@@ -735,7 +757,9 @@ LRESULT CALLBACK OptiInputWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
     bool unicodeNoCharProbe = false;
 
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputWindow);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         originalWndProc = _state.OriginalWndProc;
         OPTIINPUT_LOG_VERBOSE("WndProc dispatch hwnd:{} msg:{}({:#x}) input:{} original:{} menu:{} focused:{}",
@@ -753,7 +777,10 @@ LRESULT CALLBACK OptiInputWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         return 0;
 
     if (originalWndProc != nullptr)
+    {
+        Neurotic::HostCost::Scope nrGameCost(Neurotic::HostCost::Kind::WindowOriginal);
         return CallWindowProcW(originalWndProc, hwnd, msg, wParam, lParam);
+    }
 
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
@@ -769,7 +796,9 @@ bool ProcessRemovedMessage(MSG* msg)
     bool handled = false;
 
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputQueue);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (!_state.Initialized)
             return false;

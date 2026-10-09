@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "D3D11_Hooks.h"
+#include <dlssnr/NativeD3D11Guides.h>
 
 #include <Util.h>
 #include <Config.h>
@@ -88,6 +89,7 @@ static inline D3D11_FILTER UpgradeToAF(D3D11_FILTER f)
 
 static void HookToDeviceLocal(ID3D11Device* InDevice)
 {
+    DlssNr::NativeD3D11Guides::HookDevice(InDevice);
     if (o_CreateSamplerState != nullptr || InDevice == nullptr)
         return;
 

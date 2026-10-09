@@ -7,12 +7,23 @@
 #include <shaders/hudless_compare_compute/HCC_Dx12.h>
 
 #include <ffx_framegeneration.h>
+#include <nr/lifecycle/Fsr3FinalConsumerAdapter.h>
+#include <nr/lifecycle/Fsr3CallbackBinding.h>
+#include <atomic>
 
 class FSRFG_Dx12 : public virtual IFGFeature_Dx12
 {
   private:
     ffxContext _swapChainContext = nullptr;
     ffxContext _fgContext = nullptr;
+    Neurotic::Lifecycle::Fsr3FinalConsumerAdapter _nrFinalConsumer;
+    Neurotic::Lifecycle::Fsr3CallbackBindings<FSRFG_Dx12> _callbackBindings;
+    enum class CallbackTeardown { None, Context, Swapchain, Shutdown };
+    std::atomic<CallbackTeardown> _callbackTeardown{CallbackTeardown::None};
+    bool CloseCallbacks(CallbackTeardown requested);
+    bool RetryCallbackTeardown();
+    bool ShutdownImpl(bool lifecycleLockHeld);
+    bool ReleaseSwapchainImpl(HWND hwnd,bool lifecycleLockHeld);
     FfxApiSurfaceFormat _lastHudlessFormat = FFX_API_SURFACE_FORMAT_UNKNOWN;
     FfxApiSurfaceFormat _usingHudlessFormat = FFX_API_SURFACE_FORMAT_UNKNOWN;
     feature_version _version { 0, 0, 0 };
@@ -103,6 +114,23 @@ class FSRFG_Dx12 : public virtual IFGFeature_Dx12
     void SetCommandQueue(FG_ResourceType type, ID3D12CommandQueue* queue) override final;
 
     ffxReturnCode_t DispatchCallback(ffxDispatchDescFrameGeneration* params);
+    void ObserveSourceTransaction(std::uint64_t frameId,
+        std::shared_ptr<Neurotic::Lifecycle::NativeSourceTransactionObservation> observation)
+    {
+        _nrFinalConsumer.ObserveContext(_fgContext);
+        if(observation&&!_nrFinalConsumer.ObserveSource(_fgContext,frameId,std::move(observation)))
+            LOG_DEBUG("NR source association unavailable at frame {}",frameId);
+    }
+    // Source admission carries its canonical base, returned Resource publication
+    // and retained finalizer claim. The FSR frame ID is only an exact lookup key.
+    bool EnrollFinalConsumer(std::uint64_t frameId,
+        std::shared_ptr<Neurotic::Lifecycle::Fsr3FinalConsumerSource> source)
+    {
+        _nrFinalConsumer.ObserveContext(_fgContext);
+        const bool enrolled=_nrFinalConsumer.Enroll(_fgContext,frameId,source);
+        if(!enrolled&&source)source->Interrupt();
+        return enrolled;
+    }
 
     FSRFG_Dx12() : IFGFeature_Dx12(), IFGFeature()
     {

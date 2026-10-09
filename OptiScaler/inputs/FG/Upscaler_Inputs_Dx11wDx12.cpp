@@ -204,6 +204,7 @@ void UpscalerInputsDx11wDx12::UpscaleStart(NVSDK_NGX_Parameter* InParameters, IF
         fg->Mutex.unlockThis(4);
     }
 
+    auto cacheLock=Dx11WithDx12::LockUpscalerResources();
     auto& cache = Dx11WithDx12::GetUpscalerResourceCache();
     const auto frameIndex = fg->GetIndex();
 
@@ -212,7 +213,11 @@ void UpscalerInputsDx11wDx12::UpscaleStart(NVSDK_NGX_Parameter* InParameters, IF
     ID3D12Resource* paramVelocity = cache.Mv.Dx12Resource;
     ID3D12Resource* paramDepth = cache.Depth.Dx12Resource;
 
-    auto cmdList = fg->GetUICommandList();
+    auto cmdList = fg->GetUICommandList(-1,true);
+    ID3D12Resource* sources[]={paramVelocity,paramDepth};
+    if (!cmdList || !paramVelocity || !paramDepth) return;
+    auto cacheReader=Dx11WithDx12::RetainUpscalerReader(cmdList,sources);
+    if (!cacheReader || !fg->RetainUIBridgeReader(*cacheReader)) return;
 
     if (paramVelocity != nullptr)
     {
@@ -222,7 +227,7 @@ void UpscalerInputsDx11wDx12::UpscaleStart(NVSDK_NGX_Parameter* InParameters, IF
         setResource.resource = paramVelocity;
         setResource.state = (D3D12_RESOURCE_STATES) Config::Instance()->MVResourceBarrier.value_or(
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        setResource.validity = FG_ResourceValidity::ValidNow;
+        setResource.validity = FG_ResourceValidity::ValidButMakeCopy;
 
         if (feature->LowResMV())
         {
@@ -263,7 +268,7 @@ void UpscalerInputsDx11wDx12::UpscaleStart(NVSDK_NGX_Parameter* InParameters, IF
                     setResource.width = feature->RenderWidth();
                     setResource.height = feature->RenderHeight();
                     setResource.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-                    setResource.validity = FG_ResourceValidity::JustTrackCmdlist;
+                    setResource.validity = FG_ResourceValidity::ValidButMakeCopy;
 
                     fg->SetResource(&setResource);
                     done = true;
@@ -281,7 +286,7 @@ void UpscalerInputsDx11wDx12::UpscaleStart(NVSDK_NGX_Parameter* InParameters, IF
             setResource.height = feature->RenderHeight();
             setResource.state = (D3D12_RESOURCE_STATES) Config::Instance()->DepthResourceBarrier.value_or(
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            setResource.validity = FG_ResourceValidity::ValidNow;
+            setResource.validity = FG_ResourceValidity::ValidButMakeCopy;
 
             fg->SetResource(&setResource);
         }

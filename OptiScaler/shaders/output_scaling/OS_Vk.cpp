@@ -15,9 +15,6 @@
 #include "fsr1/ffx_fsr1.h"
 #include "fsr1/FSR_EASU_Shader_Vk.h"
 
-static Constants constants {};
-static UpscaleShaderConstants fsr1Constants {};
-
 #pragma warning(disable : 4244)
 
 // Output Scaling / Magnifier constructor: no override, so ActiveScaler() reads the global config and
@@ -44,6 +41,10 @@ OS_Vk::OS_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InPhysicalD
     }
 
     LOG_FUNC();
+
+    // NR owns this scaler with one structural image generation. Its single descriptor/constant
+    // binding is written once, then remains immutable through every recording and replay.
+    if (_scalerOverride != Scaler::Count) _maxFramesInFlight = 1;
 
     // 1. Create Base Resources
     CreateSampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
@@ -137,6 +138,12 @@ bool OS_Vk::Dispatch(VkCommandBuffer InCmdList, const VkImageInfo& InResourceVie
     const uint32_t dstW = nr ? OutResourceView.Width : State::Instance().currentFeature->DisplayWidth();
     const uint32_t dstH = nr ? OutResourceView.Height : State::Instance().currentFeature->DisplayHeight();
 
+    if (nr && _nrBound &&
+        (InResourceView.ImageView != _nrSource.ImageView || OutResourceView.ImageView != _nrTarget.ImageView ||
+         srcW != _nrSource.Width || srcH != _nrSource.Height || dstW != _nrTarget.Width || dstH != _nrTarget.Height))
+        return false;
+    Constants constants {};
+    UpscaleShaderConstants fsr1Constants {};
     // Update Constants
     FsrEasuCon(fsr1Constants.const0, fsr1Constants.const1, fsr1Constants.const2, fsr1Constants.const3,
                srcW, srcH, srcW, srcH, dstW, dstH);
@@ -146,7 +153,7 @@ bool OS_Vk::Dispatch(VkCommandBuffer InCmdList, const VkImageInfo& InResourceVie
     constants.destWidth = dstW;
     constants.destHeight = dstH;
 
-    if (_mappedConstantBuffer)
+    if (_mappedConstantBuffer && (!nr || !_nrBound))
     {
         if (ActiveScaler() == Scaler::FSR1)
             memcpy(_mappedConstantBuffer, &fsr1Constants, sizeof(UpscaleShaderConstants));
@@ -155,11 +162,12 @@ bool OS_Vk::Dispatch(VkCommandBuffer InCmdList, const VkImageInfo& InResourceVie
     }
 
     // Advance Frame Index
-    _currentSetIndex = (_currentSetIndex + 1) % _maxFramesInFlight;
+    if (!nr) _currentSetIndex = (_currentSetIndex + 1) % _maxFramesInFlight;
     VkDescriptorSet currentSet = _descriptorSets[_currentSetIndex];
 
     // Build Descriptor Writes
-    VkDescriptorBufferInfo bufferInfo { _constantBuffer, 0, sizeof(Constants) };
+    VkDescriptorBufferInfo bufferInfo { _constantBuffer, 0,
+        ActiveScaler() == Scaler::FSR1 ? sizeof(UpscaleShaderConstants) : sizeof(Constants) };
     VkDescriptorImageInfo sourceInfo { VK_NULL_HANDLE, InResourceView.ImageView,
                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     VkDescriptorImageInfo destInfo { VK_NULL_HANDLE, OutResourceView.ImageView, VK_IMAGE_LAYOUT_GENERAL };
@@ -174,7 +182,10 @@ bool OS_Vk::Dispatch(VkCommandBuffer InCmdList, const VkImageInfo& InResourceVie
                                                  { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, currentSet, 3, 0, 1,
                                                    VK_DESCRIPTOR_TYPE_SAMPLER, &samplerInfo, nullptr, nullptr } };
 
-    vkUpdateDescriptorSets(_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    if (!nr || !_nrBound) {
+        vkUpdateDescriptorSets(_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+        if (nr) { _nrSource = InResourceView; _nrTarget = OutResourceView; _nrBound = true; }
+    }
 
     vkCmdBindPipeline(InCmdList, VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
     vkCmdBindDescriptorSets(InCmdList, VK_PIPELINE_BIND_POINT_COMPUTE, _pipelineLayout, 0, 1, &currentSet, 0, nullptr);
@@ -194,4 +205,12 @@ bool OS_Vk::Dispatch(VkCommandBuffer InCmdList, const VkImageInfo& InResourceVie
     }
 
     return true;
+}
+
+uint64_t OS_Vk::PrivateAllocationBytes() const
+{
+    if (!_constantBuffer || !_constantBufferMemory) return 0;
+    VkMemoryRequirements requirements {};
+    vkGetBufferMemoryRequirements(_device,_constantBuffer,&requirements);
+    return requirements.size;
 }

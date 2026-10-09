@@ -1,5 +1,53 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="dlssnr\RenderingOutput.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><AdditionalIncludeDirectories>$(ProjectDir)..\apps\NeuRoticHub;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+    <ClCompile Include="..\apps\NeuRoticHub\anything\AnythingController.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><PreprocessorDefinitions>NOMINMAX;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalIncludeDirectories>$(ProjectDir)..\apps\NeuRoticHub;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+    <ClCompile Include="dlssnr\NativeD3D11Guides.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\NativeD3D12Guides.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\connections\D3D11Connection.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\connections\D3D12Connection.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><PreprocessorDefinitions>SPDLOG_USE_STD_FORMAT;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+    <ClCompile Include="dlssnr\connections\ConnectionSelection.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\connections\ConnectionPolicy.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\PreparedGuideStatusV2.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\NativeGuideProcessor.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\NativeVulkanGuides.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\NativeFsr3D3D12.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\NativeFsrApi.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\NativeFgVulkan.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+
+    <ClCompile Include="..\addons\prepared-guides\src\CpuMainlineClient.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClInclude Include="dlssnr\NativeGuideCapture.h" />
+    <ClInclude Include="dlssnr\NativeGuideRoute.h" />
+    <ClCompile Include="dlssnr\PreparedVkDx12Transport.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClInclude Include="dlssnr\PreparedVkDx12Transport.h" />
+    <ClInclude Include="dlssnr\PreparedVulkanDevice.h" />
+    <ClInclude Include="nr\lifecycle\PreparedObservationPublication.h" />
+    <ClInclude Include="dlssnr\PreparedGuideDispatch.h" />
+    <ClInclude Include="dlssnr\PreparedGuideRoute.h" />
+    <ClInclude Include="dlssnr\PreparedGuideFrame.h" />
+    <ClInclude Include="dlssnr\PreparedContentProbe.h" />
+    <ClInclude Include="dlssnr\PreparedTransportProtocol.h" />
+    <ClInclude Include="inputs\universal_feeder\PreparedGuideContract.h" />
+    <ClInclude Include="inputs\universal_feeder\PreparedNgxOrigin.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\PreparedGuideObservationAdapter.h" />
+    <ClInclude Include="nr\context\PreparedGuideNormalization.h" />
+    <ClInclude Include="nr\semantic\character\CharacterObservation.h" />
+    <ClInclude Include="nr\semantic\character\CharacterInspectorSettings.h" />
+    <ClInclude Include="nr\semantic\character\CharacterInspectorDraw.h" />
+    <ClInclude Include="nr\semantic\character\CharacterInspectorOverlay.h" />
+    <ClInclude Include="nr\semantic\character\CharacterInspectorMenu.h" />
+    <ClInclude Include="nr\semantic\character\CharacterPipeline.h" />
+    <ClInclude Include="nr\semantic\character\CharacterWire.h" />
+    <ClInclude Include="nr\semantic\character\CharacterTrackingWire.h" />
+    <ClInclude Include="nr\semantic\character\CharacterRuntime.h" />
+    <ClInclude Include="nr\semantic\character\CharacterCaptureDx12.h" />
+    <ClInclude Include="nr\semantic\character\CharacterCaptureDx11.h" />
+    <ClInclude Include="nr\semantic\character\CharacterCaptureVk.h" />
+    <ClInclude Include="nr\semantic\character\CharacterQueuePolicy.h" />
+    <ClInclude Include="nr\semantic\character\CharacterInspectorColor.h" />
+    <ClInclude Include="nr\semantic\character\CharacterEarlyCaptureDx12.h" />
+  </ItemGroup>
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -77,6 +125,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" Condition="'$(Platform)'=='x64'" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -541,6 +590,63 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="upscalers\fsr2_212\FSR2Feature_Dx11On12_212.h" />
     <ClInclude Include="upscalers\fsr2_212\FSR2Feature_Dx12_212.h" />
     <ClInclude Include="upscalers\fsr2_212\FSR2Feature_Vk_212.h" />
+    <ClInclude Include="nr\contracts\C01_Acquisition.h" />
+    <ClInclude Include="nr\context\CapabilityQualification.h" />
+    <ClInclude Include="nr\context\ContextBuilder.h" />
+    <ClInclude Include="nr\context\ContextMetadata.h" />
+    <ClInclude Include="nr\context\NativeSampleQualification.h" />
+    <ClInclude Include="nr\context\NativeStageQualification.h" />
+    <ClInclude Include="nr\context\RepresentationLineage.h" />
+    <ClInclude Include="nr\context\RepresentationCacheKeys.h" />
+    <ClInclude Include="nr\context\PreparedViewValidation.h" />
+    <ClInclude Include="nr\context\RepresentationPlanner.h" />
+    <ClInclude Include="nr\context\EvidenceQualification.h" />
+    <ClInclude Include="nr\context\SemanticMath.h" />
+    <ClInclude Include="nr\contracts\C02_Context.h" />
+    <ClInclude Include="nr\contracts\C03_Consumption.h" />
+    <ClInclude Include="nr\contracts\C04_Capability.h" />
+    <ClInclude Include="nr\contracts\C05_Routing.h" />
+    <ClInclude Include="nr\contracts\C06_ProtocolInput.h" />
+    <ClInclude Include="nr\contracts\C07_ProtocolOutput.h" />
+    <ClInclude Include="nr\contracts\C08_Reset.h" />
+    <ClInclude Include="nr\contracts\C09_Multipass.h" />
+    <ClInclude Include="nr\contracts\C10_Gap.h" />
+    <ClInclude Include="nr\contracts\C11_Diagnostics.h" />
+    <ClInclude Include="nr\contracts\C12_Representation.h" />
+    <ClInclude Include="nr\contracts\C13_FinalFrame.h" />
+    <ClInclude Include="nr\contracts\C14_Identity.h" />
+    <ClInclude Include="nr\contracts\C15_Validation.h" />
+    <ClInclude Include="nr\contracts\C16_Execution.h" />
+    <ClInclude Include="nr\contracts\ContractCommon.h" />
+    <ClInclude Include="nr\contracts\ContractManifest.h" />
+    <ClInclude Include="nr\contracts\Evidence.h" />
+    <ClInclude Include="nr\contracts\FixtureCodec.h" />
+    <ClInclude Include="nr\contracts\Identity.h" />
+    <ClInclude Include="nr\contracts\NativeDelivery.h" />
+    <ClInclude Include="nr\contracts\NativeStageDelivery.h" />
+    <ClInclude Include="nr\contracts\Reasons.h" />
+    <ClInclude Include="nr\contracts\SemanticDescriptions.h" />
+    <ClInclude Include="nr\lifecycle\IdentityAssociations.h" />
+    <ClInclude Include="nr\lifecycle\ConsumptionLeaseAdapter.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\ObservationPublisher.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\NgxObservationAdapter.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\FsrObservationAdapter.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\XessObservationAdapter.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\StreamlineObservationAdapter.h" />
+    <ClInclude Include="inputs\universal_feeder\providers\PresentGuideObservationAdapter.h" />
+    <ClInclude Include="nr\lifecycle\GpuSafetyLeaseAdapter.h" />
+    <ClInclude Include="nr\lifecycle\NativeLeaseBinding.h" />
+    <ClInclude Include="nr\lifecycle\LifecycleEvidence.h" />
+    <ClInclude Include="nr\lifecycle\ProviderLeaseBinding.h" />
+    <ClInclude Include="nr\lifecycle\IdentityDependencies.h" />
+    <ClInclude Include="nr\lifecycle\IdentityIssuers.h" />
+    <ClInclude Include="nr\lifecycle\FinalRealFrameTypes.h" />
+    <ClInclude Include="nr\lifecycle\FinalRealFrameRuntime.h" />
+    <ClInclude Include="nr\lifecycle\FinalRealFrameFinalizer.h" />
+    <ClInclude Include="nr\lifecycle\FinalRealFrameReset.h" />
+    <ClInclude Include="nr\lifecycle\FinalRealFramePreFgAdapter.h" />
+    <ClInclude Include="nr\lifecycle\IdentityPrimitives.h" />
+    <ClInclude Include="nr\lifecycle\IdentityTransitions.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="upscalers\fsr2\FSR2Feature.h" />
     <ClInclude Include="upscalers\fsr2\FSR2Feature_Dx11.h" />
@@ -606,6 +712,21 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="framegen\nvngx\Nvngx_Combo.cpp" />
+    <ClCompile Include="nr\semantic\character\CharacterRuntime.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="nr\semantic\character\CharacterCaptureDx12.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="nr\semantic\character\CharacterCaptureDx11.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="nr\semantic\character\CharacterCaptureVk.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="nr\semantic\character\CharacterEarlyCaptureDx12.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="fsr4\FSR4Upgrade.cpp" />
     <ClCompile Include="gpu_time\GpuTime_Dx11.cpp" />
     <ClCompile Include="gpu_time\GpuTime_Dx12.cpp" />
@@ -779,8 +900,9 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="upscalers\IFeature_Dx11wDx12.cpp" />
     <ClInclude Include="upscalers\IFeature_Dx11wDx12.h" />
     <ClInclude Include="dlssnr\DlssNr_BridgeTelemetry.h" />
-    <ClInclude Include="dlssnr\NrToggleBurst.h" />
-    <ClInclude Include="dlssnr\NrToggleNotes.h" />
+    <ClInclude Include="dlssnr\NrBridgeOutcome.h" />
+    <ClInclude Include="dlssnr\NrBridgeParameters.h" />
+    <ClInclude Include="dlssnr\NrBridgeRetirement.h" />
     <ClInclude Include="dlssnr\DlssNr_PresentCompatibility.h" />
     <ClCompile Include="Config.cpp" />
     <ClCompile Include="upscalers\fsr2\FSR2Feature.cpp" />
@@ -795,10 +917,16 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="inputs\FSR3_Dx12.cpp" />
     <ClCompile Include="hooks\D3D11_Hooks.cpp" />
     <ClCompile Include="hooks\Vulkan_Hooks.cpp" />
+    <ClCompile Include="menu\BrandImage.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="menu\menu_common.cpp" />
     <ClCompile Include="menu\Localization.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+<ClCompile Include="menu\localization\LanguageRuntime.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClCompile Include="menu\localization\LanguagePack.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClCompile Include="menu\localization\LanguageBundles.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClCompile Include="menu\localization\LanguageCatalog.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="menu\localization\LanguageFonts.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="menu\LocalizationFonts.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -840,15 +968,77 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="shaders\dlssnr\DlssNr_Dx12.cpp" />
     <ClCompile Include="shaders\dlssnr\DlssNr_Vk.cpp" />
     <ClCompile Include="dlssnr\DlssNrFeature_Vk.cpp" />
+    <ClCompile Include="dlssnr\VulkanNrRuntime.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrSession.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrRecording.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrGeneration.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrImageFacts.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentGuides.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentGuidesVk.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="shaders\format_transfer\PresentColor_Vk.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrImageSnapshot.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrStreamline.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrFfxFg.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="mfg\MfgAdaUnlock.cpp" />
+    <MASM Include="mfg\MfgCreateForward.asm" Condition="'$(Platform)'=='x64'" />
+    <ClCompile Include="mfg\ExperimentalMfgRuntime.cpp" />
+    <ClCompile Include="dlssnr\VulkanNrPreFg.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrCapture.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrCaptureVk.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrExposureScan.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrPassRecorder.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrPreSr.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanNrCompletion.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentRegistry.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresent.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentVk.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentSubmission.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentExecutor.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentStatus.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="dlssnr\DlssNr_ExposureScan.cpp" />
     <ClCompile Include="dlssnr\DlssNr_Present.cpp" />
     <ClCompile Include="dlssnr\DlssNr_Dx11.cpp" />
+    <ClCompile Include="dlssnr\NrAlternateFrameDx12.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="dlssnr\NrGpuSafety.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="nr\lifecycle\ConsumptionLeaseAdapter.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="dlssnr\DlssNr_Proxy.cpp" />
     <ClCompile Include="dlssnr\DlssNr_Menu.cpp" />
-    <ClCompile Include="menu\OptiClipAdvisor.cpp" />
     <ClCompile Include="inputs\NVNGX_DLSS_Dx12.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="inputs\NVNGX_DLSS_Vk.cpp" />
@@ -877,9 +1067,228 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\magnifier\precompile\Magnifier_Shader_Vk.spv" />
+    <None Include="..\tests\Run-NrContracts.cmd" />
+    <None Include="..\tests\nr\contracts\CommandEvidence.ps1" />
+    <None Include="..\tests\nr\context\ContextFixtureStore.h" />
+    <None Include="..\tests\nr\context\ctx_analytic_tests.cpp" />
+    <None Include="..\tests\nr\context\ctx_evidence_tests.cpp" />
+    <None Include="..\tests\nr\context\ctx_metadata_tests.cpp" />
+    <None Include="..\tests\nr\context\ctx_context_tests.cpp" />
+    <None Include="..\tests\nr\context\ctx_capability_tests.cpp" />
+    <None Include="..\tests\nr\context\ctx_stack_tests.cpp" />
+    <None Include="..\tests\nr\context\Run-NrContext.ps1" />
+    <None Include="..\tests\nr\representations\RepresentationFixture.h" />
+    <None Include="..\tests\nr\representations\lineage_tests.cpp" />
+    <None Include="..\tests\nr\representations\cache_tests.cpp" />
+    <None Include="..\tests\nr\representations\prepared_tests.cpp" />
+    <None Include="..\tests\nr\representations\planner_tests.cpp" />
+    <None Include="..\tests\nr\representations\Run-NrRepresentations.ps1" />
+    <None Include="..\tests\nr\representations\representation_inventory.json" />
+    <None Include="..\tests\nr\representations\verify_representations.py" />
+    <None Include="..\tests\nr\lifecycle\consumption_tests.cpp" />
+    <None Include="..\tests\nr\feed\nr_feed_observation_tests.cpp" />
+    <None Include="..\tests\nr\feed\nr_feed_shadow_contract.py" />
+    <None Include="..\tests\nr\feed\Run-NrFeed.ps1" />
+    <None Include="..\tests\nr\feed\verify_feed.py" />
+    <None Include="..\tests\nr\feed\feed_inventory.json" />
+    <None Include="..\tests\nr\lifecycle\gpu_lease_tests.cpp" />
+    <None Include="..\tests\nr\lifecycle\guide_lease_tests.cpp" />
+    <None Include="..\tests\nr\lifecycle\provider_lease_tests.cpp" />
+    <None Include="..\tests\nr\lifecycle\Run-NrConsumption.ps1" />
+    <None Include="..\tests\nr\lifecycle\consumption_inventory.json" />
+    <None Include="..\tests\nr\lifecycle\verify_consumption.py" />
+    <None Include="..\tests\nr\context\context_inventory.json" />
+    <None Include="..\tests\nr\context\verify_context.py" />
+    <None Include="..\tests\nr\contracts\ContractLiteralFixtures.h" />
+    <None Include="..\tests\nr\contracts\ContractTestSupport.h" />
+    <None Include="..\tests\nr\contracts\NativeProcessGroup.ps1" />
+    <None Include="..\tests\nr\contracts\Run-NrContracts.ps1" />
+    <None Include="..\tests\nr\contracts\Test-NrContractsInfrastructure.ps1" />
+    <None Include="..\tests\nr\contracts\nr_contract_codec_budgets.cpp" />
+    <None Include="..\tests\nr\contracts\nr_contract_corrections.cpp" />
+    <None Include="..\tests\nr\contracts\nr_contract_evidence.cpp" />
+    <None Include="..\tests\nr\contracts\nr_contract_known_unknown.cpp" />
+    <None Include="..\tests\nr\contracts\nr_contract_roots.cpp" />
+    <None Include="..\tests\nr\contracts\nr_contract_schema_identity.cpp" />
+    <None Include="..\tests\nr\identity\IdentityTestSupport.h" />
+    <None Include="..\tests\nr\identity\Run-NrIdentity.ps1" />
+    <None Include="..\tests\nr\identity\nr_identity_mutations.json" />
+    <None Include="..\tests\nr\identity\nr_identity_t07.cpp" />
+    <None Include="..\tests\nr\identity\nr_identity_t08.cpp" />
+    <None Include="..\tests\nr\identity\nr_identity_t09.cpp" />
+    <None Include="..\tests\nr\identity\nr_identity_final_seal.cpp" />
+    <None Include="..\tests\nr\finalizer\finalizer_fixture.h" />
+    <None Include="..\tests\nr\finalizer\t27_exactly_once.cpp" />
+    <None Include="..\tests\nr\finalizer\t28_no_present_cycle.cpp" />
+    <None Include="..\tests\nr\finalizer\t29_post_submit_failure.cpp" />
+    <None Include="..\tests\nr\finalizer\pre_fg_adapter.cpp" />
+    <None Include="..\tests\nr\finalizer\concurrent_finalization.cpp" />
+    <None Include="..\tests\nr\finalizer\Run-NrFinalizer.ps1" />
+    <None Include="..\tests\nr\finalizer\verify_finalizer.py" />
+    <None Include="..\tests\nr\finalizer\finalizer_inventory.json" />
     <None Include="Source.def" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="nr\orchestration\RoutingTypes.h" />
+    <ClInclude Include="nr\orchestration\RoutingRules.h" />
+    <ClInclude Include="nr\orchestration\RoutingSelector.h" />
+    <ClInclude Include="nr\orchestration\RoutingSerialization.h" />
+    <ClInclude Include="nr\orchestration\RoutingPublication.h" />
+    <ClInclude Include="nr\orchestration\LegacyShadowComparison.h" />
+    <ClCompile Include="nr\orchestration\RoutingCore.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <None Include="..\tests\nr\orchestration\RoutingFixture.h" />
+    <None Include="..\tests\nr\orchestration\routing_tests.cpp" />
+    <None Include="..\tests\nr\orchestration\routing_replay_tests.cpp" />
+    <None Include="..\tests\nr\orchestration\routing_publication_tests.cpp" />
+    <None Include="..\tests\nr\orchestration\Run-NrRouting.ps1" />
+    <None Include="..\tests\nr\orchestration\verify_routing.py" />
+    <None Include="..\tests\nr\orchestration\routing_inventory.json" />
+    <ClInclude Include="nr\protocol\ProfileTypes.h" />
+    <ClInclude Include="nr\protocol\ProfileRegistry.h" />
+    <ClInclude Include="nr\protocol\ProfileQualification.h" />
+    <ClInclude Include="nr\protocol\ProfileCertificate.h" />
+    <ClInclude Include="nr\protocol\RecipeTypes.h" />
+    <ClInclude Include="nr\protocol\BindingPlan.h" />
+    <ClInclude Include="nr\protocol\NrExecutionRecipe.h" />
+    <ClInclude Include="nr\protocol\RecipeSerialization.h" />
+    <ClInclude Include="nr\protocol\RecipePublication.h" />
+    <ClInclude Include="nr\protocol\LegacyNativeProfileAdapter.h" />
+    <ClInclude Include="nr\protocol\LegacySettingsProjection.h" />
+    <ClCompile Include="nr\protocol\ProtocolCore.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="nr\orchestration\StreamCoordinatorKernel.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="nr\lifecycle\NativeSessionLifetime.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="nr\protocol\NativeRouteAdmission.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClInclude Include="nr\orchestration\StreamCoordinatorKernel.h" />
+    <ClInclude Include="nr\orchestration\InitialFixedNativeCoordinator.h" />
+    <ClInclude Include="nr\lifecycle\NativeSessionLifetime.h" />
+    <ClInclude Include="nr\protocol\NativeRouteAdmission.h" />
+    <ClInclude Include="nr\protocol\NativeProfilePreparation.h" />
+    <ClCompile Include="nr\lifecycle\FinalizationCore.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <None Include="..\tests\nr\protocol\profile_registry_tests.cpp" />
+    <None Include="..\tests\nr\protocol\profile_requirements_tests.cpp" />
+    <None Include="..\tests\nr\protocol\recipe_freshness_tests.cpp" />
+    <None Include="..\tests\nr\protocol\transform_lineage_tests.cpp" />
+    <None Include="..\tests\nr\protocol\profile_settings_tests.cpp" />
+    <None Include="..\tests\nr\protocol\Run-NrProtocol.ps1" />
+    <None Include="..\tests\nr\protocol\verify_protocol.py" />
+    <None Include="..\tests\nr\protocol\protocol_inventory.json" />
+  </ItemGroup>
+<ItemGroup>
+<ClInclude Include="nr\diagnostics\capability\CapabilityContract.h" />
+<ClInclude Include="nr\diagnostics\capability\CapabilityInternal.h" />
+<ClInclude Include="nr\diagnostics\capability\CapabilityQuery.h" />
+<ClInclude Include="nr\diagnostics\capability\CapabilityRegistry.h" />
+<ClInclude Include="nr\diagnostics\capability\CapabilityStaging.h" />
+<ClInclude Include="nr\diagnostics\capability\CapabilityStore.h" />
+<ClCompile Include="nr\diagnostics\capability\CapabilityQuery.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClCompile Include="nr\diagnostics\capability\CapabilityStaging.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClCompile Include="nr\diagnostics\capability\CapabilityStore.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+</ItemGroup>
+<ItemGroup>
+<ClCompile Include="nr\diagnostics\capability\CapabilityOwnerAdapters.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityOwnerAdapters.h"></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityStatusCollector.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityStatusCollector.h"></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\ObservationRefresh.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClCompile Include="nr\diagnostics\capability\ObservationRefreshReport.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\ObservationRefresh.h" />
+<ClInclude Include="nr\diagnostics\capability\ObservationRefreshControl.h" />
+<ClInclude Include="nr\diagnostics\capability\ObservationRefreshReport.h" />
+<ClInclude Include="nr\diagnostics\candidate\ManualSession.h" />
+<ClInclude Include="dlssnr\ObservationRefreshButton.h" />
+<ClInclude Include="nr\diagnostics\capability\CapabilityRefresh.h"></ClInclude>
+</ItemGroup>
+<ItemGroup>
+<ClInclude Include="nr\diagnostics\capability\CapabilityNgxObservation.h" />
+<ClCompile Include="nr\diagnostics\capability\CapabilityNgxObservation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+</ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="nr\diagnostics\candidate\Observer.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClInclude Include="nr\diagnostics\candidate\Contract.h" />
+    <ClInclude Include="nr\diagnostics\candidate\Sink.h" />
+    <ClInclude Include="nr\diagnostics\candidate\Reducer.h" />
+    <ClInclude Include="nr\diagnostics\candidate\Observer.h" />
+    <ClInclude Include="nr\diagnostics\candidate\CreateValue.h" />
+  </ItemGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticVulkanOnly)'=='true' Or '$(NeuroticDiagnosticVulkanNoLegacy)'=='true' Or '$(NeuroticDiagnosticVulkanNoAugment)'=='true' Or '$(NeuroticDiagnosticVulkanNoObservers)'=='true' Or '$(NeuroticDiagnosticVulkanCommandOnly)'=='true' Or '$(NeuroticDiagnosticVulkanNoSubmit)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_ONLY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_ONLY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticVulkanNoLegacy)'=='true' Or '$(NeuroticDiagnosticVulkanNoAugment)'=='true' Or '$(NeuroticDiagnosticVulkanNoObservers)'=='true' Or '$(NeuroticDiagnosticVulkanCommandOnly)'=='true' Or '$(NeuroticDiagnosticVulkanNoSubmit)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_LEGACY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_LEGACY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticVulkanNoAugment)'=='true' Or '$(NeuroticDiagnosticVulkanNoObservers)'=='true' Or '$(NeuroticDiagnosticVulkanCommandOnly)'=='true' Or '$(NeuroticDiagnosticVulkanNoSubmit)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_AUGMENT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_AUGMENT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticVulkanNoObservers)'=='true' Or '$(NeuroticDiagnosticVulkanCommandOnly)'=='true' Or '$(NeuroticDiagnosticVulkanNoSubmit)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_OBSERVERS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_OBSERVERS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticVulkanCommandOnly)'=='true' Or '$(NeuroticDiagnosticVulkanNoSubmit)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_COMMAND_ONLY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_COMMAND_ONLY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticVulkanNoSubmit)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_SUBMIT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_VULKAN_NO_SUBMIT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(NeuroticDiagnosticForwardOnly)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>NR_DIAG_FORWARD_ONLY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NR_DIAG_FORWARD_ONLY=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <PropertyGroup>
+    <NativeGuideFlowRoot Condition="'$(NativeGuideFlowRoot)'=='' and '$(Configuration)'=='Debug'">$(MSBuildProjectDirectory)\..\builds\universal-guides\flow-debug</NativeGuideFlowRoot>
+    <NativeGuideFlowRoot Condition="'$(NativeGuideFlowRoot)'==''">$(MSBuildProjectDirectory)\..\builds\universal-guides\flow</NativeGuideFlowRoot>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
+    <Link>
+      <!-- These FFX symbols are isolated from the core's existing FSR SDK. -->
+      <AdditionalDependencies>$(NativeGuideFlowRoot)\neurotic_prepared_flow.lib;$(NativeGuideFlowRoot)\lib\ffx_opticalflow_x64.lib;$(NativeGuideFlowRoot)\lib\ffx_backend_dx12_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Target Name="CheckNativeGuideFlow" BeforeTargets="PrepareForBuild" Condition="'$(Platform)'=='x64'">
+    <Error Condition="!Exists('$(NativeGuideFlowRoot)\neurotic_prepared_flow.lib')" Text="Build the matching isolated native flow libraries with tests\build_native_flow.cmd (pass Debug for a Debug core) before building NeuRotic." />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" Condition="'$(Platform)'=='x64'" />
   </ImportGroup>
+<ItemGroup>
+<ClInclude Include="nr\diagnostics\capability\CapabilityConsumerView.h"></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityExport.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityExport.h"></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityWireSchema.h"></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityWireValidation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityWireValidation.h"></ClInclude>
+</ItemGroup>
 </Project>

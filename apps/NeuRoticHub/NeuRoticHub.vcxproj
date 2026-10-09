@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <ItemGroup Label="ProjectConfigurations"><ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration></ItemGroup>
+ <PropertyGroup Label="Globals"><ProjectGuid>{8C1BD0F0-ACCA-4B80-82FC-4F45EF0DDE5A}</ProjectGuid><WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+ <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><PlatformToolset>v143</PlatformToolset><CharacterSet>Unicode</CharacterSet><UseDebugLibraries>false</UseDebugLibraries></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+ <PropertyGroup><RepoRoot>$(MSBuildThisFileDirectory)..\..\</RepoRoot><OutDir>$(RepoRoot)builds\hub\bin\</OutDir><IntDir>$(RepoRoot)builds\hub\obj\</IntDir><TargetName>NeuRotic</TargetName><NhEnableCapture>false</NhEnableCapture><NhEnableNr>false</NhEnableNr><NhEnableTemporalSr>false</NhEnableTemporalSr><NhEnableFrameGeneration>false</NhEnableFrameGeneration></PropertyGroup>
+ <ItemDefinitionGroup>
+  <ClCompile><LanguageStandard>stdcpp20</LanguageStandard><RuntimeLibrary>MultiThreaded</RuntimeLibrary><Optimization>MaxSpeed</Optimization><WarningLevel>Level4</WarningLevel><AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(RepoRoot)OptiScaler;$(RepoRoot)OptiScaler\include;$(RepoRoot)OptiScaler\include\imgui;$(RepoRoot)external\nlohmann;$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)library;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_USER_CONFIG="HubImConfig.h";%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions></ClCompile>
+  <Link><SubSystem>Windows</SubSystem><AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;comdlg32.lib;shell32.lib;ole32.lib;windowscodecs.lib;shlwapi.lib;dwmapi.lib;advapi32.lib;winhttp.lib;%(AdditionalDependencies)</AdditionalDependencies><GenerateDebugInformation>true</GenerateDebugInformation><AdditionalOptions>/PDBALTPATH:$(TargetName).pdb %(AdditionalOptions)</AdditionalOptions></Link>
+ </ItemDefinitionGroup>
+ <ItemGroup>
+  <ClCompile Include="HubMain.cpp"/>
+<ClCompile Include="languages\LanguageStore.cpp"/><ClCompile Include="languages\LanguageManagerView.cpp"/><ClCompile Include="languages\TranslationEditorModel.cpp"/><ClCompile Include="languages\TranslationEditorWindow.cpp"/><ClCompile Include="languages\TranslationControlPreview.cpp"/>
+<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageFonts.cpp"/><ClCompile Include="library\ManualLibrary.cpp"/><ClCompile Include="ui\SharedUiAdapter.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\HubUiTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\OperationFlowTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\LibraryRootTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\LibraryPolishUiTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\KeybindCaptureTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\NumericSettingsTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\NumericUiTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\LoadingUiTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\ScrollLayoutTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\FocusedUxTests.cpp"/>
+  <ClCompile Include="anything\AnythingController.cpp"/><ClCompile Include="anything\AnythingView.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\ArtworkTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\HiddenLibraryTests.cpp"/><ClCompile Include="$(RepoRoot)tests\hub\GameStatusTests.cpp"/><ClCompile Include="$(RepoRoot)tests\hub\FourthPassTests.cpp"/>
+  <ClCompile Include="$(RepoRoot)tests\hub\FifthPassTests.cpp"/><ClCompile Include="$(RepoRoot)tests\hub\FrontDoorTests.cpp"/><ClCompile Include="$(RepoRoot)tests\hub\DiagnosticBundleTests.cpp"/><ClCompile Include="$(RepoRoot)tests\hub\ProfileCacheTests.cpp"/>
+  <ClCompile Include="ui\GameDiagnostics.cpp"/><ClCompile Include="ui\DiagnosticBundle.cpp"/><ClCompile Include="ui\ProfileCache.cpp"/><ClCompile Include="ui\ThemeTransition.cpp"/><ClCompile Include="ui\UpdateStatus.cpp"/>
+  <ClCompile Include="artwork\ArtworkPolicy.cpp"/><ClCompile Include="artwork\ArtworkService.cpp"/>
+  <ClCompile Include="$(RepoRoot)OptiScaler\menu\Localization.cpp"/>
+<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageRuntime.cpp"></ClCompile>
+<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguagePack.cpp"></ClCompile>
+<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageBundles.cpp"></ClCompile>
+<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageCatalog.cpp"></ClCompile>
+  <ClCompile Include="ui\HubShell.cpp"/><ClCompile Include="ui\HubViewModel.cpp"/><ClCompile Include="install\OperationController.cpp"/>
+  <ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_draw.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_tables.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_widgets.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_impl_win32.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_impl_dx11.cpp"/>
+ </ItemGroup>
+ <ItemGroup><ResourceCompile Include="HubResources.rc"/></ItemGroup>
+ <PropertyGroup><GenerateManifest>false</GenerateManifest></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

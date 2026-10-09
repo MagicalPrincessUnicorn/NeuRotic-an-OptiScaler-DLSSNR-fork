@@ -1,4 +1,8 @@
 #include "pch.h"
+#include "dlssnr/RenderingOutput.h"
+#include "menu/menu_common.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include <inputs/FG/FgOwnerScope.h>
 #include <dlssnr/FrameTrace.h>
 #include "wrapped_swapchain.h"
 
@@ -8,6 +12,12 @@
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_Dx11.h>
 #include <dlssnr/HdrObservation.h>
+#include <dlssnr/NativeD3D11Guides.h>
+#include <dlssnr/connections/ConnectionPolicy.h>
+#include <dlssnr/DlssNr_PresentGuides.h>
+#include <dlssnr/NativeD3D12Guides.h>
+#include <nr/semantic/character/CharacterRuntime.h>
+#include <nr/semantic/character/CharacterQueuePolicy.h>
 
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
@@ -52,56 +62,32 @@ const GUID IID_IUnwrappedDXGISwapChain = {
     0xe8a33b4a, 0x1405, 0x424c, { 0xae, 0x88, 0xd, 0x3e, 0x9d, 0x46, 0xc9, 0x14 }
 };
 
-static ID3D12Fence* resizeFence = nullptr;
-static UINT64 resizeFenceValue = 0;
-static HANDLE resizeFenceEvent = nullptr;
-
-static void WaitForGPUIdle(IUnknown* object)
+static bool WaitForGPUIdle(IUnknown* object)
 {
-    if (State::Instance().currentD3D12Device == nullptr || object == nullptr)
-        return;
-
-    ID3D12CommandQueue* queue = nullptr;
-
-    if (object->QueryInterface(IID_PPV_ARGS(&queue)) == S_OK)
-    {
-        LOG_DEBUG("Command queue obtained for GPU idle wait");
-        queue->Release();
-    }
-
-    if (queue != nullptr && resizeFence != nullptr && resizeFenceEvent != nullptr)
-    {
-        if (State::Instance().currentD3D12Device != nullptr)
-        {
-            if (resizeFence != nullptr)
-            {
-                resizeFence->Release();
-                resizeFence = nullptr;
-            }
-
-            if (resizeFenceEvent != nullptr)
-            {
-                CloseHandle(resizeFenceEvent);
-                resizeFenceEvent = nullptr;
-            }
-
-            State::Instance().currentD3D12Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&resizeFence));
-            resizeFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        }
-
-        LOG_DEBUG("Waiting for GPU to finish before resizing buffers");
-
-        resizeFenceValue++;
-        queue->Signal(resizeFence, resizeFenceValue);
-
-        if (resizeFence->GetCompletedValue() < resizeFenceValue)
-        {
-            resizeFence->SetEventOnCompletion(resizeFenceValue, resizeFenceEvent);
-            // Max 5 sec
-            auto waitResult = WaitForSingleObject(resizeFenceEvent, 5000);
-            LOG_DEBUG("WaitForSingleObject result: {:X}", waitResult);
+    if(!object) return true;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
+    if(FAILED(object->QueryInterface(IID_PPV_ARGS(&queue)))) return true; // D11 has its own owner.
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+    if(FAILED(queue->GetDevice(IID_PPV_ARGS(&device))) ||
+       FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)))) return false;
+    const auto event=CreateEvent(nullptr,FALSE,FALSE,nullptr);
+    if(!event) return false;
+    if(FAILED(queue->Signal(fence.Get(),1))) {CloseHandle(event);return false;}
+    bool ready=false;
+    const auto completed=fence->GetCompletedValue();
+    if(completed!=UINT64_MAX && completed>=1) ready=true;
+    else if(SUCCEEDED(fence->SetEventOnCompletion(1,event))) {
+        ready=WaitForSingleObject(event,5000)==WAIT_OBJECT_0 &&
+              fence->GetCompletedValue()!=UINT64_MAX && fence->GetCompletedValue()>=1;
+        if(!ready) {
+            // Event registration and pending queue work may still complete.
+            (void)fence.Detach(); (void)queue.Detach();
+            return false;
         }
     }
+    CloseHandle(event);
+    return ready;
 }
 
 #ifdef DXGI_DEBUG_ENABLED
@@ -152,8 +138,11 @@ void ReportD3D12LiveObjects(ID3D12Device* device)
 #endif
 
 static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags,
-                            const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP)
+                            const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP,
+                            bool inspectorQueueQualified)
 {
+    DlssNr::FinalFallback::PresentScope nrOutputScope;
+    if ((Flags & DXGI_PRESENT_TEST) == 0) DlssNr::RenderingOutput::Signal(reinterpret_cast<uintptr_t>(hWnd), MenuCommon::IsVisible());
     if (State::Instance().isShuttingDown)
     {
         if (pPresentParameters == nullptr)
@@ -165,6 +154,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     LOG_DEBUG("{}", _frameCounter);
 
     HRESULT presentResult;
+    DlssNr::Connections::PresentArbitrationScope nrArbitrationScope;
     DlssNr::PresentCallIdentity nrPresentIdentity {};
     double presentFrameIntervalMs = 0.0;
     double nrAdapterCpuMs = 0.0;
@@ -244,6 +234,25 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         }
     }
 
+    if (willPresent)
+    {
+        bool qualified = false;
+        if (device) qualified = DlssNr::NativeDx11::QualifiedPresentInputs(pSwapChain);
+        else if (cq)
+        {
+            DXGI_SWAP_CHAIN_DESC desc {};
+            auto identity = DlssNr::PresentGuides::Identity(pSwapChain);
+            if (SUCCEEDED(pSwapChain->GetDesc(&desc)))
+                qualified = DlssNr::PresentGuides::Instance().CurrentQualified(cq, identity.Get(),
+                    desc.BufferDesc.Width, desc.BufferDesc.Height);
+        }
+        DlssNr::Connections::SetNativeUsable(qualified);
+    }
+    const bool nrOwnedBeforeFg = willPresent && DlssNr::PreFg::BypassLate(pSwapChain);
+    if (willPresent && device)
+        DlssNr::NativeD3D11Guides::Present(pSwapChain, device, DlssNr::FinalFallback::InGameAllowed() && Config::Instance()->DlssNrEnabled.value_or_default() && Config::Instance()->DlssNrRoute.value_or_default() != 0 && !nrOwnedBeforeFg);
+    if (willPresent && cq)
+        DlssNr::NativeD3D12Guides::Present(pSwapChain, cq, DlssNr::FinalFallback::InGameAllowed() && Config::Instance()->DlssNrEnabled.value_or_default() && Config::Instance()->DlssNrRoute.value_or_default() != 0 && !nrOwnedBeforeFg);
     auto fg = State::Instance().currentFG;
     if (willPresent && fg != nullptr)
         ReflexHooks::update(fg->IsActive(), false);
@@ -377,7 +386,6 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         // v9.6 owns no Present call. It may enqueue same-queue DX12 work, then this function continues
         // to the one original Present/Present1 invocation with the existing arguments and return path.
         presentHookStartMs = Util::MillisecondsNow();
-        const bool nrOwnedBeforeFg = DlssNr::PreFg::BypassLate(pSwapChain);
         if (!nrOwnedBeforeFg)
             nrPresentIdentity =
                 DlssNr::EvaluatePresentImageOnly(pSwapChain, pDevice, Flags, pPresentParameters);
@@ -389,7 +397,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         DlssNr::CaptureComparisonOutput(pSwapChain, pDevice, Flags);
 
         // Draw overlay
-        MenuOverlayDx::Present(pSwapChain, SyncInterval, Flags, pPresentParameters, pDevice, hWnd, isUWP);
+        MenuOverlayDx::Present(pSwapChain, SyncInterval, Flags, pPresentParameters, pDevice, hWnd, isUWP, inspectorQueueQualified);
 
 #ifdef LOW_LATENCY_INPUTS
         if (State::Instance().activeFgOutput == FGOutput::FSRFG)
@@ -421,6 +429,23 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         State::Instance().frameCount = _frameCounter;
     }
 
+    // NR-DIAG-001 BEGIN: final pre-call values already held by the Presentation owner.
+    const auto m0Publisher = DlssNr::FrameTrace::WithM0Publisher([&]() noexcept {
+        using SourceSnapshot = Neurotic::Diagnostics::M0::SourceSnapshot;
+        using OwnerDomain = Neurotic::Contracts::OwnerDomain;
+        auto source = SourceSnapshot::OwnerPublication(OwnerDomain::Presentation,
+            "Alpha.Swapchain.OriginalPresent", "wrapped_swapchain", 1, "OriginalPresent");
+        source.Add("alpha.presentFlags", static_cast<std::uint64_t>(Flags));
+        source.Add("alpha.syncInterval", static_cast<std::uint64_t>(SyncInterval));
+        source.Add("alpha.present1", pPresentParameters != nullptr);
+        source.Add("alpha.legacyPresentAttempt", nrPresentIdentity.presentAttempt);
+        source.Add("alpha.completedOutput", nrPresentIdentity.completedOutput);
+        source.Add("alpha.activeFgOutput",
+                   static_cast<std::uint64_t>(State::Instance().activeFgOutput));
+        return source;
+    });
+    (void) m0Publisher;
+    // NR-DIAG-001 END
     const auto tracePresent = DlssNr::FrameTrace::Event("original-present-enter",
         "swapchain={:p} flags={} sync={} present1={} attempt={} outputSubmitted={} fgOutput={}",
         static_cast<void*>(pSwapChain), Flags, SyncInterval, pPresentParameters != nullptr,
@@ -507,6 +532,14 @@ WrappedIDXGISwapChain4::~WrappedIDXGISwapChain4() {}
 HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::QueryInterface(REFIID riid, void** ppvObject)
 {
     LOG_TRACE("Caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+
+    if (riid == DlssNr::NativeIdentity::neuroticSwapchainIdentityBase)
+    {
+        if (ppvObject == nullptr) return E_POINTER;
+        // Observation identity only; normal DXGI/Streamline rendering queries
+        // keep the wrapper and all of its presentation/overlay callbacks.
+        return _real->QueryInterface(__uuidof(IUnknown), ppvObject);
+    }
 
     if (riid == __uuidof(IDXGISwapChain))
     {
@@ -610,6 +643,7 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
 
     if (ret == 0)
     {
+        Neurotic::Semantic::Character::CharacterSwapchainReleased(_real, _device);
         DlssNr::NativeDx11::UnregisterSwapchain(_real);
         DlssNr::HdrObservation::Registry::Instance().Unregister(_real);
 #ifdef USE_LOCAL_MUTEX
@@ -621,16 +655,19 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
         if (State::Instance().currentSwapchain == this)
             State::Instance().currentSwapchain = nullptr;
 
-        if (State::Instance().currentRealSwapchain == this)
+        // These aliases borrow the caller/wrapper references; clear them before
+        // this wrapper and its owned real-swapchain reference are retired.
+        if (State::Instance().currentWrappedSwapchain == this)
+            State::Instance().currentWrappedSwapchain = nullptr;
+
+        if (State::Instance().currentRealSwapchain == this || State::Instance().currentRealSwapchain == _real)
             State::Instance().currentRealSwapchain = nullptr;
 
-        auto fg = State::Instance().currentFG;
-        if (fg != nullptr && fg->Mutex.getOwner() != 1 && fg->SwapchainContext() != nullptr)
+        Neurotic::Runtime::FgOwnerTransition ownerTransition;
+        auto fg = ownerTransition ? State::Instance().currentFG : nullptr;
+        if (fg != nullptr && fg->Mutex.getOwner() != 1 && fg->SwapchainContext() != nullptr && fg->OwnsSwapchain(_real))
         {
-            fg->Deactivate();
-            fg->ReleaseSwapchain(_handle);
-
-            if (State::Instance().currentFGSwapchain != nullptr)
+            if (fg->ReleaseSwapchain(_handle))
                 State::Instance().currentFGSwapchain = nullptr;
         }
 
@@ -705,7 +742,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::Present(UINT SyncInterval, UIN
 
     if ((Flags & DXGI_PRESENT_TEST) == 0)
     {
-        result = LocalPresent(_real, SyncInterval, Flags, nullptr, _device, _handle, _uwp);
+        result = LocalPresent(_real, SyncInterval, Flags, nullptr, _device, _handle, _uwp, _inspectorQueueQualified);
 
         // When Reflex can't be used to limit, sleep in present
         if (!State::Instance().reflexLimitsFps && State::Instance().activeFgOutput == FGOutput::NoFG &&
@@ -792,6 +829,12 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
 {
     DlssNr::NativeDx11::ResizeSwapchain(_real);
     DlssNr::HdrObservation::Registry::Instance().BeginResize(_real);
+    if (!Neurotic::Semantic::Character::CharacterBeforeResize(_device))
+    {
+        DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, DXGI_ERROR_WAS_STILL_DRAWING,
+                                                                  DXGI_FORMAT_UNKNOWN);
+        return DXGI_ERROR_WAS_STILL_DRAWING;
+    }
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -840,7 +883,11 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
     LOG_DEBUG("BufferCount: {0}, Width: {1}, Height: {2}, NewFormat: {3}, SwapChainFlags: {4:X}", BufferCount, Width,
               Height, (UINT) NewFormat, SwapChainFlags);
 
-    WaitForGPUIdle(_device);
+    if (!WaitForGPUIdle(_device)) {
+        if (State::Instance().currentFG && Config::Instance()->FGUseMutexForSwapchain.value_or_default())
+            State::Instance().currentFG->Mutex.unlockThis(3);
+        return DXGI_ERROR_WAS_STILL_DRAWING;
+    }
 
     // Release swapchain backbuffers to prevent errors when resizing
     /*
@@ -1083,7 +1130,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::Present1(UINT SyncInterval, UI
 
     if ((Flags & DXGI_PRESENT_TEST) == 0)
     {
-        result = LocalPresent(_real1, SyncInterval, Flags, pPresentParameters, _device, _handle, _uwp);
+        result = LocalPresent(_real1, SyncInterval, Flags, pPresentParameters, _device, _handle, _uwp, _inspectorQueueQualified);
 
         // When Reflex can't be used to limit, sleep in present
         if (!State::Instance().reflexLimitsFps && State::Instance().activeFgOutput == FGOutput::NoFG &&
@@ -1203,6 +1250,12 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
 {
     DlssNr::NativeDx11::ResizeSwapchain(_real);
     DlssNr::HdrObservation::Registry::Instance().BeginResize(_real);
+    if (!Neurotic::Semantic::Character::CharacterBeforeResize(_device))
+    {
+        DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, DXGI_ERROR_WAS_STILL_DRAWING,
+                                                                  DXGI_FORMAT_UNKNOWN);
+        return DXGI_ERROR_WAS_STILL_DRAWING;
+    }
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -1213,13 +1266,6 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
         OwnedLockGuard lock(_localMutex, 2);
     }
 #endif
-
-    if (*ppPresentQueue != nullptr)
-    {
-        auto state = &State::Instance();
-        state->currentCommandQueue = (ID3D12CommandQueue*) *ppPresentQueue;
-        _device = state->currentCommandQueue;
-    }
 
     if (State::Instance().activeFgOutput == FGOutput::FSRFG &&
         Config::Instance()->FGUseMutexForSwapchain.value_or_default())
@@ -1250,8 +1296,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
         LOG_DEBUG("Overriding flags");
         SwapChainFlags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
-        if (BufferCount < 2)
-            BufferCount = 2;
+        BufferCount = Neurotic::Semantic::Character::CharacterResizeBufferCount(BufferCount, pCreationNodeMask || ppPresentQueue);
     }
 
     State::Instance().SCAllowTearing = (SwapChainFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
@@ -1259,7 +1304,11 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
     LOG_DEBUG("BufferCount: {}, Width: {}, Height: {}, NewFormat: {}, SwapChainFlags: {:X}", BufferCount, Width, Height,
               (UINT) Format, SwapChainFlags);
 
-    WaitForGPUIdle(_device);
+    if (!WaitForGPUIdle(_device)) {
+        if (State::Instance().currentFG && Config::Instance()->FGUseMutexForSwapchain.value_or_default())
+            State::Instance().currentFG->Mutex.unlockThis(3);
+        return DXGI_ERROR_WAS_STILL_DRAWING;
+    }
 
     // Release swapchain backbuffers to prevent errors when resizing
     const bool isUsingOptiFgFeature =
@@ -1359,6 +1408,20 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
     DXGI_SWAP_CHAIN_DESC1 observationDesc {};
     const DXGI_FORMAT observationFormat = SUCCEEDED(result) && _real1 != nullptr &&
         SUCCEEDED(_real1->GetDesc1(&observationDesc)) ? observationDesc.Format : DXGI_FORMAT_UNKNOWN;
+    // Failed resize retains its old queue. Heterogeneous per-buffer queues
+    // cannot be ordered by Inspector's single-queue physical-output path.
+    using namespace Neurotic::Semantic::Character;
+    const auto queueUpdate=CharacterQueueUpdate(SUCCEEDED(result),BufferCount?BufferCount:desc.BufferCount,ppPresentQueue);
+    if(queueUpdate!=QueueUpdate::Keep){
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> replacement;
+        const bool queueValid=ppPresentQueue[0]&&
+            SUCCEEDED(ppPresentQueue[0]->QueryInterface(IID_PPV_ARGS(&replacement)))&&
+            replacement->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT;
+        _inspectorQueueQualified=queueUpdate==QueueUpdate::Uniform&&queueValid;
+        // Other inherited overlay users still select the first new queue.
+        // Inspector conservatively refuses the mixed-queue case separately.
+        if(queueValid){_resizedQueue=replacement;_device=_resizedQueue.Get();State::Instance().currentCommandQueue=_resizedQueue.Get();}
+    }
     const auto resizeObservation =
         DlssNr::HdrObservation::Registry::Instance().CompleteResize(_real, result, observationFormat);
     LOG_INFO("DLSS-NR HDR diagnostic: swapchain {:X} ResizeBuffers1 result {:X}, observation {}, generation {}, "

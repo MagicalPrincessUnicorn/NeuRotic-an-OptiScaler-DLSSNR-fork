@@ -1,14 +1,21 @@
 #include "pch.h"
+#include "../nr/diagnostics/capability/CapabilityOwnerAdapters.h"
 #include "FrameTrace.h"
 #include "DredDiagnostics.h"
 #include "DlssNr_Present.h"
+#include "PreparedGuideRoute.h"
 #include "DlssNr_PresentCompatibility.h"
 #include "DlssNr_PresentHistory.h"
+#include "DlssNr_PresentEffects.h"
+#include "DlssNr_Multipass.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
 #include "HdrObservation.h"
 #include "NrExperimentalPolicy.h"
 #include "NativeIdentity.h"
+#include "VulkanPresentStatus.h"
+#include "PresentCopybackRecording.h"
+#include "PresentDx11CopyCompletion.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
 #include <with_dx12/dx11_with_dx12.h>
@@ -58,6 +65,9 @@ struct PresentState
     UINT64 historyGeneration = 0;
     UINT64 resourceGeneration = 0;
     UINT64 resourceRouteKey = 0;
+    UINT64 resourceGuideGeneration = 0, resourceResumeGeneration = 0;
+    ComPtr<IUnknown> resourceSwapchainIdentity; // cookie only; never holds a backbuffer
+
     UINT64 readinessConfiguration = 0;
     std::optional<NrConfigSnapshot<Config>> readinessSettings;
     UINT nativeWidth = 0, nativeHeight = 0;
@@ -89,13 +99,17 @@ struct PresentState
     unsigned int workHeight = 0;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
+    PresentColor::Decision colorDecision;
+    UINT64 colorIdentity = 0;
     UINT64 timestampFrequency = 0;
     UINT64 timingCallSequence = 0;
     PresentPacing::Window<> pacing;
     PresentHistory::Continuity history;
+    PresentHistory::HostReturnGate hostReturn;
     bool presentWasRequested = false;
+    PresentInputDecision::InputClass lastCommittedInputClass = PresentInputDecision::InputClass::Refused;
     unsigned int experimentalFlags = 0;
-    UINT64 resumeGeneration = 0;
+    UINT64 resumeGeneration = 0, inputInterruptionEpoch = 0;
     UINT64 lastHdrObservationSequence = 0;
     bool guidesNeedUpload = true;
     // Set when submitted work can no longer be paired with a trustworthy completion value, or when
@@ -103,9 +117,12 @@ struct PresentState
     // Retrying or releasing resources in either case would turn an untouched-frame fallback into a
     // use-after-submit risk, so only process teardown may reclaim this generation.
     bool completionUntrackable = false;
+    // Independent proof for the D3D11 target write after the bridge's D3D12 work.
+    PresentDx11CopyCompletion dx11OutputCompletion;
 };
 
 PresentState g_present;
+int lastObservedGuideClass = -1; // protected by the existing Present owner lock
 
 void SyncHistoryTelemetry()
 {
@@ -249,20 +266,22 @@ void UavBarrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource)
     list->ResourceBarrier(1, &barrier);
 }
 
-void SetFallback(PresentApi api, const char* reason, bool failed = false, const char* policyGuardrail = nullptr)
+void SetFallback(PresentApi api, const char* reason, bool failed = false, const char* policyGuardrail = nullptr,
+                 bool possibleTargetWrite = false)
 {
     NR_FRAME_TRACE("nr-fallback", "attempt={} api={} failed={} reason={}", g_present.telemetry.presentAttempts,
         static_cast<unsigned int>(api), failed, reason ? reason : "unknown");
     const bool changedReason = g_present.telemetry.fallbackReason != (reason ? reason : "unknown fallback");
-    // A fallback leaves the game image alone, so its successor must never inherit the last model
-    // result.  This covers admission, bridge, conversion, queue, copy-back, and model failures.
+    // A refusal breaks continuity even when copyback was already submitted and the game target
+    // might have changed. Its successor must never inherit an uncertain model result.
     InvalidateHistory(reason);
     g_present.telemetry.requested = true;
     g_present.telemetry.active = false;
+    g_present.telemetry.actualInputClass = PresentInputDecision::InputClass::Refused;
     g_present.telemetry.api = api;
-    g_present.telemetry.requestedPlacement = Config::Instance()->DlssNrRoute.value_or_default() == 2
-        ? "Present Enhanced" : "Present Image-Only";
-    g_present.telemetry.actualPlacement = "Original Present fallback";
+    g_present.telemetry.requestedPlacement = "Present";
+    g_present.telemetry.actualPlacement = std::string(PresentEffects::FallbackPlacement(possibleTargetWrite));
+    g_present.telemetry.possibleTargetWrite = possibleTargetWrite;
     g_present.telemetry.fallbackReason = reason != nullptr ? reason : "unknown fallback";
     g_present.telemetry.failure = failed ? g_present.telemetry.fallbackReason : "";
     g_present.telemetry.failed = failed;
@@ -287,6 +306,7 @@ void SetFallback(PresentApi api, const char* reason, bool failed = false, const 
 
 bool AllComplete()
 {
+    if (!g_present.dx11OutputCompletion.CanYield()) return false;
     if (g_present.fence == nullptr) return true;
     const UINT64 done = g_present.fence->GetCompletedValue();
     if (done == UINT64_MAX) return false;
@@ -295,8 +315,12 @@ bool AllComplete()
     return true;
 }
 
-void ReleaseResources()
+bool ReleaseResources()
 {
+    // A rebuild/partial failure never erases a pending or unprovable final copy.
+    if (!g_present.dx11OutputCompletion.ResetCompleted()) return false;
+    g_present.resourceSwapchainIdentity.Reset();
+    g_present.resourceGuideGeneration = g_present.resourceResumeGeneration = 0;
     g_present.list.Reset();
     g_present.fence.Reset();
     g_present.pacingQueryHeap.Reset();
@@ -332,10 +356,12 @@ void ReleaseResources()
     g_present.timestampFrequency = 0;
     g_present.guidesNeedUpload = true;
     g_present.completionUntrackable = false;
+    return true;
 }
 
 bool CreateTexture(ID3D12Device* device, DXGI_FORMAT format, unsigned int width, unsigned int height,
-                   D3D12_RESOURCE_STATES initialState, ComPtr<ID3D12Resource>& output)
+                   D3D12_RESOURCE_STATES initialState, ComPtr<ID3D12Resource>& output,
+                   D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
 {
     D3D12_HEAP_PROPERTIES heap {};
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -348,7 +374,7 @@ bool CreateTexture(ID3D12Device* device, DXGI_FORMAT format, unsigned int width,
     desc.Format = format;
     desc.SampleDesc.Count = 1;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    desc.Flags = flags;
     return SUCCEEDED(device->CreateCommittedResource(
         &heap, D3D12_HEAP_FLAG_NONE, &desc, initialState, nullptr, __uuidof(ID3D12Resource),
         reinterpret_cast<void**>(output.ReleaseAndGetAddressOf())));
@@ -417,9 +443,9 @@ void RecordUpload(ID3D12GraphicsCommandList* list, ID3D12Device* device,
 
 bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned int width,
                     unsigned int height, unsigned int workWidth, unsigned int workHeight,
-                    DXGI_FORMAT format, DXGI_COLOR_SPACE_TYPE colorSpace)
+                    DXGI_FORMAT format, DXGI_COLOR_SPACE_TYPE colorSpace, const PresentColor::Decision& color)
 {
-    ReleaseResources();
+    if (!ReleaseResources()) return false;
     g_present.device = device;
     g_present.queue = queue;
     g_present.width = width;
@@ -428,9 +454,10 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
     g_present.workHeight = workHeight;
     g_present.format = format;
     g_present.colorSpace = colorSpace;
+    g_present.colorDecision = color;
 
     if (FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(g_present.fence.GetAddressOf()))) ||
-        !CreateTexture(device, DXGI_FORMAT_R8G8B8A8_UNORM, width, height,
+        !CreateTexture(device, color.workingFormat, width, height,
                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, g_present.frame) ||
         !CreateTexture(device, DXGI_FORMAT_R32_FLOAT, workWidth, workHeight,
                        D3D12_RESOURCE_STATE_COPY_DEST, g_present.depth) ||
@@ -443,24 +470,34 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
         return false;
     }
 
-    if (format == DXGI_FORMAT_R10G10B10A2_UNORM)
+    if (format == DXGI_FORMAT_R10G10B10A2_UNORM || format == DXGI_FORMAT_B8G8R8A8_UNORM)
     {
+        const bool bgra = format == DXGI_FORMAT_B8G8R8A8_UNORM;
+        const auto flags = bgra ? D3D12_RESOURCE_FLAG_NONE : D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         if (!CreateTexture(device, format, width, height, D3D12_RESOURCE_STATE_COPY_DEST,
-                           g_present.conversionSource) ||
-            !CreateTexture(device, format, width, height, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                           g_present.conversionOutput))
+                           g_present.conversionSource, flags) ||
+            !CreateTexture(device, format, width, height,
+                           bgra ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                           g_present.conversionOutput, flags))
         {
             ReleaseResources();
             return false;
         }
-        g_present.inputTransfer = std::make_unique<FT_Dx12>("Present R10 to RGBA8", device,
-                                                            DXGI_FORMAT_R8G8B8A8_UNORM);
-        g_present.outputTransfer = std::make_unique<FT_Dx12>("Present RGBA8 to R10", device, format);
+        const bool pq = color.profile == PresentColor::Profile::Hdr10Pq2020;
+        g_present.inputTransfer = std::make_unique<FT_Dx12>(bgra ? "Present BGRA8 to RGBA8" :
+            pq ? "Present PQ2020 to scRGB" : "Present R10 to RGBA8", device,
+            color.workingFormat, bgra ? FT_Dx12::Transfer::Bgra8ToRgba8 :
+            pq ? FT_Dx12::Transfer::Pq2020ToScRgb : FT_Dx12::Transfer::Copy);
+        g_present.outputTransfer = std::make_unique<FT_Dx12>(bgra ? "Present RGBA8 to packed BGRA8" :
+            pq ? "Present scRGB edit to PQ2020" : "Present RGBA8 to R10", device,
+            format, bgra ? FT_Dx12::Transfer::Rgba8ToBgra8 :
+            pq ? FT_Dx12::Transfer::ScRgbToPq2020 : FT_Dx12::Transfer::Copy);
         // These texture pairs remain fixed until the existing generation-drain gate permits
         // recreation. Never rewrite descriptors referenced by an in-flight conversion.
         if (!g_present.inputTransfer->Ready() || !g_present.outputTransfer->Ready() ||
             !g_present.inputTransfer->BindImmutableDescriptors(g_present.conversionSource.Get(), g_present.frame.Get()) ||
-            !g_present.outputTransfer->BindImmutableDescriptors(g_present.frame.Get(), g_present.conversionOutput.Get()))
+            !g_present.outputTransfer->BindImmutableDescriptors(g_present.frame.Get(), g_present.conversionOutput.Get(),
+                pq ? g_present.conversionSource.Get() : nullptr))
         {
             ReleaseResources();
             return false;
@@ -586,13 +623,116 @@ unsigned int PresentWorkDimension(unsigned int fullDimension, unsigned int workl
 
 PresentTelemetrySnapshot PresentTelemetry()
 {
+    return PresentTelemetryForApi(State::Instance().swapchainApi == Vulkan);
+}
+
+PresentTelemetrySnapshot PresentTelemetryForApi(bool vulkan)
+{
+    if (vulkan &&
+        Config::Instance()->DlssNrRoute.value_or_default() != 0)
+    {
+        const auto vk = GetVulkanPresentStatus().Snapshot();
+        const auto runtime = Config::Instance()->GetDlssNrRuntimeSnapshot();
+        PresentTelemetrySnapshot out {};
+        out.api = PresentApi::Vulkan;
+        out.requested = runtime.enabled && vk.requested;
+        out.active = runtime.enabled && vk.active;
+        out.failed = vk.failed;
+        out.possibleTargetWrite = vk.possibleTargetWrite;
+        out.requestedPlacement = "Present";
+        out.actualPlacement = vk.actualInputClass == PresentInputDecision::InputClass::ImageOnly ?
+            "Present Image Only" : vk.actualInputClass == PresentInputDecision::InputClass::Guided ? "Present Guided" : "Refused";
+        out.requestedInputPolicy = vk.requestedPolicy;
+        out.actualInputClass = vk.actualInputClass;
+        out.backbufferWidth = vk.extent.width;
+        out.backbufferHeight = vk.extent.height;
+        out.workWidth = vk.workload.appliedWork.width;
+        out.workHeight = vk.workload.appliedWork.height;
+        out.workload = vk.workload.policy.scale;
+        out.backbufferSampleCount = vk.format != VK_FORMAT_UNDEFINED ? 1 : 0;
+        out.vkBackbufferFormat = vk.format;
+        out.vkColorSpace = vk.colorSpace;
+        out.vkFormatObserved = vk.format != VK_FORMAT_UNDEFINED;
+        out.presentAttempts = vk.attempts;
+        out.modelEvaluations = vk.recorded;
+        out.compositeEvaluations = vk.composed;
+        out.acceptedOutputPresents = (std::min)(vk.completed, vk.originalAccepted);
+        out.modelSubmissions = vk.submitted;
+        out.compositeSubmissions = vk.submitted;
+        out.lastSubmittedFence = vk.submitted;
+        out.lastCompletedFence = vk.completed;
+        out.pendingSlots = static_cast<unsigned int>(std::min<unsigned long long>(
+            vk.submitted - vk.completed, UINT32_MAX));
+        out.vkOriginalPresents = vk.originalAccepted;
+        out.vkUncertain = vk.uncertain;
+        out.consecutiveFallbacks = vk.consecutiveFallbacks;
+        out.fallbackReason = vk.active ? "" : vk.reason;
+        out.failure = vk.failed ? vk.reason : "";
+        out.signalFallbackReason = vk.active ? vk.reason : "";
+        out.policyBlocked = vk.needsRecreate;
+        out.policyGuardrail = vk.needsRecreate ? vk.reason : "";
+        return out;
+    }
     std::lock_guard<std::mutex> lock(g_present.mutex);
     return g_present.telemetry;
+}
+
+Capability::PresentObservation CopyPresentCapabilityObservation(const Capability::WriterPort& port) noexcept
+{
+    if (State::Instance().api == API::Vulkan)
+    {
+        try {
+            const auto t=GetVulkanPresentStatus().Snapshot();
+            Capability::PresentObservation o; o.sequence=Capability::ReserveSample(port).sequence;
+            o.counters={t.recorded,t.composed,0,t.submitted,t.submitted,t.attempts,
+                        t.consecutiveFallbacks,t.submitted-t.completed};
+            o.observedCounters=0xfb; // Vulkan does not collect the skippedFrames total.
+            return o;
+        } catch(...) { return {}; }
+    }
+    std::lock_guard<std::mutex> lock(g_present.mutex);
+    const auto& t=g_present.telemetry;
+    Capability::PresentObservation o; o.sequence=Capability::ReserveSample(port).sequence;
+    o.counters={t.modelEvaluations,t.compositeEvaluations,t.skippedFrames,t.modelSubmissions,
+                t.compositeSubmissions,t.presentAttempts,t.consecutiveFallbacks,t.pendingSlots};
+    return o;
+}
+bool CanYieldPresentOutput(std::string& reason)
+{
+    std::unique_lock lock(g_present.mutex,std::try_to_lock);
+    if(!lock.owns_lock()){reason="Present owner is busy";return false;}
+    if (g_present.completionUntrackable)
+    {
+        reason = "Present copyback completion is quarantined";
+        return false;
+    }
+    if (!g_present.dx11OutputCompletion.CanYield())
+    {
+        reason = "Final D3D11 output copy completion is not independently verified";
+        return false;
+    }
+    if (!AllComplete())
+    {
+        reason = "Present GPU completion is pending or unknown";
+        return false;
+    }
+    if (!GpuSafety::CanYieldOutput())
+    {
+        reason = "NR recording completion or terminal ownership remains unresolved";
+        return false;
+    }
+    reason.clear();
+    return true;
 }
 
 void ReportPresentCallTiming(const PresentCallTimingSample& sample)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
+    if (sample.identity.pacing.call != 0 &&
+        !g_present.hostReturn.Accept(sample.identity.pacing.call))
+        return;
+    if (sample.identity.completedOutput && sample.result == S_OK)
+        ++g_present.telemetry.acceptedOutputPresents;
     g_present.telemetry.frameIntervalMs = sample.frameIntervalMs;
     auto& cadence = g_present.telemetry.cadence;
     ++cadence.sequence;
@@ -664,6 +804,20 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
                                              PreFg::Frame* preFgFrame)
 {
     std::lock_guard<std::mutex> lock(g_present.mutex);
+    Capability::PresentObservationScope capabilityChain(g_present.telemetry);
+    // NR-DIAG-001 BEGIN: values already supplied to the Present owner; no resource discovery.
+    const auto m0Publisher = FrameTrace::WithM0Publisher([&]() noexcept {
+        using SourceSnapshot = Neurotic::Diagnostics::M0::SourceSnapshot;
+        using OwnerDomain = Neurotic::Contracts::OwnerDomain;
+        auto source = SourceSnapshot::OwnerPublication(OwnerDomain::Presentation,
+            "Alpha.Present.EvaluateImageOnly", "DlssNr_Present", 1, "EvaluatePresentImageOnly");
+        source.Add("alpha.presentFlags", static_cast<std::uint64_t>(presentFlags));
+        source.Add("alpha.presentParametersProvided", presentParameters != nullptr);
+        source.Add("alpha.preFgFrameProvided", preFgFrame != nullptr);
+        return source;
+    });
+    (void) m0Publisher;
+    // NR-DIAG-001 END
     const auto tracePresent = FrameTrace::Event("nr-present-enter", "swapchain={:p} presentDevice={:p} flags={}",
         static_cast<void*>(swapChain), static_cast<void*>(presentDevice), presentFlags);
     FrameTrace::Context traceContext(FrameTrace::presentObservation, tracePresent);
@@ -679,7 +833,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return {};
     }
     const auto& settings = *capturedSettings;
-    if (!g_present.readinessSettings || !settings.SameConfiguration(*g_present.readinessSettings))
+    capabilityChain.values.configRevision=settings.ObservationRevision();
+    if (!g_present.readinessSettings || !settings.SamePresentReadinessConfiguration(*g_present.readinessSettings))
     {
         g_present.readinessSettings = settings;
         ++g_present.readinessConfiguration;
@@ -689,12 +844,15 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         preFgFrame->readiness->CheckEpoch(PreFg::State().readinessEpoch.load());
     const auto runtime = settings.GetDlssNrRuntimeSnapshot();
     const auto resolution = PresentResolution::Selected(settings);
-    const bool enhanced = settings.DlssNrRoute.value_or_default() == 2;
-    const bool observeNative = enhanced || (settings.DlssNrRoute.value_or_default() == 1 &&
-        resolution.mode == PresentResolution::FollowNative);
+    const auto inputPolicy = PresentInput::Selected(settings);
+    const bool wantsGuides = inputPolicy == PresentInput::Policy::RequireGuides ||
+        inputPolicy == PresentInput::Policy::AutoGuides;
+    const bool observeNative = wantsGuides || resolution.mode == PresentResolution::FollowNative;
     const auto routeKey = PresentResolution::CaptureKey(settings);
+    const bool preparedRoute = PreparedGuides::OwnsPresentOutput();
     PresentGuides::Instance().Enable(runtime.enabled && observeNative, routeKey);
-    const auto guideSelection = PresentGuides::Instance().BeginPresent();
+    const auto guideSelection = PresentGuides::Instance().BeginPresent(preFgFrame ? preFgFrame->key : 0,
+        preFgFrame ? preFgFrame->providerGeneration : PreFg::Provider().generation);
     NR_FRAME_TRACE("guide-selection",
         "epoch={} generation={} count={} producer={:p} identity={:p} backbuffer={} width={} height={} route={}",
         guideSelection.epoch, guideSelection.generation, guideSelection.count,
@@ -708,15 +866,19 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     const bool enabled = runtime.enabled;
     const unsigned int route = std::min(settings.DlssNrRoute.value_or_default(), 2u);
-    const bool presentRequested = enabled && route != 0;
+    const bool presentRequested = enabled && route != 0 && !preparedRoute;
     g_present.telemetry.requested = presentRequested;
     g_present.telemetry.active = false;
     g_present.telemetry.policyBlocked = false;
     g_present.telemetry.policyGuardrail.clear();
     g_present.telemetry.compatibilityPath.clear();
     g_present.telemetry.workWidth = g_present.telemetry.workHeight = 0;
-    g_present.telemetry.requestedPlacement = route == 2 ? "Present Enhanced" :
-        route == 1 ? "Present Image-Only" : "Native Temporal";
+    g_present.telemetry.requestedPlacement = preparedRoute ? "Prepared guides" : route != 0 ? "Present" : "Native Temporal";
+    g_present.telemetry.requestedInputPolicy = inputPolicy;
+    g_present.telemetry.actualInputClass = PresentInputDecision::InputClass::Refused;
+    g_present.telemetry.signalFallbackReason.clear();
+    g_present.telemetry.workloadFallback = false;
+    g_present.telemetry.possibleTargetWrite = false;
     if (presentRequested)
         ++g_present.telemetry.presentAttempts;
     RefreshCompletionTelemetry();
@@ -725,7 +887,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     identity.advisorConfigurationGeneration = advisorEpoch;
     identity.presentAttempt = presentRequested ? g_present.telemetry.presentAttempts : 0;
     const auto pacingRoute = !presentRequested ? PresentPacing::Route::NativeTemporal :
-        enhanced ? PresentPacing::Route::PresentEnhanced : PresentPacing::Route::PresentImageOnly;
+        wantsGuides ? PresentPacing::Route::PresentEnhanced : PresentPacing::Route::PresentImageOnly;
     EmitPacingSummary(g_present.pacing.beginCall(pacingRoute, ++g_present.timingCallSequence,
                                                  identity.pacing));
     g_present.pacing.observePending(identity.pacing, g_present.telemetry.pendingSlots);
@@ -735,7 +897,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         if (g_present.presentWasRequested)
             InvalidateHistory("Present route or enable state changed");
         g_present.presentWasRequested = false;
-        g_present.telemetry.actualPlacement = "Native Temporal";
+        g_present.telemetry.actualPlacement = preparedRoute ? "Prepared guides (addon owned)" : "Native Temporal";
         g_present.telemetry.fallbackReason.clear();
         g_present.telemetry.failure.clear();
         g_present.telemetry.failed = false;
@@ -744,10 +906,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
 
     if (!g_present.presentWasRequested)
         InvalidateHistory("Present route or enable state changed");
-    else if (runtime.resumeGeneration != g_present.resumeGeneration)
+    else if (runtime.resumeGeneration != g_present.resumeGeneration ||
+             FinalFallback::CurrentInputEpoch() != g_present.inputInterruptionEpoch)
         InvalidateHistory("NR resume generation changed");
     g_present.presentWasRequested = true;
     g_present.resumeGeneration = runtime.resumeGeneration;
+    g_present.inputInterruptionEpoch = FinalFallback::CurrentInputEpoch();
 
     if (preFgFrame && !preFgFrame->valid)
     {
@@ -767,11 +931,6 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
                 frame->readiness->Reset();
         }
     } readinessAttempt {preFgFrame, identity};
-    if (preFgFrame && settings.DlssNrMultipassEnabled.value_or_default())
-    {
-        SetFallback(PresentApi::D3D12, "Pre-FG adapter supports native Streamline 2x with NR Multipass off");
-        return identity;
-    }
     if (BasicMultipass::Active(settings) && BasicMultipass::Count(settings.DlssNrBasicMultipass.value_or_default()) == 0)
     {
         InvalidateHistory("Basic Multipass totals are zero");
@@ -782,32 +941,16 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const auto experimental = ExperimentalPolicy::Capture(settings);
     const bool frameGeneration = config->FGEnabled.value_or_default() ||
         State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive;
-    if (enhanced && settings.DlssNrMultipassEnabled.value_or_default() &&
-        !experimental.Allows(ExperimentalPolicy::Guardrail::Multipass))
-    {
-        SetFallback(PresentApi::Unknown,
-            "Present Enhanced with NR Multipass is guarded; enable the saved Multipass experimental override",
-            false, "Multipass");
-        return identity;
-    }
-    if (enhanced && frameGeneration && !experimental.Allows(ExperimentalPolicy::Guardrail::FrameGeneration))
-    {
-        SetFallback(PresentApi::Unknown,
-            "Present Enhanced with Frame Generation is guarded; enable the saved FG experimental override",
-            false, "Frame Generation");
-        return identity;
-    }
-
-    // Experimental combinations are attempted. Actual guide/resource admission below still applies.
-    const unsigned int experimentalFlags = enhanced ?
+    // Combination changes invalidate history; guide/resource admission below still applies.
+    const unsigned int experimentalFlags = wantsGuides ?
         (settings.DlssNrMultipassEnabled.value_or_default() ? 1u : 0u) |
         (frameGeneration ? 2u : 0u) |
         (Telemetry().nativeRayReconstructionActive ? 4u : 0u) : 0u;
     if (experimentalFlags != g_present.experimentalFlags)
     {
-        InvalidateHistory("Experimental compatibility settings changed");
+        InvalidateHistory("Present compatibility settings changed");
         g_present.experimentalFlags = experimentalFlags;
-        LOG_INFO("DLSS-NR Present Enhanced: Experimental combination changed: Multipass={} FG={} RR={}. "
+        LOG_INFO("DLSS-NR Present Enhanced: compatibility combination changed: Multipass={} FG={} RR={}. "
                  "Processing is allowed; fresh guide matching and resource checks still apply. "
                  "Runtime validation remains pending for future releases.",
                  (experimentalFlags & 1u) != 0, (experimentalFlags & 2u) != 0, (experimentalFlags & 4u) != 0);
@@ -845,13 +988,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::Unknown, "IDXGISwapChain3 or swapchain description unavailable");
         return identity;
     }
-    // DXGI exposes SetColorSpace1 but no getter. Use the successful per-swapchain observation when
-    // this chain is wrapped. Preserve the parent's legacy inference only for unobserved bypass paths.
+    // DXGI exposes SetColorSpace1 but no getter. Resolve the same swapchain identity
+    // as the observation producer. Missing observations stay unknown, including in telemetry.
     const auto hdrObservation = HdrObservation::Registry::Instance().Read(swapChain);
-    colorSpace = hdrObservation.registered
-        ? hdrObservation.colorSpace
-        : (State::Instance().isHdrActive ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
-                                         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
+    capabilityChain.values.chainIdentity=hdrObservation.identityGeneration;
+    capabilityChain.values.hdrIdentity=hdrObservation.identityGeneration;
+    colorSpace = hdrObservation.colorSpace;
     g_present.telemetry.backbufferWidth = swapDesc.Width;
     g_present.telemetry.backbufferHeight = swapDesc.Height;
     g_present.telemetry.backbufferFormat = swapDesc.Format;
@@ -860,6 +1002,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     g_present.telemetry.colorSpace = colorSpace;
     g_present.telemetry.colorSpaceObserved = hdrObservation.colorSpaceObserved;
     g_present.telemetry.hdrDescriptorTransitioning = hdrObservation.transitioning;
+    g_present.telemetry.hdrDescriptorRegistered = hdrObservation.registered;
+    g_present.telemetry.hdrDescriptorFormat = hdrObservation.format;
     g_present.telemetry.hdrObservationSequence = hdrObservation.observationSequence;
     g_present.telemetry.hdrDescriptorGeneration = hdrObservation.generation;
     g_present.telemetry.hdrResizeGeneration = hdrObservation.resizeGeneration;
@@ -879,7 +1023,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
                  hdrObservation.generation, hdrObservation.resizeGeneration,
                  (UINT) hdrObservation.format, (UINT) swapDesc.Format, (UINT) colorSpace,
                  HdrObservation::ColorClassName(HdrObservation::Classify(colorSpace)),
-                 hdrObservation.colorSpaceObserved ? "successful SetColorSpace1" : "DXGI SDR default",
+                 hdrObservation.colorSpaceObserved ? "successful SetColorSpace1" : "DXGI format default",
                  hdrObservation.transitioning, (UINT) hdrObservation.colorSpaceResult,
                  (UINT) hdrObservation.metadataType, hdrObservation.metadataSize,
                  (UINT) hdrObservation.metadataResult, hdrObservation.metadataHash);
@@ -889,27 +1033,25 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(PresentApi::Unknown, "swapchain HDR descriptor is transitioning after resize");
         return identity;
     }
-    if (swapDesc.SampleDesc.Count != 1 ||
-        (swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_DISCARD &&
-         swapDesc.SwapEffect != DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL))
+    const bool flipModel = swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_DISCARD ||
+                           swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    const bool blitModel = swapDesc.SwapEffect == DXGI_SWAP_EFFECT_DISCARD ||
+                           swapDesc.SwapEffect == DXGI_SWAP_EFFECT_SEQUENTIAL;
+    if (swapDesc.SampleDesc.Count != 1 || (!flipModel && !blitModel))
     {
         SetFallback(PresentApi::Unknown, "target is not single-sample flip-model");
         return identity;
     }
-    const bool hdrConversionAllowed = colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 &&
-        swapDesc.Format == DXGI_FORMAT_R10G10B10A2_UNORM &&
-        experimental.Allows(ExperimentalPolicy::Guardrail::Hdr);
-    if (colorSpace != DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 && !hdrConversionAllowed)
+    const auto colorDecision = PresentColor::Select(hdrObservation, swapDesc.Format);
+    if (!colorDecision.Supported())
     {
-        SetFallback(PresentApi::Unknown,
-            colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
-                ? "HDR Present NR is guarded or lacks the supported 10-bit conversion path"
-                : "non-SDR color space is unsupported",
-            false, colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "HDR" : nullptr);
+        SetFallback(PresentApi::Unknown, colorDecision.reason);
         return identity;
     }
 
-    const UINT bufferIndex = swapChain3->GetCurrentBackBufferIndex();
+    // Blit swap chains expose buffer zero as the writable presentation target.
+    // Their other buffers must never be selected for copyback.
+    const UINT bufferIndex = flipModel ? swapChain3->GetCurrentBackBufferIndex() : 0;
     ComPtr<ID3D12CommandQueue> queue;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12Resource> backbuffer12;
@@ -953,7 +1095,27 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             SetFallback(api, "Present target and NR queue use different devices");
             return identity;
         }
-        device = devices.left.object;
+        // Ownership equality does not authorize replacing ReShade's execution
+        // interface. Retain the pre-existing Streamline-only rendering path.
+        const auto executionDevice = NativeIdentity::Resolve<ID3D12Device>(device.Get());
+        if (FAILED(executionDevice.result) || !executionDevice.object)
+        {
+            SetFallback(api, "Present rendering device could not be resolved");
+            return identity;
+        }
+        device = executionDevice.object;
+        if (devices.left.reshadeLayers || devices.right.reshadeLayers)
+        {
+            static unsigned int contractLogs = 0; // Present owner lock is held.
+            if (contractLogs < 4)
+            {
+                ++contractLogs;
+                LOG_INFO("NR Present device contract: execution={:p} owner={:p} ReShadeLayers={}; "
+                         "retaining rendering interface for resource and command-list creation",
+                         static_cast<void*>(device.Get()), static_cast<void*>(devices.left.object.Get()),
+                         devices.left.reshadeLayers);
+            }
+        }
         backDesc = backbuffer12->GetDesc();
         NR_FRAME_TRACE("nr-backbuffer", "swapchain={:p} index={} resource={:p} device={:p} queue={:p} "
             "width={} height={} format={}", static_cast<void*>(swapChain), bufferIndex,
@@ -1024,13 +1186,15 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
                        rgba8Texture, rgba8ShaderLoad, rgba8TypedStore);
     FormatCapabilities(device.Get(), backDesc.Format,
                        targetTexture, targetShaderLoad, targetTypedStore);
+    bool fp16Texture = false, fp16Load = false, fp16Store = false;
+    FormatCapabilities(device.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, fp16Texture, fp16Load, fp16Store);
     const PresentCompatibility::Capabilities capabilities {
         compatibilityApi,
         queue != nullptr && queue->GetDesc().Type == D3D12_COMMAND_LIST_TYPE_DIRECT,
         backDesc.SampleDesc.Count == 1,
         swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_DISCARD ||
             swapDesc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
-        colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 || hdrConversionAllowed,
+        colorDecision.Supported() && backDesc.Format == swapDesc.Format,
         backDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         backDesc.Width != 0 && backDesc.Height != 0,
         true,
@@ -1042,7 +1206,11 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         targetTexture && targetTypedStore,
         api == PresentApi::D3D12 || (device11 != nullptr && context11 != nullptr),
         api == PresentApi::D3D12 || (Dx11WithDx12::GetD3D12Device() == device.Get() &&
-                                     Dx11WithDx12::GetD3D12CommandQueue() == queue.Get())
+                                     Dx11WithDx12::GetD3D12CommandQueue() == queue.Get()),
+        backDesc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT, colorDecision.hdr,
+        fp16Texture && fp16Load, fp16Texture && fp16Store,
+        backDesc.Format == DXGI_FORMAT_B8G8R8A8_UNORM,
+        blitModel
     };
     const auto admission = PresentCompatibility::Admit(capabilities);
     if (!admission.supported)
@@ -1050,28 +1218,25 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, admission.reason);
         return identity;
     }
-    g_present.telemetry.compatibilityPath = api == PresentApi::D3D11
-        ? (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
-            ? (hdrConversionAllowed ? "D3D11 shared R10 HDR experimental conversion" : "D3D11 shared R10 SDR conversion")
-            : "D3D11 shared RGBA8 direct")
-        : (admission.path == PresentCompatibility::PixelPath::Rgb10Conversion
-            ? (hdrConversionAllowed ? "D3D12 R10 HDR experimental conversion" : "D3D12 R10 SDR conversion")
-            : "D3D12 RGBA8 direct");
+    g_present.telemetry.compatibilityPath = std::string(api == PresentApi::D3D11 ? "D3D11 shared " : "D3D12 ") + colorDecision.reason;
 
     const unsigned int width = static_cast<unsigned int>(backDesc.Width);
     const unsigned int height = backDesc.Height;
+    const auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
+    bool metadataQualified = false;
+    std::string guideRefusal;
     if (observeNative)
     {
         auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
-        if (!PresentGuides::Instance().MatchMetadata(guideSelection,
+        metadataQualified = PresentGuides::Instance().MatchMetadata(guideSelection,
                 queue.Get(), swapchainIdentity.Get(), bufferIndex, width, height,
-                preFgFrame ? preFgFrame->key : 0))
+                preFgFrame ? preFgFrame->key : 0);
+        if (!metadataQualified)
         {
             const auto status = PresentGuides::Instance().Inspect();
-            SetFallback(api, status.status.c_str());
-            return identity;
+            guideRefusal = status.status;
         }
-        if (!preFgFrame && guideSelection.backbuffer != bufferIndex)
+        else if (!preFgFrame && guideSelection.backbuffer != bufferIndex)
         {
             static UINT64 acceptedRotations = 0;
             const auto accepted = ++acceptedRotations;
@@ -1083,25 +1248,79 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
                          "using unique Present-interval association ({} so far)",
                          guideSelection.backbuffer, bufferIndex, accepted);
         }
-        if (g_present.nativeWidth != guideSelection.frame.RenderSubrectWidth ||
+        if (metadataQualified && (g_present.nativeWidth != guideSelection.frame.RenderSubrectWidth ||
             g_present.nativeHeight != guideSelection.frame.RenderSubrectHeight)
+           )
             InvalidateHistory("Native render subrect changed");
         const auto& next = guideSelection.frame;
         const auto& old = g_present.nativeFrame;
-        if (enhanced && (next.DepthSubrectX != old.DepthSubrectX || next.DepthSubrectY != old.DepthSubrectY ||
+        if (metadataQualified && wantsGuides && (next.DepthSubrectX != old.DepthSubrectX || next.DepthSubrectY != old.DepthSubrectY ||
             next.MotionSubrectX != old.MotionSubrectX || next.MotionSubrectY != old.MotionSubrectY ||
             next.DepthSubrectWidth != old.DepthSubrectWidth || next.DepthSubrectHeight != old.DepthSubrectHeight ||
             next.MotionSubrectWidth != old.MotionSubrectWidth || next.MotionSubrectHeight != old.MotionSubrectHeight ||
             next.DepthInverted != old.DepthInverted || next.MvScaleX != old.MvScaleX || next.MvScaleY != old.MvScaleY))
             InvalidateHistory("Native guide convention or subrect origin changed");
-        if (enhanced && next.Reset) InvalidateHistory("Native reset requested");
-        g_present.nativeFrame = next;
-        g_present.nativeWidth = guideSelection.frame.RenderSubrectWidth;
-        g_present.nativeHeight = guideSelection.frame.RenderSubrectHeight;
+        if (metadataQualified && wantsGuides && next.Reset) InvalidateHistory("Native reset requested");
+        if (metadataQualified)
+        {
+            g_present.nativeFrame = next;
+            g_present.nativeWidth = next.RenderSubrectWidth;
+            g_present.nativeHeight = next.RenderSubrectHeight;
+        }
     }
-    const auto size = PresentResolution::Resolve(resolution, width, height,
-        observeNative ? guideSelection.frame.RenderSubrectWidth : 0,
-        observeNative ? guideSelection.frame.RenderSubrectHeight : 0);
+    const auto decision = PresentInputDecision::Choose(inputPolicy, metadataQualified,
+        metadataQualified && guideSelection.frame.RenderSubrectWidth != 0 &&
+            guideSelection.frame.RenderSubrectHeight != 0, resolution);
+    if (decision.input == PresentInputDecision::InputClass::Refused)
+    {
+        SetFallback(api, guideRefusal.empty() ? decision.reason : guideRefusal.c_str());
+        return identity;
+    }
+    const bool guided = decision.input == PresentInputDecision::InputClass::Guided;
+    identity.inputClass = decision.input;
+    identity.workloadFallback = decision.workloadFallback;
+    g_present.telemetry.actualInputClass = decision.input;
+    g_present.telemetry.workloadFallback = decision.workloadFallback;
+    g_present.telemetry.signalFallbackReason = !guideRefusal.empty() ? guideRefusal :
+        decision.reason ? decision.reason : "";
+    if (observeNative && lastObservedGuideClass != static_cast<int>(decision.input))
+    {
+        lastObservedGuideClass = static_cast<int>(decision.input);
+        LOG_INFO("NR Present guide transition: input={} requestedFrame={} capturedFrame={} captures={} "
+                 "slot={} captureError={} reason={}", guided ? "native" : "image-only",
+                 preFgFrame ? preFgFrame->key : 0, guideSelection.providerFrame,
+                 guideSelection.count, guideSelection.slot, guideSelection.captureError,
+                 g_present.telemetry.signalFallbackReason);
+    }
+    if (PresentInputDecision::ChangesHistory(g_present.lastCommittedInputClass, decision.input))
+        InvalidateHistory("Present input class changed");
+    const bool sameResourceContext = g_present.frame && swapchainIdentity &&
+        g_present.resourceSwapchainIdentity.Get() == swapchainIdentity.Get() &&
+        NativeIdentity::CompareDevices(g_present.device.Get(), device.Get()).equal &&
+        g_present.queue.Get() == queue.Get() && g_present.width == width && g_present.height == height &&
+        g_present.format == backDesc.Format && g_present.colorSpace == colorSpace &&
+        g_present.colorIdentity == hdrObservation.identityGeneration &&
+        g_present.resourceRouteKey == routeKey &&
+        g_present.resourceGuideGeneration == guideSelection.generation &&
+        g_present.resourceResumeGeneration == runtime.resumeGeneration;
+    const auto workload = PresentInputDecision::ResolveWorkload(decision, width, height,
+        metadataQualified ? guideSelection.frame.RenderSubrectWidth : 0,
+        metadataQualified ? guideSelection.frame.RenderSubrectHeight : 0,
+        sameResourceContext ? PresentResolution::Size{g_present.workWidth, g_present.workHeight}
+                            : PresentResolution::Size{});
+    const auto size = workload.size;
+    if (workload.retained)
+    {
+        g_present.telemetry.signalFallbackReason = "Native metadata unavailable; image-only at retained workload";
+        if (!guideRefusal.empty()) g_present.telemetry.signalFallbackReason += ": " + guideRefusal;
+        static unsigned int retainedLogs = 0; // Present owner lock is held.
+        if (retainedLogs < 4)
+        {
+            ++retainedLogs;
+            LOG_INFO("NR Present workload fallback: retained {}x{}; input=image-only; reason={}",
+                     size.width, size.height, guideRefusal);
+        }
+    }
     const unsigned int workWidth = size.width, workHeight = size.height;
     g_present.telemetry.backbufferWidth = width;
     g_present.telemetry.backbufferHeight = height;
@@ -1120,7 +1339,10 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         g_present.queue.Get() != queue.Get() || g_present.width != width || g_present.height != height ||
         g_present.workWidth != workWidth || g_present.workHeight != workHeight ||
         g_present.format != backDesc.Format || g_present.colorSpace != colorSpace ||
-        g_present.resourceRouteKey != routeKey;
+        g_present.colorIdentity != hdrObservation.identityGeneration ||
+        g_present.colorDecision.recipe != colorDecision.recipe || g_present.colorDecision.profile != colorDecision.profile ||
+        g_present.resourceRouteKey != routeKey ||
+        g_present.resourceSwapchainIdentity.Get() != swapchainIdentity.Get();
     if (signatureChanged)
     {
         if (preFgFrame && preFgFrame->readiness) preFgFrame->readiness->Reset();
@@ -1131,19 +1353,29 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             return identity;
         }
         if (!BuildResources(device.Get(), queue.Get(), width, height, workWidth, workHeight,
-                            backDesc.Format, colorSpace))
+                            backDesc.Format, colorSpace, colorDecision))
         {
             SetFallback(api, "private Present resources could not be created", true);
             return identity;
         }
+        g_present.colorIdentity = hdrObservation.identityGeneration;
+        LOG_INFO("NR Present color: profile={} recipe={} carrier={} reference={} scRGB units; scene exposure disabled",
+            (unsigned) colorDecision.profile, colorDecision.recipe, (unsigned) colorDecision.workingFormat, colorDecision.whitePoint);
         g_present.resourceRouteKey = routeKey;
         ++g_present.resourceGeneration;
         g_present.telemetry.resourceGeneration = g_present.resourceGeneration;
     }
 
-    if (!DirectD3D12Available(device.Get()))
+    // Stamp only an admitted allocation. A source reset/off-on/resize/configuration
+    // change cannot inherit the reduced workload from a previous context.
+    g_present.resourceSwapchainIdentity = swapchainIdentity;
+    g_present.resourceGuideGeneration = guideSelection.generation;
+    g_present.resourceResumeGeneration = runtime.resumeGeneration;
+
+    const char* modelUnavailable = nullptr;
+    if (!DirectD3D12Available(device.Get(), &modelUnavailable))
     {
-        SetFallback(api, "direct Feature 18 entry-point/capability probe failed", true);
+        SetFallback(api, modelUnavailable && modelUnavailable[0] ? modelUnavailable : "NR model capability check failed", true);
         return identity;
     }
 
@@ -1164,6 +1396,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         const auto model = Telemetry();
         key.model = model.featureBuilds;
         key.modelLifecycle = model.lifecycleGeneration;
+        key.additionalModels = model.layer2FeatureBuilds;
+        key.additionalRetirements = model.layer2FeatureRetires;
+        key.requestedPasses = Multipass::RequestedCount(settings);
         if (!model.lifecycleOpen || !model.modelLoaded) preFgFrame->readiness->Reset();
         key.invalidation = PreFg::State().readinessEpoch.load();
         key.route = route; key.width = width; key.height = height;
@@ -1171,6 +1406,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         key.quality = backDesc.SampleDesc.Quality;
         key.workWidth = workWidth; key.workHeight = workHeight; key.colorSpace = colorSpace;
         key.hdrIdentity = hdrObservation.identityGeneration;
+        key.colorRecipe = colorDecision.recipe; key.colorProfile = (unsigned) colorDecision.profile;
         if (!key.swapchain || !key.device || device->GetDeviceRemovedReason() != S_OK)
         {
             SetFallback(api, "swapchain or Present device unavailable", true);
@@ -1241,9 +1477,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     PresentGuides::Inputs nativeGuides;
-    if (enhanced)
+    if (guided)
     {
-        auto swapchainIdentity = PresentGuides::Identity(swapChain3.Get());
         if (!PresentGuides::Instance().Bind(guideSelection,
             g_present.list.Get(), queue.Get(), swapchainIdentity.Get(), bufferIndex,
             static_cast<UINT>(backDesc.Width), backDesc.Height, nativeGuides,
@@ -1281,7 +1516,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     Transition(g_present.list.Get(), presentInput, presentRestingState,
                D3D12_RESOURCE_STATE_COPY_SOURCE);
     bool inputPrepared = true;
-    if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
+    const bool converting = admission.path == PresentCompatibility::PixelPath::Rgb10Conversion ||
+                            admission.path == PresentCompatibility::PixelPath::Bgra8Conversion;
+    if (!converting)
     {
         Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                    D3D12_RESOURCE_STATE_COPY_DEST);
@@ -1306,14 +1543,16 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (!inputPrepared)
     {
         g_present.list->Close();
-        SetFallback(api, "10-bit input conversion could not be recorded", true);
+        SetFallback(api, "Present input conversion could not be recorded", true);
         return identity;
     }
 
+    const auto modelColor = colorDecision.Model();
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
-        g_present.frame.Get(), enhanced ? nativeGuides.depth.Get() : g_present.depth.Get(),
-        enhanced ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
-        g_present.history.ResetForNextEvaluation(), enhanced ? &nativeGuides.frame : nullptr, &settings);
+        g_present.frame.Get(), guided ? nativeGuides.depth.Get() : g_present.depth.Get(),
+        guided ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
+        g_present.history.ResetForNextEvaluation(), guided ? &nativeGuides.frame : nullptr, &settings, &modelColor,
+        preFgFrame != nullptr);
     if (FAILED(g_present.list->Close()))
     {
         g_present.completionUntrackable = true;
@@ -1323,11 +1562,12 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     ID3D12CommandList* modelLists[] = { g_present.list.Get() };
     slot.firstSubmissionMs = Util::MillisecondsNow();
     queue->ExecuteCommandLists(1, modelLists);
+    identity.modelSubmitted = true;
     const bool modelRecordingSealed = GpuSafety::SealOwnedRecording(g_present.list.Get());
     NR_FRAME_TRACE("nr-model-submitted",
         "attempt={} list={:p} queue={:p} output={:p} width={} height={} enhanced={} modelRecorded={}",
         identity.presentAttempt, static_cast<void*>(g_present.list.Get()), static_cast<void*>(queue.Get()),
-        static_cast<void*>(presentOutput), workWidth, workHeight, enhanced, modelSucceeded);
+        static_cast<void*>(presentOutput), workWidth, workHeight, guided, modelSucceeded);
     ++g_present.telemetry.modelSubmissions;
     if (uploadingGuides)
         g_present.guidesNeedUpload = false;
@@ -1359,16 +1599,20 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         // new probe, even if the old generation was ready at entry.
         const auto model = Telemetry();
         if (model.featureBuilds != preFgFrame->readinessIdentity.model ||
-            model.lifecycleGeneration != preFgFrame->readinessIdentity.modelLifecycle)
+            model.lifecycleGeneration != preFgFrame->readinessIdentity.modelLifecycle ||
+            model.layer2FeatureBuilds != preFgFrame->readinessIdentity.additionalModels ||
+            model.layer2FeatureRetires != preFgFrame->readinessIdentity.additionalRetirements)
         {
             preFgFrame->readiness->Reset();
             preFgFrame->allowOutput = false;
             preFgFrame->readinessIdentity.model = model.featureBuilds;
             preFgFrame->readinessIdentity.modelLifecycle = model.lifecycleGeneration;
+            preFgFrame->readinessIdentity.additionalModels = model.layer2FeatureBuilds;
+            preFgFrame->readinessIdentity.additionalRetirements = model.layer2FeatureRetires;
         }
         const auto current = TryNrConfigSnapshot(*config);
         const auto currentHdr = HdrObservation::Registry::Instance().Read(swapChain);
-        if (!current || !settings.SameConfiguration(*current) || !model.lifecycleOpen || !model.modelLoaded ||
+        if (!current || !settings.SamePresentReadinessConfiguration(*current) || !model.lifecycleOpen || !model.modelLoaded ||
             currentHdr.transitioning || currentHdr.identityGeneration != preFgFrame->readinessIdentity.hdrIdentity ||
             preFgFrame->readinessIdentity.invalidation != PreFg::State().readinessEpoch.load() ||
             device->GetDeviceRemovedReason() != S_OK)
@@ -1403,7 +1647,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "Waiting for the selected route. Image unchanged.");
         return identity;
     }
-    if (enhanced) PresentGuides::Instance().Evaluated();
+    if (guided) PresentGuides::Instance().Evaluated();
 
     if (FAILED(slot.compositeAllocator->Reset()) ||
         FAILED(g_present.list->Reset(slot.compositeAllocator.Get(), nullptr)))
@@ -1420,6 +1664,15 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "copyback command list could not be reset", true);
         return identity;
     }
+    PresentCopybackRecording copybackRecording(g_present.list.Get(), slot.compositeAllocator.Get(),
+                                               g_present.completionUntrackable);
+    if (!copybackRecording)
+    {
+        g_present.list->Close();
+        g_present.completionUntrackable = true;
+        SetFallback(api, "copyback recording ownership unavailable", true);
+        return identity;
+    }
     struct ScreenshotPublication
     {
         bool recorded = false;
@@ -1432,14 +1685,15 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         screenshotPublication.recorded = RecordPresentComparison(g_present.list.Get(), device.Get(),
             presentInput, presentRestingState, finalOutput, finalState, settings, identity.presentAttempt,
             preFgFrame ? preFgFrame->key : 0, preFgFrame ? preFgFrame->providerGeneration : 0,
-            g_present.resourceGeneration, bufferIndex);
+            g_present.resourceGeneration, bufferIndex, hdrObservation.colorSpace);
     };
     bool outputPrepared = true;
-    if (!settings.DlssNrApplyModel.value_or_default())
+    const bool applyOutput = Multipass::AppliesModel(settings);
+    if (!applyOutput)
     {
         // Model work and fence tracking continue, but no conversion or copy touches the game image.
     }
-    else if (admission.path == PresentCompatibility::PixelPath::Rgba8Direct)
+    else if (!converting)
     {
         captureFinalPair(g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -1454,25 +1708,34 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     else
     {
+        const auto conversionState = admission.path == PresentCompatibility::PixelPath::Bgra8Conversion
+            ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         Transition(g_present.list.Get(), g_present.frame.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if (colorDecision.hdr)
+            Transition(g_present.list.Get(), g_present.conversionSource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                       D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         outputPrepared = g_present.outputTransfer->Dispatch(g_present.list.Get(),
             g_present.frame.Get(), g_present.conversionOutput.Get());
-        UavBarrier(g_present.list.Get(), g_present.conversionOutput.Get());
+        if (conversionState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+            UavBarrier(g_present.list.Get(), g_present.conversionOutput.Get());
+        if (colorDecision.hdr)
+            Transition(g_present.list.Get(), g_present.conversionSource.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                       D3D12_RESOURCE_STATE_COPY_DEST);
         if (outputPrepared)
-            captureFinalPair(g_present.conversionOutput.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            captureFinalPair(g_present.conversionOutput.Get(), conversionState);
         Transition(g_present.list.Get(), g_present.frame.Get(),
                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         Transition(g_present.list.Get(), g_present.conversionOutput.Get(),
-                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+                   conversionState, D3D12_RESOURCE_STATE_COPY_SOURCE);
         Transition(g_present.list.Get(), presentOutput, presentRestingState,
                    D3D12_RESOURCE_STATE_COPY_DEST);
         g_present.list->CopyResource(presentOutput, g_present.conversionOutput.Get());
         Transition(g_present.list.Get(), presentOutput, D3D12_RESOURCE_STATE_COPY_DEST,
                    presentRestingState);
         Transition(g_present.list.Get(), g_present.conversionOutput.Get(),
-                   D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                   D3D12_RESOURCE_STATE_COPY_SOURCE, conversionState);
     }
     if (!outputPrepared)
     {
@@ -1486,7 +1749,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         }
         else
             g_present.completionUntrackable = true;
-        SetFallback(api, "10-bit output conversion could not be recorded", true);
+        SetFallback(api, "Present output conversion could not be recorded", true);
         return identity;
     }
     if (slot.timingStarted && !screenshotPublication.recorded)
@@ -1528,8 +1791,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };
     queue->ExecuteCommandLists(1, compositeLists);
-    if (screenshotPublication.recorded)
-        screenshotPublication.sealed = GpuSafety::SealOwnedRecording(g_present.list.Get());
+    screenshotPublication.sealed = copybackRecording.Submitted(queue.Get());
     identity.copybackSubmitted = true;
     NR_FRAME_TRACE("nr-copyback-submitted", "attempt={} list={:p} queue={:p} output={:p} "
         "generation={} claimGeneration={} claimInstance={} providerGeneration={}",
@@ -1542,7 +1804,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     if (FAILED(queue->Signal(g_present.fence.Get(), signal)))
     {
         g_present.completionUntrackable = true;
-        SetFallback(api, "copyback completion signal failed", true);
+        SetFallback(api, "copyback completion signal failed", true, nullptr, true);
         return identity;
     }
     slot.completion = signal;
@@ -1550,20 +1812,34 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     slot.pacingExpected = g_present.pacing.expectGpu(identity.pacing);
     RecordSubmission(signal);
 
-    if (api == PresentApi::D3D11 && settings.DlssNrApplyModel.value_or_default())
+    if (!screenshotPublication.sealed)
+    {
+        SetFallback(api, "copyback recording completion or ownership unavailable", true, nullptr, true);
+        return identity;
+    }
+
+    if (api == PresentApi::D3D11 && applyOutput)
     {
         if (!Dx11WithDx12::SyncDx12ToDx11())
         {
             SetFallback(api, "D3D12-to-D3D11 output synchronization failed", true);
             return identity;
         }
-        context11->CopyResource(backbuffer11.Get(), g_present.dx11Output.SharedTexture);
-        context11->Flush();
+        if (!g_present.dx11OutputCompletion.Copy(context11.Get(), backbuffer11.Get(),
+                                                 g_present.dx11Output.SharedTexture))
+        {
+            const bool written = g_present.dx11OutputCompletion.Quarantined();
+            g_present.completionUntrackable = g_present.completionUntrackable || written;
+            SetFallback(api, written ? "final D3D11 copy completion signal failed; restart required" :
+                        "final D3D11 copy proof or source ownership unavailable", true, nullptr, written);
+            return identity;
+        }
     }
 
     ++g_present.telemetry.modelEvaluations;
     ++g_present.telemetry.compositeEvaluations;
     identity.completedOutput = true;
+    g_present.lastCommittedInputClass = decision.input;
     screenshotPublication.succeeded = true;
     identity.modelPrepared = true;
     identity.completionFence = g_present.fence.Get();
@@ -1575,10 +1851,13 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         LOG_INFO("DLSS-NR Present diagnostic: processing recovered on attempt {} after {} consecutive fallback(s)",
                  g_present.telemetry.presentAttempts, g_present.telemetry.consecutiveFallbacks);
     g_present.telemetry.consecutiveFallbacks = 0;
-    g_present.telemetry.actualPlacement = enhanced ?
-        "Present Enhanced (game HUD included)" : "Present Image-Only";
+    g_present.telemetry.actualPlacement = guided ? "Present guided (game HUD included)" :
+        "Present image-only";
     g_present.telemetry.fallbackReason.clear();
     g_present.telemetry.failure.clear();
     return identity;
 }
 } // namespace DlssNr
+
+
+

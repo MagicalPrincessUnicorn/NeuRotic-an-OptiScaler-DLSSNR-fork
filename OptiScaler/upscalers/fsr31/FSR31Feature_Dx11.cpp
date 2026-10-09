@@ -401,7 +401,7 @@ FSR31FeatureDx11::~FSR31FeatureDx11()
         auto errorCode = Fsr31::ffxFsr3ContextDestroy(&_upscalerContext);
 
         if (errorCode != Fsr31::FFX_OK)
-            spdlog::error("FSR31FeatureDx11::~FSR31FeatureDx11 ffxFsr3ContextDestroy error: {0:x}", errorCode);
+            LOG_WHILE_ACTIVE(error, "FSR31FeatureDx11::~FSR31FeatureDx11 ffxFsr3ContextDestroy error: {0:x}", errorCode);
 
         free(_upscalerContextDesc.backendInterfaceUpscaling.scratchBuffer);
     }

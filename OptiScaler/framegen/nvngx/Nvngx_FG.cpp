@@ -303,12 +303,16 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 
     // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InHandle);
 
-    std::scoped_lock lock(((Nvngx_FG_Handle*) InHandle)->handleMutex);
-
-    auto result = provider->D3D12_ReleaseFeature(((Nvngx_FG_Handle*) InHandle)->nativeHandle);
-
+    auto* proxyHandle = reinterpret_cast<Nvngx_FG_Handle*>(InHandle);
+    NVSDK_NGX_Result result;
+    {
+        std::scoped_lock lock(proxyHandle->handleMutex);
+        result = provider->D3D12_ReleaseFeature(proxyHandle->nativeHandle);
+    }
+    // The lock owns storage inside this exact proxy. Unlock before destroying
+    // it, and retain the proxy unchanged when the provider refuses release.
     if (result == NVSDK_NGX_Result_Success)
-        delete InHandle;
+        delete proxyHandle;
 
     return result;
 }
@@ -541,13 +545,14 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 
     // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InHandle);
 
-    Nvngx_FG_Handle* ourHandle = (Nvngx_FG_Handle*) InHandle;
-    std::scoped_lock lock(ourHandle->handleMutex);
-
-    auto result = provider->VULKAN_ReleaseFeature(ourHandle->nativeHandle);
-
+    auto* proxyHandle = reinterpret_cast<Nvngx_FG_Handle*>(InHandle);
+    NVSDK_NGX_Result result;
+    {
+        std::scoped_lock lock(proxyHandle->handleMutex);
+        result = provider->VULKAN_ReleaseFeature(proxyHandle->nativeHandle);
+    }
     if (result == NVSDK_NGX_Result_Success)
-        delete InHandle;
+        delete proxyHandle;
 
     return result;
 }

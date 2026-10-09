@@ -42,6 +42,7 @@ Index of this file:
 
 #include "imgui.h"
 #include "../../menu/Localization.h"
+#include "../../menu/SleekUi.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 
@@ -788,9 +789,12 @@ bool ImGui::ButtonEx(const char* label, const ImVec2& size_arg, ImGuiButtonFlags
     bool pressed = ButtonBehavior(bb, id, &hovered, &held, flags);
 
     // Render
-    const ImU32 col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+    const ImU32 col = Neurotic::Sleek::ControlColor(id, hovered, held, ImGuiCol_Button, ImGuiCol_ButtonHovered, ImGuiCol_ButtonActive);
     RenderNavCursor(bb, id);
-    RenderFrame(bb.Min, bb.Max, col, true, style.FrameRounding);
+    const float compression = Neurotic::Sleek::Enabled() ? Neurotic::Sleek::Animate(id, 6, held && hovered ? 1.0f : 0.0f, 28) : 0.0f;
+    const ImVec2 inset(compression * 1.0f, compression * 1.0f);
+    RenderFrame(bb.Min + inset, bb.Max - inset, col, true, style.FrameRounding);
+    Neurotic::Sleek::ButtonFeedback(window->DrawList, bb, id, pressed, style.FrameRounding);
 
     if (g.LogEnabled)
         LogSetNextTextDecoration("[", "]");
@@ -1215,6 +1219,11 @@ bool ImGui::ImageButton(ImTextureID user_texture_id, const ImVec2& size, const I
 
 bool ImGui::Checkbox(const char* label, bool* v)
 {
+    return Checkbox(label, v, false);
+}
+
+bool ImGui::Checkbox(const char* label, bool* v, bool square)
+{
     ImGuiWindow* window = GetCurrentWindow();
     if (window->SkipItems)
         return false;
@@ -1226,7 +1235,8 @@ bool ImGui::Checkbox(const char* label, bool* v)
 
     const float square_sz = GetFrameHeight();
     const ImVec2 pos = window->DC.CursorPos;
-    const ImRect total_bb(pos, pos + ImVec2(square_sz + (label_size.x > 0.0f ? style.ItemInnerSpacing.x + label_size.x : 0.0f), label_size.y + style.FramePadding.y * 2.0f));
+    const float control_width = square ? square_sz : Neurotic::Sleek::ToggleWidth();
+    const ImRect total_bb(pos, pos + ImVec2(control_width + (label_size.x > 0.0f ? style.ItemInnerSpacing.x + label_size.x : 0.0f), label_size.y + style.FramePadding.y * 2.0f));
     ItemSize(total_bb, style.FramePadding.y);
     const bool is_visible = ItemAdd(total_bb, id);
     const bool is_multi_select = (g.LastItemData.ItemFlags & ImGuiItemFlags_IsMultiSelect) != 0;
@@ -1258,11 +1268,15 @@ bool ImGui::Checkbox(const char* label, bool* v)
         MarkItemEdited(id);
     }
 
-    const ImRect check_bb(pos, pos + ImVec2(square_sz, square_sz));
+    const ImRect check_bb(pos, pos + ImVec2(control_width, square_sz));
     const bool mixed_value = (g.LastItemData.ItemFlags & ImGuiItemFlags_MixedValue) != 0;
     if (is_visible)
     {
         RenderNavCursor(total_bb, id);
+        if (!square && Neurotic::Sleek::Enabled())
+            Neurotic::Sleek::DrawSwitch(window->DrawList, check_bb, id, *v, mixed_value, hovered, held);
+        else
+        {
         RenderFrame(check_bb.Min, check_bb.Max, GetColorU32((held && hovered) ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg), true, style.FrameRounding);
         ImU32 check_col = GetColorU32(ImGuiCol_CheckMark);
         if (mixed_value)
@@ -1276,6 +1290,7 @@ bool ImGui::Checkbox(const char* label, bool* v)
         {
             const float pad = ImMax(1.0f, IM_TRUNC(square_sz / 6.0f));
             RenderCheckMark(window->DrawList, check_bb.Min + ImVec2(pad, pad), check_col, square_sz - pad * 2.0f);
+        }
         }
     }
     const ImVec2 label_pos = ImVec2(check_bb.Max.x + style.ItemInnerSpacing.x, check_bb.Min.y + style.FramePadding.y);
@@ -1933,9 +1948,9 @@ bool ImGui::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
     }
 
     // Render shape
-    const ImU32 frame_col = GetColorU32(hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+    const ImU32 frame_col = Neurotic::Sleek::ControlColor(id, hovered, held, ImGuiCol_FrameBg, ImGuiCol_FrameBgHovered, ImGuiCol_FrameBgActive);
     const float value_x2 = ImMax(bb.Min.x, bb.Max.x - arrow_size);
-    RenderNavCursor(bb, id);
+    RenderNavCursor(bb, id, Neurotic::Sleek::Enabled() ? ImGuiNavRenderCursorFlags_Compact : ImGuiNavRenderCursorFlags_None);
     if (!(flags & ImGuiComboFlags_NoPreview))
         window->DrawList->AddRectFilled(bb.Min, ImVec2(value_x2, bb.Max.y), frame_col, style.FrameRounding, (flags & ImGuiComboFlags_NoArrowButton) ? ImDrawFlags_RoundCornersAll : ImDrawFlags_RoundCornersLeft);
     if (!(flags & ImGuiComboFlags_NoArrowButton))
@@ -1944,7 +1959,12 @@ bool ImGui::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
         ImU32 text_col = GetColorU32(ImGuiCol_Text);
         window->DrawList->AddRectFilled(ImVec2(value_x2, bb.Min.y), bb.Max, bg_col, style.FrameRounding, (w <= arrow_size) ? ImDrawFlags_RoundCornersAll : ImDrawFlags_RoundCornersRight);
         if (value_x2 + arrow_size - style.FramePadding.x <= bb.Max.x)
+        {
+            if (Neurotic::Sleek::Enabled())
+                Neurotic::Sleek::Chevron(window->DrawList, ImVec2(value_x2 + arrow_size * .5f, bb.GetCenter().y), g.FontSize * .7f, text_col, 1.0f + Neurotic::Sleek::AnimateLinear(id, 7, popup_open ? 1.0f : 0.0f) * 2.0f);
+            else
             RenderArrow(window->DrawList, ImVec2(value_x2 + style.FramePadding.y, bb.Min.y + style.FramePadding.y), text_col, ImGuiDir_Down, 1.0f);
+        }
     }
     RenderFrameBorder(bb.Min, bb.Max, style.FrameRounding);
 
@@ -1961,13 +1981,35 @@ bool ImGui::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
     {
         if (g.LogEnabled)
             LogSetNextTextDecoration("{", "}");
-        RenderTextClipped(bb.Min + style.FramePadding, ImVec2(value_x2, bb.Max.y), preview_value, NULL, NULL);
+        float reveal=1.0f;
+        if(Neurotic::Sleek::Enabled()) {
+            auto& state=window->StateStorage;
+            const auto hashKey=Neurotic::Sleek::Key(id,27,2);
+            const int current=(int)ImHashStr(preview_value),previous=state.GetInt(hashKey,0);
+            if(previous && current!=previous) {
+                state.SetFloat(Neurotic::Sleek::Key(id,27,0),0);
+                state.SetInt(Neurotic::Sleek::Key(id,27,1),g.FrameCount-1);
+            }
+            state.SetInt(hashKey,current);
+            reveal=Neurotic::Sleek::AnimateLinear(id,27,1);
+        }
+        PushStyleVar(ImGuiStyleVar_Alpha,style.Alpha*(.3f+.7f*reveal));
+        const ImVec2 rise(0,(1-reveal)*g.FontSize*.22f);
+        const ImRect preview_clip(bb.Min,ImVec2(value_x2,bb.Max.y));
+        RenderTextClipped(bb.Min + style.FramePadding + rise, ImVec2(value_x2, bb.Max.y), preview_value, NULL, NULL, ImVec2(0,0), &preview_clip);
+        PopStyleVar();
     }
     if (label_size.x > 0)
         RenderText(ImVec2(bb.Max.x + style.ItemInnerSpacing.x, bb.Min.y + style.FramePadding.y), label);
 
-    if (!popup_open)
+    if (!popup_open) {
+        char fading_name[16];
+        ImFormatString(fading_name,IM_ARRAYSIZE(fading_name),"##Combo_%02d",g.BeginComboDepth);
+        if(Neurotic::Sleek::BeginClosingPopup(fading_name,popup_id)) {
+            ++g.BeginComboDepth; return true;
+        }
         return false;
+    }
 
     g.NextWindowData.HasFlags = backup_next_window_data_flags;
     return BeginComboPopup(popup_id, bb, flags);
@@ -2034,6 +2076,7 @@ bool ImGui::BeginComboPopup(ImGuiID popup_id, const ImRect& bb, ImGuiComboFlags 
         IM_ASSERT(0);   // This should never happen as we tested for IsPopupOpen() above
         return false;
     }
+    Neurotic::Sleek::PreparePopupPresentation(g.CurrentWindow);
     g.BeginComboDepth++;
     return true;
 }
@@ -2741,7 +2784,7 @@ bool ImGui::DragScalar(const char* label, ImGuiDataType data_type, void* p_data,
     }
 
     // Draw frame
-    const ImU32 frame_col = GetColorU32(g.ActiveId == id ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+    const ImU32 frame_col = Neurotic::Sleek::ControlColor(id, hovered, g.ActiveId == id, ImGuiCol_FrameBg, ImGuiCol_FrameBgHovered, ImGuiCol_FrameBgActive);
     RenderNavCursor(frame_bb, id);
     RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, true, style.FrameRounding);
 
@@ -3329,7 +3372,8 @@ bool ImGui::SliderScalar(const char* label, ImGuiDataType data_type, void* p_dat
     // Draw frame
     const ImU32 frame_col = GetColorU32(g.ActiveId == id ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
     RenderNavCursor(frame_bb, id);
-    RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, true, g.Style.FrameRounding);
+    if (!Neurotic::Sleek::railSlider)
+        RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, true, g.Style.FrameRounding);
 
     // Slider behavior
     ImRect grab_bb;
@@ -3338,7 +3382,18 @@ bool ImGui::SliderScalar(const char* label, ImGuiDataType data_type, void* p_dat
         MarkItemEdited(id);
 
     // Render grab
-    if (grab_bb.Max.x > grab_bb.Min.x)
+    if (Neurotic::Sleek::Enabled() && grab_bb.Max.x > grab_bb.Min.x)
+    {
+        const float y = Neurotic::Sleek::railSlider ? frame_bb.GetCenter().y : frame_bb.Max.y - ImMax(3.0f, style.FramePadding.y * .5f);
+        const ImVec2 start(frame_bb.Min.x + style.FramePadding.x, y);
+        const ImVec2 end(frame_bb.Max.x - style.FramePadding.x, y);
+        const float x = ImClamp(grab_bb.GetCenter().x, start.x, end.x);
+        const float thickness = Neurotic::Sleek::railSlider ? ImMax(3.0f, g.FontSize*.28f) : 2.0f;
+        window->DrawList->AddLine(start, end, GetColorU32(ImGuiCol_Border), thickness);
+        window->DrawList->AddLine(start, ImVec2(x,y), GetColorU32(ImGuiCol_CheckMark), thickness);
+        window->DrawList->AddCircleFilled(ImVec2(x,y), ImMax(3.0f, g.FontSize*(Neurotic::Sleek::railSlider?.44f:.19f)), GetColorU32(ImGuiCol_SliderGrabActive));
+    }
+    else if (grab_bb.Max.x > grab_bb.Min.x)
         window->DrawList->AddRectFilled(grab_bb.Min, grab_bb.Max, GetColorU32(g.ActiveId == id ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab), style.GrabRounding);
 
     // Display value using user-provided display format so user can add prefix/suffix/decorations to the value.
@@ -3346,7 +3401,8 @@ bool ImGui::SliderScalar(const char* label, ImGuiDataType data_type, void* p_dat
     const char* value_buf_end = value_buf + DataTypeFormatString(value_buf, IM_ARRAYSIZE(value_buf), data_type, p_data, format);
     if (g.LogEnabled)
         LogSetNextTextDecoration("{", "}");
-    RenderTextClipped(frame_bb.Min, frame_bb.Max, value_buf, value_buf_end, NULL, ImVec2(0.5f, 0.5f));
+    if (!Neurotic::Sleek::railSlider)
+        RenderTextClipped(frame_bb.Min, frame_bb.Max, value_buf, value_buf_end, NULL, ImVec2(0.5f, 0.5f));
 
     if (label_size.x > 0.0f)
         RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, frame_bb.Min.y + style.FramePadding.y), label);
@@ -6859,7 +6915,7 @@ bool ImGui::TreeNodeBehavior(ImGuiID id, ImGuiTreeNodeFlags flags, const char* l
         if (display_frame)
         {
             // Framed type
-            const ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+            const ImU32 bg_col = Neurotic::Sleek::ControlColor(id, hovered, held, ImGuiCol_Header, ImGuiCol_HeaderHovered, ImGuiCol_HeaderActive);
             RenderFrame(frame_bb.Min, frame_bb.Max, bg_col, true, style.FrameRounding);
             RenderNavCursor(frame_bb, id, nav_render_cursor_flags);
             if (span_all_columns && !span_all_columns_label)
@@ -6867,7 +6923,12 @@ bool ImGui::TreeNodeBehavior(ImGuiID id, ImGuiTreeNodeFlags flags, const char* l
             if (flags & ImGuiTreeNodeFlags_Bullet)
                 RenderBullet(window->DrawList, ImVec2(text_pos.x - text_offset_x * 0.60f, text_pos.y + g.FontSize * 0.5f), text_col);
             else if (!is_leaf)
-                RenderArrow(window->DrawList, ImVec2(text_pos.x - text_offset_x + padding.x, text_pos.y), text_col, is_open ? ((flags & ImGuiTreeNodeFlags_UpsideDownArrow) ? ImGuiDir_Up : ImGuiDir_Down) : ImGuiDir_Right, 1.0f);
+            {
+                if (Neurotic::Sleek::Enabled())
+                    Neurotic::Sleek::Chevron(window->DrawList, ImVec2(text_pos.x - text_offset_x + padding.x + g.FontSize*.4f, text_pos.y + g.FontSize*.5f), g.FontSize*.7f, text_col, Neurotic::Sleek::AnimateLinear(id, 8, is_open ? ((flags & ImGuiTreeNodeFlags_UpsideDownArrow) ? -1.0f : 1.0f) : 0.0f));
+                else
+                    RenderArrow(window->DrawList, ImVec2(text_pos.x - text_offset_x + padding.x, text_pos.y), text_col, is_open ? ((flags & ImGuiTreeNodeFlags_UpsideDownArrow) ? ImGuiDir_Up : ImGuiDir_Down) : ImGuiDir_Right, 1.0f);
+            }
             else // Leaf without bullet, left-adjusted text
                 text_pos.x -= text_offset_x - padding.x;
             if (flags & ImGuiTreeNodeFlags_ClipLabelForTrailingButton)

@@ -1,10 +1,30 @@
 #include "pch.h"
+#include <runtime/OwnedNgxCreateParameters.h>
+#include <runtime/NgxCallGate.h>
+#include <runtime/OwnedFeatureReleasePolicy.h>
+#include <runtime/RuntimeLifetime.h>
+#include <mfg/ExperimentalMfgRuntime.h>
+#include "../nr/diagnostics/capability/CapabilityNgxObservation.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/NgxObservationAdapter.h>
+// NR-FEED-001 END
 #include <dlssnr/FrameTrace.h>
 #include <dlssnr/PreFg.h>
 #include <dlssnr/FgLifecycle.h>
+#include <nr/semantic/character/CharacterFgActivity.h>
+#include <nr/semantic/character/CharacterRuntime.h>
 #include <dlssnr/NrGpuSafety.h>
 #include <dlssnr/NativeFeatureRegistry.h>
+#include <nr/lifecycle/NativeProcessBootstrap.h>
+#include <nr/lifecycle/SelectedFsr3NativeLeaseOwner.h>
+#include <nr/lifecycle/Fsr3ControlledModule.h>
+#include <nr/protocol/NativeFrameBridge.h>
+#include <nr/protocol/NativeTypedEvaluation.h>
+#include <nr/protocol/NativeCommandStateScope.h>
+#include <dlssnr/NativeParameterOverride.h>
 #include <dlssnr/NativeTemporalInputs.h>
+#include <dlssnr/NativeIdentity.h>
+#include <dlssnr/DlssNr_PresentGuides.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -26,6 +46,7 @@
 #include <imgui/ImGuiNotify.hpp>
 
 #include <hooks/D3D12_Hooks.h>
+#include <hooks/Streamline_Hooks.h>
 
 #include <dxgi1_4.h>
 #include <shared_mutex>
@@ -35,6 +56,510 @@
 
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Dx12>> Dx12Contexts;
 static DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature> HandleToFeature;
+namespace Neurotic::Lifecycle
+{
+Orchestration::InitResult NativeProcessBootstrap::PrepareRuntime(Callback& callback,const NrConfigSnapshot<Config>& settings)
+{
+    if(!settings.DlssNrRunBeforeSr.value_or_default()&&!callback.RequiredSrInput())
+    {callback.runtimeReason_=Protocol::Symbol("Native.PostSrOutputPending");return {};}
+    return Materialize(callback,settings,[&]{
+        const bool before=settings.DlssNrRunBeforeSr.value_or_default();
+        const auto color=callback.publication_?callback.publication_->DeclaredColor(!before):std::nullopt;
+        if(!color||!Context::Established(color->domain))return std::unique_ptr<DlssNr::NativeRendererPreparation>{};
+        const auto domain=color->domain.KnownPart()->value;
+        if(domain!=C::ColorDomain::SceneLinear&&domain!=C::ColorDomain::EncodedDisplay)
+            return std::unique_ptr<DlssNr::NativeRendererPreparation>{};
+        return DlssNr::NativeRendererPreparation::TryAcquire(callback.call_->CommandList(),
+            callback.call_->Resource(before?"Color":"Output"),settings,before,domain==C::ColorDomain::SceneLinear);});
+}
+Protocol::NativeProtocolResult NativeProcessBootstrap::RunNativeBefore(
+    Callback& callback,void* nativeParameters,const NrConfigSnapshot<Config>& settings)
+{
+    Protocol::NativeProtocolResult result;
+    const bool before=settings.DlssNrRunBeforeSr.value_or_default();
+    if(!before&&!callback.RequiredSrInput())
+    {result.reason=Protocol::Symbol("Native.PostSrOutputPending");return result;}
+    if(callback.invocationAttempted_||!callback.Current()||!callback.currentPreparation_)
+    {result.reason=Protocol::Symbol("Native.InitializationUnavailable");return result;}
+    callback.invocationAttempted_=true;
+    if(callback.currentPreparation_->request.placement!=(before?C::Placement::NativeBefore:C::Placement::NativeAfter))
+    {result.reason=Protocol::Symbol("Native.PostSrOutputPending");callback.rendererBorrow_.reset();return result;}
+    auto borrow=callback.rendererBorrow_;
+    // Preparation authenticated the loaded matched forwarder contract and
+    // installed this exact provider owner. A no-argument catalog lookup cannot
+    // describe the retained renderer generation.
+    const auto* preparedResources=borrow?borrow->Inspect():nullptr;
+    if(!preparedResources||!preparedResources->providerUses||
+       !preparedResources->providerUses->Contract().Supported())
+    {result.reason=Protocol::Symbol("ProviderLifetimeContractUnavailable");callback.runtimeReason_=result.reason;callback.rendererBorrow_.reset();return result;}
+    if(!borrow||!nativeParameters||!borrow->Owns(callback.call_->CommandList(),callback.call_->Resource(before?"Color":"Output")))
+    {result.reason=Protocol::Symbol("Native.RecordingBorrowUnavailable");callback.rendererBorrow_.reset();return result;}
+    std::shared_ptr<NativeInvocationOwner> owner;
+    struct End{std::function<void()> close;~End(){close();}} end{[&]{
+        if(owner&&callback.invocation_!=owner)owner->CloseCallback();callback.rendererBorrow_.reset();}};
+    try
+    {
+        NativeInvocationOwner::Seeds seeds;C::RecordHeader resultHeader;
+        std::shared_ptr<NativeSessionLifetime> root;NativeOwnerSet* owners=nullptr;
+        {
+            std::lock_guard lock(state_->mutex);
+            if(state_->closed||!state_->lifetime||!state_->Owner())
+            {result.reason=Protocol::Symbol("Native.ScopeUnavailable");return result;}
+            owners=state_->Owner();root=state_->lifetime;
+            seeds.consumer=owners->ProtocolJournal().Event().evidence.record;
+            seeds.recording=owners->ProtocolJournal().Event().evidence.record;
+            seeds.reservation=owners->ProtocolJournal().Event().evidence.record;
+            for(auto& key:seeds.providerRegistrations)
+                key=owners->RuntimeJournal().Event().evidence.record;
+            seeds.history=owners->HistoryJournal().Event().evidence.record;
+            const auto issued=owners->Handoff()->ContractChanged(owners->FinalizerJournal().Event());
+            if(issued.status!=IdentityStatus::Ok||!Context::Established(issued.value))
+            {result.reason=Protocol::Symbol("Native.HandoffUnavailable");return result;}
+            seeds.handoff=issued.value.KnownPart()->value;
+            resultHeader=owners->StrategyJournal().Header(C::ContractId::C07,callback.scope_.scope);
+        }
+        owner=std::shared_ptr<NativeInvocationOwner>(new NativeInvocationOwner(
+            callback.currentPreparation_,borrow,callback.call_,*state_->resources,*owners,
+            callback.sample_,callback.scope_.scope,seeds,
+            [&callback]{return callback.pin_&&callback.pin_->Current();}));
+        owner->retainedSourceState_=callback.state_;
+        auto admission=Protocol::NativeInvocationIngress::Admit(root,owner);
+        if(!admission)
+        {result.reason=owner->PreparationReason();return result;}
+        const auto* product=admission->Product();
+        const auto target=callback.CallerOutputTarget();
+        if(!product||!target||target->region.x||target->region.y||
+           !Context::Established(target->view.raster.active)||
+           target->view.raster.active.KnownPart()->value.width!=target->region.width||
+           target->view.raster.active.KnownPart()->value.height!=target->region.height||
+           !owner->ReserveReturn(resultHeader,target->view))
+        {result.reason=Protocol::Symbol("Native.ReturnReservationUnavailable");return result;}
+        callback.invocation_=owner;
+        {std::lock_guard lock(state_->mutex);
+         if(state_->latestReturn.sequence==callback.sample_.producerOrdinal)state_->latestReturnOwner=owner;}
+        auto executor=[&](const Protocol::NativeBindingMap& map,Protocol::NativeExecutionObserver& observer){
+            if(!product){observer.Fail("Native.AdmissionUnavailable");return observer.Facts();}
+            const auto frame=Protocol::BuildNativeFrameInfo(map,*product,*owner->Store());
+            if(!frame){observer.Fail("Native.FrameBindingUnavailable");return observer.Facts();}
+            Protocol::NativeTypedEvaluation typed;typed.frame=*frame;
+            typed.colour=callback.call_->Resource(before?"Color":"Output");typed.target=typed.colour;
+            typed.depth=callback.call_->Resource("Depth");typed.motion=callback.call_->Resource("MotionVectors");
+            unsigned quality=0;if(callback.call_->Get("PerfQualityValue",&quality)==0)
+                typed.hostQuality=static_cast<int>(quality);
+            typed.observer=&observer;typed.rendererBorrow=borrow.get();
+            if(before)DlssNr::EvaluateNativeProtocolBefore(callback.call_->CommandList(),
+                static_cast<NVSDK_NGX_Parameter*>(nativeParameters),nullptr,settings,typed,true,*admission);
+            else DlssNr::EvaluateNativeProtocolTyped(callback.call_->CommandList(),typed,nullptr,settings,*admission);
+            return observer.Facts();
+        };
+        result=Protocol::ExecuteNativeProtocol(*admission,resultHeader,*owner,*owner->Store(),
+            executor,owner->History(),false);
+        owner->ObserveReturnExecution(result);
+        if(owner->snapshot_&&owner->snapshot_->SourceBoundRequest())
+        {
+            std::shared_ptr<ControlledFg> selected;
+            {std::lock_guard lock(state_->mutex);selected=state_->controlledFg;}
+            // The admitted callback keeps FinishControlledWriters excluded.
+            // Drop the state lock before acquiring the selection lock so a
+            // simultaneous observation cannot race publication or invert locks.
+            if(selected)
+            {
+                std::lock_guard selectionLock(selected->mutex);
+                if(!selected->invocation)
+                {
+                    selected->invocation=owner;selected->transaction=callback.transactionObservation_;
+                    selected->claim=admission->SourceBoundPrimary();
+                    if(!selected->claim)selected->observation.failed=1;
+                }
+            }
+        }
+        callback.runtimeReason_=result.reason;
+        return result;
+    }
+    catch(...)
+    {result.reason=Protocol::Symbol("Native.InvocationOwnerFailure");callback.runtimeReason_=result.reason;return result;}
+}
+void NativeProcessBootstrap::FinishNativeReturn(Callback& callback,std::uint32_t hostResult,bool succeeded)noexcept
+{
+    // Last destructor in this function: keep the coordinator's retaining slot
+    // alive until all local shared references have dropped without destruction.
+    struct TailPin
+    {
+        std::atomic<bool>* active=nullptr;
+        ~TailPin(){if(active)active->store(false);}
+    } tail;
+    auto owner=callback.invocation_;
+    if(!owner||!owner->return_){callback.Drop(succeeded);return;}
+    owner->returnTailActive_=true;tail.active=&owner->returnTailActive_;
+    // Capture actual SR consumption and Resource publication before dropping
+    // call-scoped resources. No result code substitutes for the selected join.
+    const bool current=callback.Current();
+    const auto sr=callback.srReturn_;
+    auto pin=callback.pin_; // keeps the real CPU return tail admitted
+    auto state=callback.state_;
+    const bool cpu=callback.nativeCpuRestored_,commands=callback.nativeCommandRestored_;
+    owner->CloseCallback(true);
+    callback.Drop(succeeded);
+    // Match source closure's State -> Resource order. Drop's bookkeeping must
+    // finish before either lock is retained across the publication tail.
+    std::lock_guard stateLock(state->mutex);
+    auto resourceLock=owner->resources_->LockNativeAction();
+    std::optional<C::ResourceView> output;
+    output=owner->resources_->CurrentRegisteredView(owner->call_->Resource("Output"));
+    const auto finish=[&]{return owner->providerOwner_->WithHistory(owner->recordingUse_,[&](NativeHistoryState&){
+        const auto rejected=[&]{owner->return_->FinishRejected();return false;};
+        if(sr&&!owner->return_->ObserveSr(sr->result,sr->succeeded,owner->consumedSrInput_))return rejected();
+        if(!current||state->closed||!succeeded||!sr||!sr->succeeded||!sr->callerBindingMatches||sr->result!=hostResult)
+        {owner->return_->Reject("Native.ReturnOuterFailure");return rejected();}
+        const auto returned=owner->snapshot_->product.recipe.placement==C::Placement::NativeAfter?
+            owner->publishedOutput_:owner->returnedSrOutput_;
+        if(output&&returned&&!owner->return_->ObserveOutput(*returned,*output,*owner->store_))return rejected();
+        if(!owner->return_->ObserveRestoration(cpu,commands)||!owner->return_->Prepare(*owner->store_))return rejected();
+        return owner->return_->Commit();
+    });};
+    // After cleanup, only current-source/history/Resource synchronization and
+    // preallocated CPU publication remain. The callback pin ends at this CPU
+    // boundary; the existing State is retained separately for downstream tails.
+    if(!pin||!pin->WithCurrent(finish))
+        owner->providerOwner_->WithHistory(owner->recordingUse_,[&](NativeHistoryState&){
+            owner->return_->Reject("Native.ReturnSourceRevoked");owner->return_->FinishRejected();return false;});
+}
+}
+namespace DlssNr
+{
+// Sole process source attachment for this actual registry. Retained until
+// aggregate downstream retirement, never reconstructed by a callback facade.
+class NativeDx12Source
+{
+    inline static std::mutex mutex_;
+    inline static Neurotic::Lifecycle::NativeProcessBootstrap* host_ = nullptr;
+    inline static bool globallyClosed_ = false;
+  public:
+    static unsigned ControlledBegin(std::uintptr_t);
+    static unsigned ControlledEnroll(const NativeControlledFgEnrollmentV1*);
+    static unsigned ControlledFinish(NativeControlledFgObservationV1*);
+    static FfxNrStatusV1 ControlledConsumer(FfxNrOwnedOutputHandleV1,FfxNrAlgorithmHandleV1,const FfxNrDispatchTicketV1*,void**);
+    static void ControlledReturned(void*,std::int32_t);
+    static FfxNrStatusV1 ControlledSubmit(const FfxNrDispatchTicketV1*,void**);
+    static void ControlledSubmitted(void*,const FfxNrSubmitResultV1*);
+    static unsigned ControlledObserve(NativeControlledFgObservationV1*,bool);
+    // Scoped binding of the already produced Native scratch to the selected
+    // existing SR call. No copy, Resource revision or extra owner is introduced.
+    class SrInputScope
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host_=nullptr;
+        Neurotic::Lifecycle::NativeProcessBootstrap::Callback* callback_=nullptr;
+        std::unique_ptr<NativeParameterOverride<NVSDK_NGX_Parameter,NVSDK_NGX_Result>> binding_;
+        ID3D12Resource* input_=nullptr;
+        bool reading_=false,closed_=false,ready_=true;
+      public:
+        SrInputScope(Neurotic::Lifecycle::NativeProcessBootstrap::Callback* callback,NVSDK_NGX_Parameter* parameters):callback_(callback)
+        {
+            {std::lock_guard lock(mutex_);host_=NativeDx12Source::host_;}
+            if(!host_||!callback_)return;
+            input_=host_->BeforeSrInput(*callback_);if(!input_)return;
+            void* original=nullptr;
+            if(!callback_->OriginalCall()||callback_->OriginalCall()->Get("Color",&original)!=0)
+            {ready_=false;return;}
+            binding_=std::make_unique<NativeParameterOverride<NVSDK_NGX_Parameter,NVSDK_NGX_Result>>(
+                parameters,"Color",original,NVSDK_NGX_Result_Success);
+            ready_=binding_->Bind(input_);
+            if(ready_)ready_=reading_=host_->TransitionSrInput(*callback_,input_,true);
+        }
+        SrInputScope(const SrInputScope&)=delete;
+        ~SrInputScope(){Close();}
+        bool Ready()const noexcept{return ready_;}
+        bool Close()noexcept
+        {
+            if(closed_)return ready_;closed_=true;
+            if(!input_)return ready_;
+            const bool state=!reading_||host_->TransitionSrInput(*callback_,input_,false);
+            const bool binding=binding_&&binding_->Restore();
+            ready_=ready_&&state&&binding;host_->ObserveSrInputRestoration(*callback_,ready_);return ready_;
+        }
+    };
+    static auto BeginSourceScope(){return Neurotic::Lifecycle::NativeSourceTransactionScope{};}
+    static void BindSourceScope(Neurotic::Lifecycle::NativeSourceTransactionScope& scope,
+        const Neurotic::Lifecycle::NativeProcessBootstrap::Callback& callback)
+    {if(scope.depth_<=8)scope.observation_=callback.TransactionObservation();}
+    static auto Capture(NativeFeatureRegistry<NVSDK_NGX_Feature>::CallbackPin&& pin,
+                        ID3D12GraphicsCommandList* list, const NVSDK_NGX_Parameter* parameters)
+    {
+        // The process retains this root permanently. Copy its address under the
+        // root lock, then release that lock before parameter/COM owner calls.
+        // A reentrant shutdown can revoke the source during BindCall; its final
+        // current-source check then refuses the captured inputs.
+        Neurotic::Lifecycle::NativeProcessBootstrap* host = nullptr;
+        {
+            std::lock_guard lock(mutex_);
+            if(globallyClosed_)return std::optional<Neurotic::Lifecycle::NativeProcessBootstrap::Callback>{};
+            if (!host_) host_ = new Neurotic::Lifecycle::NativeProcessBootstrap;
+            host = host_;
+        }
+        auto callback = host->Capture(HandleToFeature, std::move(pin));
+        if (callback) host->BindCall(*callback, list, parameters, NVSDK_NGX_Result_Success,
+            D3D12Hooks::ObserveNativeRecording);
+        return callback;
+    }
+    static NVSDK_NGX_Result RecordSceneEvaluate(ID3D12GraphicsCommandList* list,
+        const NVSDK_NGX_Handle* handle,NVSDK_NGX_Parameter* parameters,
+        ID3D12Resource* disocclusion,unsigned frame,unsigned inverted)noexcept
+    try
+    {
+        static_assert(static_cast<unsigned>(NVSDK_NGX_PerfQuality_Value_DLAA)==5);
+        if(!list||!handle||!parameters||!disocclusion||frame>3||inverted>1)return NVSDK_NGX_Result_FAIL_InvalidParameter;
+        const auto settings=TryNrConfigSnapshot(*Config::Instance());
+        if(!settings||!settings->DlssNrEnabled.value_or_default()||
+           !settings->DlssNrNativeProtocol.value_or_default()||settings->DlssNrRoute.value_or_default()!=0||
+           settings->DlssNrRunBeforeSr.value_or_default())return NVSDK_NGX_Result_FAIL_InvalidParameter;
+        const auto snapshot=HandleToFeature.Read(handle->Id);
+        if(!snapshot||snapshot.feature!=NVSDK_NGX_Feature_SuperSampling)return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+        if(!Neurotic::Lifecycle::NativeProcessBootstrap::ControlledCreation(snapshot.originalCreation,inverted))
+            return NVSDK_NGX_Result_FAIL_InvalidParameter;
+        auto pin=HandleToFeature.Pin(handle->Id,snapshot);
+        if(!pin||!pin->Current())return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+        Neurotic::Lifecycle::NativeControlledSceneProducer::Images images{};
+        constexpr const char* names[]={"Color","Depth","MotionVectors"};
+        for(unsigned i=0;i<3;++i)
+        {
+            void* raw=nullptr;
+            if(parameters->Get(names[i],&raw)!=NVSDK_NGX_Result_Success||!raw)return NVSDK_NGX_Result_FAIL_InvalidParameter;
+            images[i]=static_cast<ID3D12Resource*>(raw);
+        }
+        images[3]=disocclusion;
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {
+            std::lock_guard lock(mutex_);
+            if(globallyClosed_)return NVSDK_NGX_Result_FAIL_PlatformError;
+            if(!host_)host_=new Neurotic::Lifecycle::NativeProcessBootstrap;
+            host=host_;
+        }
+        auto producer=host->RecordControlledScene(list,images,snapshot.generation,frame,inverted!=0,
+            D3D12Hooks::ObserveNativeRecording,D3D12Hooks::RegisterNativeRootLayout);
+        if(!producer||!pin->Current())return NVSDK_NGX_Result_Fail;
+        Neurotic::Lifecycle::NativeControlledSceneProducer::Scope scope(producer,handle,parameters);
+        // Actual evaluation consumes the producer span immediately. No public
+        // setter can label unrelated resources or arbitrary game recordings.
+        return NVSDK_NGX_D3D12_EvaluateFeature(list,handle,parameters,nullptr);
+    }
+    catch(...){return NVSDK_NGX_Result_Fail;}
+    static auto RunBefore(Neurotic::Lifecycle::NativeProcessBootstrap::Callback& callback,
+        NVSDK_NGX_Parameter* parameters,const NrConfigSnapshot<Config>& settings)
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        namespace P=Neurotic::Protocol;
+        P::NativeProtocolResult result;
+        if(!host)return result;
+        std::optional<NativeStateRestorePoint> captured;
+        auto captureReason=P::Symbol("Native.CommandStateUnavailable");
+        try
+        {
+            const auto* call=callback.OriginalCall();
+            // The selected NR route uses compute, PSO and descriptor heaps.
+            // Graphics state may be undefined on a compute-only caller list;
+            // the observer must reject any mutation of that omitted stage.
+            using Mask=Neurotic::D3D12::RestoreMask;
+            Neurotic::D3D12::NativeStateCaptureDiagnostic diagnostic;
+            if(call)captured=D3D12Hooks::CapturePostSrState(call->CommandList(),Mask::Compute|Mask::Pipeline|Mask::Heaps|Mask::HeapInvalidatedTables,&diagnostic);
+            if(!captured)
+            {
+                auto reason=std::string(diagnostic.reason);
+                if(diagnostic.parameter!=UINT_MAX)
+                    reason+=".p"+std::to_string(diagnostic.parameter)+".known"+std::to_string(diagnostic.known)+
+                        "of"+std::to_string(diagnostic.required);
+                captureReason=P::Symbol(reason);
+                LOG_WARN("NR state capture refused: list={:p} reason={} trace_count={} trace_total={}",
+                    call ? static_cast<void*>(call->CommandList()) : nullptr, reason,
+                    diagnostic.traceCount, diagnostic.traceTotal);
+                for(UINT i=0;i<diagnostic.traceCount;++i)
+                {
+                    const auto& entry=diagnostic.trace[i];
+                    LOG_WARN("NR state trace: seq={} work={} op={} a={} b={} c={}",
+                        entry.sequence,entry.workOrdinal,entry.operation,entry.a,entry.b,entry.c);
+                }
+            }
+        }
+        catch(...){result.reason=P::Symbol("Native.CommandStateCaptureFailed");return host->RecordNativeResult(callback,result);}
+        if(!captured)return host->RecordCommandStateUnavailable(callback,D3D12Hooks::ObserveNativeRecording(
+            callback.OriginalCall()?callback.OriginalCall()->CommandList():nullptr),captureReason);
+        P::NativeCommandStateScope restore([&]{return D3D12Hooks::RestorePostSrState(*captured);},
+            [&]()noexcept{P::NativeMarkCommandStateRestoreFailed(result.facts);});
+        try
+        {
+            // Creation/preparation can itself record work. Its state belongs
+            // inside the same envelope as the actual evaluation.
+            host->PrepareRuntime(callback,settings);
+            if(!callback.Current())result.reason=P::Symbol("Native.ScopeUnavailable");
+            else result=host->RunNativeBefore(callback,parameters,settings);
+        }
+        catch(...){result.reason=P::Symbol("Native.InvocationOwnerFailure");}
+        // Explicit before the result is copied; destructor covers exceptions.
+        const bool restored=restore.Restore();
+        if(!restored&&result.reason.Empty())result.reason=result.facts.failure;
+        host->ObserveNativeRestoration(callback,result,restored,D3D12Hooks::ObserveNativeRecording(
+            callback.OriginalCall()?callback.OriginalCall()->CommandList():nullptr));
+        return host->RecordNativeResult(callback,result);
+    }
+    static void FinishReturn(Neurotic::Lifecycle::NativeProcessBootstrap::Callback& callback,
+        NVSDK_NGX_Result result)noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        if(host)host->FinishNativeReturn(callback,static_cast<std::uint32_t>(result),
+            result==NVSDK_NGX_Result_Success);
+    }
+    static bool ObserveSrReturn(Neurotic::Lifecycle::NativeProcessBootstrap::Callback& callback,
+        NVSDK_NGX_Parameter* parameters,NVSDK_NGX_Result result)noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        return host&&host->ObserveSrReturn(callback,parameters,result,NVSDK_NGX_Result_Success);
+    }
+    static auto BeginOpaqueSr(Neurotic::Lifecycle::NativeProcessBootstrap::Callback& callback,
+        const NVSDK_NGX_Handle* feature,NVSDK_NGX_Parameter* parameters)noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        return host?host->BeginOpaqueSr(callback,feature,parameters,NVSDK_NGX_Result_Success,
+            D3D12Hooks::ObserveNativeRecording(callback.OriginalCall()?callback.OriginalCall()->CommandList():nullptr)):
+            std::shared_ptr<Neurotic::Lifecycle::NativeProcessBootstrap::OpaqueSrOperation>{};
+    }
+    static void SealOpaqueSr(Neurotic::Lifecycle::NativeProcessBootstrap::Callback& callback,
+        Neurotic::Lifecycle::NativeProcessBootstrap::OpaqueSrOperation& operation,
+        const NVSDK_NGX_Handle* feature,NVSDK_NGX_Parameter* parameters,NVSDK_NGX_Result result)noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        if(host)host->SealOpaqueSr(callback,operation,feature,parameters,result,NVSDK_NGX_Result_Success,
+            D3D12Hooks::ObserveNativeRecording(callback.OriginalCall()?callback.OriginalCall()->CommandList():nullptr));
+    }
+    static void Close()noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);globallyClosed_=true;host=host_;}
+        if(host)host->CloseSource();
+    }
+    static NativeTeardownObservationV1 PrepareTeardown()noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        auto result=host?host->PrepareTeardown():NativeTeardownObservationV1{};
+        // Keep the same immutable epoch across preflight and the foreign
+        // attempt. A concurrently published scope cannot inherit this result.
+        if(host)host->AttemptRendererTeardown(result,[]{return DlssNr::Shutdown();});
+        return result;
+    }
+    static NativeTeardownObservationV1 CompleteTeardown()noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        return host?host->CompleteTeardown(DlssNr::ObserveNativeRendererRetirement()):NativeTeardownObservationV1{};
+    }
+    static bool RecreateScope()noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        return host&&host->RecreateScope([host](std::shared_ptr<Neurotic::Lifecycle::NativeProcessBootstrap> fresh){
+            // Readers that already copied the old pointer keep a closed,
+            // immutable scope. Retain each bounded epoch until process exit;
+            // publishing a pointer never reopens the previous owner.
+            static auto* retained=new std::array<std::shared_ptr<Neurotic::Lifecycle::NativeProcessBootstrap>,16>;
+            std::lock_guard lock(mutex_);
+            if(globallyClosed_||host_!=host||!fresh)return false;
+            for(auto& entry:*retained)if(!entry)
+            {entry=std::move(fresh);host_=entry.get();return true;}
+            return false;
+        });
+    }
+    static unsigned QueryReturn(std::uint64_t after,std::uint64_t handle,std::uint64_t list,
+        std::uint64_t output,NativeHostReturnObservationV1& result)noexcept
+    {
+        Neurotic::Lifecycle::NativeProcessBootstrap* host=nullptr;
+        {std::lock_guard lock(mutex_);host=host_;}
+        return host?host->QueryNativeReturn(after,handle,list,output,result):0u;
+    }
+};
+}
+// Explicit controlled teardown. Stops source ingress, sweeps genuine invocation
+#include "NativeControlledFgIntegration.inl"
+// tails, then uses the existing checked renderer shutdown. No module is unloaded.
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_PrepareTeardownV1(
+    DlssNr::NativeTeardownObservationV1* output,std::uint32_t size) noexcept
+try
+{
+    if(!output||size!=sizeof(*output))return 0;
+    *output=DlssNr::NativeDx12Source::PrepareTeardown();
+    return 1;
+}
+catch(...){return 0;}
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_CompleteTeardownV1(
+    DlssNr::NativeTeardownObservationV1* output,std::uint32_t size) noexcept
+try
+{
+    if(!output||size!=sizeof(*output))return 0;
+    *output=DlssNr::NativeDx12Source::CompleteTeardown();
+    return 1;
+}
+catch(...){return 0;}
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_QueryRendererShutdownV1(
+    DlssNr::NativeRendererShutdownObservationV1* output,std::uint32_t size) noexcept
+{
+    if(!output||size!=sizeof(*output))return 0;
+    *output=DlssNr::ObserveNativeRendererShutdown();return 1;
+}
+// Read-only identity of the existing proxy's selected module. No initialization,
+// load, ownership transfer, fallback selection or provider action is performed.
+extern "C" __declspec(dllexport) HMODULE __cdecl OptiScaler_W03_QueryCoreModuleV1() noexcept
+{
+    return NVNGXProxy::NVNGXModule();
+}
+extern "C" __declspec(dllexport) NVSDK_NGX_Result __cdecl OptiScaler_W03_RecordSceneEvaluateV1(
+    ID3D12GraphicsCommandList* list,const NVSDK_NGX_Handle* handle,NVSDK_NGX_Parameter* parameters,
+    ID3D12Resource* disocclusion,unsigned frame,unsigned inverted)noexcept
+{
+    return DlssNr::NativeDx12Source::RecordSceneEvaluate(list,handle,parameters,disocclusion,frame,inverted);
+}
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_QueryNativeReturnV1(
+    std::uint64_t afterSequence,std::uint64_t expectedHandle,std::uint64_t expectedCommandList,
+    std::uint64_t expectedOutput,DlssNr::NativeHostReturnObservationV1* output,std::uint32_t outputSize)noexcept
+{
+    if(!output||outputSize!=sizeof(*output))return 0;
+    *output={};
+    return DlssNr::NativeDx12Source::QueryReturn(afterSequence,expectedHandle,expectedCommandList,expectedOutput,*output);
+}
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_QueryRecordingV1(
+    std::uint64_t commandList,DlssNr::NativeRecordingObservationV1* output,std::uint32_t outputSize)noexcept
+{
+    if(!output||outputSize!=sizeof(*output)||!commandList)return 0;
+    *output={};
+    try
+    {
+        const auto observed=D3D12Hooks::ObserveNativeRecording(
+            reinterpret_cast<ID3D12GraphicsCommandList*>(static_cast<std::uintptr_t>(commandList)));
+        output->commandList=commandList;
+        output->incarnation=observed.incarnation;
+        output->workOrdinal=observed.workOrdinal;
+        output->hookGeneration=observed.hookGeneration;
+        output->flags=(observed.active?1u:0u)|(observed.completeCoverage?2u:0u)|
+            (observed.trackingBeganBeforeRecording?4u:0u)|(observed.missingRequiredHistory?8u:0u);
+        return 1;
+    }
+    catch(...){return 0;}
+}
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_QueryRecordingDiagnosticV1(
+    std::uint64_t commandList,DlssNr::NativeRecordingDiagnosticV1* output,std::uint32_t outputSize)noexcept
+{
+    if(!output||outputSize!=sizeof(*output)||!commandList)return 0;
+    *output={};
+    try
+    {
+        *output=D3D12Hooks::DiagnoseNativeRecording(
+            reinterpret_cast<ID3D12GraphicsCommandList*>(static_cast<std::uintptr_t>(commandList)));
+        return 1;
+    }
+    catch(...){return 0;}
+}
 static std::mutex ngxObservationMutex;
 static std::mutex fgObservationMutex;
 static ID3D12Device* D3D12Device = nullptr;
@@ -166,7 +691,7 @@ static void LogNrPipelineObservation(unsigned int handleId, NVSDK_NGX_Feature fe
 
 static int evalCounter = 0;
 static bool shutdown = false;
-static bool _skipInit = false;
+static thread_local bool _skipInit = false;
 static wchar_t const** paths;
 
 class ScopedInitDx12
@@ -282,7 +807,7 @@ static void UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 
 #pragma region DLSS Init Calls
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApplicationId,
+static NVSDK_NGX_Result InitDx12ExtendedCore(unsigned long long InApplicationId,
                                                         const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
                                                         NVSDK_NGX_Version InSDKVersion,
                                                         const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
@@ -358,11 +883,23 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
     return NVSDK_NGX_Result_Success;
 }
 
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApplicationId,
+    const wchar_t* InApplicationDataPath, ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
+    const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
+    return InitDx12ExtendedCore(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
+}
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplicationId,
                                                     const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
                                                     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                                     NVSDK_NGX_Version InSDKVersion)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     NVSDK_NGX_FeatureCommonInfo localFeatureInfo = {};
@@ -408,7 +945,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplica
 
     ScopedInitDx12 scopedInit {};
     auto result =
-        NVSDK_NGX_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+        InitDx12ExtendedCore(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
 
     LOG_DEBUG("was called NVSDK_NGX_D3D12_Init_Ext");
     return result;
@@ -421,6 +958,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
                                                               ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                                               const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     NVSDK_NGX_FeatureCommonInfo localFeatureInfo = {};
@@ -469,7 +1009,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
     }
 
     ScopedInitDx12 scopedInit {};
-    auto result = NVSDK_NGX_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+    auto result = InitDx12ExtendedCore(0x1337, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
     return result;
 }
 
@@ -479,6 +1019,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
     const wchar_t* InApplicationDataPath, ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
     NVSDK_NGX_Version InSDKVersion)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     LOG_INFO("InProjectId: {0}", InProjectId);
@@ -495,7 +1038,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
         return NVSDK_NGX_Result_Success;
     }
 
-    auto result = NVSDK_NGX_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
+    auto result = InitDx12ExtendedCore(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
 
     return result;
 }
@@ -504,10 +1047,78 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
 
 #pragma region DLSS Shutdown Calls
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
+// Fixed process-lifetime retention slots; no allocation can fail after logical
+// release is published. All access is under the existing native NGX call lease.
+using OwnedDx12ReleaseGuard = DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::ReleaseGuard;
+struct DeferredOwnedDx12Release
+{
+    unsigned int handle = 0;
+    bool failed = false;
+    std::optional<OwnedDx12ReleaseGuard> guard;
+};
+static std::array<DeferredOwnedDx12Release,16> DeferredOwnedDx12Releases;
+static DeferredOwnedDx12Release* AvailableOwnedDx12Release()
+{
+    for(auto& slot:DeferredOwnedDx12Releases)if(!slot.guard)return &slot;
+    return nullptr;
+}
+static bool HasDeferredOwnedDx12Release()
+{
+    return std::any_of(DeferredOwnedDx12Releases.begin(),DeferredOwnedDx12Releases.end(),
+                       [](const auto& slot){return slot.guard.has_value();});
+}
+static void PollDeferredOwnedDx12Releases()
+{
+    for(auto& slot:DeferredOwnedDx12Releases)
+    {
+        if(!slot.guard||slot.failed)continue;
+        const auto it=Dx12Contexts.find(slot.handle);
+        if(it==Dx12Contexts.end()||!it->second.ownedReleaseDeferred||!it->second.feature)
+        {slot.failed=true;continue;} // preserve the closed generation on inconsistent ownership
+        auto& context=it->second;
+        if(!context.feature->CanRetire())
+        {
+            if(!context.feature->CanDeferRetirement())
+            {
+                slot.failed=true;context.ownedReleaseUnresolved=true;
+                LOG_ERROR("Deferred owned SR/RR tracking became unavailable; closed generation retained, restart required");
+            }
+            continue;
+        }
+        NVSDK_NGX_Result result=NVSDK_NGX_Result_Fail;
+        try{result=context.feature->ReleaseProvider();}catch(...){slot.failed=true;}
+        if(result!=NVSDK_NGX_Result_Success||!slot.guard->Complete(true))
+        {
+            slot.failed=true;context.ownedReleaseUnresolved=true;
+            LOG_ERROR("Deferred owned SR/RR physical release failed; generation retained, restart required");
+            continue; // never reopen admission or retry an entered opaque provider
+        }
+        const auto handle=slot.handle;
+        Dx12Contexts.erase(it);
+        slot.guard.reset();slot.handle=0;
+        {std::lock_guard lock(ngxObservationMutex);
+         NrPipelineObservations.erase(handle);NgxEvaluationTraceObservations.erase(handle);}
+        if(!HandleToFeature.Has(NVSDK_NGX_Feature_RayReconstruction))
+            DlssNr::SetNativeRayReconstructionActive(false);
+        // No currentFeature, menu, exposure or FG cleanup: those globals may
+        // already belong to a newer generation.
+        LOG_INFO("Deferred owned SR/RR physical retirement completed, HandleId: {}",handle);
+    }
+}
+
+static NVSDK_NGX_Result ShutdownDx12Core()
 {
     shutdown = true;
 
+    for (const auto& [id, context] : Dx12Contexts)
+        if (context.feature && !context.feature->CanRetire()) { shutdown = false; return NVSDK_NGX_Result_FAIL_PlatformError; }
+    for (const auto& [id, context] : Dx12Contexts)
+    {
+        const auto result = context.feature ? context.feature->ReleaseProvider() : NVSDK_NGX_Result_Success;
+        if (result != NVSDK_NGX_Result_Success) { shutdown = false; return result; }
+    }
+    State::Instance().currentFeature = nullptr;
+    Dx12Contexts.clear();
     // NR owns driver features, capability parameters, and device-bound scratch resources.
     // Release them while the native NGX core is still live so a later initialization cannot reuse a
     // stale generation.
@@ -516,8 +1127,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
         shutdown = false;
         return NVSDK_NGX_Result_FAIL_PlatformError;
     }
+    if(!IFeature_Dx12::TryRetireSharedMenu())
+    {shutdown=false;return NVSDK_NGX_Result_FAIL_PlatformError;}
     State::Instance().nvngxDx12Inited = false;
 
+    ID3D12Device* shutdownDevice = D3D12Device;
     D3D12Device = nullptr;
 
     State::Instance().currentFeature = nullptr;
@@ -525,13 +1139,22 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
     // Unhooking and cleaning stuff causing issues during shutdown.
     // Disabled for now to check if it cause any issues
     // UnhookAll();
-    DLSSFeatureDx12::Shutdown(D3D12Device);
+    DLSSFeatureDx12::Shutdown(shutdownDevice);
 
     // Added `&& !State::Instance().isShuttingDown` hack for crash on exit
     if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::IsDx12Inited() &&
-        NVNGXProxy::D3D12_Shutdown() != nullptr && !State::Instance().isShuttingDown)
+        !State::Instance().isShuttingDown)
     {
-        auto result = NVNGXProxy::D3D12_Shutdown()();
+        // Owned DLSS and native passthrough initialized this same proxy core.
+        // Select one shutdown variant and preserve the device for its fallback.
+        const auto result = NVNGXProxy::D3D12_Shutdown() != nullptr ? NVNGXProxy::D3D12_Shutdown()() :
+            NVNGXProxy::D3D12_Shutdown1() != nullptr ? NVNGXProxy::D3D12_Shutdown1()(shutdownDevice) :
+            NVSDK_NGX_Result_FAIL_PlatformError;
+        if (result != NVSDK_NGX_Result_Success)
+        {
+            shutdown = false;
+            return result;
+        }
         NVNGXProxy::SetDx12Inited(false);
     }
 
@@ -562,15 +1185,50 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
     return NVSDK_NGX_Result_Success;
 }
 
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
+{
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
+    PollDeferredOwnedDx12Releases();
+    if(HasDeferredOwnedDx12Release())return NVSDK_NGX_Result_FAIL_PlatformError;
+    DlssNr::NativeDx12Source::Close();
+    auto sourceShutdown = HandleToFeature.BeginShutdown();
+    if (!sourceShutdown) return NVSDK_NGX_Result_FAIL_PlatformError;
+    const auto result = ShutdownDx12Core();
+    sourceShutdown->Complete();
+    return result;
+}
+
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
+    PollDeferredOwnedDx12Releases();
+    if(HasDeferredOwnedDx12Release())return NVSDK_NGX_Result_FAIL_PlatformError;
+    DlssNr::NativeDx12Source::Close();
+    auto sourceShutdown = HandleToFeature.BeginShutdown();
+    if (!sourceShutdown) return NVSDK_NGX_Result_FAIL_PlatformError;
     shutdown = true;
+    for (const auto& [id, context] : Dx12Contexts)
+        if (context.feature && !context.feature->CanRetire()) { shutdown = false; sourceShutdown->Complete(); return NVSDK_NGX_Result_FAIL_PlatformError; }
+    for (const auto& [id, context] : Dx12Contexts)
+    {
+        const auto result = context.feature ? context.feature->ReleaseProvider() : NVSDK_NGX_Result_Success;
+        if (result != NVSDK_NGX_Result_Success) { shutdown = false; sourceShutdown->Complete(); return result; }
+    }
+    State::Instance().currentFeature = nullptr;
+    Dx12Contexts.clear();
     // Shutdown1 must release NR before either native NGX shutdown variant is invoked.
     if (!DlssNr::Shutdown())
     {
         shutdown = false;
+        sourceShutdown->Complete();
         return NVSDK_NGX_Result_FAIL_PlatformError;
     }
+    if(!IFeature_Dx12::TryRetireSharedMenu())
+    {shutdown=false;sourceShutdown->Complete();return NVSDK_NGX_Result_FAIL_PlatformError;}
     State::Instance().nvngxDx12Inited = false;
 
     if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
@@ -583,11 +1241,48 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
         NVNGXProxy::D3D12_Shutdown1() != nullptr && !State::Instance().isShuttingDown)
     {
         auto result = NVNGXProxy::D3D12_Shutdown1()(InDevice);
+        if (result != NVSDK_NGX_Result_Success)
+        {
+            shutdown = false;
+            sourceShutdown->Complete();
+            return result;
+        }
         NVNGXProxy::SetDx12Inited(false);
     }
 
-    return NVSDK_NGX_D3D12_Shutdown();
+    const auto result = ShutdownDx12Core();
+    sourceShutdown->Complete();
+    return result;
 }
+
+// Controlled host requires an actual core shutdown call. The general public
+// wrapper also supports no-native-core configurations and cannot attest that.
+extern "C" __declspec(dllexport) std::uint32_t __cdecl OptiScaler_W03_ShutdownCheckedV1() noexcept
+try
+{
+    if(!Config::Instance()->DLSSEnabled.value_or_default()||!NVNGXProxy::IsDx12Inited()||
+       !NVNGXProxy::D3D12_Shutdown()||State::Instance().isShuttingDown||
+       State::Instance().activeFgNvngx!=FGNvngxReplacement::None||State::Instance().currentFG)
+        return static_cast<std::uint32_t>(NVSDK_NGX_Result_FAIL_PlatformError);
+    // A failed/throwing native shutdown may have changed provider state. Never
+    // re-enter that operation through the controlled API, including reentrancy.
+    static std::atomic<bool> attempted{false};
+    if(attempted.exchange(true))return static_cast<std::uint32_t>(NVSDK_NGX_Result_FAIL_PlatformError);
+    return static_cast<std::uint32_t>(NVSDK_NGX_D3D12_Shutdown());
+}
+catch(...){return static_cast<std::uint32_t>(NVSDK_NGX_Result_FAIL_PlatformError);}
+
+extern "C" __declspec(dllexport) unsigned __cdecl OptiScaler_W03_RecreateScopeV1() noexcept
+try
+{
+    if(!D3D12Device||!NVNGXProxy::IsDx12Inited()||State::Instance().isShuttingDown||
+       State::Instance().currentFG||State::Instance().activeFgNvngx!=FGNvngxReplacement::None||
+       !DlssNr::NativeDx12Source::RecreateScope())return 0;
+    // The old scope and attempt latch remain retired. This initializes only
+    // the new renderer generation after authoritative prior retirement.
+    DlssNr::NotifyDeviceInit(D3D12Device);return 1;
+}
+catch(...){return 0;}
 
 #pragma endregion
 
@@ -601,6 +1296,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
  */
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetParameters(NVSDK_NGX_Parameter** OutParameters)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     if (OutParameters == nullptr)
@@ -641,6 +1339,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetParameters(NVSDK_NGX_Parameter
  */
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetCapabilityParameters(NVSDK_NGX_Parameter** OutParameters)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     if (OutParameters == nullptr)
@@ -650,6 +1351,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetCapabilityParameters(NVSDK_NGX
     if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::NVNGXModule() != nullptr &&
         NVNGXProxy::IsDx12Inited() && NVNGXProxy::D3D12_GetCapabilityParameters() != nullptr)
     {
+        // Streamline caches this result during plugin startup. Publish the
+        // selected Ada unlock before NGX computes the capability map.
+        StreamlineHooks::prepareNativeMfgCapabilities();
+        if (Neurotic::Mfg::Experimental::GameFgScope::Current()) StreamlineHooks::prepareExperimentalMfgCapabilities();
         LOG_INFO("Calling NVNGXProxy::D3D12_GetCapabilityParameters");
         auto result = NVNGXProxy::D3D12_GetCapabilityParameters()(OutParameters);
         LOG_INFO("Calling NVNGXProxy::D3D12_GetCapabilityParameters result: {0:X}, ptr: {1:X}", (UINT) result,
@@ -680,6 +1385,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetCapabilityParameters(NVSDK_NGX
  */
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_AllocateParameters(NVSDK_NGX_Parameter** OutParameters)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::NVNGXModule() != nullptr &&
@@ -705,6 +1413,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_AllocateParameters(NVSDK_NGX_Para
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     if (InParameters == nullptr)
@@ -726,6 +1437,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_PopulateParameters_Impl(NVSDK_NGX
  */
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_DestroyParameters(NVSDK_NGX_Parameter* InParameters)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     if (InParameters == nullptr)
@@ -781,11 +1495,18 @@ static bool EnsureD3D12Device(ID3D12GraphicsCommandList* cmdList)
 static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdList,
                                                const NVSDK_NGX_Handle* InFeatureHandle,
                                                NVSDK_NGX_Parameter* InParameters,
-                                               PFN_NVSDK_NGX_ProgressCallback InCallback);
+                                               PFN_NVSDK_NGX_ProgressCallback InCallback,
+                                               DlssNr::NativeTemporalInputs::OutputEvaluation& outputEvaluation);
 
 static NVSDK_NGX_Result TryCreateOptiFeature(ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
                                              NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
+    PollDeferredOwnedDx12Releases();
+    if(!Neurotic::Runtime::CanCreateOwnedFeature(Dx12Contexts,*OutHandle))
+    {
+        LOG_ERROR("Owned SR/RR creation refused: unresolved prior release or live caller handle");
+        return NVSDK_NGX_Result_Fail;
+    }
     State& state = State::Instance();
     const Config& cfg = *Config::Instance();
 
@@ -826,6 +1547,7 @@ static NVSDK_NGX_Result TryCreateOptiFeature(ID3D12GraphicsCommandList* InCmdLis
 
     // Create context entry
     Dx12Contexts[handleId] = {};
+    Dx12Contexts[handleId].ownedCreateParams = Neurotic::Runtime::SnapshotCreateParameters(*InParameters);
 
     // Retrieve feature implementation
     if (!FeatureProvider_Dx12::GetFeature(upscalerBackend, handleId, InParameters, &Dx12Contexts[handleId].feature))
@@ -862,8 +1584,10 @@ static NVSDK_NGX_Result TryCreateOptiFeature(ID3D12GraphicsCommandList* InCmdLis
     }
     else
     {
-        LOG_ERROR("Feature '{}' initialization failed falling back to FSR 2.1.2", UpscalerDisplayName(upscalerBackend));
-        state.newBackend = Upscaler::FSR21;
+        const bool rayReconstruction = upscalerBackend == Upscaler::DLSSD;
+        LOG_ERROR("Feature '{}' initialization failed; scheduling {}", UpscalerDisplayName(upscalerBackend),
+                  rayReconstruction ? "RR recreation" : "FSR 2.1.2 fallback");
+        state.newBackend = rayReconstruction ? Upscaler::DLSSD : Upscaler::FSR21;
         state.changeBackend[handleId] = true;
     }
 
@@ -889,6 +1613,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
                                                              NVSDK_NGX_Parameter* InParameters,
                                                              NVSDK_NGX_Handle** OutHandle)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::NgxCreationSnapshot feedCreation(InParameters, NVSDK_NGX_Result_Success);
+    // NR-FEED-001 END
     LOG_FUNC();
 
     if (!InCmdList)
@@ -906,7 +1636,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
     const State& state = State::Instance();
     const Config& cfg = *Config::Instance();
 
+    Neurotic::Mfg::Experimental::GameFgScope ngxGameScope(InFeatureID == NVSDK_NGX_Feature_FrameGeneration &&
+        Neurotic::Mfg::Experimental::GameFgScope::Current());
+    if (InFeatureID == NVSDK_NGX_Feature_FrameGeneration) {
+        Neurotic::Mfg::Experimental::BeforeCreate();
+        if (!Neurotic::Mfg::Experimental::AllowFeatureCall()) return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
+    }
+
     // DLSSG replacements passthrough
+    const auto nativeCreation = (cfg.DlssNrNativeProtocol.value_or_default() || IsNrPipelineFeature(InFeatureID))
+        ? DlssNr::NativeNgxCreationParameters::Capture(InParameters, NVSDK_NGX_Result_Success)
+        : DlssNr::NativeNgxCreationParameters{};
     if (State::Instance().activeFgNvngx != FGNvngxReplacement::None && Nvngx_FG::isDx12Available() &&
         InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
@@ -917,15 +1657,41 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
         if (res == NVSDK_NGX_Result_Success && *OutHandle)
         {
             LOG_INFO("Created modded DLSSG feature with HandleId: {}", (*OutHandle)->Id);
-            HandleToFeature.Set((*OutHandle)->Id, InFeatureID);
+            HandleToFeature.Set((*OutHandle)->Id, InFeatureID, nativeCreation);
+            // NR-FEED-001 BEGIN
+            if (Neurotic::Feed::Observing()) feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::D3D12, "create",
+                HandleToFeature.Read((*OutHandle)->Id).generation}, *OutHandle, InFeatureID);
+            // NR-FEED-001 END
         }
 
         LogNgxCreateTrace(InFeatureID, "DLSSG replacement", res, *OutHandle);
         return res;
     }
 
-    // Native DLSS passthrough (exclude SuperSampling and RayReconstruction)
-    if (InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction)
+    // The explicit Native SR route uses the genuine provider handle, which
+    // reaches the existing selected native evaluation/HostReturn path. Other
+    // SR/RR choices retain their existing replacement creation route.
+    const bool selectedNativeSr=DlssNr::UseNativeSrPassthrough(cfg.DlssNrNativeProtocol.value_or_default(),
+        cfg.GetDlssNrRuntimeSnapshot().enabled,cfg.DlssNrRoute.value_or_default(),
+        InFeatureID==NVSDK_NGX_Feature_SuperSampling,
+        cfg.Dx12Upscaler.has_value()&&cfg.Dx12Upscaler.value()==Upscaler::DLSS);
+    if (selectedNativeSr)
+    {
+        // Attach before creation finishes so the caller's next genuine Reset
+        // can enroll the first evaluation. Legacy restoration remains optional;
+        // native recording authority must not depend on those preferences.
+        if (cfg.RestoreComputeSignature.value_or_default() || cfg.RestoreGraphicSignature.value_or_default())
+            D3D12Hooks::HookToCommandListLate(InCmdList);
+    }
+    // Enroll before creation returns when a consumer already needs the owner.
+    // Inspector can also start later; that path enrolls at its first evaluation.
+    if (selectedNativeSr || (InFeatureID == NVSDK_NGX_Feature_SuperSampling &&
+        Neurotic::Semantic::Character::CharacterEarlyCaptureEnabled && Neurotic::Semantic::Character::CharacterWorkerRequested()))
+    {
+        const auto nativeList = DlssNr::NativeIdentity::Resolve<ID3D12GraphicsCommandList>(InCmdList);
+        if (nativeList.object) D3D12Hooks::InstallNativeRecordingHooks(nativeList.object.Get());
+    }
+    if (selectedNativeSr||(InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction))
     {
         if (cfg.DLSSEnabled.value_or_default() && NVNGXProxy::InitDx12(D3D12Device) &&
             NVNGXProxy::D3D12_CreateFeature() != nullptr)
@@ -945,7 +1711,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
             if (res == NVSDK_NGX_Result_Success && *OutHandle)
             {
                 LOG_INFO("Native CreateFeature success, HandleId: {}", (*OutHandle)->Id);
-                HandleToFeature.Set((*OutHandle)->Id, InFeatureID);
+                HandleToFeature.Set((*OutHandle)->Id, InFeatureID, nativeCreation);
+                // NR-FEED-001 BEGIN
+                if (Neurotic::Feed::Observing()) feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::D3D12, "create",
+                    HandleToFeature.Read((*OutHandle)->Id).generation}, *OutHandle, InFeatureID);
+                // NR-FEED-001 END
             }
             else
             {
@@ -967,7 +1737,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 
     if (tryResult == NVSDK_NGX_Result_Success)
     {
-        if (*OutHandle) HandleToFeature.Set((*OutHandle)->Id, InFeatureID);
+        if (*OutHandle) HandleToFeature.Set((*OutHandle)->Id, InFeatureID, nativeCreation);
+        // NR-FEED-001 BEGIN
+        if (Neurotic::Feed::Observing() && *OutHandle) feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::D3D12, "create",
+            HandleToFeature.Read((*OutHandle)->Id).generation}, *OutHandle, InFeatureID);
+        // NR-FEED-001 END
         if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
         {
             LOG_INFO("DLSS-NR: native mode-aware RR feature created; active reconstruction follows evaluation");
@@ -980,10 +1754,50 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_FUNC();
 
     if (!InHandle)
         return NVSDK_NGX_Result_Success;
+
+    auto handleId = InHandle->Id;
+    const auto featureSnapshot = HandleToFeature.Read(handleId);
+    const auto owned=Dx12Contexts.find(handleId);
+    if(owned!=Dx12Contexts.end()&&owned->second.ownedReleaseDeferred)
+        return NVSDK_NGX_Result_Success; // logical release is idempotent; the retained owner stays closed
+    std::optional<DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::ReleaseGuard> sourceRelease;
+    if (featureSnapshot)
+    {
+        sourceRelease = HandleToFeature.BeginRelease(handleId, featureSnapshot);
+        if (!sourceRelease)
+        {
+            if(owned!=Dx12Contexts.end())owned->second.ownedReleaseUnresolved=true;
+            LOG_ERROR("Owned SR/RR release refused: source callback admission is still occupied or unavailable");
+            return NVSDK_NGX_Result_Fail;
+        }
+    }
+    if(owned!=Dx12Contexts.end()&&owned->second.feature&&!owned->second.feature->CanRetire())
+    {
+        auto& context=owned->second;
+        auto* slot=AvailableOwnedDx12Release();
+        const bool known=sourceRelease&&sourceRelease->CanRetainPending()&&context.feature->CanDeferRetirement();
+        const bool independentFg=State::Instance().currentFG==nullptr||State::Instance().activeFgInput!=FGInput::Upscaler;
+        if(!known||!independentFg||!slot)
+        {
+            context.ownedReleaseUnresolved=true; // every refused explicit release blocks fresh allocation
+            if(sourceRelease)sourceRelease->DeferBeforeProvider();
+            LOG_ERROR("Owned SR/RR release refused before provider: known={}, independentFG={}, capacity={}",known,independentFg,slot!=nullptr);
+            return NVSDK_NGX_Result_Fail;
+        }
+        slot->handle=handleId;slot->failed=false;slot->guard.emplace(std::move(*sourceRelease));
+        context.ownedReleaseDeferred=true;context.ownedReleaseUnresolved=false;
+        if(State::Instance().currentFeature==context.feature.get())State::Instance().currentFeature=nullptr;
+        LOG_INFO("Owned SR/RR logical release accepted with tracked pending recording, HandleId: {}",handleId);
+        return NVSDK_NGX_Result_Success; // no global FG/exposure cleanup on this retained generation
+    }
+    if(owned!=Dx12Contexts.end())owned->second.ownedReleaseUnresolved=true;
 
     // Before any feature's resources are freed, drop the exposure scan's references to whatever it
     // captured. The scan AddRef's candidates and never released them; a Streamline/DLSS-D resource it
@@ -992,15 +1806,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     // whenever NR is on; a no-op only when NR is off.
     DlssNr::ExposureScan::ReleaseTrackedResources();
 
-    auto handleId = InHandle->Id;
-
-    const auto featureSnapshot = HandleToFeature.Read(handleId);
     const NVSDK_NGX_Feature releasedFeature = featureSnapshot.feature;
     const auto diagnosticInstance = DlssNr::FgLifecycle::Find(handleId);
     const auto nativeFgInstance = DlssNr::PreFg::NativeFgInstance(handleId);
     const bool diagnosticFg = releasedFeature == NVSDK_NGX_Feature_FrameGeneration || diagnosticInstance != 0;
     const auto finishRelease = [&](NVSDK_NGX_Result result) {
-        if (HandleToFeature.Released(handleId, featureSnapshot, result == NVSDK_NGX_Result_Success))
+        if (sourceRelease ? sourceRelease->Complete(result == NVSDK_NGX_Result_Success) :
+            HandleToFeature.Released(handleId, featureSnapshot, result == NVSDK_NGX_Result_Success))
         {
             {
                 std::lock_guard lock(ngxObservationMutex);
@@ -1047,7 +1859,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
                     static_cast<uint32_t>(result), result == NVSDK_NGX_Result_Success);
             if (releasedFeature == NVSDK_NGX_Feature_FrameGeneration &&
                 result == NVSDK_NGX_Result_Success)
+            {
                 DlssNr::PreFg::PublishNativeFgReleased(handleId, nativeFgInstance);
+                Neurotic::Semantic::Character::NativeFgWork().Released(handleId,nativeFgInstance);
+            }
 
             if (!shutdown)
                 LOG_INFO("D3D12_ReleaseFeature result for ({0}): {1:X}", handleId, (UINT) result);
@@ -1062,7 +1877,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
                 DlssNr::FgLifecycle::Released(0, handleId, diagnosticInstance,
                     static_cast<uint32_t>(NVSDK_NGX_Result_FAIL_FeatureNotFound), false);
 
-            return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+            return finishRelease(NVSDK_NGX_Result_FAIL_FeatureNotFound);
         }
     }
     // Clean up OptiScaler feature with framegen
@@ -1079,6 +1894,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
 
         if (auto* deviceContext = entry.feature.get())
         {
+            if (!deviceContext->CanRetire())
+            {
+                if(sourceRelease)sourceRelease->DeferBeforeProvider();
+                return NVSDK_NGX_Result_Fail;
+            }
+            const auto providerRelease = deviceContext->ReleaseProvider();
+            if (providerRelease != NVSDK_NGX_Result_Success) return finishRelease(providerRelease);
             // Clear global reference if it matches
             if (deviceContext == State::Instance().currentFeature)
                 State::Instance().currentFeature = nullptr;
@@ -1086,6 +1908,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
             // Erase from map (smart pointer reset is implicit on erase)
             Dx12Contexts.erase(it);
         }
+        else Dx12Contexts.erase(it);
     }
     else
     {
@@ -1107,6 +1930,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
     IDXGIAdapter* Adapter, const NVSDK_NGX_FeatureDiscoveryInfo* FeatureDiscoveryInfo,
     NVSDK_NGX_FeatureRequirement* OutSupported)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     LOG_DEBUG("for ({0})", (int) FeatureDiscoveryInfo->FeatureID);
 
     const bool isUpscaling = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling;
@@ -1126,6 +1952,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
 
         // Some old windows 10 os version
         strcpy_s(OutSupported->MinOSVersion, "10.0.10240.16384");
+        DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::D3D12, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), NVSDK_NGX_Result_Success, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Effective);
         return NVSDK_NGX_Result_Success;
     }
 
@@ -1139,10 +1966,30 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
         NVNGXProxy::D3D12_GetFeatureRequirements() != nullptr)
     {
         LOG_DEBUG("D3D12_GetFeatureRequirements for ({0})", (int) FeatureDiscoveryInfo->FeatureID);
+        if (isFG && Neurotic::Mfg::Experimental::GameFgScope::Current()) StreamlineHooks::prepareExperimentalMfgCapabilities();
+        DXGI_ADAPTER_DESC experimentalAdapter{};
+        const bool boundExperimentalAdapter = Adapter && SUCCEEDED(Adapter->GetDesc(&experimentalAdapter));
+        if (isFG && !Neurotic::Mfg::Experimental::AllowFeatureCall()) return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
+        Neurotic::Mfg::Experimental::ArchitectureScope experimentalScope(isFG && boundExperimentalAdapter &&
+            Neurotic::Mfg::Experimental::GameFgScope::Current(),
+            experimentalAdapter.AdapterLuid);
         auto result = NVNGXProxy::D3D12_GetFeatureRequirements()(Adapter, FeatureDiscoveryInfo, OutSupported);
         LOG_DEBUG("D3D12_GetFeatureRequirements result for ({0}): {1:X}", (int) FeatureDiscoveryInfo->FeatureID,
                   (UINT) result);
 
+        DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::D3D12, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), result, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Raw);
+        if (isFG && Adapter && OutSupported) {
+            DXGI_ADAPTER_DESC desc{};
+            if (SUCCEEDED(Adapter->GetDesc(&desc))) {
+                uint32_t flags = static_cast<uint32_t>(OutSupported->FeatureSupported);
+                uint32_t arch = OutSupported->MinHWArchitecture;
+                if (Neurotic::Mfg::Experimental::RelaxRequirements(static_cast<uint32_t>(result),
+                    static_cast<uint32_t>(FeatureDiscoveryInfo->FeatureID), desc.AdapterLuid, flags, arch)) {
+                    OutSupported->FeatureSupported = static_cast<decltype(OutSupported->FeatureSupported)>(flags);
+                    OutSupported->MinHWArchitecture = arch;
+                }
+            }
+        }
         return result;
     }
     else
@@ -1151,13 +1998,15 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
     }
 
     OutSupported->FeatureSupported = NVSDK_NGX_FeatureSupportResult_AdapterUnsupported;
+    DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::D3D12, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), NVSDK_NGX_Result_FAIL_FeatureNotSupported, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Effective);
     return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
 }
 
 static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdList,
                                                const NVSDK_NGX_Handle* InFeatureHandle,
                                                NVSDK_NGX_Parameter* InParameters,
-                                               PFN_NVSDK_NGX_ProgressCallback InCallback)
+                                               PFN_NVSDK_NGX_ProgressCallback InCallback,
+                                               DlssNr::NativeTemporalInputs::OutputEvaluation& outputEvaluation)
 {
     State& state = State::Instance();
     const Config& cfg = *Config::Instance();
@@ -1188,7 +2037,7 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
 
     // Skip evaluation for the first N frames if configured
     if (cfg.SkipFirstFrames.has_value() && evalCounter < cfg.SkipFirstFrames.value())
-        return NVSDK_NGX_Result_Success;
+        return NVSDK_NGX_Result_Fail;
 
     // Root signature restoration setup
     const bool restoreCompute = cfg.RestoreComputeSignature.value_or_default();
@@ -1202,7 +2051,7 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
         if (!D3D12Hooks::CanRestoreRootSignature(InCmdList))
         {
             LOG_DEBUG("Skipping upscaling because can't restore root signature");
-            return NVSDK_NGX_Result_Success;
+            return NVSDK_NGX_Result_Fail;
         }
     }
 
@@ -1238,12 +2087,12 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
         if (ctxData.changeBackendCounter != 0 || !successfulPhase)
         {
             D3D12Hooks::SetRootSignatureTracking(true);
-            return NVSDK_NGX_Result_Success;
+            return NVSDK_NGX_Result_Fail;
         }
     }
 
     // Fallback to FSR 2.1.2 if feature failed to initialize and user didn't explicitly request it
-    if (!feature->IsInited() && cfg.Dx12Upscaler.value_or_default() != Upscaler::FSR21)
+    if (feature && feature->GetUpscalerType() != Upscaler::DLSSD && !feature->IsInited() && cfg.Dx12Upscaler.value_or_default() != Upscaler::FSR21)
     {
         LOG_WARN("Feature '{}' failed to initialize. Falling back to FSR 2.1.2", feature->Name());
         ImGui::InsertNotification({ ImGuiToastType::Warning, 10000, "Falling back to FSR 2.1.2" });
@@ -1253,9 +2102,10 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
 
         D3D12Hooks::SetRootSignatureTracking(true);
 
-        return NVSDK_NGX_Result_Success;
+        return NVSDK_NGX_Result_Fail;
     }
 
+    if (!feature) return NVSDK_NGX_Result_FAIL_FeatureNotFound;
     state.currentFeature = feature;
 
     // Prepare upscaling inputs
@@ -1269,7 +2119,9 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
         UpscalerInputsDx12::UpscaleEnd(InCmdList, InParameters, feature);
 
         ScopedSkipHeapCapture skip {};
-        evalSuccess = feature->Evaluate(InCmdList, InParameters);
+        evalSuccess = outputEvaluation.Invoke(feature->GetUpscalerType() == Upscaler::DLSSD &&
+            feature->Api() == API::DX12 && !feature->IsWithDx12(),
+            [&] { return feature->Evaluate(InCmdList, InParameters); });
     }
 
     if (!evalSuccess)
@@ -1296,6 +2148,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                                                                NVSDK_NGX_Parameter* InParameters,
                                                                PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
+    PollDeferredOwnedDx12Releases();
+    if(InFeatureHandle)
+        if(const auto old=Dx12Contexts.find(InFeatureHandle->Id);old!=Dx12Contexts.end()&&old->second.ownedReleaseDeferred)
+            return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+    auto sourceTransactionScope=DlssNr::NativeDx12Source::BeginSourceScope();
     if (!InFeatureHandle)
     {
         LOG_DEBUG("InFeatureHandle is null");
@@ -1320,14 +2180,92 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         LOG_WARN("EvaluateFeature received untracked handle {}; NR is not attached", handleId);
     }
     const NVSDK_NGX_Feature feature = featureSnapshot.feature;
+    Neurotic::Mfg::Experimental::GameFgScope ngxGameScope(feature == NVSDK_NGX_Feature_FrameGeneration &&
+        Neurotic::Mfg::Experimental::GameFgScope::Current());
+    if (feature == NVSDK_NGX_Feature_FrameGeneration && !Neurotic::Mfg::Experimental::AllowFeatureCall())
+        return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"NGX", Neurotic::Contracts::GraphicsApi::D3D12,
+        "evaluate", featureSnapshot ? std::optional<std::uint64_t>(featureSnapshot.generation) : std::nullopt}, InFeatureHandle);
+    Neurotic::Feed::ObserveNgxEvaluation(feedObservation, InParameters, NVSDK_NGX_Result_Success);
+    feedObservation.Value("feature", feature);
+    // NR-FEED-001 END
     const bool isNrPipelineFeature = IsNrPipelineFeature(feature);
     const bool isSuperResolution = feature == NVSDK_NGX_Feature_SuperSampling;
     const bool isRayReconstruction = feature == NVSDK_NGX_Feature_RayReconstruction;
+    // Observe the original temporal color before any NR override or upscaler.
+    // Optional capture must not infer resource state from the swapchain HDR mode.
+    if (Neurotic::Semantic::Character::CharacterEarlyCaptureEnabled && isSuperResolution && featureSnapshot && InParameters && InCmdList &&
+        Neurotic::Semantic::Character::CharacterWorkerRequested() && !cfg.ColorResourceBarrier.has_value())
+    {
+        const auto nativeList = DlssNr::NativeIdentity::Resolve<ID3D12GraphicsCommandList>(InCmdList);
+        if (nativeList.object)
+        {
+            // One bounded enrollment attempt per native vtable route. Existing
+            // in-progress recordings remain unknown until a genuine host Reset.
+            // Do not install full command observation while the Inspector is off.
+            static std::mutex enrollmentMutex;
+            static std::array<void*,8> attemptedRoutes{};
+            auto* route = *reinterpret_cast<void**>(nativeList.object.Get());
+            bool install = false;
+            { std::unique_lock lock(enrollmentMutex,std::try_to_lock);
+                if (lock && std::find(attemptedRoutes.begin(),attemptedRoutes.end(),route)==attemptedRoutes.end())
+                    if (auto free=std::find(attemptedRoutes.begin(),attemptedRoutes.end(),nullptr); free!=attemptedRoutes.end())
+                    { *free=route;install=true; }
+            }
+            if (install) D3D12Hooks::InstallNativeRecordingHooks(nativeList.object.Get());
+        }
+        const auto metadata = DlssNr::NativeTemporalInputs::FromCreation(
+            featureSnapshot.originalCreation, handleId, featureSnapshot.generation);
+        void* color = nullptr;
+        unsigned width = 0, height = 0, x = 0, y = 0;
+        InParameters->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &width);
+        InParameters->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, &height);
+        InParameters->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, &x);
+        InParameters->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, &y);
+        if (!width) width = featureSnapshot.originalCreation.Value("Width").value_or(0);
+        if (!height) height = featureSnapshot.originalCreation.Value("Height").value_or(0);
+        if (metadata && !x && !y && width && height &&
+            InParameters->Get(NVSDK_NGX_Parameter_Color, &color) == NVSDK_NGX_Result_Success && color)
+        {
+            const auto source = DlssNr::NativeIdentity::Resolve<ID3D12Resource>(static_cast<IUnknown*>(color));
+            const bool linear = (metadata->flags & NVSDK_NGX_DLSS_Feature_Flags_IsHDR) != 0;
+            float preExposure = 1.f;
+            InParameters->Get(NVSDK_NGX_Parameter_DLSS_Pre_Exposure, &preExposure);
+            if (source.object && std::isfinite(preExposure) && preExposure > 1e-6f)
+            {
+                const auto desc = source.object->GetDesc();
+                // Cropped/padded inputs require a separately proved coordinate mapping.
+                if (desc.Width == width && desc.Height == height &&
+                    !Neurotic::Semantic::Character::CharacterBeforeUpscale(InCmdList, source.object.Get(),
+                        width, height, metadata->outputWidth, metadata->outputHeight, linear, preExposure,
+                        featureSnapshot.generation))
+                    return NVSDK_NGX_Result_FAIL_PlatformError;
+            }
+        }
+    }
     // Cyberpunk retains its RR handle after switching RR off and begins evaluating a separate
     // Super Resolution handle. Track the feature that owns this frame's reconstruction seam;
     // handle creation alone otherwise leaves Present's RR compatibility gate permanently stale.
     if (isNrPipelineFeature)
         DlssNr::SetNativeRayReconstructionActive(isRayReconstruction);
+    // NR-DIAG-001 BEGIN: owner-published scalar handoff; no handle/pointer retention or queries.
+    const auto m0Publisher = DlssNr::FrameTrace::WithM0Publisher([&]() noexcept {
+        using SourceSnapshot = Neurotic::Diagnostics::M0::SourceSnapshot;
+        using OwnerDomain = Neurotic::Contracts::OwnerDomain;
+        auto source = SourceSnapshot::OwnerPublication(OwnerDomain::Provider,
+            "Alpha.NVNGX.Evaluate", "NVNGX_DLSS_Dx12", 1, "NVSDK_NGX_D3D12_EvaluateFeature");
+        source.Add("alpha.featureTracked", static_cast<bool>(featureSnapshot));
+        source.Add("alpha.featureCode", static_cast<std::uint64_t>(feature));
+        source.Add("alpha.nrPipelineFeature", isNrPipelineFeature);
+        source.Add("alpha.superResolution", isSuperResolution);
+        source.Add("alpha.rayReconstruction", isRayReconstruction);
+        source.Add("alpha.activeFgOutput", static_cast<std::uint64_t>(state.activeFgOutput));
+        source.Add("alpha.nativeRegistryGeneration", featureSnapshot.generation);
+        return source;
+    });
+    (void) m0Publisher;
+    // NR-DIAG-001 END
     const auto traceEvaluation = DlssNr::FrameTrace::Event("ngx-evaluate-enter",
         "handle={} feature={} list={:p} fgOutput={}", handleId, static_cast<unsigned int>(feature),
         static_cast<void*>(InCmdList), static_cast<unsigned int>(state.activeFgOutput));
@@ -1341,6 +2279,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     static std::optional<float> lastDlssgCameraFar {};
     void* fgBackbuffer = nullptr;
     NVSDK_NGX_Result fgBackbufferResult = NVSDK_NGX_Result_FAIL_InvalidParameter;
+    unsigned int fgGenerated = 0, fgIndex = 0;
+    bool characterFgWork=false;
 
     if (feature == NVSDK_NGX_Feature_FrameGeneration)
     {
@@ -1363,6 +2303,22 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         }
         int frameCount = 0;
         InParameters->Get("DLSSG.MultiFrameCount", &frameCount);
+        const bool haveCount = InParameters->Get("DLSSG.MultiFrameCount", &fgGenerated) == NVSDK_NGX_Result_Success;
+        characterFgWork=!haveCount||fgGenerated>0;
+        const bool haveIndex = InParameters->Get("DLSSG.MultiFrameIndex", &fgIndex) == NVSDK_NGX_Result_Success;
+        if (!haveCount) fgGenerated = 0;
+        // The existing single-evaluation path needs no child discriminator.
+        // MFG always requires the actual provider index; never infer it by age.
+        if (!haveIndex) fgIndex = fgGenerated == 1 ? 1 : 0;
+        DlssNr::PreFg::ObserveGeneratedCount(handleId, fgGenerated, fgIndex);
+        if (!haveCount || !fgGenerated || fgGenerated > 5 || !fgIndex || fgIndex > fgGenerated)
+        {
+            static std::atomic<unsigned int> missingObservations {0};
+            if (++missingObservations <= 4)
+                LOG_INFO("NR Present MFG observation unavailable: countKnown={} indexKnown={} generated={} index={}; "
+                         "fixed 2x-6x admission requires valid provider parameters",
+                         haveCount, haveIndex, fgGenerated, fgIndex);
+        }
         float dlssgCameraNear = 0.0f;
         float dlssgCameraFar = 0.0f;
         const bool haveNear = InParameters->Get("DLSSG.CameraNear", &dlssgCameraNear) == NVSDK_NGX_Result_Success;
@@ -1395,6 +2351,46 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     // during native SR must not schedule NR once before SR and again after it.
     const auto nrSettings = isNrPipelineFeature ? TryNrConfigSnapshot(cfg)
                                                : std::optional<NrConfigSnapshot<Config>>{};
+    std::optional<DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::CallbackPin> sourcePin;
+    std::optional<Neurotic::Lifecycle::NativeProcessBootstrap::Callback> nativeSource;
+    std::shared_ptr<const DlssNr::NativeNgxCallCapture> alternateOriginal;
+    DlssNr::NativeTemporalSourceObservation alternateSource;
+    const bool alternateEnabled=nrSettings&&nrSettings->DlssNrAlternateFrame.value_or_default()&&
+        nrSettings->GetDlssNrRuntimeSnapshot().enabled;
+    // A feature protected by an earlier invocation remains protected when the
+    // setting changes. Keep its real CPU admission pinned through this call;
+    // the uncaptured effect below remains unknown lifetime coverage.
+    if ((!nrSettings || !nrSettings->DlssNrNativeProtocol.value_or_default()) &&
+        (HandleToFeature.Protected(handleId) || (isSuperResolution && alternateEnabled)))
+    {
+        sourcePin = HandleToFeature.Pin(handleId, featureSnapshot);
+        if (!sourcePin) return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+        if(isSuperResolution && alternateEnabled) {
+            alternateOriginal=HandleToFeature.CaptureTemporalInputs(*sourcePin,InCmdList,InParameters,NVSDK_NGX_Result_Success);
+            alternateSource=HandleToFeature.ObserveTemporalSource(*sourcePin,
+                alternateOriginal?alternateOriginal->SourceFrame():nullptr,alternateOriginal);
+        }
+    }
+    if (nrSettings && nrSettings->DlssNrNativeProtocol.value_or_default())
+    {
+        sourcePin = HandleToFeature.Pin(handleId, featureSnapshot);
+        if (!sourcePin) return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+        try { nativeSource = DlssNr::NativeDx12Source::Capture(std::move(*sourcePin), InCmdList, InParameters); }
+        catch (...) { return NVSDK_NGX_Result_Fail; }
+        if (!nativeSource || !nativeSource->Current()) return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+        if(isSuperResolution)DlssNr::NativeDx12Source::BindSourceScope(sourceTransactionScope,*nativeSource);
+        if (isSuperResolution && nrSettings->DlssNrRunBeforeSr.value_or_default())
+        {
+            // Initial owner/model preparation only. No candidate evaluation or
+            // host delivery is authorized by this route materialization.
+            const auto nativeBefore = DlssNr::NativeDx12Source::RunBefore(*nativeSource,InParameters,*nrSettings);
+            if (!nativeSource->Current()) return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+            // A failed restoration may leave the caller's parameter bound to
+            // Native scratch. Neither SR path may consume that uncertain binding.
+            if (!Neurotic::Protocol::NativeMayContinueOuterEvaluation(nativeBefore.facts))
+                return NVSDK_NGX_Result_FAIL_PlatformError;
+        }
+    }
 
     // Native DLSS passthrough
     if (handleId < DLSS_MOD_ID_OFFSET)
@@ -1403,10 +2399,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         {
             LOG_DEBUG("Passthrough to native DLSS EvaluateFeature for handle {}", handleId);
 
-            if (isSuperResolution && nrSettings)
+            if (isSuperResolution && nrSettings && !nrSettings->DlssNrNativeProtocol.value_or_default())
                 DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, true);
 
             std::shared_ptr<DlssNr::GpuSafety::ExternalExecutionStatus> consumerObservation;
+            DlssNr::PreFg::CompletionClaim fgCompletion;
             if (feature == NVSDK_NGX_Feature_FrameGeneration)
             {
                 consumerObservation = DlssNr::PreFg::ObserveConsumer(handleId, InCmdList);
@@ -1426,7 +2423,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                     return NVSDK_NGX_Result_FAIL_InvalidParameter;
                 }
                 const auto provider = DlssNr::PreFg::Provider();
-                const auto completion = DlssNr::PreFg::ClaimCompletion(nativeBackbuffer, provider.generation, handleId);
+                fgCompletion = DlssNr::PreFg::ClaimCompletion(nativeBackbuffer, provider.generation, handleId,
+                                                              fgGenerated, fgIndex);
+                const auto& completion = fgCompletion;
                 bool handoffFailed = completion.result == DlssNr::PreFg::CompletionClaimResult::Refused;
                 if (completion.result == DlssNr::PreFg::CompletionClaimResult::Ready &&
                     !DlssNr::GpuSafety::BindExternalWait(InCmdList, completion.dependency.fence.Get(),
@@ -1442,24 +2441,101 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 if (handoffFailed)
                 {
                     if (consumerObservation) consumerObservation->failed = true;
+                    static std::atomic<unsigned int> refusedHandoffs {0};
+                    if (++refusedHandoffs <= 16)
+                        LOG_WARN("NR Present FG handoff refused: reason={} provider={} nativeHandle={} generated={} index={}",
+                                 completion.result == DlssNr::PreFg::CompletionClaimResult::Refused ?
+                                 completion.reason : "wait-bind-failed", provider.generation, handleId, fgGenerated, fgIndex);
                     NR_FRAME_TRACE("nr-fg-handoff-refused", "reason={} handle={} list={:p} backbuffer={:p} "
-                        "token={} sequence={}", completion.result == DlssNr::PreFg::CompletionClaimResult::Refused ?
-                        "identity-mismatch" : "wait-bind-failed", handleId, static_cast<void*>(InCmdList),
+                        "token={} sequence={} generated={} index={}", completion.result == DlssNr::PreFg::CompletionClaimResult::Refused ?
+                        "identity-or-input-group-mismatch" : "wait-bind-failed", handleId, static_cast<void*>(InCmdList),
                         static_cast<void*>(nativeBackbuffer), completion.dependency.token,
-                        completion.dependency.sequence);
+                        completion.dependency.sequence, fgGenerated, fgIndex);
                     return NVSDK_NGX_Result_FAIL_PlatformError;
                 }
             }
 
+            DlssNr::NativeDx12Source::SrInputScope srInput(nativeSource&&isSuperResolution?&*nativeSource:nullptr,InParameters);
+            if(!srInput.Ready())
+            {
+                srInput.Close();
+                if(nativeSource)DlssNr::NativeDx12Source::FinishReturn(*nativeSource,NVSDK_NGX_Result_FAIL_PlatformError);
+                return NVSDK_NGX_Result_FAIL_PlatformError;
+            }
+            auto opaqueSr=(nativeSource&&isSuperResolution&&nrSettings)?
+                DlssNr::NativeDx12Source::BeginOpaqueSr(*nativeSource,InFeatureHandle,InParameters):nullptr;
+            // Account for the actual opaque entry through the original feature
+            // owner before any foreign effect. A missing capture permanently
+            // excludes a later claim of complete selected-output coverage.
+            if(featureSnapshot&&(nativeSource||sourcePin||isSuperResolution))
+            {
+                if(nativeSource)
+                {
+                    if(!nativeSource->MarkOpaqueEntry())
+                    {
+                        srInput.Close();
+                        DlssNr::NativeDx12Source::FinishReturn(*nativeSource,NVSDK_NGX_Result_FAIL_PlatformError);
+                        return NVSDK_NGX_Result_FAIL_PlatformError;
+                    }
+                    if(!isSuperResolution||!opaqueSr||!opaqueSr->lifetimeRegistration)
+                        HandleToFeature.MarkUntrackedEvaluation(handleId,featureSnapshot);
+                }
+                else
+                {
+                    if(sourcePin&&!sourcePin->MarkOpaqueEntry())
+                    {
+                        srInput.Close();
+                        return NVSDK_NGX_Result_FAIL_PlatformError;
+                    }
+                    HandleToFeature.MarkUntrackedEvaluation(handleId,featureSnapshot);
+                }
+            }
+            if(opaqueSr&&opaqueSr->receipt)opaqueSr->entered=opaqueSr->receipt->MarkEntered();
+            auto characterFgToken=Neurotic::Semantic::Character::NativeFgWorkTracker::Token{};
+            if(feature==NVSDK_NGX_Feature_FrameGeneration&&characterFgWork){
+                characterFgToken=Neurotic::Semantic::Character::NativeFgWork().Begin(handleId,DlssNr::PreFg::NativeFgInstance(handleId));
+                if(Neurotic::Semantic::Character::CharacterWorkerRequested())Neurotic::Semantic::Character::CharacterNativeFgStarted();
+            }
             NVSDK_NGX_Result result =
                 NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            if(characterFgToken.pending)Neurotic::Semantic::Character::NativeFgWork().Finish(characterFgToken,
+                result==NVSDK_NGX_Result_Success,DlssNr::PreFg::NativeFgInstance(handleId),Neurotic::Semantic::Character::CharacterActivityNow());
+            if (nativeSource && isSuperResolution && nrSettings)
+            {
+                DlssNr::NativeDx12Source::ObserveSrReturn(*nativeSource,InParameters,result);
+                if(opaqueSr)DlssNr::NativeDx12Source::SealOpaqueSr(*nativeSource,*opaqueSr,
+                    InFeatureHandle,InParameters,result);
+                if(!srInput.Close())result=NVSDK_NGX_Result_FAIL_PlatformError;
+                if(result==NVSDK_NGX_Result_Success&&!nrSettings->DlssNrRunBeforeSr.value_or_default())
+                {
+                    const auto nativeAfter=DlssNr::NativeDx12Source::RunBefore(*nativeSource,InParameters,*nrSettings);
+                    if(!Neurotic::Protocol::NativeMayContinueOuterEvaluation(nativeAfter.facts))
+                        result=NVSDK_NGX_Result_FAIL_PlatformError;
+                }
+            }
             if (consumerObservation)
             {
                 if (result == NVSDK_NGX_Result_Success) consumerObservation->evaluated = true;
                 else consumerObservation->failed = true;
             }
             if (feature == NVSDK_NGX_Feature_FrameGeneration && result != NVSDK_NGX_Result_Success)
+            {
                 DlssNr::PreFg::RevokeReadiness();
+                if (fgCompletion.dependency.status) fgCompletion.dependency.status->Fail();
+            }
+            if (fgCompletion.result == DlssNr::PreFg::CompletionClaimResult::Ready &&
+                fgGenerated >= 1 && fgGenerated <= 5)
+            {
+                static std::atomic<unsigned int> reports[5] {};
+                const auto& dependency = fgCompletion.dependency;
+                if (++reports[fgGenerated - 1] <= 12 || dependency.sequence % 600 == 0)
+                    LOG_INFO("NR Present MFG handoff: generated={} index={} token={} sequence={} reservation={} "
+                             "probe={} retiring={} result=0x{:X} bound={} applied={}; output cadence/release unmeasured",
+                             fgGenerated, fgIndex, dependency.token, dependency.sequence, dependency.reservation,
+                             dependency.kind == DlssNr::PreFg::CompletionKind::Probe, dependency.retiring,
+                             static_cast<unsigned int>(result),
+                             dependency.status->bound.load(), dependency.status->applied.load());
+            }
             NR_FRAME_TRACE("ngx-native-return", "handle={} feature={} result={} list={:p}", handleId,
                 static_cast<unsigned int>(feature), static_cast<unsigned int>(result), static_cast<void*>(InCmdList));
 
@@ -1472,9 +2548,31 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
             // rendered frame. The feature check is the point: frame generation is handed depth and
             // motion vectors too, and its handle can reach here because the branch above does not
             // return, so filtering on the parameter block alone would run the model twice a frame.
-            if (result == NVSDK_NGX_Result_Success && isNrPipelineFeature && nrSettings)
-                DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings);
+            if (result != NVSDK_NGX_Result_Success && isNrPipelineFeature)
+            {
+                const auto frame = DlssNr::PreFg::CurrentFrameIdentity(InCmdList);
+                DlssNr::PresentGuides::Instance().RejectNative("Native SR/RR evaluation failed; no current guides",
+                    frame.key, frame.providerGeneration);
+            }
+            if (result == NVSDK_NGX_Result_Success && isNrPipelineFeature && nrSettings &&
+                !nrSettings->DlssNrNativeProtocol.value_or_default())
+            {
+                auto nativeInputs = DlssNr::NativeTemporalInputs::FromCreation(
+                    featureSnapshot.originalCreation, handleId, featureSnapshot.generation);
+                if(nativeInputs) {nativeInputs->alternateOriginal=alternateOriginal;nativeInputs->alternateSource=alternateSource;}
+                DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings,
+                                            nativeInputs ? &*nativeInputs : nullptr);
+            }
 
+            if(sourcePin&&alternateOriginal)HandleToFeature.CompleteTemporalSource(*sourcePin,alternateSource,
+                result==NVSDK_NGX_Result_Success);
+            // Close fallible observations and scoped resources before the sole
+            // local-delivery commit. The next observable action is API return.
+            opaqueSr.reset();consumerObservation.reset();
+            if(nativeSource)
+            {
+                DlssNr::NativeDx12Source::FinishReturn(*nativeSource,result);
+            }
             return result;
         }
 
@@ -1510,22 +2608,42 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     if (authoritativeNativePreSr)
         nativeInputs = {static_cast<unsigned>(nrFeature->GetFeatureFlags()),
                         nrFeature->DisplayWidth(), nrFeature->DisplayHeight(), handleId, featureSnapshot.generation};
-    if (isSuperResolution && nrSettings)
+    if (isSuperResolution && nrSettings && !nrSettings->DlssNrNativeProtocol.value_or_default())
         DlssNr::EvaluateBeforeUpscale(InCmdList, InParameters, nullptr, &*nrSettings, authoritativeNativePreSr,
                                      nativeInputs ? &*nativeInputs : nullptr);
 
+    DlssNr::NativeTemporalInputs::OutputEvaluation outputEvaluation;
+    if(nativeInputs) {nativeInputs->alternateOriginal=alternateOriginal;nativeInputs->alternateSource=alternateSource;}
     const NVSDK_NGX_Result optiResult =
-        TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
+        TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback, outputEvaluation);
+    // Resolve RR metadata only for the backend which actually evaluated this
+    // call, after any recreation/fallback. This never authorizes a pre-RR write.
+    if (isRayReconstruction)
+        nativeInputs = outputEvaluation.RayReconstructed()
+            ? DlssNr::NativeTemporalInputs::FromCreation(
+                featureSnapshot.originalCreation, handleId, featureSnapshot.generation)
+            : std::nullopt;
     NR_FRAME_TRACE("ngx-replacement-return", "handle={} feature={} result={} list={:p}", handleId,
         static_cast<unsigned int>(feature), static_cast<unsigned int>(optiResult), static_cast<void*>(InCmdList));
 
     DlssNr::RestoreAfterUpscale(InParameters);
 
+    if ((optiResult != NVSDK_NGX_Result_Success || !outputEvaluation.Succeeded()) && isNrPipelineFeature)
+    {
+        const auto frame = DlssNr::PreFg::CurrentFrameIdentity(InCmdList);
+        DlssNr::PresentGuides::Instance().RejectNative("Selected SR/RR did not evaluate successfully; no current guides",
+            frame.key, frame.providerGeneration);
+    }
+
     // Same pass, for OptiScaler's own upscalers rather than native DLSS.
-    if (optiResult == NVSDK_NGX_Result_Success && isNrPipelineFeature && nrSettings)
+    if (optiResult == NVSDK_NGX_Result_Success && outputEvaluation.Succeeded() && isNrPipelineFeature && nrSettings &&
+        !nrSettings->DlssNrNativeProtocol.value_or_default())
         DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings,
                                     nativeInputs ? &*nativeInputs : nullptr);
 
+    if(sourcePin&&alternateOriginal)HandleToFeature.CompleteTemporalSource(*sourcePin,alternateSource,
+        optiResult==NVSDK_NGX_Result_Success&&outputEvaluation.Succeeded());
+    if(nativeSource)DlssNr::NativeDx12Source::FinishReturn(*nativeSource,optiResult);
     return optiResult;
 }
 
@@ -1537,6 +2655,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetScratchBufferSize(NVSDK_NGX_Fe
                                                                     const NVSDK_NGX_Parameter* InParameters,
                                                                     size_t* OutSizeInBytes)
 {
+    if (Neurotic::Runtime::BootstrapUnavailable()) return NVSDK_NGX_Result_FAIL_PlatformError;
+    Neurotic::Runtime::NgxCallLease vendorCall;
+    if (!vendorCall) return NVSDK_NGX_Result_FAIL_PlatformError;
     if (OutSizeInBytes == nullptr)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 

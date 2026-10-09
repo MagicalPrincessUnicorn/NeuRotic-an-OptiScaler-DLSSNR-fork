@@ -1,6 +1,307 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Provider rules have a pinned raw-byte digest; preserve LF on Windows checkouts.
+tools/packaging/customer/support/NeuRotic-AntiCheatProviders.json text eol=lf
+# Hash-locked unmodified Zoo source must survive Windows checkout byte-exact.
+tools/nr_semantic_worker/third_party/** -text -whitespace
 *.sh eol=lf
+
+# Passive-discovery frozen packet assets and native value contracts preserve raw bytes.
+tools/diagnostics/candidate_observer/candidate_record.schema.json -text
+tools/diagnostics/candidate_observer/candidate_examples.json -text
+tools/diagnostics/candidate_observer/limits.json -text whitespace=cr-at-eol
+OptiScaler/nr/diagnostics/candidate/* -text whitespace=cr-at-eol
 
 # This reviewed package input is byte-exact provenance, including its CRLF layout.
 integration/OptiScaler.ini -text -diff
+
+# Recovered W03 policy input: its existing SHA-256 identifies exact packet bytes.
+tests/nr/vertical-slice/spectre_case_map_58.json -text
+
+# W03 reviewed raw-byte closure: preserve exact source/evidence bytes, including mixed EOL.
+# Explicit paths only; source review digests never normalize line endings.
+OptiScaler/Config.h -text
+OptiScaler/CustomOptional.h -text
+OptiScaler/Logger.h -text
+OptiScaler/NrConfigSnapshot.h -text
+OptiScaler/NrConfigState.h -text
+OptiScaler/OptiTypes.h -text
+OptiScaler/OwnedMutex.h -text
+OptiScaler/State.h -text
+OptiScaler/SynchronizedOptional.h -text
+OptiScaler/SysUtils.h -text
+OptiScaler/Util.h -text
+OptiScaler/dlssnr/DlssNr_BasicMultipass.h -text
+OptiScaler/dlssnr/FrameTrace.h -text
+OptiScaler/dlssnr/FrameTraceContract.h -text
+OptiScaler/dlssnr/NativeDispatchOutcome.h -text
+OptiScaler/dlssnr/NativeFeatureRegistry.h -text
+OptiScaler/dlssnr/NativeIdentity.h -text
+OptiScaler/dlssnr/NativeNgxCreationParameters.h -text
+OptiScaler/dlssnr/NativeParameterOverride.h -text
+OptiScaler/dlssnr/NativeProviderEntry.h -text
+OptiScaler/dlssnr/NativeProviderLifetime.h -text
+OptiScaler/dlssnr/NativeRendererPreparation.h -text
+OptiScaler/dlssnr/NrGpuSafety.cpp -text
+OptiScaler/dlssnr/NrGpuSafety.h -text
+OptiScaler/framegen/IFGFeature.h -text
+OptiScaler/framegen/IFGFeature_Dx12.h -text
+OptiScaler/gpu_time/GpuTime_Dx12.h -text
+OptiScaler/include/d3dx/d3dx12.h -text
+OptiScaler/include/detours/detours.h -text
+OptiScaler/include/flag-set-cpp/flag_set.hpp -text
+OptiScaler/inputs/FG/Streamline_Inputs_Dx12.h -text
+OptiScaler/inputs/FG/Streamline_Inputs_Sl1_Dx12.h -text
+OptiScaler/library/detours/detours.lib -text
+OptiScaler/misc/Quirks.h -text
+OptiScaler/misc/SkipSpoof.h -text
+OptiScaler/nr/context/ContextBuilder.h -text
+OptiScaler/nr/context/ContextMetadata.h -text
+OptiScaler/nr/context/EvidenceQualification.h -text
+OptiScaler/nr/context/NativeJitterBasis.h -text
+OptiScaler/nr/context/NativeNgxSchemaQualification.h -text
+OptiScaler/nr/context/NativeSampleQualification.h -text
+OptiScaler/nr/context/NativeStageQualification.h -text
+OptiScaler/nr/context/RepresentationCacheKeys.h -text
+OptiScaler/nr/context/RepresentationLineage.h -text
+OptiScaler/nr/context/SemanticMath.h -text
+OptiScaler/nr/contracts/C01_Acquisition.h -text
+OptiScaler/nr/contracts/C02_Context.h -text
+OptiScaler/nr/contracts/C03_Consumption.h -text
+OptiScaler/nr/contracts/C04_Capability.h -text
+OptiScaler/nr/contracts/C05_Routing.h -text
+OptiScaler/nr/contracts/C06_ProtocolInput.h -text
+OptiScaler/nr/contracts/C07_ProtocolOutput.h -text
+OptiScaler/nr/contracts/C08_Reset.h -text
+OptiScaler/nr/contracts/C09_Multipass.h -text
+OptiScaler/nr/contracts/C10_Gap.h -text
+OptiScaler/nr/contracts/C11_Diagnostics.h -text
+OptiScaler/nr/contracts/C12_Representation.h -text
+OptiScaler/nr/contracts/C13_FinalFrame.h -text
+OptiScaler/nr/contracts/C14_Identity.h -text
+OptiScaler/nr/contracts/C15_Validation.h -text
+OptiScaler/nr/contracts/C16_Execution.h -text
+OptiScaler/nr/contracts/ContractCommon.h -text
+OptiScaler/nr/contracts/ContractManifest.h -text
+OptiScaler/nr/contracts/Evidence.h -text
+OptiScaler/nr/contracts/FixtureCodec.h -text
+OptiScaler/nr/contracts/Identity.h -text
+OptiScaler/nr/contracts/NativeDelivery.h -text
+OptiScaler/nr/contracts/NativeStageDelivery.h -text
+OptiScaler/nr/contracts/Reasons.h -text
+OptiScaler/nr/contracts/SemanticDescriptions.h -text
+OptiScaler/nr/diagnostics/ContractObservation.h -text
+OptiScaler/nr/lifecycle/ConsumptionLeaseAdapter.h -text
+OptiScaler/nr/lifecycle/FinalRealFrameFinalizer.h -text
+OptiScaler/nr/lifecycle/FinalRealFrameReset.h -text
+OptiScaler/nr/lifecycle/FinalRealFrameRuntime.h -text
+OptiScaler/nr/lifecycle/FinalRealFrameTypes.h -text
+OptiScaler/nr/lifecycle/IdentityAssociations.h -text
+OptiScaler/nr/lifecycle/IdentityDependencies.h -text
+OptiScaler/nr/lifecycle/IdentityIssuers.h -text
+OptiScaler/nr/lifecycle/IdentityPrimitives.h -text
+OptiScaler/nr/lifecycle/IdentityTransitions.h -text
+OptiScaler/nr/lifecycle/LifecycleEvidence.h -text
+OptiScaler/nr/lifecycle/NativeAllocationRecord.h -text
+OptiScaler/nr/lifecycle/NativeExecutionLedger.h -text
+OptiScaler/nr/lifecycle/NativeHistoryState.h -text
+OptiScaler/nr/lifecycle/NativeOwnedContinuation.h -text
+OptiScaler/nr/lifecycle/NativeOwnerSet.h -text
+OptiScaler/nr/lifecycle/NativeResourceRegistry.h -text
+OptiScaler/nr/lifecycle/NativeSessionLifetime.cpp -text
+OptiScaler/nr/lifecycle/NativeSessionLifetime.h -text
+OptiScaler/nr/lifecycle/NativeSourceEnrollment.h -text
+OptiScaler/nr/lifecycle/NativeUnsealedRetirement.h -text
+OptiScaler/nr/lifecycle/OpaqueSrEvaluationReceipt.h -text
+OptiScaler/nr/lifecycle/OwnerMetadataArena.h -text
+OptiScaler/nr/lifecycle/OwnerPublicationJournal.h -text
+OptiScaler/nr/lifecycle/SameRecordingUse.h -text
+OptiScaler/nr/lifecycle/SessionComposition.h -text
+OptiScaler/nr/orchestration/InitialFixedNativeCoordinator.h -text
+OptiScaler/nr/orchestration/RoutingPublication.h -text
+OptiScaler/nr/orchestration/RoutingRules.h -text
+OptiScaler/nr/orchestration/RoutingSelector.h -text
+OptiScaler/nr/orchestration/RoutingTypes.h -text
+OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp -text
+OptiScaler/nr/orchestration/StreamCoordinatorKernel.h -text
+OptiScaler/nr/protocol/BindingPlan.h -text
+OptiScaler/nr/protocol/LegacyNativeProfileAdapter.h -text
+OptiScaler/nr/protocol/NativeCommandStateScope.h -text
+OptiScaler/nr/protocol/NativeEncodeControls.h -text
+OptiScaler/nr/protocol/NativeEvaluationResult.h -text
+OptiScaler/nr/protocol/NativeInvocationCurrentness.h -text
+OptiScaler/nr/protocol/NativeProfilePreparation.h -text
+OptiScaler/nr/protocol/NativeRouteAdmission.cpp -text
+OptiScaler/nr/protocol/NativeRouteAdmission.h -text
+OptiScaler/nr/protocol/NativeTemporalBindingMapper.h -text
+OptiScaler/nr/protocol/NativeTemporalProtocolAdapter.h -text
+OptiScaler/nr/protocol/NativeTemporalRuntime.h -text
+OptiScaler/nr/protocol/NrExecutionRecipe.h -text
+OptiScaler/nr/protocol/ProfileQualification.h -text
+OptiScaler/nr/protocol/ProfileRegistry.h -text
+OptiScaler/nr/protocol/ProfileTypes.h -text
+OptiScaler/nr/protocol/RecipePublication.h -text
+OptiScaler/nr/protocol/RecipeTypes.h -text
+OptiScaler/pch.h -text
+OptiScaler/shaders/Shader_Common.h -text
+OptiScaler/shaders/Shader_Dx12.h -text
+OptiScaler/shaders/Shader_Dx12Utils.h -text
+OptiScaler/shaders/hudless_compare/HC_Dx12.h -text
+OptiScaler/shaders/render_ui/RUI_Dx12.h -text
+OptiScaler/shaders/resource_flip/RF_Dx12.h -text
+OptiScaler/upscalers/IFeature.h -text
+tests/nr/context/ContextFixtureStore.h -text
+tests/nr/contracts/CommandEvidence.ps1 -text
+tests/nr/contracts/NativeProcessGroup.ps1 -text
+tests/nr/contracts/Test002Support.h -text
+tests/nr/contracts/test002_source_and_evidence.py -text
+tests/nr/finalizer/finalizer_fixture.h -text
+tests/nr/finalizer/finalizer_inventory.json -text
+tests/nr/finalizer/t27_exactly_once.cpp -text
+tests/nr/identity/IdentityTestSupport.h -text
+tests/nr/lifecycle/consumption_inventory.json -text
+tests/nr/lifecycle/consumption_tests.cpp -text
+tests/nr/oracles/Test002AnalyticCases.h -text
+tests/nr/orchestration/InitialInvocationFixture.h -text
+tests/nr/orchestration/InitialNativeFixture.h -text
+tests/nr/orchestration/NativeAdversarialClosure.h -text
+tests/nr/orchestration/NativeAdversarialConfig.h -text
+tests/nr/orchestration/NativeAdversarialGroups.h -text
+tests/nr/orchestration/NativeAdversarialSample.h -text
+tests/nr/orchestration/RoutingFixture.h -text
+tests/nr/orchestration/Run-NrOrchInit.ps1 -text
+tests/nr/orchestration/initial_inventory.json -text
+tests/nr/orchestration/initial_native_admission.cpp -text
+tests/nr/orchestration/initial_native_authority.cpp -text
+tests/nr/orchestration/initial_native_races.cpp -text
+tests/nr/orchestration/native_adversarial_authority.cpp -text
+tests/nr/orchestration/native_adversarial_inventory.json -text
+tests/nr/orchestration/native_adversarial_mutations.json -text
+tests/nr/orchestration/verify_initial.py -text
+tests/nr/representations/RepresentationFixture.h -text
+tests/nr/spectre-obligations/construction_mutations.json -text
+tests/nr/spectre-obligations/final_boundary.cpp -text
+tests/nr/spectre-obligations/final_boundary_inventory.json -text
+tests/nr/spectre-obligations/return_history.cpp -text
+tests/nr/spectre-obligations/return_history_inventory.json -text
+tests/nr/spectre/owned_continuation.cpp -text
+tests/nr/spectre/owned_process.py -text
+tests/nr/spectre/provider_lifetime.cpp -text
+tests/nr/spectre/run_owned_continuation.py -text
+tests/nr/spectre/run_provider_lifetime.py -text
+tests/nr/vertical-slice/construction_producer.py -text
+tests/nr/vertical-slice/construction_profiles.py -text
+tests/nr/vertical-slice/controlled_producer.py -text
+tests/nr/vertical-slice/native_fixture.h -text
+tests/nr/vertical-slice/native_lifecycle_integration.cpp -text
+tests/nr/vertical-slice/native_lifecycle_inventory.json -text
+tests/nr/vertical-slice/native_same_recording.cpp -text
+tests/nr/vertical-slice/native_same_recording_inventory.json -text
+tests/nr/vertical-slice/oracle_checks.py -text
+tests/nr/vertical-slice/oracle_producer.py -text
+tests/nr/vertical-slice/provider_producer.py -text
+tests/nr/vertical-slice/run_construction_producer.py -text
+tests/nr/vertical-slice/run_controlled_producer.py -text
+tests/nr/vertical-slice/run_oracle_producer.py -text
+tests/nr/vertical-slice/run_provider_producer.py -text
+tests/nr/vertical-slice/run_supervised_producer.py -text
+tests/nr/vertical-slice/spectre_scope_policy.json -text
+tests/nr/vertical-slice/supervised_producer.py -text
+tests/nr/vertical-slice/verify_construction.py -text
+
+# Code-pinned manifests and their exact review evidence.
+docs/ai/live/W03_ACCEPTANCE_PRIOR_SOURCE_REVIEW_2026-09-26.json -text
+docs/ai/live/W03_ACCEPTANCE_SOURCE_REVIEW_2026-09-26.json -text
+docs/ai/live/W03_EOL_RECOVERY_2026-09-26.json -text
+tests/nr/vertical-slice/construction_reviewed_source_closure.json -text
+tests/nr/vertical-slice/l07_reviewed_source_closure.json -text
+tests/nr/vertical-slice/n04_reviewed_source_closure.json -text
+tests/nr/vertical-slice/n08_reviewed_source_closure.json -text
+tests/nr/vertical-slice/oracle_reviewed_source_closure.json -text
+tests/nr/vertical-slice/provider_reviewed_source_closure.json -text
+
+# Frozen W03 review additions.
+OptiScaler/dlssnr/NativeOutputPassToken.h -text
+docs/ai/live/W03_DELIVERY_FINALIZER_SOURCE_REVIEW_2026-09-26.json -text
+docs/ai/live/W03_DELIVERY_EOL_NORMALIZATION_2026-09-26.json -text
+
+# R2 review evidence byte preservation.
+docs/ai/live/W03_VERIFICATION_TOOLING_REVIEW_2026-09-26.json -text
+# Preserve the supplied canonical provider manifest's exact pinned bytes.
+tools/nr/provider/CANONICAL_PROVIDER_MANIFEST.json -text
+
+# Preserve independently reviewed W03 checkpoint bytes on restore.
+OptiScaler/dlssnr/CanonicalProviderIdentity.h -text
+OptiScaler/dlssnr/CanonicalProviderPolicy.h -text
+OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp -text
+OptiScaler/inputs/NVNGX_DLSS_Dx12.cpp -text
+OptiScaler/nr/lifecycle/NativeInvocationOwner.h -text
+OptiScaler/nr/lifecycle/NativeProcessBootstrap.h -text
+OptiScaler/nr/lifecycle/NativeReturnTransaction.h -text
+OptiScaler/shaders/dlssnr/DlssNr_Dx12.cpp -text
+tests/nr/finalizer/strict_native_integration.cpp -text
+tests/nr/provider/benign_module.cpp -text
+tests/nr/provider/canonical_identity.cpp -text
+tests/nr/provider/forwarder_identity.cpp -text
+tests/nr/provider/test_canonical_package.py -text
+tests/nr/spectre/native_runtime_attachment.cpp -text
+tests/nr/spectre/native_unsealed_owner.cpp -text
+tests/nr/spectre/run_spectre_regressions.py -text
+tests/nr/vertical-slice/gate_evaluator.py -text
+tests/nr/vertical-slice/native_history_state.cpp -text
+tests/nr/vertical-slice/native_protocol_contract.cpp -text
+tests/nr/vertical-slice/native_renderer_wiring.py -text
+tests/nr/vertical-slice/native_resource_registry.cpp -text
+tests/nr/vertical-slice/test_supervised_issuer.py -text
+tests/nr/vertical-slice/verify_reviewed_source_closure.py -text
+tools/nr/provider/ProviderIdentity.cpp -text
+tools/nr/provider/canonical_package.py -text
+
+# Preserve reviewed route-dependency source and evidence bytes.
+tools/nr/provider/run_identity_checks.py -text
+tools/nr/provider/README.md -text
+docs/ai/live/W03_ROUTE_DEPENDENCIES_SOURCE_REVIEW_2026-09-26.json -text
+
+# Connected SR/FG reviewed byte preservation.
+OptiScaler/nr/lifecycle/NativeFinalConsumerAction.h -text
+docs/ai/live/W03_CONNECTED_SR_SOURCE_REVIEW_2026-09-26.json -text
+docs/ai/live/W03_CONNECTED_FG_SOURCE_REVIEW_2026-09-26.json -text
+
+# Preserve remaining independently reviewed connected source bytes.
+OptiScaler/dlssnr/NativeNgxCallCapture.h -text
+OptiScaler/nr/lifecycle/NativeSourcePublication.h -text
+tests/nr/spectre/opaque_sr_evaluation_receipt.cpp -text
+
+# The FidelityFX v1 submodule is upstream-owned; retain our replayable patch bytes.
+external/FidelityFX-CheckedClosure/W03_FidelityFX_SDK_v1.patch -text -diff
+OptiScaler/nr/lifecycle/Fsr3FinalConsumerAdapter.h -text
+OptiScaler/nr/lifecycle/Fsr3FinalConsumerPublication.h -text
+OptiScaler/framegen/ffx/FSRFG_Dx12.h -text
+OptiScaler/framegen/ffx/FSRFG_Dx12.cpp -text
+tests/nr/finalizer/fsr3_consumer_adapter.cpp -text
+
+# Connected SR/FG reviewed byte preservation.
+docs/ai/live/W03_CONNECTED_ORCH_INVENTORY_REVIEW_2026-09-26.json -text
+
+# Connected SR/FG reviewed byte preservation.
+docs/ai/live/W03_LIVE_RESOURCE_SOURCE_REVIEW_2026-09-26.json -text
+
+# Connected SR/FG reviewed byte preservation.
+docs/ai/live/W03_SOURCE_ASSOCIATION_REVIEW_2026-09-26.json -text
+
+# Preserve supplemental source-association review hashes.
+OptiScaler/dlssnr/StreamlineSourceScope.h -text
+OptiScaler/hooks/Streamline_Hooks.cpp -text
+tests/nr/vertical-slice/native_ngx_call_capture.cpp -text
+
+# Preserve exact pinned public DD2 provider-binding research originals.
+references/dd2-provider-binding/20260930/entry_detour.cpp -text
+references/dd2-provider-binding/20260930/LICENSE.txt -text
+# Preserve exact bytes of returned automatic-refresh observations and their hashes.
+references/capability-auto-refresh/20260930/*.json -text
+
+# Preserve imported experimental MFG source/provenance byte hashes.
+external/mfg_ampere/** -text
+
+# Preserve the exact trusted provider-policy bytes.
+/tools/packaging/customer/support/NeuRotic-AntiCheatProviders.json -text

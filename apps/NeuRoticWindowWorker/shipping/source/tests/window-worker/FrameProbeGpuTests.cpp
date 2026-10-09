@@ -1,0 +1,100 @@
+// Owned synthetic resources only: no provider, WGC target, user window or image export.
+#define NRW_NATIVE_TEST
+#include "../../apps/NeuRoticWindowWorker/nr/NrHost.cpp"
+#include "../../apps/NeuRoticWindowWorker/diagnostics/FrameProbe.h"
+#include "../../apps/NeuRoticWindowWorker/capture/ComparisonOutput.h"
+#include <iostream>
+#include <cstring>
+namespace nrw {
+static void ProbeNeed(bool ok,const char* reason){if(!ok)throw std::runtime_error(reason);}
+static std::vector<unsigned char> ProbeRead(ID3D11Device* d,ID3D11DeviceContext* c,ID3D11Texture2D* source){
+ D3D11_TEXTURE2D_DESC desc{};source->GetDesc(&desc);desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=desc.MiscFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+ ComPtr<ID3D11Texture2D> staging;require(d->CreateTexture2D(&desc,nullptr,&staging),"Fixture-only oracle staging");c->CopyResource(staging.Get(),source);
+ D3D11_MAPPED_SUBRESOURCE mapped{};require(c->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped),"Fixture-only oracle read");
+ std::vector<unsigned char> bytes(size_t(desc.Width)*desc.Height*4);for(UINT y=0;y<desc.Height;++y)std::memcpy(bytes.data()+size_t(y)*desc.Width*4,static_cast<unsigned char*>(mapped.pData)+size_t(y)*mapped.RowPitch,size_t(desc.Width)*4);c->Unmap(staging.Get(),0);return bytes;
+}
+// The production class grants this name access solely under NRW_NATIVE_TEST.
+struct NrOwnedGpuFixture {
+ static void RunProbe(ID3D11Device* d,ID3D11DeviceContext* context,bool loseResolve,bool loseComparison,int lifecycle=-1,int scenario=0,bool losePublication=false){
+  NrHost host;auto& kit=*host.impl_;kit.SetupGpu(d,context);FrameProbe probe;uint64_t request=0,signal=0;
+  ComPtr<ID3D11Device5> d5;ComPtr<ID3D11DeviceContext4> c4;ComPtr<ID3D11Fence> fence;require(d->QueryInterface(IID_PPV_ARGS(&d5)),"Fixture D11.5");require(context->QueryInterface(IID_PPV_ARGS(&c4)),"Fixture D11.4");require(d5->CreateFence(0,D3D11_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)),"Fixture final-comparison fence");
+  for(auto shape:std::array<std::array<UINT,2>,5>{{{1,1},{5,9},{17,9},{65,33},{1278,1391}}})for(unsigned alphaCase=0;alphaCase<4;++alphaCase){
+   kit.Resources(shape[0],shape[1],shape[0],shape[1]);CapturedFrame frame;frame.stamp={9,++request,42,shape[0],shape[1],false,1,2,4};
+   std::vector<unsigned char> original(size_t(shape[0])*shape[1]*4);for(size_t pixel=0;pixel<original.size()/4;++pixel){original[pixel*4]=32;original[pixel*4+1]=64;original[pixel*4+2]=96;original[pixel*4+3]=scenario==8||alphaCase==0?255:alphaCase==1?0:alphaCase==2?128:static_cast<unsigned char>((pixel%3)*127);}
+   D3D11_TEXTURE2D_DESC desc{};desc.Width=shape[0];desc.Height=shape[1];desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
+   D3D11_SUBRESOURCE_DATA initial{original.data(),shape[0]*4,0};require(d->CreateTexture2D(&desc,&initial,&frame.texture),"Fixture original");
+   ProbeIdentity id;id.requestId=request;id.frame=frame.stamp;id.targetGeneration=id.outputEpoch=2;id.requestedRevision=id.appliedRevision=id.processingRevision=id.comparisonRevision=4;id.workWidth=id.outputWidth=shape[0];id.workHeight=id.outputHeight=shape[1];
+   if(scenario==10){id.nr=false;ProbeNeed(probe.Request(request)&&!probe.Bind(id),"Bypass must be honestly unsupported");kit.Ingress(frame.texture.Get());kit.Begin();Constants bypass;bypass.width=shape[0];bypass.height=shape[1];kit.Dispatch(0,bypass,{&kit.source,nullptr,nullptr,nullptr,nullptr},{&kit.proxy,&kit.original});bypass.mode=1;bypass.apply=0;kit.Dispatch(2,bypass,{&kit.proxy,&kit.model,&kit.original,nullptr,nullptr},{&kit.output,nullptr});kit.Transition(kit.output,D3D12_RESOURCE_STATE_COMMON);kit.Transition(kit.source,D3D12_RESOURCE_STATE_COMMON);kit.Submit();NrResult ordinary;ordinary.stamp=frame.stamp;ordinary.texture=kit.PublishD11(desc,ordinary);const auto bytes=ProbeRead(d,context,ordinary.texture.Get());for(size_t n=0;n<bytes.size();++n)ProbeNeed(n%4==3?bytes[n]==original[n]:std::abs(int(bytes[n])-int(original[n]))<=1,"Unsupported measurement changed ordinary bypass output");ProbeNeed(probe.Status()["state"]=="unsupported"&&probe.Status()["summaries"].is_null()&&probe.Status()["ownershipRetired"].get<bool>(),"Bypass returned fabricated metrics");std::cout<<"PROBE_UNSUPPORTED bypass=true summaries_null=true ordinary_output_preserved=true\n";host.Stop();return;}
+   ProbeNeed(probe.Request(request)&&probe.Bind(id),"Synthetic diagnostic admission");ProbeNeed(!probe.Request(request+1),"Busy probe replaced its immutable frame");
+   kit.Ingress(frame.texture.Get());kit.Begin();Constants constants;constants.width=shape[0];constants.height=shape[1];constants.transfer=constants.colour=1;
+   kit.Dispatch(0,constants,{&kit.source,nullptr,nullptr,nullptr,nullptr},{&kit.proxy,&kit.original});
+   auto fillHalf=[&](auto& image,const std::array<uint16_t,4>& pixel){auto md=image.resource->GetDesc();D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;kit.d12->GetCopyableFootprints(&md,0,1,0,&footprint,nullptr,nullptr,&bytes);auto upload=kit.Buffer(bytes,D3D12_HEAP_TYPE_UPLOAD);unsigned char* mapped=nullptr;D3D12_RANGE noRead{};require(upload->Map(0,&noRead,reinterpret_cast<void**>(&mapped)),"Synthetic FP16 upload");for(UINT y=0;y<shape[1];++y)for(UINT x=0;x<shape[0];++x)std::memcpy(mapped+footprint.Offset+size_t(y)*footprint.Footprint.RowPitch+x*8,pixel.data(),8);upload->Unmap(0,nullptr);kit.Transition(image,D3D12_RESOURCE_STATE_COPY_DEST);D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=upload.Get();from.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;from.PlacedFootprint=footprint;to.pResource=image.resource.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;kit.list->CopyTextureRegion(&to,0,0,0,&from,nullptr);kit.uploads.push_back(upload);};
+   std::array<uint16_t,4> pixel{0x3a00,0x3000,0x3400,uint16_t(alphaCase==3?0x7e00:0x3c00)};
+   if(scenario==2)pixel={0,0,0,0x3c00};else if(scenario==3)pixel={0x7e00,0x7e00,0x7e00,0x3c00};else if(scenario==4)pixel={0x7e00,0x7e00,0x3400,0x3c00};else if(scenario==5){pixel={0xfbff,0x7bff,0xfbff,0x3c00};fillHalf(kit.proxy,{0x7bff,0xfbff,0x7bff,0x3c00});}else if(scenario==6||scenario==7){const uint16_t tiny=scenario==6?0x0080:0x0100;pixel={tiny,tiny,tiny,0x3c00};fillHalf(kit.proxy,{0,0,0,0x3c00});}
+   fillHalf(kit.model,pixel);if(scenario==1){kit.Transition(kit.proxy,D3D12_RESOURCE_STATE_COPY_SOURCE);kit.Transition(kit.model,D3D12_RESOURCE_STATE_COPY_DEST);kit.list->CopyResource(kit.model.resource.Get(),kit.proxy.resource.Get());}
+   constants.mode=1;constants.apply=loseResolve?0:1;kit.Dispatch(2,constants,{&kit.proxy,&kit.model,&kit.original,nullptr,nullptr},{&kit.output,nullptr});
+   if(!loseResolve){std::array<uint32_t,24> actual{};std::memcpy(actual.data(),&constants,sizeof(actual));ProbeNeed(probe.CaptureConstants(actual),"Actual constants snapshot refused");}
+   ProbeNeed(probe.RecordNr(kit.d12.Get(),d,context,kit.list.Get(),kit.model.resource.Get(),kit.proxy.resource.Get(),kit.output.resource.Get(),kit.source.resource.Get()),"D12 diagnostic record unavailable");kit.Transition(kit.output,D3D12_RESOURCE_STATE_COMMON);kit.Transition(kit.source,D3D12_RESOURCE_STATE_COMMON);NrResult completion;kit.Submit(&completion);probe.CompleteNr(kit.fence.Get(),completion.completionValue);
+   NrResult publication;publication.stamp=frame.stamp;publication.texture=kit.PublishD11(desc,publication,scenario==9?&probe:nullptr);
+   const unsigned byteStep=scenario==8?unsigned((request-1)%3):0;
+   if(losePublication||scenario==8){const unsigned base=scenario==8?std::array<unsigned,3>{0,128,255}[(request-1)/3]:0;const unsigned changed=base==255?base-byteStep:base+byteStep;std::vector<unsigned char> resolvedBytes(original.size()),publishedBytes(original.size());for(size_t n=0;n<original.size();n+=4){for(unsigned channel=0;channel<3;++channel){resolvedBytes[n+channel]=static_cast<unsigned char>(base);publishedBytes[n+channel]=static_cast<unsigned char>(changed);}resolvedBytes[n+3]=publishedBytes[n+3]=original[n+3];}if(scenario==8)context->UpdateSubresource(kit.output11.Get(),0,nullptr,resolvedBytes.data(),shape[0]*4,0);context->UpdateSubresource(publication.texture.Get(),0,nullptr,publishedBytes.data(),shape[0]*4,0);}
+   if(scenario!=9){ProbeNeed(probe.RecordPublication(context,publication.texture.Get(),kit.outputView.Get()),"Publication diagnostic unavailable");require(c4->Signal(fence.Get(),++signal),"Fixture publication last-use signal");context->Flush();probe.CompletePublication(fence.Get(),signal);}
+   ComPtr<ID3D11Texture2D> backbuffer;ComPtr<IDXGISwapChain1> ownedChain;
+   if((shape[0]==17&&alphaCase==0)||lifecycle>=0){ComPtr<IDXGIDevice> dxgi;ComPtr<IDXGIAdapter> adapter;ComPtr<IDXGIFactory2> factory;require(d->QueryInterface(IID_PPV_ARGS(&dxgi)),"Fixture DXGI device");require(dxgi->GetAdapter(&adapter),"Fixture adapter");require(adapter->GetParent(IID_PPV_ARGS(&factory)),"Fixture factory");DXGI_SWAP_CHAIN_DESC1 sd{};sd.Width=shape[0];sd.Height=shape[1];sd.Format=desc.Format;sd.SampleDesc.Count=1;sd.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;sd.BufferCount=2;sd.SwapEffect=DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;sd.AlphaMode=DXGI_ALPHA_MODE_IGNORE;require(factory->CreateSwapChainForComposition(d,&sd,nullptr,&ownedChain),"Owned windowless comparison chain");require(ownedChain->GetBuffer(0,IID_PPV_ARGS(&backbuffer)),"Owned chain backbuffer");}
+   else require(d->CreateTexture2D(&desc,nullptr,&backbuffer),"Owned comparison target");
+   ComparisonOutput compositor;compositor.Compose(context,backbuffer.Get(),frame.texture.Get(),publication.texture.Get(),shape[0],shape[1],0,0);context->ClearState();
+   if(loseComparison){ComPtr<ID3D11RenderTargetView> target;require(d->CreateRenderTargetView(backbuffer.Get(),nullptr,&target),"Comparison loss target");const float zero[4]{};context->ClearRenderTargetView(target.Get(),zero);}
+   int observedAlpha=-1;if(ownedChain){DXGI_SWAP_CHAIN_DESC1 actual{};require(ownedChain->GetDesc1(&actual),"Observe actual owned-chain alpha mode");observedAlpha=int(actual.AlphaMode);}
+   ProbeNeed(probe.RecordComparison(context,backbuffer.Get(),publication.texture.Get(),2,observedAlpha,true),"Comparison diagnostic unavailable");probe.RequireComparison(fence.Get(),++signal);
+   // An invented later value cannot retire an unsignalled bound fence.
+   probe.ObserveComparison(signal+100);probe.Poll();ProbeNeed(probe.Pending()&&!probe.Status()["ownershipRetired"].get<bool>(),"Spurious raw completion released comparison ownership");
+   if(lifecycle>=0){
+    compositor.ReleaseFrameViews();context->ClearState();backbuffer.Reset();
+    ProbeNeed(ownedChain->ResizeBuffers(2,2,2,DXGI_FORMAT_B8G8R8A8_UNORM,0)==DXGI_ERROR_INVALID_CALL,"Unproved diagnostic released its swapchain buffer");
+    if(lifecycle==0)probe.Invalidate("Synthetic resize canceled result before exact completion");
+    if(lifecycle==1){ComPtr<ID3D12Fence> wrong;require(kit.d12->CreateFence(completion.completionValue,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&wrong)),"Wrong NR fence");probe.CompleteNr(wrong.Get(),completion.completionValue);}
+    if(lifecycle==2){ComPtr<ID3D11Fence> wrong;require(d5->CreateFence(signal+100,D3D11_FENCE_FLAG_NONE,IID_PPV_ARGS(&wrong)),"Wrong publication fence");probe.CompletePublication(wrong.Get(),signal-1);}
+    if(lifecycle==3){ComPtr<ID3D11Fence> wrong;require(d5->CreateFence(signal+100,D3D11_FENCE_FLAG_NONE,IID_PPV_ARGS(&wrong)),"Wrong comparison fence");probe.RequireComparison(wrong.Get(),signal);}
+    require(c4->Signal(fence.Get(),signal),"Lifecycle exact final-copy signal");context->Flush();const auto until=GetTickCount64()+5000;while(fence->GetCompletedValue()<signal&&GetTickCount64()<until)Sleep(1);ProbeNeed(fence->GetCompletedValue()!=UINT64_MAX&&fence->GetCompletedValue()>=signal,"Lifecycle completion unavailable");probe.Poll();
+    if(lifecycle==0){ProbeNeed(probe.Status()["state"]=="invalidated"&&probe.Status()["summaries"].is_null()&&probe.Status()["ownershipRetired"].get<bool>(),"Invalidated late-completed diagnostic did not safely retire");require(ownedChain->ResizeBuffers(2,2,2,DXGI_FORMAT_B8G8R8A8_UNORM,0),"Invalidated retired diagnostic retained its backbuffer");}
+    else {ProbeNeed(probe.Quarantined()&&!probe.Request(request+1),"Different fence with same value replaced immutable completion proof");ProbeNeed(ownedChain->ResizeBuffers(2,2,2,DXGI_FORMAT_B8G8R8A8_UNORM,0)==DXGI_ERROR_INVALID_CALL,"Unknown ownership released its backbuffer");}
+    std::cout<<"PROBE_LIFECYCLE case="<<lifecycle<<" raw_spurious_observation_rejected=true bound_fence_checked=true retirement_policy_verified=true\n";host.Stop();return;
+   }
+   require(c4->Signal(fence.Get(),signal),"Fixture exact final-copy signal");context->Flush();
+   const auto deadline=GetTickCount64()+5000;while(fence->GetCompletedValue()<signal&&GetTickCount64()<deadline)Sleep(1);ProbeNeed(fence->GetCompletedValue()!=UINT64_MAX&&fence->GetCompletedValue()>=signal,"Fixture exact completion unavailable");probe.ObserveComparison(fence->GetCompletedValue());
+   for(unsigned attempt=0;attempt<100&&probe.Pending();++attempt){probe.Poll();if(probe.Pending())Sleep(1);}auto status=probe.Status();ProbeNeed(status["state"]=="complete","Four diagnostic records did not complete");const auto& summaries=status["summaries"];ProbeNeed(summaries.size()==4,"Missing diagnostic boundary");
+   ProbeNeed(ownedChain?status["output"]["alphaMode"]==observedAlpha:status["output"]["alphaMode"].is_null(),"Diagnostic alpha-mode metadata is not observed or null");
+   ProbeNeed(loseResolve?status["effectiveProcessing"]["resolveConstantsDwords"].is_null():status["effectiveProcessing"]["resolveConstantsDwords"].size()==24,"Actual resolve constants snapshot is missing");
+   const auto samples=ProbeGridCount(shape[0],shape[1]);const auto& budget=status["budget"]["observed"];ProbeNeed(budget["resources"]==6&&budget["scratchConstantBytes"]==1568&&budget["aggregateReadbackBytes"]==512&&budget["dispatches"]==3&&budget["sampleCopies"]==samples&&budget["aggregateCopies"]==2,"Actual diagnostic resource or command budget exceeded");
+   std::cout<<"PROBE_BUDGET "<<budget.dump()<<'\n';
+   std::cout<<"PROBE_SUMMARIES extent="<<shape[0]<<'x'<<shape[1]<<" alphaCase="<<alphaCase<<" scenario="<<scenario<<" aggregate="<<summaries.dump()<<'\n';
+   if(scenario==0||scenario==9){ProbeNeed(summaries[0]["rgb"]["aboveThresholdPixels"].get<unsigned>()>0,"Known raw model edit lost");ProbeNeed(summaries[1]["rgb"]["aboveThresholdPixels"].get<unsigned>()>0,"Known edit lost at resolve");}
+   if(scenario==1)ProbeNeed(summaries[0]["rgb"]["unequalPixels"]==0&&summaries[1]["rgb"]["aboveThresholdPixels"]==0,"Identity model changed more than one byte step");
+   if(scenario==2)ProbeNeed(summaries[0]["fallback"]["lowModelLuminanceSamples"]==samples&&summaries[1]["rgb"]["unequalPixels"]==0,"Empty model did not report fallback and unchanged resolved RGB");
+   if(scenario==3)ProbeNeed(summaries[0]["rgb"]["finiteChannels"]==0&&summaries[0]["rgb"]["meanAbsoluteDifference"].is_null()&&summaries[0]["rgb"]["equalPixels"].is_null()&&summaries[0]["fallback"]["lowModelLuminanceSamples"].is_null(),"All nonfinite RGB became zero, equal or a fallback denominator");
+   if(scenario==4)ProbeNeed(summaries[0]["rgb"]["finiteChannels"]==samples&&summaries[0]["rgb"]["nonfiniteChannels"]==2*samples&&summaries[0]["rgb"]["equalPixels"].is_null()&&!summaries[0]["rgb"]["meanAbsoluteDifference"].is_null(),"Mixed nonfinite RGB discarded independent finite channels");
+   if(scenario==5)ProbeNeed(summaries[0]["rgb"]["maximumAbsoluteDifference"]==131008.f&&summaries[0]["rgb"]["meanAbsoluteDifference"]==131008.f,"Finite FP16 extreme sum or maximum corrupted");
+   if(scenario==6||scenario==7)ProbeNeed(summaries[0]["rgb"]["aboveThresholdPixels"]==(scenario==6?0:samples),"Raw FP16 threshold classification is incorrect");
+   ProbeNeed(summaries[2]["rgb"]["unequalPixels"]==(scenario==8&&byteStep? samples:0)&&summaries[2]["rgb"]["aboveThresholdPixels"]==(scenario==8&&byteStep==2?samples:0)&&summaries[2]["alpha"]["unequalSamples"]==0,"Publication lost the same-frame edit or byte-step classification");
+   ProbeNeed(summaries[3]["rgb"]["unequalPixels"]==0&&summaries[3]["alpha"]["unequalSamples"]==0,"Comparison lost the same-frame publication");
+   const auto published=ProbeRead(d,context,publication.texture.Get());const auto composed=ProbeRead(d,context,backbuffer.Get());ProbeNeed(published==composed,"Diagnostic changed composed bytes");ProbeNeed(ProbeRead(d,context,frame.texture.Get())==original,"Diagnostic mutated captured original");
+   uint32_t zeroAlpha=0,notOne=0;for(UINT j=0;j<16;++j){UINT y=ProbeGridAxis(shape[1],j);if(j&&y==ProbeGridAxis(shape[1],j-1))continue;for(UINT i=0;i<16;++i){UINT x=ProbeGridAxis(shape[0],i);if(i&&x==ProbeGridAxis(shape[0],i-1))continue;const auto alpha=original[(size_t(y)*shape[0]+x)*4+3];zeroAlpha+=alpha==0;notOne+=alpha!=255;}}
+   for(unsigned pair:{1u,2u,3u})for(const char* side:{"lhs","rhs"})ProbeNeed(summaries[pair]["alpha"][side]["zero"]==zeroAlpha&&summaries[pair]["alpha"][side]["notOne"]==notOne,"Independent alpha endpoint counts disagree with original grid");
+   if(alphaCase==3)ProbeNeed(summaries[0]["alpha"]["finitePairedSamples"]==0&&summaries[0]["alpha"]["lhs"]["zero"].is_null()&&summaries[0]["alpha"]["rhs"]["finite"]==ProbeGridCount(shape[0],shape[1]),"One-sided NaN masked the finite proxy alpha");
+   for(size_t n=3;n<published.size();n+=4)ProbeNeed(published[n]==original[n],"Probe path forced source alpha");
+   if(scenario!=8){kit.Begin();kit.Dispatch(2,constants,{&kit.proxy,&kit.model,&kit.original,nullptr,nullptr},{&kit.output,nullptr});kit.Transition(kit.output,D3D12_RESOURCE_STATE_COMMON);kit.Transition(kit.source,D3D12_RESOURCE_STATE_COMMON);kit.Submit();NrResult without;without.stamp=frame.stamp;without.texture=kit.PublishD11(desc,without);ProbeNeed(ProbeRead(d,context,without.texture.Get())==published,"Probe-on/off changed the same synthetic composition output");}
+   std::cout<<"PROBE_GPU extent="<<shape[0]<<'x'<<shape[1]<<" alphaCase="<<alphaCase<<" scenario="<<scenario<<" byteStep="<<byteStep<<" samples="<<samples<<" four_pairs=true original_immutable=true source_alpha_preserved=true\n";
+   compositor.ReleaseFrameViews();
+   if(ownedChain){context->ClearState();backbuffer.Reset();require(ownedChain->ResizeBuffers(2,19,11,DXGI_FORMAT_B8G8R8A8_UNORM,0),"Completed diagnostic retained a backbuffer until another request");std::cout<<"PROBE_RESIZE completed_result_kept=true new_request=false resize_succeeded=true\n";}
+   if(scenario>0&&(scenario!=8||request==9)){host.Stop();return;}
+  }
+  host.Stop();ProbeNeed(!host.RequiresRestart(),"Completed synthetic owner did not retire");
+ }
+};
+}
+int wmain(int argc,wchar_t** argv){try{
+ nrw::ComPtr<ID3D11Device> d;nrw::ComPtr<ID3D11DeviceContext> c;nrw::require(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,&d,nullptr,&c),"Owned WARP device");int lifecycle=-1,scenario=0;const std::wstring option=argc==2?argv[1]:L"";
+ if(option==L"--invalidated-late")lifecycle=0;else if(option==L"--wrong-nr-fence")lifecycle=1;else if(option==L"--wrong-publication-fence")lifecycle=2;else if(option==L"--wrong-comparison-fence")lifecycle=3;
+ else if(option==L"--identity")scenario=1;else if(option==L"--empty")scenario=2;else if(option==L"--all-nonfinite")scenario=3;else if(option==L"--mixed-nonfinite")scenario=4;else if(option==L"--fp16-extremes")scenario=5;else if(option==L"--raw-below-threshold")scenario=6;else if(option==L"--raw-above-threshold")scenario=7;else if(option==L"--byte-thresholds")scenario=8;else if(option==L"--production-publication")scenario=9;else if(option==L"--unsupported-bypass")scenario=10;
+ nrw::NrOwnedGpuFixture::RunProbe(d.Get(),c.Get(),option==L"--lose-resolve",option==L"--lose-comparison",lifecycle,scenario,option==L"--lose-publication");return 0;
+}catch(const std::exception& error){std::cerr<<"PROBE_GPU_FAIL "<<error.what()<<'\n';return 1;}}

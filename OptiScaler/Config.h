@@ -10,6 +10,10 @@
 
 #include "NrConfigState.h"
 #include "NrConfigSnapshot.h"
+#include "ConfigPersistence.h"
+#include "dlssnr/AutomaticSetupRequirements.h"
+
+namespace DlssNr::ExperimentalPolicy { struct UiDraft; }
 
 constexpr inline int UnboundKey = -1;
 constexpr uint32_t NV_PRESET_LATEST = 0x00FFFFFF;
@@ -161,6 +165,22 @@ class Config
 
     Config();
 
+    // Independent observation lane; these requests never enable NR/SR/FG.
+    CustomOptional<std::string> ObjectRulesProfileHex { "auto" };
+    CustomOptional<bool> CharacterInspectorEnabled { false };
+    CustomOptional<std::string> CharacterInspectorProvider { "auto" };
+    CustomOptional<bool> CharacterInspectorBodyBoxes { true };
+    CustomOptional<bool> CharacterInspectorTorsoEstimate { false };
+    CustomOptional<uint32_t> CharacterInspectorMaximumPersons { 4 };
+    CustomOptional<uint32_t> CharacterInspectorMaximumLabels { 8 };
+    CustomOptional<uint32_t> CharacterInspectorBoxHoldMs { 80 };
+    CustomOptional<uint32_t> CharacterInspectorBoxThickness { 2 };
+    CustomOptional<uint32_t> CharacterInspectorLabelScalePercent { 100 };
+    CustomOptional<uint32_t> CharacterInspectorUpdateIntervalMs { 33 };
+    CustomOptional<bool> CharacterInspectorAutoLabelScale { true };
+    CustomOptional<bool> CharacterInspectorSmartBoxHandoff { true };
+    CustomOptional<bool> CharacterInspectorDetectObjects { true };
+
     // Init flags
     CustomOptional<bool, NoDefault> DepthInverted;
     CustomOptional<bool, NoDefault> AutoExposure;
@@ -192,10 +212,21 @@ class Config
     // DLSS Neural Rendering: a detail-synthesis pass over the upscaler's output. Off by default -- it is
     // an undocumented feature driven directly through its snippet, not something NVIDIA exposes.
     NrOptional<bool> DlssNrEnabled { false };
+    // Stage supported Vulkan model extensions before activation; false preserves caller requests.
+    NrOptional<bool> DlssNrVulkanPrepare { true };
+    NrOptional<bool> DlssNrAlternateFrame { false };
     // Multipass is a separate opt-in. A count of one is deliberately valid and behaves exactly like
     // the established single-pass route; up to nine later passes own independent sessions/history.
     NrOptional<bool> DlssNrMultipassEnabled { false };
     NrOptional<bool> DlssNrExperimentalMode { false };
+    NrOptional<bool> DlssNrPreparedDepth { false }; // Experimental Native depth compatibility.
+    NrOptional<int> DlssNrNativeDepthDirection { -1 }; // Auto, forward, reversed.
+    NrOptional<bool> DlssNrNativeGuides { false }; // Built-in Vulkan acquisition; restart to change ownership.
+    NrOptional<int> DlssNrInputSource { DlssNr::SetupRequirements::InputSource }; // Automatic, native, built-in, ReShade, external.
+    NrOptional<int> DlssNrInputTransport { DlssNr::SetupRequirements::InputTransport }; // Automatic, GPU-only, CPU.
+    NrOptional<bool> DlssNrAllowCpuFallback { DlssNr::SetupRequirements::AllowCpuFallback };
+    NrOptional<bool> DlssNrNativeFrameGeneration { false }; // Standalone 2x FSR; restart for Vulkan presentation ownership.
+    NrOptional<bool> DlssNrNativeVulkanRenderer { false }; // Captured-guide Vulkan NR; sharing layout selected at startup.
     NrOptional<bool> DlssNrOverrideMultipassGuardrails { false };
     NrOptional<bool> DlssNrOverrideHdrGuardrails { false };
     NrOptional<bool> DlssNrOverrideFgGuardrails { false };
@@ -224,13 +255,22 @@ class Config
     // an off->on generation so a resumed model cannot reuse temporal history across skipped frames.
     void SetDlssNrEnabled(bool enabled);
     DlssNrRuntimeSnapshot GetDlssNrRuntimeSnapshot() const noexcept;
+    bool RequestDlssNrSession() noexcept { return _dlssNrState.RequestNewSession(); }
     // All routing writers must use this transaction; separate field assignments can tear the pair.
     void SetDlssNrRenderingMode(int32_t mode);
     // Capture once per evaluation and reuse for creation, tuning checks, and built-tuning records.
     // Returned option copies require no locks. No NR lock survives this call.
     NrConfigSnapshot<Config> GetDlssNrConfigSnapshot() const;
     // 0 = Native Temporal; 1 = Present Image Only; 2 = Present Enhanced (default).
-    NrOptional<uint32_t> DlssNrRoute { 2 };
+    NrOptional<uint32_t> DlssNrRoute { DlssNr::SetupRequirements::Route };
+    NrOptional<uint32_t> DlssNrAnythingScale { 100u };
+    // Standalone resolution UI memory; runtime consumes AnythingScale only.
+    NrOptional<uint32_t> DlssNrUiAnythingResolutionPreset { 0u };
+    NrOptional<uint32_t> DlssNrUiAnythingManualScale { 75u };
+    // Schema v1: 0 image-only, 1 require guides, 2 auto guides, 3 invalid/refuse.
+    NrOptional<uint32_t> DlssNrPresentInputPolicy { DlssNr::SetupRequirements::PresentInputPolicy };
+    // Experimental Native contract adapter; absent/false preserves the legacy path.
+    NrOptional<bool> DlssNrNativeProtocol { false };
     // UI memory only; legacy route/placement/working scale remain authoritative.
     NrOptional<bool> DlssNrUiManualResolution { false };
     NrOptional<float> DlssNrUiManualScale { 0.25f };
@@ -265,7 +305,7 @@ class Config
     NrOptional<uint32_t> DlssNrPreset { 0 };
     NrOptional<float> DlssNrIntensity { 1.0f };
     // 0 default (standard), 1 natural, 2 cinematic -- the model's own processing profiles.
-    NrOptional<uint32_t> DlssNrStyle { 0 };
+    NrOptional<uint32_t> DlssNrStyle { DlssNr::SetupRequirements::Style };
     NrOptional<float> DlssNrLocalStructure { 1.0f };
     NrOptional<float> DlssNrLocalTone { 1.0f };
     // -1 means follow local structure, which is the model's own default. It is not a strength of zero.
@@ -516,13 +556,13 @@ class Config
 
     // DLSSD
     CustomOptional<bool> DLSSDRenderPresetOverride { false };
-    CustomOptional<uint32_t> DLSSDRenderPresetForAll { 0 };
-    CustomOptional<uint32_t> DLSSDRenderPresetDLAA { 0 };
-    CustomOptional<uint32_t> DLSSDRenderPresetUltraQuality { 0 };
-    CustomOptional<uint32_t> DLSSDRenderPresetQuality { 0 };
-    CustomOptional<uint32_t> DLSSDRenderPresetBalanced { 0 };
-    CustomOptional<uint32_t> DLSSDRenderPresetPerformance { 0 };
-    CustomOptional<uint32_t> DLSSDRenderPresetUltraPerformance { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetForAll { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetDLAA { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetUltraQuality { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetQuality { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetBalanced { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetPerformance { 0 };
+    CustomOptional<uint32_t, SoftDefault> DLSSDRenderPresetUltraPerformance { 0 };
 
     // Nukems
     CustomOptional<bool> NvngxFGMakeDepthCopy { false };
@@ -578,14 +618,16 @@ class Config
 
     // Menu
     CustomOptional<std::string> MenuLanguage { "en" };
-    CustomOptional<bool> OptiClip { true };
     CustomOptional<float> MenuBrightness { 1.0f };
+    CustomOptional<bool> MenuPreflightExpanded { true };
     CustomOptional<bool> AllowGameMouse { false };
     CustomOptional<bool> AllowGameKeyboard { true };
     CustomOptional<bool> AllowGameController { true };
+    // Missing Scale uses display-based sizing; explicit numeric settings remain respected.
     CustomOptional<float, NoDefault> MenuScale;
     CustomOptional<bool> OverlayMenu { true };
     CustomOptional<int> ShortcutKey { VK_INSERT };
+    CustomOptional<bool> EscapeClosesMenu { false };
     CustomOptional<bool> ExtendedLimits { false };
     CustomOptional<bool> ShowFps { false };
     /// 0 Top Left, 1 Top Right, 2 Bottom Left, 3 Bottom Right
@@ -605,14 +647,15 @@ class Config
     CustomOptional<std::wstring, NoDefault> TTFFontPath;
     CustomOptional<int> FGShortcutKey { VK_END };
     CustomOptional<bool> LightTheme { false };
+    CustomOptional<bool> MenuReduceMotion { false };
     CustomOptional<bool> OverlaysUseTheme { false };
-    CustomOptional<float> MenuAccentColorR { 0.00f };
-    CustomOptional<float> MenuAccentColorG { 0.40f };
-    CustomOptional<float> MenuAccentColorB { 0.77f };
+    CustomOptional<float> MenuAccentColorR { 0.54f };
+    CustomOptional<float> MenuAccentColorG { 0.54f };
+    CustomOptional<float> MenuAccentColorB { 0.54f };
     CustomOptional<float> MenuBGColorR { 0.0f };
     CustomOptional<float> MenuBGColorG { 0.0f };
     CustomOptional<float> MenuBGColorB { 0.0f };
-    CustomOptional<float> MenuBGColorA { 0.99f };
+    CustomOptional<float> MenuBGColorA { 0.950f };
 
     // Hooks
     CustomOptional<bool> HookOriginalNvngxOnly { false };
@@ -679,7 +722,7 @@ class Config
 
     CustomOptional<int32_t, NoDefault> ColorResourceBarrier;    // disabled by default
     CustomOptional<int32_t, NoDefault> MVResourceBarrier;       // disabled by default
-    CustomOptional<int32_t, NoDefault> DepthResourceBarrier;    // disabled by default
+    NrOptional<int32_t, NoDefault> DepthResourceBarrier;        // disabled by default
     CustomOptional<int32_t, NoDefault> ExposureResourceBarrier; // disabled by default
     CustomOptional<int32_t, NoDefault> MaskResourceBarrier;     // disabled by default
     CustomOptional<int32_t, NoDefault> OutputResourceBarrier;   // disabled by default
@@ -861,6 +904,10 @@ class Config
     CustomOptional<int, NoDefault>
         FGDLSSGOverrideInterpolationCount; // For overriding game's value sent to SL, could be Nvngx FG, could be noFG
                                            // but someone just uses real DLSSG
+    CustomOptional<bool> FGDLSSGNativeMfgExperimental { false };
+    CustomOptional<bool> FGDLSSGExperimentalUnlockRTX30 { false };
+    CustomOptional<bool> FGDLSSGExperimentalUnlockRTX20 { false };
+    bool FGDLSSGNativeMfgAtStartup = false; // Session snapshot; not an INI setting.
     CustomOptional<bool> FGDLSSGOverrideForceDMFG { false };   // Overrides game's DLSSG mode to Dynamic
     CustomOptional<bool> FGDLSSGForceDMFG { false };           // Overrides Opti's DLSSG mode to Dynamic
     CustomOptional<float> FGDLSSGFramerateTargetDMFG { 0.0f }; // 0.0 means auto-detects the display refresh rate
@@ -912,10 +959,11 @@ class Config
     CustomOptional<bool, NoDefault> _DONTUSE_Fsr4ForceEnableInt8;
 
     bool LoadFromPath(const wchar_t* InPath);
-    bool SaveIni();
+    bool SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraft = nullptr);
+    ConfigPersistence::Snapshot GetPersistenceStatus() const { return ConfigPersistence::Current().Read(); }
     bool SaveMenuInputSettings(bool mouse, bool keyboard, bool controller);
-    bool SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration,
-                                  bool preSrSoftReset);
+    bool SaveExperimentalSettings(bool multipass, bool hdr, bool frameGeneration, bool preSrSoftReset,
+                                  bool preparedDepth = false);
     bool SaveXeFG();
 
     void CheckUpscalerFiles();

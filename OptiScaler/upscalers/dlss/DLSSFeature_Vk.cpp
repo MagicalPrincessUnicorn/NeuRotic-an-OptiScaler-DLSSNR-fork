@@ -3,6 +3,7 @@
 #include <Logger.h>
 
 #include "DLSSFeature_Vk.h"
+#include <dlssnr/DlssNrFeature_Vk.h>
 
 bool DLSSFeatureVk::InitInternal(VkCommandBuffer InCmdList, NVSDK_NGX_Parameter* InParameters)
 {
@@ -82,6 +83,7 @@ bool DLSSFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Para
     if (NVNGXProxy::VULKAN_EvaluateFeature() != nullptr)
     {
         ProcessEvaluateParams(InParameters);
+        DlssNr::RecordPerformanceCaptureVk(InCmdBuffer,InParameters,_p_dlssHandle);
 
         NVSDK_NGX_Result nvResult =
             NVNGXProxy::VULKAN_EvaluateFeature()(InCmdBuffer, _p_dlssHandle, InParameters, NULL);

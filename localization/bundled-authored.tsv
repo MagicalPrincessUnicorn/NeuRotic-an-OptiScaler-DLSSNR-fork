@@ -1,0 +1,93 @@
+# English	zh-CN	ru	es	pt-BR	de	ja	fr	pl	ko
+General	常规	Общие	General	Geral	Allgemein	一般	Général	Ogólne	일반
+Settings	设置	Настройки	Ajustes	Configurações	Einstellungen	設定	Paramètres	Ustawienia	설정
+Language	语言	Язык	Idioma	Idioma	Sprache	言語	Langue	Język	언어
+Scale	缩放	Масштаб	Escala	Escala	Skalierung	倍率	Échelle	Skala	배율
+Apply	应用	Применить	Aplicar	Aplicar	Anwenden	適用	Appliquer	Zastosuj	적용
+Cancel	取消	Отмена	Cancelar	Cancelar	Abbrechen	キャンセル	Annuler	Anuluj	취소
+Close	关闭	Закрыть	Cerrar	Fechar	Schließen	閉じる	Fermer	Zamknij	닫기
+Save	保存	Сохранить	Guardar	Salvar	Speichern	保存	Enregistrer	Zapisz	저장
+Reset	重置	Сбросить	Restablecer	Redefinir	Zurücksetzen	リセット	Réinitialiser	Resetuj	초기화
+Install	安装	Установить	Instalar	Instalar	Installieren	インストール	Installer	Zainstaluj	설치
+Uninstall	卸载	Удалить	Desinstalar	Desinstalar	Deinstallieren	アンインストール	Désinstaller	Odinstaluj	제거
+Replace	替换	Заменить	Reemplazar	Substituir	Ersetzen	置き換える	Remplacer	Zastąp	교체
+Skip	跳过	Пропустить	Omitir	Ignorar	Überspringen	スキップ	Ignorer	Pomiń	건너뛰기
+Fresh Install	全新安装	Чистая установка	Instalación nueva	Instalação nova	Neuinstallation	新規インストール	Nouvelle installation	Nowa instalacja	새로 설치
+Installation	安装	Установка	Instalación	Instalação	Installation	インストール	Installation	Instalacja	설치
+Not installed	未安装	Не установлено	No instalado	Não instalado	Nicht installiert	未インストール	Non installé	Nie zainstalowano	설치되지 않음
+Installed	已安装	Установлено	Instalado	Instalado	Installiert	インストール済み	Installé	Zainstalowano	설치됨
+Partial	部分完成	Частично	Parcial	Parcial	Teilweise	一部完了	Partiel	Częściowo	부분 완료
+Unavailable	不可用	Недоступно	No disponible	Indisponível	Nicht verfügbar	利用不可	Indisponible	Niedostępne	사용 불가
+Ready	就绪	Готово	Listo	Pronto	Bereit	準備完了	Prêt	Gotowe	준비됨
+Loading	正在加载	Загрузка	Cargando	Carregando	Wird geladen	読み込み中	Chargement	Ładowanie	불러오는 중
+Working...	正在处理…	Обработка…	Procesando…	Processando…	Wird bearbeitet…	処理中…	Traitement…	Przetwarzanie…	처리 중…
+Enabled	已启用	Включено	Activado	Ativado	Aktiviert	有効	Activé	Włączone	활성화됨
+Disabled	已禁用	Отключено	Desactivado	Desativado	Deaktiviert	無効	Désactivé	Wyłączone	비활성화됨
+Off	关闭	Выключено	Desactivado	Desligado	Aus	オフ	Désactivé	Wyłączone	꺼짐
+On	开启	Включено	Activado	Ligado	Ein	オン	Activé	Włączone	켜짐
+Automatic	自动	Автоматически	Automático	Automático	Automatisch	自動	Automatique	Automatycznie	자동
+Auto	自动	Авто	Automático	Automático	Auto	自動	Auto	Auto	자동
+Refresh	刷新	Обновить	Actualizar	Atualizar	Aktualisieren	更新	Actualiser	Odśwież	새로 고침
+Refresh details	刷新详情	Обновить сведения	Actualizar detalles	Atualizar detalhes	Details aktualisieren	詳細を更新	Actualiser les détails	Odśwież szczegóły	세부 정보 새로 고침
+Resolve	处理	Разрешить	Resolver	Resolver	Beheben	解決	Résoudre	Rozwiąż	해결
+Needs attention	需要处理	Требуется внимание	Requiere atención	Requer atenção	Handlung erforderlich	対応が必要	Intervention requise	Wymaga uwagi	확인 필요
+Neural Rendering	神经渲染	Нейронный рендеринг	Renderizado neuronal	Renderização neural	Neuronales Rendering	ニューラルレンダリング	Rendu neuronal	Renderowanie neuronowe	뉴럴 렌더링
+Frame Generation	帧生成	Генерация кадров	Generación de fotogramas	Geração de quadros	Frame-Generierung	フレーム生成	Génération d’images	Generowanie klatek	프레임 생성
+Upscaling	超分辨率	Масштабирование	Reescalado	Upscaling	Upscaling	アップスケーリング	Mise à l’échelle	Skalowanie	업스케일링
+Upscalers	超分辨率算法	Масштабировщики	Reescaladores	Upscalers	Upscaler	アップスケーラー	Algorithmes de mise à l’échelle	Algorytmy skalowania	업스케일러
+Image	图像	Изображение	Imagen	Imagem	Bild	画像	Image	Obraz	이미지
+Gameplay	游戏操作	Игровой процесс	Juego	Jogabilidade	Gameplay	ゲームプレイ	Jeu	Rozgrywka	게임 플레이
+Advanced	高级	Дополнительно	Avanzado	Avançado	Erweitert	詳細	Avancé	Zaawansowane	고급
+Tools	工具	Инструменты	Herramientas	Ferramentas	Werkzeuge	ツール	Outils	Narzędzia	도구
+Diagnostics	诊断	Диагностика	Diagnóstico	Diagnóstico	Diagnose	診断	Diagnostic	Diagnostyka	진단
+Color	颜色	Цвет	Color	Cor	Farbe	色	Couleur	Kolor	색상
+Composition	合成	Композиция	Composición	Composição	Komposition	合成	Composition	Kompozycja	합성
+Processing	处理	Обработка	Procesamiento	Processamento	Verarbeitung	処理	Traitement	Przetwarzanie	처리
+Incoming	输入	Вход	Entrada	Entrada	Eingang	入力	Entrée	Wejście	입력
+Output	输出	Выход	Salida	Saída	Ausgabe	出力	Sortie	Wyjście	출력
+Targeted Window	目标窗口	Целевое окно	Ventana seleccionada	Janela selecionada	Zielfenster	対象ウィンドウ	Fenêtre ciblée	Okno docelowe	대상 창
+No window selected.	未选择窗口。	Окно не выбрано.	No hay ninguna ventana seleccionada.	Nenhuma janela selecionada.	Kein Fenster ausgewählt.	ウィンドウが選択されていません。	Aucune fenêtre sélectionnée.	Nie wybrano okna.	선택한 창이 없습니다.
+Countdown	倒计时	Обратный отсчёт	Cuenta atrás	Contagem regressiva	Countdown	カウントダウン	Compte à rebours	Odliczanie	카운트다운
+Stop	停止	Остановить	Detener	Parar	Stoppen	停止	Arrêter	Zatrzymaj	중지
+Start	开始	Запустить	Iniciar	Iniciar	Starten	開始	Démarrer	Uruchom	시작
+Reduced motion	减少动画	Меньше анимации	Reducir movimiento	Reduzir movimento	Weniger Bewegung	アニメーションを減らす	Réduire les animations	Ogranicz animacje	애니메이션 줄이기
+Game Settings	游戏设置	Настройки игры	Ajustes del juego	Configurações do jogo	Spieleinstellungen	ゲーム設定	Paramètres du jeu	Ustawienia gry	게임 설정
+INI Settings	INI 设置	Настройки INI	Ajustes INI	Configurações INI	INI-Einstellungen	INI 設定	Paramètres INI	Ustawienia INI	INI 설정
+Open game folder	打开游戏文件夹	Открыть папку игры	Abrir carpeta del juego	Abrir pasta do jogo	Spielordner öffnen	ゲームフォルダーを開く	Ouvrir le dossier du jeu	Otwórz folder gry	게임 폴더 열기
+Open Screenshots	打开截图	Открыть снимки экрана	Abrir capturas	Abrir capturas de tela	Screenshots öffnen	スクリーンショットを開く	Ouvrir les captures	Otwórz zrzuty ekranu	스크린샷 열기
+Open INI File	打开 INI 文件	Открыть файл INI	Abrir archivo INI	Abrir arquivo INI	INI-Datei öffnen	INI ファイルを開く	Ouvrir le fichier INI	Otwórz plik INI	INI 파일 열기
+Start game	启动游戏	Запустить игру	Iniciar juego	Iniciar jogo	Spiel starten	ゲームを起動	Lancer le jeu	Uruchom grę	게임 시작
+Play in Steam	在 Steam 中启动	Запустить в Steam	Jugar en Steam	Jogar no Steam	In Steam spielen	Steam で起動	Jouer sur Steam	Graj w Steam	Steam에서 플레이
+Browse for executable	选择可执行文件	Выбрать исполняемый файл	Buscar ejecutable	Procurar executável	Programmdatei auswählen	実行ファイルを選択	Choisir l’exécutable	Wybierz plik wykonywalny	실행 파일 찾기
+Change executable	更改可执行文件	Изменить исполняемый файл	Cambiar ejecutable	Alterar executável	Programmdatei ändern	実行ファイルを変更	Changer d’exécutable	Zmień plik wykonywalny	실행 파일 변경
+Choose executable	选择可执行文件	Выберите исполняемый файл	Elegir ejecutable	Escolher executável	Programmdatei auswählen	実行ファイルを選択	Choisir l’exécutable	Wybierz plik wykonywalny	실행 파일 선택
+Translation Editor	翻译编辑器	Редактор переводов	Editor de traducciones	Editor de traduções	Übersetzungseditor	翻訳エディター	Éditeur de traductions	Edytor tłumaczeń	번역 편집기
+Control Preview	控件预览	Предпросмотр элементов	Vista previa de controles	Prévia dos controles	Steuerelementvorschau	コントロールのプレビュー	Aperçu des contrôles	Podgląd elementów	컨트롤 미리 보기
+Save Draft	保存草稿	Сохранить черновик	Guardar borrador	Salvar rascunho	Entwurf speichern	下書きを保存	Enregistrer le brouillon	Zapisz szkic	초안 저장
+Discard	放弃	Отбросить	Descartar	Descartar	Verwerfen	破棄	Ignorer les modifications	Odrzuć	변경 사항 버리기
+Import	导入	Импорт	Importar	Importar	Importieren	インポート	Importer	Importuj	가져오기
+Export	导出	Экспорт	Exportar	Exportar	Exportieren	エクスポート	Exporter	Eksportuj	내보내기
+Add Language	添加语言	Добавить язык	Añadir idioma	Adicionar idioma	Sprache hinzufügen	言語を追加	Ajouter une langue	Dodaj język	언어 추가
+Manage Languages	管理语言	Управление языками	Gestionar idiomas	Gerenciar idiomas	Sprachen verwalten	言語を管理	Gérer les langues	Zarządzaj językami	언어 관리
+Apply language	应用语言	Применить язык	Aplicar idioma	Aplicar idioma	Sprache anwenden	言語を適用	Appliquer la langue	Zastosuj język	언어 적용
+Export English Template	导出英文模板	Экспорт английского шаблона	Exportar plantilla en inglés	Exportar modelo em inglês	Englische Vorlage exportieren	英語テンプレートを出力	Exporter le modèle anglais	Eksportuj szablon angielski	영어 템플릿 내보내기
+Export selected pack	导出所选语言包	Экспорт выбранного пакета	Exportar paquete seleccionado	Exportar pacote selecionado	Ausgewähltes Paket exportieren	選択したパックを出力	Exporter le pack sélectionné	Eksportuj wybrany pakiet	선택한 팩 내보내기
+Remove	删除	Удалить	Eliminar	Remover	Entfernen	削除	Supprimer	Usuń	삭제
+Create	创建	Создать	Crear	Criar	Erstellen	作成	Créer	Utwórz	만들기
+Name	名称	Название	Nombre	Nome	Name	名前	Nom	Nazwa	이름
+Author	作者	Автор	Autor	Autor	Autor	作者	Auteur	Autor	작성자
+Version	版本	Версия	Versión	Versão	Version	バージョン	Version	Wersja	버전
+Locale	语言标识	Локаль	Configuración regional	Localidade	Sprachkennung	ロケール	Paramètre régional	Ustawienia regionalne	로캘
+English	英语	Английский	Inglés	Inglês	Englisch	英語	Anglais	Angielski	영어
+Translation	翻译	Перевод	Traducción	Tradução	Übersetzung	翻訳	Traduction	Tłumaczenie	번역
+Select an entry to edit and preview.	选择条目进行编辑和预览。	Выберите запись для редактирования и просмотра.	Selecciona una entrada para editarla y previsualizarla.	Selecione uma entrada para editar e visualizar.	Eintrag zum Bearbeiten und Vorschauen auswählen.	編集してプレビューする項目を選択してください。	Sélectionnez une entrée à modifier et à prévisualiser.	Wybierz wpis do edycji i podglądu.	편집하고 미리 볼 항목을 선택하세요.
+Save the draft before closing?	关闭前保存草稿吗？	Сохранить черновик перед закрытием?	¿Guardar el borrador antes de cerrar?	Salvar o rascunho antes de fechar?	Entwurf vor dem Schließen speichern?	閉じる前に下書きを保存しますか？	Enregistrer le brouillon avant de fermer ?	Zapisać szkic przed zamknięciem?	닫기 전에 초안을 저장할까요?
+Light preview	浅色预览	Светлая тема предпросмотра	Vista previa clara	Prévia clara	Helle Vorschau	ライトプレビュー	Aperçu clair	Jasny podgląd	밝은 테마 미리 보기
+Compact	紧凑	Компактный	Compacto	Compacto	Kompakt	コンパクト	Compact	Kompaktowy	간결하게
+Draft saved	草稿已保存	Черновик сохранён	Borrador guardado	Rascunho salvo	Entwurf gespeichert	下書きを保存しました	Brouillon enregistré	Szkic zapisany	초안 저장됨
+Unsaved draft	草稿未保存	Несохранённый черновик	Borrador sin guardar	Rascunho não salvo	Ungespeicherter Entwurf	未保存の下書き	Brouillon non enregistré	Niezapisany szkic	저장하지 않은 초안
+Usable translation	可用翻译	Пригодный перевод	Traducción válida	Tradução válida	Verwendbare Übersetzung	使用できる翻訳	Traduction utilisable	Poprawne tłumaczenie	사용 가능한 번역
+Unbound	未绑定	Не назначено	Sin asignar	Não atribuído	Nicht zugewiesen	未割り当て	Non attribué	Bez przypisania	할당되지 않음
+requested	已请求	запрошено	solicitado	solicitado	angefordert	要求済み	demandé	żądane	요청됨
+off	关闭	выключено	desactivado	desativado	aus	オフ	désactivé	wyłączone	꺼짐
+Upscaler: %7.2f ms	超分辨率：%7.2f ms	Масштабирование: %7.2f ms	Escalador: %7.2f ms	Upscaler: %7.2f ms	Upscaler: %7.2f ms	アップスケーラー：%7.2f ms	Mise à l’échelle : %7.2f ms	Skalowanie: %7.2f ms	업스케일러: %7.2f ms

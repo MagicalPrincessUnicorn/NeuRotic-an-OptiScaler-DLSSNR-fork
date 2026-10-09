@@ -10,18 +10,6 @@ inline constexpr int RouteCount(int stage) { return stage == Before ? 1 : 3; }
 inline constexpr bool Contains(int stage, int route)
 { return (stage == Before || stage == After) && route >= 0 && route < RouteCount(stage); }
 
-// Requirements, not promises of compatibility. Only the implemented policy gates
-// may recommend an override; unknown cadence or an unsupported format must not.
-inline const char* ExperimentalAdvice(int route, const ExperimentalPolicy::Snapshot& policy,
-                                      bool frameGeneration, bool supportedHdr)
-{
-    if (route == 2 && frameGeneration && !policy.Allows(ExperimentalPolicy::Guardrail::FrameGeneration))
-        return "Experimental required: enable Unlock Experimental Mode and Override FG Guardrails, then Save experimental settings and retry. Safety checks still apply.";
-    if ((route == 1 || route == 2) && supportedHdr && !policy.Allows(ExperimentalPolicy::Guardrail::Hdr))
-        return "Experimental required: enable Unlock Experimental Mode and Override HDR Guardrails, then Save experimental settings and retry. Safety checks still apply.";
-    return nullptr;
-}
-
 inline bool CurrentFailure(int route, uint64_t trialGeneration, uint64_t startAttempt,
                            const AdvisorSampling::Cadence& cadence, uint64_t fallbackAttempt)
 {

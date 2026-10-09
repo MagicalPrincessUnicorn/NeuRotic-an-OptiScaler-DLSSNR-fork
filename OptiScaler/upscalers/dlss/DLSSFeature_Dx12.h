@@ -7,6 +7,7 @@
 class DLSSFeatureDx12 : public DLSSFeature, public IFeature_Dx12
 {
   private:
+    Neurotic::Runtime::ProviderReleaseGate _providerRelease;
   protected:
     bool InitDLSS(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters);
 
@@ -15,6 +16,8 @@ class DLSSFeatureDx12 : public DLSSFeature, public IFeature_Dx12
     bool EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
 
     static void Shutdown(ID3D12Device* InDevice);
+    NVSDK_NGX_Result ReleaseProvider() override;
+    bool ProviderReleaseQuarantined() const override { return _providerRelease.Quarantined(); }
 
     feature_version Version() override { return DLSSFeature::Version(); }
     Upscaler GetUpscalerType() const final { return DLSSFeature::GetUpscalerType(); }

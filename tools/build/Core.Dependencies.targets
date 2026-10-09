@@ -1,0 +1,13 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <PropertyGroup>
+  <NeuRoticRepoRoot Condition="'$(NeuRoticRepoRoot)'==''">$(MSBuildThisFileDirectory)..\..</NeuRoticRepoRoot>
+  <NeuRoticGeneratedRoot Condition="'$(NeuRoticGeneratedRoot)'==''">$(NeuRoticRepoRoot)\builds\source\core\generated</NeuRoticGeneratedRoot>
+  <IncludePath>$(NeuRoticGeneratedRoot);$(NeuRoticRepoRoot)\OptiScaler;$(NeuRoticRepoRoot)\OptiScaler\include;$(NeuRoticRepoRoot)\external\vulkan\include;$(NeuRoticRepoRoot)\external\nvngx_dlss_sdk;$(NeuRoticRepoRoot)\external\xess\inc\xess;$(NeuRoticRepoRoot)\external\xess\inc\xell;$(NeuRoticRepoRoot)\external\xess\inc\xess_fg;$(NeuRoticRepoRoot)\external\FidelityFX-SDK\ffx-api\include\ffx_api;$(NeuRoticRepoRoot)\external\simpleini;$(NeuRoticRepoRoot)\external\unordered_dense\include;$(NeuRoticRepoRoot)\external\spdlog\include;$(NeuRoticRepoRoot)\external\freetype;$(NeuRoticRepoRoot)\external\streamline;$(NeuRoticRepoRoot)\external\streamline1;$(NeuRoticRepoRoot)\external\nvapi;$(NeuRoticRepoRoot)\external\nlohmann;$(NeuRoticRepoRoot)\external\fakenvapi;$(NeuRoticRepoRoot)\external\magic_enum\include\magic_enum;$(NeuRoticRepoRoot)\external\AntiLag2-SDK;$(NeuRoticRepoRoot)\external\latencyflex;$(IncludePath)</IncludePath>
+  <LibraryPath>$(NeuRoticRepoRoot)\OptiScaler\library\fsr2;$(NeuRoticRepoRoot)\OptiScaler\library\fsr2_212;$(NeuRoticRepoRoot)\OptiScaler\library\fsr31;$(NeuRoticRepoRoot)\OptiScaler\library\vulkan;$(NeuRoticRepoRoot)\OptiScaler\library\d3dx;$(NeuRoticRepoRoot)\OptiScaler\library\detours;$(NeuRoticRepoRoot)\external\xess\lib;$(NeuRoticRepoRoot)\external\freetype;$(LibraryPath)</LibraryPath>
+ </PropertyGroup>
+ <ItemDefinitionGroup>
+  <ClCompile><AdditionalOptions>/MP2 %(AdditionalOptions)</AdditionalOptions></ClCompile>
+  <ResourceCompile><AdditionalIncludeDirectories>$(NeuRoticGeneratedRoot);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ResourceCompile>
+  <Link><AdditionalOptions>/PDBALTPATH:$(TargetName).pdb %(AdditionalOptions)</AdditionalOptions></Link>
+ </ItemDefinitionGroup>
+</Project>

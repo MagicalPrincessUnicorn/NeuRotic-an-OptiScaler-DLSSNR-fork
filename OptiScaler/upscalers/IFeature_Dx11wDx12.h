@@ -8,12 +8,41 @@
 #include <d3d12.h>
 #include <d3d11_4.h>
 #include <dxgi1_6.h>
+#include <dlssnr/NrBridgeRetirement.h>
 
 #define DX11WDX12_NUM_OF_BUFFERS 2
 
 class IFeature_Dx11wDx12 : public virtual IFeature_Dx11
 {
   private:
+    struct BridgeSlot
+    {
+        std::shared_ptr<DlssNr::Bridge::Use> use=std::make_shared<DlssNr::Bridge::Use>();
+        Dx11WithDx12::RetainedResources before, after;
+        std::array<Microsoft::WRL::ComPtr<ID3D11Resource>,6> inputs;
+    };
+    struct BridgeGeneration
+    {
+        Microsoft::WRL::ComPtr<ID3D11Device5> device11;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext4> context;
+        Microsoft::WRL::ComPtr<ID3D12Device> device12;
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
+        Microsoft::WRL::ComPtr<ID3D11Fence> consumerFence;
+        std::array<BridgeSlot,DX11WDX12_NUM_OF_BUFFERS> slots;
+        UINT64 consumerValue=0;
+        bool revoked=false;
+    };
+    std::unique_ptr<BridgeGeneration> bridgeGeneration;
+    UINT64 bridgeGenerationId=0, bridgeAttemptId=0;
+    bool bridgeRecordingOpen=false, bridgeInitialised=false;
+    DlssNr::Bridge::Receipt bridgeReceipt;
+    bool GenerationReusable() const;
+    bool WaitForGenerationReuse();
+    const char* bridgePreparationReason="resource-or-command-preparation";
+    UINT64 bridgeWaitCount=0, bridgeBusyRefusals=0, bridgeWaitMilliseconds=0;
+    bool MarkConsumer(UINT slot);
+    bool CancelRecording(UINT slot);
+    DlssNr::Bridge::Identity CurrentIdentity(UINT slot, UINT64 lifecycle) const;
     template <typename F, typename Default> auto CallFeature(F&& f, Default&& def)
     {
         if (auto feature = dx12Feature.get(); feature)
@@ -49,7 +78,7 @@ class IFeature_Dx11wDx12 : public virtual IFeature_Dx11
 
     bool CreateD3D12Objects();
     bool ProcessDx11Textures(const NVSDK_NGX_Parameter* InParameters);
-    bool CopyBackOutput();
+    bool CopyBackOutput(DlssNr::Bridge::Outcome& outcome);
 
     void ResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
                          D3D12_RESOURCE_STATES InBeforeState, D3D12_RESOURCE_STATES InAfterState);
@@ -142,7 +171,7 @@ class IFeature_Dx11wDx12 : public virtual IFeature_Dx11
     };
     bool IsInited() override
     {
-        return CallFeature([](auto f) { return f->IsInited(); }, bool {});
+        return bridgeInitialised && CallFeature([](auto f) { return f->IsInited(); }, bool {});
     }
     float Sharpness() override
     {

@@ -11,6 +11,8 @@
 // so it does not belong in a shader class.
 
 #include <cstdint>
+#include <inputs/universal_feeder/PreparedGuideContract.h>
+#include <dlssnr/NrAlternateFrameInputs.h>
 
 // Which of the passes a dispatch is. One shader, because they read and write the same set of
 // resources and differ only in what they compute.
@@ -63,6 +65,12 @@ constexpr uint32_t kDlssNrMeterGrid = 64;
 // motion use different standard resolutions.
 struct DlssNrFrameInfo
 {
+    // Only prepared ingress sets this. A genuine NGX call does not turn
+    // image-derived flow into engine-native motion.
+    std::optional<Neurotic::Feed::Prepared::Descriptor> PreparedSource;
+    std::optional<DlssNr::AlternateFrame::NativeSourceView> AlternateFrameSource;
+    bool AlternateFrameDuplicate=false;
+    bool AlternateFrameContradiction=false;
     // Which way round depth runs. The game states this when it creates its own upscaler.
     bool DepthInverted = false;
 
@@ -84,6 +92,8 @@ struct DlssNrFrameInfo
     // through a tonemapper. Getting this wrong encodes an encoded frame a second time, which looks
     // washed out and banded.
     bool ColourIsLinearHdr = true;
+    // Only the explicit Present HDR recipe enables signed original reconstruction.
+    bool PreserveSignedOriginal = false;
 
     // The game's own exposure: a 1x1 texture holding, in the SDK's words, "the final exposure scale".
     //
@@ -202,6 +212,10 @@ struct alignas(256) DlssNrConstants
     // preExposure * trim, so the live white point is ExposurePreMul / exposure. Mirrored in the cbuffer.
     uint32_t UseGameExposure;
     float ExposurePreMul;
+    uint32_t SignedPresent;
+    // Vulkan Pre-SR crops the active color rectangle into a private zero-origin carrier.
+    // Trailing fields occupy the existing 256-byte constant-slot padding.
+    uint32_t SourceX, SourceY;
 };
 
 class DlssNr_Common

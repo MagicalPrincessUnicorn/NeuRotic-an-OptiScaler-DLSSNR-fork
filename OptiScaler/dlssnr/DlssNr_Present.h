@@ -3,8 +3,10 @@
 #include "DlssNr_PresentPacing.h"
 #include "PreFg.h"
 #include "NrAdvisorSampling.h"
+#include "DlssNr_PresentInputDecision.h"
 
 #include <dxgi1_6.h>
+#include <vulkan/vulkan.h>
 #include <string>
 
 namespace DlssNr
@@ -29,11 +31,18 @@ struct PresentTelemetrySnapshot
     unsigned int backbufferWidth = 0;
     unsigned int backbufferHeight = 0;
     DXGI_FORMAT backbufferFormat = DXGI_FORMAT_UNKNOWN;
+    VkFormat vkBackbufferFormat = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR vkColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    bool vkFormatObserved = false;
+    unsigned long long vkOriginalPresents = 0;
+    unsigned long long vkUncertain = 0;
     unsigned int backbufferSampleCount = 0;
     DXGI_SWAP_EFFECT swapEffect = DXGI_SWAP_EFFECT_DISCARD;
     DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
     bool colorSpaceObserved = false;
     bool hdrDescriptorTransitioning = false;
+    bool hdrDescriptorRegistered = false;
+    DXGI_FORMAT hdrDescriptorFormat = DXGI_FORMAT_UNKNOWN;
     unsigned long long hdrObservationSequence = 0;
     unsigned long long hdrDescriptorGeneration = 0;
     unsigned long long hdrResizeGeneration = 0;
@@ -48,6 +57,9 @@ struct PresentTelemetrySnapshot
     unsigned int workHeight = 0;
     unsigned long long modelEvaluations = 0;
     unsigned long long compositeEvaluations = 0;
+    // Output reached copyback submission and the original Present returned S_OK.
+    // Vulkan additionally requires its completed counter; neither is scanout proof.
+    unsigned long long acceptedOutputPresents = 0;
     unsigned long long skippedFrames = 0;
     unsigned long long modelSubmissions = 0;
     unsigned long long compositeSubmissions = 0;
@@ -82,6 +94,11 @@ struct PresentTelemetrySnapshot
     std::string requestedPlacement = "Native Temporal";
     std::string actualPlacement = "Native Temporal";
     std::string compatibilityPath;
+    PresentInput::Policy requestedInputPolicy = PresentInput::Policy::AutoGuides;
+    PresentInputDecision::InputClass actualInputClass = PresentInputDecision::InputClass::Refused;
+    std::string signalFallbackReason;
+    bool workloadFallback = false;
+    bool possibleTargetWrite = false;
     std::string fallbackReason;
     std::string failure;
 };
@@ -97,10 +114,14 @@ struct PresentCallIdentity
     // Successful model recording/submission with a tracked completion signal;
     // warmup can prepare work without publishing it or clearing the game's FG tags.
     bool modelPrepared = false;
+    // The model command list was submitted, even if evaluation or sealing later failed.
+    bool modelSubmitted = false;
     bool probeSubmitted = false;
     // A submitted copyback must not be canceled as if the backbuffer were unchanged,
     // even when its signal fails. Own the fence across the Present lock boundary.
     bool copybackSubmitted = false;
+    PresentInputDecision::InputClass inputClass = PresentInputDecision::InputClass::Refused;
+    bool workloadFallback = false;
     Microsoft::WRL::ComPtr<ID3D12Fence> completionFence;
     unsigned long long completionValue = 0;
     ID3D12Resource* outputResource = nullptr;
@@ -128,6 +149,12 @@ void ReportPresentUnavailable(PresentApi api, const char* reason);
 // collected separately from non-blocking timestamps and the existing completion fence.
 void ReportPresentCallTiming(const PresentCallTimingSample& sample);
 PresentTelemetrySnapshot PresentTelemetry();
+PresentTelemetrySnapshot PresentTelemetryForApi(bool vulkan);
+// Caller gates new NR work and joins in-flight callbacks before this read-only
+// proof. Does not drain, release resources, or replace other API-owner checks.
+bool CanYieldPresentOutput(std::string& reason);
+namespace Capability { class WriterPort; struct PresentObservation; }
+Capability::PresentObservation CopyPresentCapabilityObservation(const Capability::WriterPort&) noexcept;
 const char* PresentWorkloadName(unsigned int workload);
 float PresentWorkloadScale(unsigned int workload);
 unsigned int PresentWorkDimension(unsigned int fullDimension, unsigned int workload);

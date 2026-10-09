@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <libloaderapi.h>
 #include <ranges>
+#include <atomic>
 
 #include <winternl.h>
 #include <d3dkmthk.h>
@@ -86,36 +87,47 @@ inline HMODULE d3d12AgilityModule = nullptr;
 inline HMODULE slInterposerModule = nullptr;
 inline DWORD processId;
 
-#define LOG_TRACE(msg, ...) spdlog::trace(__FUNCTION__ " " msg, ##__VA_ARGS__)
+// Constant-initialized and trivially destructible: late CRT/driver callbacks must
+// be able to skip logging even after spdlog's registry has been destroyed.
+inline constinit std::atomic<bool> loggerClosed { false };
 
-#define LOG_DEBUG(msg, ...) spdlog::debug(__FUNCTION__ " " msg, ##__VA_ARGS__)
+#define LOG_WHILE_ACTIVE(method, ...)                                                                                  \
+    do                                                                                                                \
+    {                                                                                                                 \
+        if (!loggerClosed.load(std::memory_order_relaxed))                                                             \
+            spdlog::method(__VA_ARGS__);                                                                               \
+    } while (false)
+
+#define LOG_TRACE(msg, ...) LOG_WHILE_ACTIVE(trace, __FUNCTION__ " " msg, ##__VA_ARGS__)
+
+#define LOG_DEBUG(msg, ...) LOG_WHILE_ACTIVE(debug, __FUNCTION__ " " msg, ##__VA_ARGS__)
 
 #ifdef DETAILED_DEBUG_LOGS
-#define LOG_DEBUG_ONLY(msg, ...) spdlog::debug(__FUNCTION__ " " msg, ##__VA_ARGS__)
+#define LOG_DEBUG_ONLY(msg, ...) LOG_WHILE_ACTIVE(debug, __FUNCTION__ " " msg, ##__VA_ARGS__)
 #else
 #define LOG_DEBUG_ONLY(msg, ...)
 #endif
 
 #ifdef LOG_ASYNC
-#define LOG_DEBUG_ASYNC(msg, ...) spdlog::debug(__FUNCTION__ " " msg, ##__VA_ARGS__)
+#define LOG_DEBUG_ASYNC(msg, ...) LOG_WHILE_ACTIVE(debug, __FUNCTION__ " " msg, ##__VA_ARGS__)
 #else
 #define LOG_DEBUG_ASYNC(msg, ...)
 #endif
 
-#define LOG_INFO(msg, ...) spdlog::info(__FUNCTION__ " " msg, ##__VA_ARGS__)
+#define LOG_INFO(msg, ...) LOG_WHILE_ACTIVE(info, __FUNCTION__ " " msg, ##__VA_ARGS__)
 
-#define LOG_WARN(msg, ...) spdlog::warn(__FUNCTION__ " " msg, ##__VA_ARGS__)
+#define LOG_WARN(msg, ...) LOG_WHILE_ACTIVE(warn, __FUNCTION__ " " msg, ##__VA_ARGS__)
 
-#define LOG_ERROR(msg, ...) spdlog::error(__FUNCTION__ " " msg, ##__VA_ARGS__)
+#define LOG_ERROR(msg, ...) LOG_WHILE_ACTIVE(error, __FUNCTION__ " " msg, ##__VA_ARGS__)
 
-#define LOG_FUNC() spdlog::trace(__FUNCTION__)
+#define LOG_FUNC() LOG_WHILE_ACTIVE(trace, __FUNCTION__)
 
-#define LOG_FUNC_RESULT(result) spdlog::trace(__FUNCTION__ " result: {0:X}", (UINT64) result)
+#define LOG_FUNC_RESULT(result) LOG_WHILE_ACTIVE(trace, __FUNCTION__ " result: {0:X}", (UINT64) result)
 
 // #define TRACKING_LOGS
 
 #ifdef TRACKING_LOGS
-#define LOG_TRACK(msg, ...) spdlog::debug(__FUNCTION__ " [RT] " msg, ##__VA_ARGS__)
+#define LOG_TRACK(msg, ...) LOG_WHILE_ACTIVE(debug, __FUNCTION__ " [RT] " msg, ##__VA_ARGS__)
 #else
 #define LOG_TRACK(msg, ...)
 #endif

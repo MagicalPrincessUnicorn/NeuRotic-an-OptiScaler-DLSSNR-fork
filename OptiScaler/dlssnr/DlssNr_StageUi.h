@@ -11,14 +11,15 @@ inline int DisplayPercent(float scale)
     return std::isfinite(scale) ? int(std::lround(std::clamp(scale, 0.25f, 2.0f) * 100.0f)) : 100;
 }
 inline constexpr const char* Stages[] = { "Before", "After" };
-inline constexpr const char* Methods[] = { "Native Temporal", "Present Compatibility", "Present Enhanced" };
+inline constexpr const char* Methods[] = { "Native Temporal", "Present", "Present" };
 inline constexpr const char* NativeResolutions[] = { "Automatic", "Manual" };
 inline constexpr const char* Resolutions[] = { "Automatic", "Manual", "Legacy" };
 enum class NrResolutionPreference { AlwaysFullOutput, MatchGameRender, Manual };
 inline constexpr int ManualChoice = 2, LegacyChoice = 3;
 inline constexpr const char* ResolutionChoices[] = {
-    "Always Full Output", "Match Game Render - Recommended", "Manual - Advanced / Low-end"
+    "Full output", "Match Native", "Manual"
 };
+inline constexpr const char* UnifiedMethods[] = {"Present", "Native", "NR Anything"};
 // Existing NR percentages; these do not alter the game's DLSS SR selection.
 inline constexpr int ResolutionPercentages[] = {100, 100, 67, 58, 50, 33};
 template<class C> auto& ResolutionPresetHint(C& c)
@@ -146,7 +147,7 @@ template<class C> const char* ResolutionRefusal(const C& c, int choice)
 }
 template<class C> const char* NativePlacementRefusal(const C& c, bool forcedAfter)
 {
-    return forcedAfter && c.DlssNrRoute.value_or_default() == 0 && Stage(c) == 0
+    return forcedAfter && c.DlssNrRoute.value_or_default() == 0 && Stage(c) == 0 && Manual(c)
         ? "Native Temporal is currently forced After reconstruction. Select After explicitly to edit or test its resolution."
         : nullptr;
 }
@@ -164,6 +165,71 @@ template<class C> void SelectResolutionChoice(C& c, int choice)
     mode = choice == 1 ? PresentResolution::FollowNative : choice == 0 ? PresentResolution::Automatic : PresentResolution::Manual;
     scale = uint32_t(DisplayPercent(memory.value_or_default()));
 }
+// The ordinary three-mode UI projects onto existing route/placement owners. Historical
+// helpers above remain available to the archived Advisor and old-profile tests.
+template<class C> int UnifiedMethodSelection(const C& c)
+{
+    return c.DlssNrRoute.value_or_default() == 3 ? 2 : c.DlssNrRoute.value_or_default() == 0 ? 1 : 0;
+}
+template<class C> void SelectUnifiedMethod(C& c, int method)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    if (method < 0 || method > 2) return;
+    if (method == 2)
+    {
+        const auto current=c.DlssNrRoute.value_or_default();
+        if(current==1||current==2)c.DlssNrUiAfterMethod=current;
+        c.DlssNrRoute=3u;
+        return;
+    }
+    if (method == 1)
+    {
+        if (c.DlssNrRoute.value_or_default() == 1 || c.DlssNrRoute.value_or_default() == 2)
+            c.DlssNrUiAfterMethod = c.DlssNrRoute.value_or_default();
+        c.DlssNrRoute = 0u;
+        return;
+    }
+    const uint32_t current = c.DlssNrRoute.value_or_default();
+    const uint32_t remembered = c.DlssNrUiAfterMethod.value_or_default();
+    const uint32_t route = current == 1 || current == 2 ? current :
+        remembered == 1 || remembered == 2 ? remembered : 2u;
+    c.DlssNrRoute = route;
+    c.DlssNrUiAfterMethod = route;
+    c.DlssNrPresentInputPolicy = 2u;
+}
+template<class C> const char* UnifiedResolutionRefusal(const C&, int choice, bool)
+{
+    if (choice < 0 || choice > 2) return "Unknown NR resolution preference";
+    // RR keeps After placement and resolves Match Native into its private raster.
+    return nullptr;
+}
+template<class C> void SelectUnifiedResolution(C& c, int choice)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    if (choice < 0 || choice > 2) return;
+    if (c.DlssNrRoute.value_or_default() != 0)
+    {
+        c.DlssNrPresentInputPolicy = 2u;
+        SelectResolutionChoice(c, choice);
+        return;
+    }
+    if (Manual(c) && choice != ManualChoice)
+        c.DlssNrUiManualScale = c.DlssNrWorkingScale.value_or_default();
+    c.DlssNrUiResolutionPreset = 0u;
+    c.DlssNrUiManualResolution = choice == ManualChoice;
+    c.DlssNrWorkingScale = choice == ManualChoice ? c.DlssNrUiManualScale.value_or_default() : 1.0f;
+    NrConfigState::SetRoutingMode(c.DlssNrRenderingMode, c.DlssNrRunBeforeSr,
+        choice == 1 ? 1 : 0);
+}
+template<class C> void SelectUnifiedResolutionScale(C& c, float scale)
+{
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    SelectResolutionScale(c, scale);
+    if (c.DlssNrRoute.value_or_default() == 0)
+        NrConfigState::SetRoutingMode(c.DlssNrRenderingMode, c.DlssNrRunBeforeSr, 0);
+    else
+        c.DlssNrPresentInputPolicy = 2u;
+}
 template<class C, class Read> void LoadResolutionPresets(C& c, Read read)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
@@ -175,6 +241,12 @@ template<class C, class Read> void LoadResolutionPresets(C& c, Read read)
     load(c.DlssNrUiPresentResolutionPreset, "UiPresentResolutionPreset");
     load(c.DlssNrUiEnhancedResolutionPreset, "UiEnhancedResolutionPreset");
 }
+// Unknown future/corrupt routes must not authorize the external capture worker.
+template<class C> void LoadRoute(C& c, std::optional<uint32_t> saved)
+{
+    if(saved)c.DlssNrRoute.set_from_config(*saved<=3?*saved:2u);
+    else c.DlssNrRoute.reset();
+}
 template<class C> void LoadHints(C& c, std::optional<bool> manual, std::optional<float> scale,
                                   std::optional<uint32_t> afterMethod)
 {
@@ -183,7 +255,7 @@ template<class C> void LoadHints(C& c, std::optional<bool> manual, std::optional
     const auto working = c.DlssNrWorkingScale.value_or_default();
     const auto remembered = scale && std::isfinite(*scale) && *scale >= 0.25f && *scale <= 2.0f ? *scale : 0.25f;
     c.DlssNrUiManualScale.set_from_config(working != 1.0f || manual.value_or(false) ? DisplayPercent(working) / 100.0f : remembered);
-    c.DlssNrUiAfterMethod.set_from_config(Stage(c) == 1 ? c.DlssNrRoute.value_or_default() :
+    c.DlssNrUiAfterMethod.set_from_config(Stage(c) == 1 && c.DlssNrRoute.value_or_default()!=3 ? c.DlssNrRoute.value_or_default() :
         afterMethod && *afterMethod <= 2 ? *afterMethod : 0u);
 }
 template<class Ini, class C> void SaveHints(Ini& ini, const C& c)

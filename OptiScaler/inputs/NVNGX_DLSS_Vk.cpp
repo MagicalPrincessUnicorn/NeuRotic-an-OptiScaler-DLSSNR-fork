@@ -1,10 +1,24 @@
 #include "pch.h"
+#include <nr/diagnostics/HostCost.h>
+#include "../nr/diagnostics/capability/CapabilityNgxObservation.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/NgxObservationAdapter.h>
+// NR-FEED-001 END
 #include <dlssnr/DlssNrFeature_Vk.h>
+#include <dlssnr/VulkanNrFrameParams.h>
+#include <dlssnr/VulkanNrPreSr.h>
+#include <dlssnr/VulkanNrStreamline.h>
+#include <dlssnr/VulkanNrCaptureVk.h>
+#include <dlssnr/VulkanPresentGuidesVk.h>
+#include <dlssnr/VulkanPresentRegistry.h>
+#include <dlssnr/VulkanNrCompletion.h>
+#include <dlssnr/DlssNr_PresentInputPolicy.h>
 #include "Util.h"
 #include "Config.h"
 #include "resource.h"
 #include <hooks/Streamline_Hooks.h>
 #include <hooks/Vulkan_Hooks.h>
+#include <hooks/VulkanwDx12_Hooks.h>
 
 #include "NVNGX_DLSS.h"
 #include "VulkanRrRouting.h"
@@ -39,9 +53,12 @@ static VulkanNativeFeatures::Registry nativeFeatures;
 static std::mutex nativeFeaturesMutex;
 
 static void RegisterNativeFeature(NVSDK_NGX_Result result, NVSDK_NGX_Handle** handle,
-                                  NVSDK_NGX_Feature type, VkDevice device)
+                                  NVSDK_NGX_Feature type, VkDevice device, NVSDK_NGX_Parameter* params)
 {
     if (result != NVSDK_NGX_Result_Success || !handle || !*handle) return;
+    if(type==NVSDK_NGX_Feature_SuperSampling||type==NVSDK_NGX_Feature_RayReconstruction)
+        DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(device);
+    if(type==NVSDK_NGX_Feature_FrameGeneration)DlssNr::ObserveVkNrNgxFgCreate(device,*handle,params,result);
     std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
     nativeFeatures.Register((*handle)->Id, static_cast<uint32_t>(type), reinterpret_cast<uintptr_t>(device));
 }
@@ -739,6 +756,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureRequirements(
 
         // Some old windows 10 os version
         strcpy_s(OutSupported->MinOSVersion, "10.0.10240.16384");
+        DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::Vulkan, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), NVSDK_NGX_Result_Success, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Effective);
         return NVSDK_NGX_Result_Success;
     }
 
@@ -755,6 +773,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureRequirements(
         if (result == NVSDK_NGX_Result_Success)
             LOG_DEBUG("FeatureSupported: {0}", (UINT) OutSupported->FeatureSupported);
 
+        DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::Vulkan, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), result, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Raw);
         return result;
     }
     else
@@ -764,6 +783,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureRequirements(
     }
 
     OutSupported->FeatureSupported = NVSDK_NGX_FeatureSupportResult_AdapterUnsupported;
+    DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::Vulkan, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), NVSDK_NGX_Result_FAIL_FeatureNotSupported, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Effective);
     return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
 }
 
@@ -853,9 +873,16 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
                                                                NVSDK_NGX_Parameter* InParameters,
                                                                NVSDK_NGX_Handle** OutHandle)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::NgxCreationSnapshot feedCreation(InParameters, NVSDK_NGX_Result_Success);
+    // NR-FEED-001 END
     if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
+        // NR-FEED-001 BEGIN
+        if (result == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
+            feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::Vulkan, "create"}, *OutHandle, InFeatureID);
+        // NR-FEED-001 END
         LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
         return result;
     }
@@ -868,7 +895,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
             auto result =
                 NVNGXProxy::VULKAN_CreateFeature1()(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature1 result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
-            RegisterNativeFeature(result, OutHandle, InFeatureID, InDevice);
+            RegisterNativeFeature(result, OutHandle, InFeatureID, InDevice, InParameters);
+            // NR-FEED-001 BEGIN
+            if (result == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
+                feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::Vulkan, "create"}, *OutHandle, InFeatureID);
+            // NR-FEED-001 END
             return result;
         }
         else
@@ -939,6 +970,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
         if (deviceContext->Init(vkInstance, vkPD, InDevice, InCmdList, vkGIPA, vkGDPA, InParameters))
         {
+            DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(InDevice);
+            // NR-FEED-001 BEGIN
+            feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::Vulkan, "create"}, *OutHandle, InFeatureID);
+            // NR-FEED-001 END
+            {
+                std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+                nativeFeatures.Register(handleId, static_cast<uint32_t>(InFeatureID), reinterpret_cast<uintptr_t>(InDevice));
+            }
             if (InFeatureID == NVSDK_NGX_Feature_RayReconstruction)
             {
                 std::lock_guard<std::mutex> lock(rrRoutesMutex);
@@ -961,11 +1000,19 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
                                                               NVSDK_NGX_Parameter* InParameters,
                                                               NVSDK_NGX_Handle** OutHandle)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::NgxCreationSnapshot feedCreation(InParameters, NVSDK_NGX_Result_Success);
+    // NR-FEED-001 END
     LOG_FUNC();
 
     if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle);
+        RegisterNativeFeature(result,OutHandle,InFeatureID,vkDevice,InParameters);
+        // NR-FEED-001 BEGIN
+        if (result == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
+            feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::Vulkan, "create"}, *OutHandle, InFeatureID);
+        // NR-FEED-001 END
         LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
         return result;
     }
@@ -977,7 +1024,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
         {
             auto result = NVNGXProxy::VULKAN_CreateFeature()(InCmdBuffer, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
-            RegisterNativeFeature(result, OutHandle, InFeatureID, vkDevice);
+            RegisterNativeFeature(result, OutHandle, InFeatureID, vkDevice, InParameters);
+            // NR-FEED-001 BEGIN
+            if (result == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
+                feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::Vulkan, "create"}, *OutHandle, InFeatureID);
+            // NR-FEED-001 END
             return result;
         }
     }
@@ -987,6 +1038,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 {
+    DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
     if (!InHandle)
         return NVSDK_NGX_Result_Success;
 
@@ -1000,6 +1052,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_ReleaseFeature() != nullptr)
         {
             auto result = NVNGXProxy::VULKAN_ReleaseFeature()(InHandle);
+            DlssNr::ObserveVkNrNgxFgRelease(handleId,result);
             {
                 std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
                 nativeFeatures.Release(handleId, result == NVSDK_NGX_Result_Success);
@@ -1018,7 +1071,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
     else if (handleId >= NVNGX_PROVIDER_ID_OFFSET)
     {
         LOG_INFO("VULKAN_ReleaseFeature modded DLSSG with HandleId: {0}", handleId);
-        return Nvngx_FG::VULKAN_ReleaseFeature(InHandle);
+        auto result=Nvngx_FG::VULKAN_ReleaseFeature(InHandle);DlssNr::ObserveVkNrNgxFgRelease(handleId,result);return result;
     }
 
     if (!shutdown)
@@ -1040,6 +1093,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+    {
+        std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+        nativeFeatures.Release(handleId, true);
+    }
     return NVSDK_NGX_Result_Success;
 }
 
@@ -1048,6 +1105,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                                                                 NVSDK_NGX_Parameter* InParameters,
                                                                 PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
+    Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::NgxHook);
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"NGX", Neurotic::Contracts::GraphicsApi::Vulkan, "evaluate"}, InFeatureHandle);
+    Neurotic::Feed::ObserveNgxEvaluation(feedObservation, InParameters, NVSDK_NGX_Result_Success);
+    // NR-FEED-001 END
     State& state = State::Instance();
 
     if (InFeatureHandle == nullptr)
@@ -1063,6 +1125,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     if (InCmdList == nullptr)
     {
         LOG_ERROR("InCmdList is null!!!");
+        if(InFeatureHandle&&InFeatureHandle->Id>=DLSS_MOD_ID_OFFSET&&InFeatureHandle->Id<NVNGX_PROVIDER_ID_OFFSET)
+            DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
         return NVSDK_NGX_Result_Fail;
     }
 
@@ -1083,7 +1147,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_EvaluateFeature() != nullptr)
         {
             LOG_DEBUG("VULKAN_EvaluateFeature for ({0})", handleId);
+            DlssNr::SetVkNrNgxOutputLookup([](VkCommandBuffer cb){return DlssNr::SelectedVkNrOutput(cb);},DlssNr::PrepareVkNrFinalColor);
+            DlssNr::VkNrNgxFgScope fgInput(InCmdList,InFeatureHandle,InParameters);
             auto result = NVNGXProxy::VULKAN_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            fgInput.Returned(result);
             LOG_INFO("VULKAN_EvaluateFeature result for ({0}): {1:X}", handleId, (UINT) result);
 
             // SR/RR are owned contexts below. Native pass-through features (including FG)
@@ -1097,12 +1164,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     }
     else if (handleId >= NVNGX_PROVIDER_ID_OFFSET)
     {
-        return Nvngx_FG::VULKAN_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
+        DlssNr::SetVkNrNgxOutputLookup([](VkCommandBuffer cb){return DlssNr::SelectedVkNrOutput(cb);},DlssNr::PrepareVkNrFinalColor);
+        DlssNr::VkNrNgxFgScope fgInput(InCmdList,InFeatureHandle,InParameters);
+        auto result=Nvngx_FG::VULKAN_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback);fgInput.Returned(result);return result;
     }
 
     evalCounter++;
     if (Config::Instance()->SkipFirstFrames.has_value() && evalCounter < Config::Instance()->SkipFirstFrames.value())
+    {
+        DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
         return NVSDK_NGX_Result_Success;
+    }
 
     if (InCallback)
         LOG_WARN("callback exist");
@@ -1119,7 +1191,16 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 
         if (contextData->changeBackendCounter != 0 || !successfulPhase)
         {
+            DlssNr::RejectVulkanNativeGuides("selected Vulkan upscaler is preparing; no fresh guide frame");
+            DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
             return NVSDK_NGX_Result_Success;
+        }
+        DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
+        {
+            std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+            const auto kind = contextData->feature && contextData->feature->GetUpscalerType() == Upscaler::DLSSD
+                ? NVSDK_NGX_Feature_RayReconstruction : NVSDK_NGX_Feature_SuperSampling;
+            nativeFeatures.Register(handleId, static_cast<uint32_t>(kind), reinterpret_cast<uintptr_t>(vkDevice));
         }
     }
 
@@ -1128,14 +1209,150 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 
     UpscalerTimeVk::UpscaleStart(InCmdList);
 
-    auto upscaleResult = deviceContext->Evaluate(InCmdList, InParameters);
+    auto nrSettings = TryNrConfigSnapshot(*Config::Instance());
+    if(nrSettings&&!nrSettings->GetDlssNrRuntimeSnapshot().enabled&&DlssNr::WantsVulkanNrCapture())*nrSettings=nrSettings->ForPrivateDiagnostic();
+    VulkanNativeFeatures::Identity nrIdentity;
+    {
+        std::lock_guard<std::mutex> lock(nativeFeaturesMutex);
+        nrIdentity = nativeFeatures.Observe(handleId);
+    }
+    const char* nrMetadataUnavailable=nullptr;
+    auto nrTemporal = DlssNr::VkFrame::ObserveTemporal(InParameters,
+        static_cast<uint32_t>(deviceContext->GetFeatureFlags()), nrIdentity.generation, nrIdentity.evaluations,
+        {deviceContext->DisplayWidth(), deviceContext->DisplayHeight()},&nrMetadataUnavailable);
+    if(nrTemporal){DlssNr::VkNrStreamlineSourceScope::Authenticate(InCmdList,*nrTemporal);DlssNr::AuthenticateVkNrNgxFrame(InParameters,*nrTemporal);}
 
+    const auto backend = deviceContext != nullptr ? deviceContext->GetUpscalerType() : Upscaler::FSR22;
+    const bool bridged = backend == Upscaler::XeSS_on12 || backend == Upscaler::FSR21_on12 ||
+                         backend == Upscaler::FSR22_on12 || backend == Upscaler::FFX_on12;
+    bool isRrRoute = false;
+    {
+        std::lock_guard<std::mutex> lock(rrRoutesMutex);
+        isRrRoute = rrRoutes.Contains(handleId);
+    }
+    const DlssNr::VkNrPreSrAdmission nrAdmission {
+        nrSettings && nrSettings->GetDlssNrRuntimeSnapshot().enabled,nrSettings && nrSettings->DlssNrRoute.value_or_default() == 0,
+        nrSettings && nrSettings->DlssNrRunBeforeSr.value_or_default(),
+        nrIdentity.generation != 0 && nrIdentity.device == reinterpret_cast<uintptr_t>(vkDevice) &&
+            nrIdentity.type == static_cast<uint32_t>(NVSDK_NGX_Feature_SuperSampling),isRrRoute,bridged};
+    const bool nativePerformanceSelected = nrAdmission.enabled && nrAdmission.nativeSelected &&
+        nrAdmission.beforeRequested && !nrAdmission.rayReconstruction && !nrAdmission.bridged;
+    const bool beforeRequested = DlssNr::ShouldRecordVkNrPreSr(nrAdmission);
+    if(nrSettings&&!nrSettings->IsPrivateDiagnostic()&&!bridged)
+        DlssNr::ObserveNativeVk(InParameters,nrTemporal?&*nrTemporal:nullptr,*nrSettings,isRrRoute);
+    static std::atomic<uint64_t> selectedEvaluationSequence{0};
+    const DlssNr::VkNrEvaluationIdentity selectedEvaluation{InCmdList,
+        DlssNr::VulkanNrRecordings().Incarnation(InCmdList),++selectedEvaluationSequence,nrIdentity.generation};
+    DlssNr::VkRecordResult preSr;
+    DlssNr::VkRecordResult afterSr;
+    bool nrPreSrBound=false;
+    bool nrNativeAttempted=nativePerformanceSelected;
+    if (beforeRequested) {
+        DlssNr::VkFrameRequest request;
+        request.commandBuffer = InCmdList; request.instance = vkInstance;
+        request.physicalDevice = vkPD; request.device = vkDevice;
+        request.contract.placement = DlssNr::VkNrPlacement::BeforeSR;
+        request.ngxSrInputContract = nrAdmission.selectedSr;
+        request.contract.evaluation = selectedEvaluation;
+        request.selectedSrQuality=static_cast<int>(deviceContext->PerfQualityValue());
+        if (nrTemporal) request.contract.temporal = *nrTemporal;
+        preSr = DlssNr::EvaluateBeforeUpscaleVk(request,InParameters,*nrSettings);
+    }
+    DlssNr::ClearSelectedVkNrFinalColor(InCmdList);
+    // Copy borrowed guides at the authenticated input boundary, before the
+    // provider can change command bindings. Failed SR invalidates the selection.
+    if(nrSettings&&nrSettings->GetDlssNrRuntimeSnapshot().enabled&&
+       nrSettings->DlssNrRoute.value_or_default()!=0&&!bridged) {
+        const auto output=ObservedOutputExtent(InParameters);
+        unsigned int guideReset=0,outputX=0,outputY=0;
+        const bool resetKnown=InParameters->Get(NVSDK_NGX_Parameter_Reset,&guideReset)==NVSDK_NGX_Result_Success;
+        InParameters->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X,&outputX);
+        InParameters->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y,&outputY);
+        const auto queue = DlssNr::UniqueVkNrCompletionQueue(vkDevice,
+            DlssNr::VulkanNrRecordings().CommandFamily(InCmdList));
+        // Optional scalar resolution metadata; this never authenticates the
+        // guide packet's consumer. Exact evaluation/output identity does that.
+        const auto context = queue ? DlssNr::GetVulkanPresentRegistry().NativeResolutionContext(
+            vkDevice,*queue,{output.width,output.height}) : std::nullopt;
+        const auto guidePolicy=DlssNr::PresentInput::Selected(*nrSettings);
+        if(guidePolicy==DlssNr::PresentInput::Policy::ImageOnly||guidePolicy==DlssNr::PresentInput::Policy::Invalid)
+            DlssNr::RejectVulkanNativeGuides("Present input policy does not request native guides");
+        else if(!resetKnown||outputX||outputY||!output.width||!output.height||
+           output.width!=deviceContext->DisplayWidth()||output.height!=deviceContext->DisplayHeight())
+            DlssNr::RejectVulkanNativeGuides("Native guide reset or full-output subrect is unavailable");
+        else if (!deviceContext->IsInited() || !nrTemporal || !selectedEvaluation || !nrIdentity.generation ||
+            nrIdentity.device != reinterpret_cast<uintptr_t>(vkDevice))
+            DlssNr::RejectVulkanNativeGuides("selected Native evaluation or output identity unavailable");
+        else {
+            DlssNr::VkFrameRequest frame;frame.commandBuffer=InCmdList;frame.instance=vkInstance;
+            frame.ngxSrInputContract=nrAdmission.selectedSr&&!isRrRoute;
+            frame.ngxGuideInputIdentity=nrAdmission.selectedSr||isRrRoute;
+            // sl.dlss_d transitions depth/motion to eTextureRead before NGX evaluation.
+            // Restrict this convention to the authenticated public evaluation scope.
+            frame.ngxGuideInputReadContract=frame.ngxSrInputContract||
+                (isRrRoute&&nrTemporal&&nrTemporal->providerFrameKnown&&nrTemporal->providerGeneration);
+            frame.physicalDevice=vkPD;frame.device=vkDevice;frame.contract=context.value_or(DlssNr::VkNrFrameContract{});
+            frame.contract.deviceGeneration=DlssNr::VkNrCompletionDeviceGeneration(vkDevice);
+            frame.contract.queue=VK_NULL_HANDLE;frame.contract.queueFamily=DlssNr::VulkanNrRecordings().CommandFamily(InCmdList);
+            frame.contract.evaluation=selectedEvaluation;frame.contract.temporal=*nrTemporal;
+            frame.contract.output=frame.contract.work={output.width,output.height};
+            InParameters->Get(NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&frame.targetColor));
+            if(frame.targetColor&&frame.targetColor->Type==NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW){
+                frame.contract.representation.format=frame.targetColor->Resource.ImageViewInfo.Format;
+                if(!(nrTemporal->featureFlags&NVSDK_NGX_DLSS_Feature_Flags_IsHDR))
+                    frame.contract.representation={frame.contract.representation.format,VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,1};
+            }
+            InParameters->Get(NVSDK_NGX_Parameter_Depth,reinterpret_cast<void**>(&frame.depth));
+            InParameters->Get(NVSDK_NGX_Parameter_MotionVectors,reinterpret_cast<void**>(&frame.motion));
+            DlssNr::CaptureVulkanPresentGuides(frame);
+        }
+    }
+    bool upscaleResult = false;
+    {
+        auto selectedFrame=preSr.preSrContract;
+        selectedFrame.evaluation=selectedEvaluation;
+        DlssNr::VkNrPreSrScope scope(InParameters,DlssNr::VulkanNrRecordings(),selectedFrame);
+        const bool bound = beforeRequested && !nrSettings->IsPrivateDiagnostic() && scope.Bind({preSr.preSrColor,preSr.preSrContract,preSr.use,
+            preSr.preSrReady,preSr.forceSrReset},selectedFrame);
+        nrPreSrBound=bound;
+        try {
+            Neurotic::HostCost::Scope nrProviderCost(Neurotic::HostCost::Kind::Upscaler);
+            upscaleResult = deviceContext->Evaluate(InCmdList, InParameters);
+        }
+        catch (...) {
+            DlssNr::CompleteVulkanGuideEvaluation(selectedEvaluation,false);
+            scope.Restore();
+            if(nrSettings&&!nrSettings->IsPrivateDiagnostic()&&!bridged&&nrAdmission.enabled&&nrAdmission.nativeSelected)
+                DlssNr::RequestHistoryResetVk();
+            DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
+            DlssNr::RejectVulkanNativeGuides("Selected SR evaluation threw after guide capture");
+            if (nativePerformanceSelected) DlssNr::CompletePreSrVk(preSr,bound,false);
+            // NGX exposes a C ABI: retain the failed-frame cleanup without unwinding into the game.
+            return NVSDK_NGX_Result_Fail;
+        }
+        const bool restored = scope.Restore();
+        if (nativePerformanceSelected) DlssNr::CompletePreSrVk(preSr,bound,upscaleResult && restored);
+    }
+    DlssNr::CompleteVulkanGuideEvaluation(selectedEvaluation,upscaleResult&&deviceContext->IsInited());
+
+    if (nrSettings && nrSettings->GetDlssNrRuntimeSnapshot().enabled && nrSettings->DlssNrRoute.value_or_default() != 0 && !bridged) {
+        const auto output = ObservedOutputExtent(InParameters);
+        if(upscaleResult&&deviceContext->IsInited()&&nrTemporal&&nrIdentity.generation&&
+            nrIdentity.device==reinterpret_cast<uintptr_t>(vkDevice))
+            DlssNr::GetVulkanPresentRegistry().ObserveNativeRenderSize(vkDevice,{output.width,output.height},
+                {{nrTemporal->color.width,nrTemporal->color.height},nrIdentity.generation});
+        else DlssNr::GetVulkanPresentRegistry().InvalidateNativeRenderSize(vkDevice);
+        if(!upscaleResult||!deviceContext->IsInited())
+            DlssNr::RejectVulkanNativeGuides("Selected SR evaluation failed after guide capture");
+    }
     if (!upscaleResult)
         ImGui::InsertNotification({ ImGuiToastType::Error, 10000, "Upscaler failed to run!" });
 
     if ((!upscaleResult || !deviceContext->IsInited()) &&
         Config::Instance()->VulkanUpscaler.value_or_default() != Upscaler::FSR22)
     {
+        if(nrSettings&&!nrSettings->IsPrivateDiagnostic()&&!bridged&&nrAdmission.enabled&&nrAdmission.nativeSelected)
+            DlssNr::ObserveNativeResultVk(nativePerformanceSelected?preSr:afterSr,nativePerformanceSelected,nrPreSrBound,false);
         state.newBackend = Upscaler::FSR22;
         state.changeBackend[handleId] = true;
         return NVSDK_NGX_Result_Success;
@@ -1156,21 +1373,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     // Asked of the live feature rather than of the config: the config is what was requested and the
     // feature is what is actually running, and they differ for a frame after any backend change and
     // permanently after a fallback.
-    const auto backend = deviceContext != nullptr ? deviceContext->GetUpscalerType() : Upscaler::FSR22;
-    const bool bridged = backend == Upscaler::XeSS_on12 || backend == Upscaler::FSR21_on12 ||
-                         backend == Upscaler::FSR22_on12 || backend == Upscaler::FFX_on12;
-
-    if (upscaleResult && !bridged)
+    if (upscaleResult && nrSettings && DlssNr::ShouldRecordVkNrAfterSr(nrAdmission))
     {
-        bool isRrRoute = false;
-        {
-            std::lock_guard<std::mutex> lock(rrRoutesMutex);
-            isRrRoute = rrRoutes.Contains(handleId);
-        }
-
         if (!isRrRoute)
         {
-            DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+            nrNativeAttempted=true;
+            afterSr=DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice,
+                &*nrSettings, nrTemporal ? &*nrTemporal : nullptr, false, &selectedEvaluation);
         }
         else
         {
@@ -1187,15 +1396,57 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                                            presentation);
             }
 
+            // A duplicate/auxiliary RR callback is not a failed selected frame.
+            // Other selection failures still invalidate status and history.
+            nrNativeAttempted=decision.reason!=VulkanRrRouting::BypassReason::Duplicate&&
+                decision.reason!=VulkanRrRouting::BypassReason::Auxiliary;
+            if(!decision.execute&&nrNativeAttempted)
+                afterSr.reason=std::string("Native Temporal RR selection: ")+VulkanRrRouting::ReasonName(decision.reason);
             if (decision.execute)
             {
                 if (decision.resetHistory)
                     DlssNr::RequestHistoryResetVk();
-                DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+                nrNativeAttempted=true;
+                afterSr=DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice,
+                    &*nrSettings, nrTemporal ? &*nrTemporal : nullptr, true, &selectedEvaluation);
             }
         }
     }
 
+    if(upscaleResult&&!bridged&&nrSettings&&!nrSettings->IsPrivateDiagnostic()&&nrTemporal)
+        DlssNr::ObserveSelectedVkNrFinalColor(InCmdList,InParameters,vkInstance,vkPD,vkDevice,*nrTemporal,*nrSettings,selectedEvaluation);
+    if(nrSettings&&!nrSettings->IsPrivateDiagnostic()&&!bridged&&nrAdmission.enabled&&nrAdmission.nativeSelected)
+        DlssNr::ObserveNativeResultVk(nativePerformanceSelected?preSr:afterSr,nativePerformanceSelected,nrPreSrBound,upscaleResult,nrNativeAttempted);
+    if(nrSettings&&nrSettings->GetDlssNrRuntimeSnapshot().enabled) {
+        // Bounded summaries preserve skipped-frame evidence without per-frame log spam.
+        static std::mutex nrProgressMutex;
+        std::lock_guard progressLock(nrProgressMutex);
+        static uint64_t nextNrReport=0,attempts=0,recorded=0,boundFrames=0,selectedNativeAttempts=0;
+        static std::string lastNrRefusal;
+        static int reportedRoute=-1,reportedPlacement=-1;
+        const int route=static_cast<int>(nrSettings->DlssNrRoute.value_or_default());
+        const int placement=route?3:isRrRoute?2:beforeRequested?0:1;
+        if(reportedRoute!=route||reportedPlacement!=placement) {
+            nextNrReport=0;attempts=recorded=boundFrames=selectedNativeAttempts=0;lastNrRefusal.clear();
+            reportedRoute=route;reportedPlacement=placement;
+        }
+        ++attempts;recorded+=preSr.modelRecorded||afterSr.modelRecorded;boundFrames+=nrPreSrBound;
+        selectedNativeAttempts+=nrNativeAttempted;
+        const auto& selectedResult=nativePerformanceSelected?preSr:afterSr;
+        if(nrNativeAttempted&&!selectedResult.reason.empty())lastNrRefusal=selectedResult.reason;
+        const auto now=GetTickCount64();
+        if(now>=nextNrReport) {
+            const auto work=DlssNr::WorkloadStatusVk(route?DlssNr::VkNrRoute::Present:DlssNr::VkNrRoute::Native);
+            const auto& result=beforeRequested?preSr:afterSr;
+            LOG_INFO("Vulkan NR progress: route={} placement={} attempts={} modelRecorded={} preSrBound={} nativeRender={}x{} requestedWork={}x{} appliedWork={}x{} metadata={} inputLayout={} reason={} selectedNativeAttempts={} passes={}/{} lastRefusal=[{}]",
+                route,route?"Present":isRrRoute?"AfterRR":beforeRequested?"BeforeSR":"AfterSR",attempts,recorded,boundFrames,
+                nrTemporal?nrTemporal->color.width:0u,nrTemporal?nrTemporal->color.height:0u,
+                work.requestedWork.width,work.requestedWork.height,work.appliedWork.width,work.appliedWork.height,
+                nrMetadataUnavailable?nrMetadataUnavailable:"qualified",result.inputLayoutBasis,result.reason.empty()?work.reason:result.reason,
+                selectedNativeAttempts,selectedResult.completedPasses,selectedResult.requestedPasses,lastNrRefusal);
+            nextNrReport=now+2000;attempts=recorded=boundFrames=selectedNativeAttempts=0;lastNrRefusal.clear();
+        }
+    }
     return upscaleResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 }
 

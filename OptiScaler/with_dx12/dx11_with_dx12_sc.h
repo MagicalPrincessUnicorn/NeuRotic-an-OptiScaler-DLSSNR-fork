@@ -70,9 +70,10 @@ class DECLSPEC_UUID("23b064bb-482d-416c-93b1-829acedfb3d0") Dx11wDx12SC final : 
     HRESULT STDMETHODCALLTYPE SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData) override;
 
   private:
+    HRESULT _Present(UINT,UINT,const DXGI_PRESENT_PARAMETERS*);
     bool _InitInteropObjects();
     bool _RequestSharedBackBuffer(UINT index);
-    bool _CopyDx11BackBufferToShared(UINT index);
+    bool _CopyDx11BackBufferToShared(UINT index,const DXGI_PRESENT_PARAMETERS*);
     bool _WaitDx11ThenDx12();
     bool _CopyDx11SharedToDx12FGBackBuffer(UINT dx11Index);
     bool _WaitForCopyQueueIdle();
@@ -131,6 +132,11 @@ class DECLSPEC_UUID("23b064bb-482d-416c-93b1-829acedfb3d0") Dx11wDx12SC final : 
     UINT _currentFakeIndex = 0;
     DXGI_FORMAT _bufferFormat = DXGI_FORMAT_UNKNOWN;
     bool _interopInitialized = false;
+    bool _copyCompletionUnknown = false;
+    bool _ingressPending = false;
+    UINT64 _lastDx11FenceValue = 0;
+    ID3D11Texture2D* _presentHistory = nullptr;
+    bool _presentHistoryValid = false;
 
     HWND _handle = nullptr;
 };

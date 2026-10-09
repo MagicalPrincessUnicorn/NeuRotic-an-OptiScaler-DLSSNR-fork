@@ -1,9 +1,18 @@
 #include <pch.h>
+#include <dlssnr/NativeFgVulkan.h>
+#include <dlssnr/NativeFgLayouts.h>
+#include <dlssnr/NativeVulkanGuides.h>
+#include <dlssnr/DlssNrFeature_Vk.h>
 
 #include "VulkanwDx12_Hooks.h"
+#if defined(NR_DIAG_VULKAN_NO_LEGACY) && NR_DIAG_VULKAN_NO_LEGACY && !NR_DIAG_VULKAN_ONLY
+#error The legacy-hook bypass requires the Vulkan-only diagnostic entry.
+#endif
 
 #include <State.h>
 #include <Config.h>
+#include <dlssnr/VulkanNrRecording.h>
+#include <dlssnr/VulkanNrCompletion.h>
 
 #include <magic_enum.hpp>
 
@@ -629,7 +638,10 @@ void Vulkan_wDx12::hk_vkCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCo
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDraw(cmdBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount,
@@ -650,7 +662,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t i
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndexed(cmdBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -671,7 +686,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer 
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndirect(cmdBuffer, buffer, offset, drawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -692,7 +710,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, Vk
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndexedIndirect(cmdBuffer, buffer, offset, drawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDispatch(VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY,
@@ -713,7 +734,10 @@ void Vulkan_wDx12::hk_vkCmdDispatch(VkCommandBuffer commandBuffer, uint32_t grou
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDispatch(cmdBuffer, groupCountX, groupCountY, groupCountZ);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDispatchIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset)
@@ -733,7 +757,10 @@ void Vulkan_wDx12::hk_vkCmdDispatchIndirect(VkCommandBuffer commandBuffer, VkBuf
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDispatchIndirect(cmdBuffer, buffer, offset);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer,
@@ -776,7 +803,11 @@ void Vulkan_wDx12::hk_vkCmdCopyImage(VkCommandBuffer commandBuffer, VkImage srcI
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdCopyImage(cmdBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ColorCopy(cmdBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions);
 }
 
 void Vulkan_wDx12::hk_vkCmdBlitImage(VkCommandBuffer commandBuffer, VkImage srcImage, VkImageLayout srcImageLayout,
@@ -798,7 +829,11 @@ void Vulkan_wDx12::hk_vkCmdBlitImage(VkCommandBuffer commandBuffer, VkImage srcI
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdBlitImage(cmdBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions, filter);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ColorBlit(cmdBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions, filter);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkImage dstImage,
@@ -820,7 +855,10 @@ void Vulkan_wDx12::hk_vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer, VkBu
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdCopyBufferToImage(cmdBuffer, srcBuffer, dstImage, dstImageLayout, regionCount, pRegions);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyImageToBuffer(VkCommandBuffer commandBuffer, VkImage srcImage,
@@ -906,7 +944,10 @@ void Vulkan_wDx12::hk_vkCmdClearColorImage(VkCommandBuffer commandBuffer, VkImag
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdClearColorImage(cmdBuffer, image, imageLayout, pColor, rangeCount, pRanges);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdClearDepthStencilImage(VkCommandBuffer commandBuffer, VkImage image,
@@ -929,7 +970,10 @@ void Vulkan_wDx12::hk_vkCmdClearDepthStencilImage(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdClearDepthStencilImage(cmdBuffer, image, imageLayout, pDepthStencil, rangeCount, pRanges);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ClearDepthImage(cmdBuffer,image,imageLayout,pDepthStencil,rangeCount,pRanges);
 }
 
 void Vulkan_wDx12::hk_vkCmdClearAttachments(VkCommandBuffer commandBuffer, uint32_t attachmentCount,
@@ -951,7 +995,10 @@ void Vulkan_wDx12::hk_vkCmdClearAttachments(VkCommandBuffer commandBuffer, uint3
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdClearAttachments(cmdBuffer, attachmentCount, pAttachments, rectCount, pRects);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ClearAttachments(cmdBuffer, attachmentCount, pAttachments, rectCount, pRects);
 }
 
 void Vulkan_wDx12::hk_vkCmdResolveImage(VkCommandBuffer commandBuffer, VkImage srcImage, VkImageLayout srcImageLayout,
@@ -973,7 +1020,10 @@ void Vulkan_wDx12::hk_vkCmdResolveImage(VkCommandBuffer commandBuffer, VkImage s
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdResolveImage(cmdBuffer, srcImage, srcImageLayout, dstImage, dstImageLayout, regionCount, pRegions);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStageFlags stageMask)
@@ -1039,8 +1089,13 @@ void Vulkan_wDx12::hk_vkCmdWaitEvents(VkCommandBuffer commandBuffer, uint32_t ev
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
     o_vkCmdWaitEvents(cmdBuffer, eventCount, pEvents, srcStageMask, dstStageMask, memoryBarrierCount, pMemoryBarriers,
                       bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount, pImageMemoryBarriers);
+    if (virtualCmdBuffer == VK_NULL_HANDLE)
+        cmdBufferStateTracker.OnPipelineBarrier(cmdBuffer, srcStageMask, dstStageMask, 0,
+            memoryBarrierCount, pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers,
+            imageMemoryBarrierCount, pImageMemoryBarriers);
 }
 
 void Vulkan_wDx12::hk_vkCmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask,
@@ -1120,6 +1175,7 @@ void Vulkan_wDx12::hk_vkCmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipe
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::NativeVulkanGuides::Barrier(cmdBuffer,srcStageMask,dstStageMask,dependencyFlags,memoryBarrierCount,pMemoryBarriers,bufferMemoryBarrierCount,pBufferMemoryBarriers,imageMemoryBarrierCount,pImageMemoryBarriers);
     o_vkCmdPipelineBarrier(cmdBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount, pMemoryBarriers,
                            bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount,
                            pImageMemoryBarriers);
@@ -1295,7 +1351,10 @@ void Vulkan_wDx12::hk_vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, const 
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
-    o_vkCmdBeginRenderPass(cmdBuffer, pRenderPassBegin, contents);
+    const auto fgBegin=pRenderPassBegin?DlssNr::NativeFg::Layouts::Begin(DlssNr::VulkanNrRecordings().CommandDevice(cmdBuffer),*pRenderPassBegin):VkRenderPassBeginInfo{};
+    o_vkCmdBeginRenderPass(cmdBuffer, pRenderPassBegin?&fgBegin:nullptr, contents);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,true);
+    DlssNr::NativeVulkanGuides::BeginLegacy(cmdBuffer,pRenderPassBegin);
 }
 
 void Vulkan_wDx12::hk_vkCmdNextSubpass(VkCommandBuffer commandBuffer, VkSubpassContents contents)
@@ -1340,6 +1399,8 @@ void Vulkan_wDx12::hk_vkCmdEndRenderPass(VkCommandBuffer commandBuffer)
 #endif
 
     o_vkCmdEndRenderPass(cmdBuffer);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,false);
+    DlssNr::NativeVulkanGuides::End(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetDeviceMask(VkCommandBuffer commandBuffer, uint32_t deviceMask)
@@ -1381,7 +1442,10 @@ void Vulkan_wDx12::hk_vkCmdDispatchBase(VkCommandBuffer commandBuffer, uint32_t 
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDispatchBase(cmdBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY, groupCountZ);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndirectCount(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -1403,7 +1467,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndirectCount(VkCommandBuffer commandBuffer, VkBu
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndirectCount(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -1425,7 +1492,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffe
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndexedIndirectCount(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdBeginRenderPass2(VkCommandBuffer commandBuffer,
@@ -1447,7 +1517,10 @@ void Vulkan_wDx12::hk_vkCmdBeginRenderPass2(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
-    o_vkCmdBeginRenderPass2(cmdBuffer, pRenderPassBegin, pSubpassBeginInfo);
+    const auto fgBegin=pRenderPassBegin?DlssNr::NativeFg::Layouts::Begin(DlssNr::VulkanNrRecordings().CommandDevice(cmdBuffer),*pRenderPassBegin):VkRenderPassBeginInfo{};
+    o_vkCmdBeginRenderPass2(cmdBuffer, pRenderPassBegin?&fgBegin:nullptr, pSubpassBeginInfo);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,true);
+    DlssNr::NativeVulkanGuides::BeginLegacy(cmdBuffer,pRenderPassBegin);
 }
 
 void Vulkan_wDx12::hk_vkCmdNextSubpass2(VkCommandBuffer commandBuffer, const VkSubpassBeginInfo* pSubpassBeginInfo,
@@ -1489,6 +1562,8 @@ void Vulkan_wDx12::hk_vkCmdEndRenderPass2(VkCommandBuffer commandBuffer, const V
 #endif
 
     o_vkCmdEndRenderPass2(cmdBuffer, pSubpassEndInfo);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,false);
+    DlssNr::NativeVulkanGuides::End(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetEvent2(VkCommandBuffer commandBuffer, VkEvent event,
@@ -1550,7 +1625,11 @@ void Vulkan_wDx12::hk_vkCmdWaitEvents2(VkCommandBuffer commandBuffer, uint32_t e
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
     o_vkCmdWaitEvents2(cmdBuffer, eventCount, pEvents, pDependencyInfos);
+    if (virtualCmdBuffer == VK_NULL_HANDLE && pDependencyInfos)
+        for (uint32_t i = 0; i < eventCount; ++i)
+            cmdBufferStateTracker.OnPipelineBarrier2(cmdBuffer, &pDependencyInfos[i]);
 }
 
 void Vulkan_wDx12::hk_vkCmdPipelineBarrier2(VkCommandBuffer commandBuffer, const VkDependencyInfo* pDependencyInfo)
@@ -1570,7 +1649,9 @@ void Vulkan_wDx12::hk_vkCmdPipelineBarrier2(VkCommandBuffer commandBuffer, const
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::NativeVulkanGuides::Barrier(cmdBuffer,pDependencyInfo);
     o_vkCmdPipelineBarrier2(cmdBuffer, pDependencyInfo);
+    cmdBufferStateTracker.OnPipelineBarrier2(cmdBuffer,pDependencyInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdWriteTimestamp2(VkCommandBuffer commandBuffer, VkPipelineStageFlags2 stage,
@@ -1631,7 +1712,11 @@ void Vulkan_wDx12::hk_vkCmdCopyImage2(VkCommandBuffer commandBuffer, const VkCop
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdCopyImage2(cmdBuffer, pCopyImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ColorCopy(cmdBuffer, pCopyImageInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyBufferToImage2(VkCommandBuffer commandBuffer,
@@ -1652,7 +1737,10 @@ void Vulkan_wDx12::hk_vkCmdCopyBufferToImage2(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdCopyBufferToImage2(cmdBuffer, pCopyBufferToImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyImageToBuffer2(VkCommandBuffer commandBuffer,
@@ -1693,7 +1781,11 @@ void Vulkan_wDx12::hk_vkCmdBlitImage2(VkCommandBuffer commandBuffer, const VkBli
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdBlitImage2(cmdBuffer, pBlitImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ColorBlit(cmdBuffer, pBlitImageInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdResolveImage2(VkCommandBuffer commandBuffer, const VkResolveImageInfo2* pResolveImageInfo)
@@ -1713,7 +1805,10 @@ void Vulkan_wDx12::hk_vkCmdResolveImage2(VkCommandBuffer commandBuffer, const Vk
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdResolveImage2(cmdBuffer, pResolveImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdBeginRendering(VkCommandBuffer commandBuffer, const VkRenderingInfo* pRenderingInfo)
@@ -1734,6 +1829,8 @@ void Vulkan_wDx12::hk_vkCmdBeginRendering(VkCommandBuffer commandBuffer, const V
 #endif
 
     o_vkCmdBeginRendering(cmdBuffer, pRenderingInfo);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,true, pRenderingInfo->flags);
+    DlssNr::NativeVulkanGuides::BeginDynamic(cmdBuffer,pRenderingInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdEndRendering(VkCommandBuffer commandBuffer)
@@ -1754,6 +1851,8 @@ void Vulkan_wDx12::hk_vkCmdEndRendering(VkCommandBuffer commandBuffer)
 #endif
 
     o_vkCmdEndRendering(cmdBuffer);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,false);
+    DlssNr::NativeVulkanGuides::End(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetCullMode(VkCommandBuffer commandBuffer, VkCullModeFlags cullMode)
@@ -2410,6 +2509,8 @@ void Vulkan_wDx12::hk_vkCmdBeginRenderingKHR(VkCommandBuffer commandBuffer, cons
 #endif
 
     o_vkCmdBeginRenderingKHR(cmdBuffer, pRenderingInfo);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,true, pRenderingInfo->flags);
+    DlssNr::NativeVulkanGuides::BeginDynamic(cmdBuffer,pRenderingInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdEndRenderingKHR(VkCommandBuffer commandBuffer)
@@ -2430,6 +2531,8 @@ void Vulkan_wDx12::hk_vkCmdEndRenderingKHR(VkCommandBuffer commandBuffer)
 #endif
 
     o_vkCmdEndRenderingKHR(cmdBuffer);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,false);
+    DlssNr::NativeVulkanGuides::End(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetDeviceMaskKHR(VkCommandBuffer commandBuffer, uint32_t deviceMask)
@@ -2471,7 +2574,10 @@ void Vulkan_wDx12::hk_vkCmdDispatchBaseKHR(VkCommandBuffer commandBuffer, uint32
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDispatchBaseKHR(cmdBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY, groupCountZ);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdPushDescriptorSetKHR(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint,
@@ -2537,7 +2643,10 @@ void Vulkan_wDx12::hk_vkCmdBeginRenderPass2KHR(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
-    o_vkCmdBeginRenderPass2KHR(cmdBuffer, pRenderPassBegin, pSubpassBeginInfo);
+    const auto fgBegin=pRenderPassBegin?DlssNr::NativeFg::Layouts::Begin(DlssNr::VulkanNrRecordings().CommandDevice(cmdBuffer),*pRenderPassBegin):VkRenderPassBeginInfo{};
+    o_vkCmdBeginRenderPass2KHR(cmdBuffer, pRenderPassBegin?&fgBegin:nullptr, pSubpassBeginInfo);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,true);
+    DlssNr::NativeVulkanGuides::BeginLegacy(cmdBuffer,pRenderPassBegin);
 }
 
 void Vulkan_wDx12::hk_vkCmdNextSubpass2KHR(VkCommandBuffer commandBuffer, const VkSubpassBeginInfo* pSubpassBeginInfo,
@@ -2579,6 +2688,8 @@ void Vulkan_wDx12::hk_vkCmdEndRenderPass2KHR(VkCommandBuffer commandBuffer, cons
 #endif
 
     o_vkCmdEndRenderPass2KHR(cmdBuffer, pSubpassEndInfo);
+    DlssNr::VulkanNrRecordings().OnRendering(cmdBuffer,false);
+    DlssNr::NativeVulkanGuides::End(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndirectCountKHR(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -2600,7 +2711,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndirectCountKHR(VkCommandBuffer commandBuffer, V
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndirectCountKHR(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirectCountKHR(VkCommandBuffer commandBuffer, VkBuffer buffer,
@@ -2623,7 +2737,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirectCountKHR(VkCommandBuffer commandBu
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndexedIndirectCountKHR(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetFragmentShadingRateKHR(VkCommandBuffer commandBuffer, const VkExtent2D* pFragmentSize,
@@ -2768,7 +2885,11 @@ void Vulkan_wDx12::hk_vkCmdWaitEvents2KHR(VkCommandBuffer commandBuffer, uint32_
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
     o_vkCmdWaitEvents2KHR(cmdBuffer, eventCount, pEvents, pDependencyInfos);
+    if (virtualCmdBuffer == VK_NULL_HANDLE && pDependencyInfos)
+        for (uint32_t i = 0; i < eventCount; ++i)
+            cmdBufferStateTracker.OnPipelineBarrier2(cmdBuffer, &pDependencyInfos[i]);
 }
 
 void Vulkan_wDx12::hk_vkCmdPipelineBarrier2KHR(VkCommandBuffer commandBuffer, const VkDependencyInfo* pDependencyInfo)
@@ -2788,7 +2909,9 @@ void Vulkan_wDx12::hk_vkCmdPipelineBarrier2KHR(VkCommandBuffer commandBuffer, co
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::NativeVulkanGuides::Barrier(cmdBuffer,pDependencyInfo);
     o_vkCmdPipelineBarrier2KHR(cmdBuffer, pDependencyInfo);
+    cmdBufferStateTracker.OnPipelineBarrier2(cmdBuffer,pDependencyInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdWriteTimestamp2KHR(VkCommandBuffer commandBuffer, VkPipelineStageFlags2 stage,
@@ -2849,7 +2972,11 @@ void Vulkan_wDx12::hk_vkCmdCopyImage2KHR(VkCommandBuffer commandBuffer, const Vk
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdCopyImage2KHR(cmdBuffer, pCopyImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ColorCopy(cmdBuffer, pCopyImageInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyBufferToImage2KHR(VkCommandBuffer commandBuffer,
@@ -2870,7 +2997,10 @@ void Vulkan_wDx12::hk_vkCmdCopyBufferToImage2KHR(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdCopyBufferToImage2KHR(cmdBuffer, pCopyBufferToImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdCopyImageToBuffer2KHR(VkCommandBuffer commandBuffer,
@@ -2911,7 +3041,11 @@ void Vulkan_wDx12::hk_vkCmdBlitImage2KHR(VkCommandBuffer commandBuffer, const Vk
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdBlitImage2KHR(cmdBuffer, pBlitImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::ColorBlit(cmdBuffer, pBlitImageInfo);
 }
 
 void Vulkan_wDx12::hk_vkCmdResolveImage2KHR(VkCommandBuffer commandBuffer, const VkResolveImageInfo2* pResolveImageInfo)
@@ -2931,7 +3065,10 @@ void Vulkan_wDx12::hk_vkCmdResolveImage2KHR(VkCommandBuffer commandBuffer, const
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdResolveImage2KHR(cmdBuffer, pResolveImageInfo);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdTraceRaysIndirect2KHR(VkCommandBuffer commandBuffer, VkDeviceAddress indirectDeviceAddress)
@@ -2951,7 +3088,10 @@ void Vulkan_wDx12::hk_vkCmdTraceRaysIndirect2KHR(VkCommandBuffer commandBuffer, 
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdTraceRaysIndirect2KHR(cmdBuffer, indirectDeviceAddress);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdBindIndexBuffer2KHR(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -3358,7 +3498,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndirectCountAMD(VkCommandBuffer commandBuffer, V
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndirectCountAMD(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirectCountAMD(VkCommandBuffer commandBuffer, VkBuffer buffer,
@@ -3381,7 +3524,10 @@ void Vulkan_wDx12::hk_vkCmdDrawIndexedIndirectCountAMD(VkCommandBuffer commandBu
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawIndexedIndirectCountAMD(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdBeginConditionalRenderingEXT(
@@ -3729,11 +3875,14 @@ void Vulkan_wDx12::hk_vkCmdTraceRaysNV(VkCommandBuffer commandBuffer, VkBuffer r
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdTraceRaysNV(cmdBuffer, raygenShaderBindingTableBuffer, raygenShaderBindingOffset,
                        missShaderBindingTableBuffer, missShaderBindingOffset, missShaderBindingStride,
                        hitShaderBindingTableBuffer, hitShaderBindingOffset, hitShaderBindingStride,
                        callableShaderBindingTableBuffer, callableShaderBindingOffset, callableShaderBindingStride,
                        width, height, depth);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdWriteAccelerationStructuresPropertiesNV(
@@ -3819,7 +3968,10 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksNV(VkCommandBuffer commandBuffer, uint32
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawMeshTasksNV(cmdBuffer, taskCount, firstTask);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectNV(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -3840,7 +3992,10 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectNV(VkCommandBuffer commandBuffer
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawMeshTasksIndirectNV(cmdBuffer, buffer, offset, drawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectCountNV(VkCommandBuffer commandBuffer, VkBuffer buffer,
@@ -3863,8 +4018,11 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectCountNV(VkCommandBuffer commandB
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawMeshTasksIndirectCountNV(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount,
                                         stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetExclusiveScissorEnableNV(VkCommandBuffer commandBuffer, uint32_t firstExclusiveScissor,
@@ -4369,6 +4527,7 @@ void Vulkan_wDx12::hk_vkCmdCudaLaunchKernelNV(VkCommandBuffer commandBuffer, con
 void Vulkan_wDx12::hk_vkCmdBindDescriptorBuffersEXT(VkCommandBuffer commandBuffer, uint32_t bufferCount,
                                                     const VkDescriptorBufferBindingInfoEXT* pBindingInfos)
 {
+    DlssNr::VulkanNrRecordings().OnUnsupportedBindings(commandBuffer);
     VkCommandBuffer cmdBuffer = commandBuffer;
 
     if (cmdBuffer == lastCmdBuffer && virtualCmdBuffer != VK_NULL_HANDLE)
@@ -5607,6 +5766,7 @@ void Vulkan_wDx12::hk_vkCmdOpticalFlowExecuteNV(VkCommandBuffer commandBuffer, V
 void Vulkan_wDx12::hk_vkCmdBindShadersEXT(VkCommandBuffer commandBuffer, uint32_t stageCount,
                                           const VkShaderStageFlagBits* pStages, const VkShaderEXT* pShaders)
 {
+    DlssNr::VulkanNrRecordings().OnUnsupportedBindings(commandBuffer);
     VkCommandBuffer cmdBuffer = commandBuffer;
 
     if (cmdBuffer == lastCmdBuffer && virtualCmdBuffer != VK_NULL_HANDLE)
@@ -5928,8 +6088,11 @@ void Vulkan_wDx12::hk_vkCmdTraceRaysKHR(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdTraceRaysKHR(cmdBuffer, pRaygenShaderBindingTable, pMissShaderBindingTable, pHitShaderBindingTable,
                         pCallableShaderBindingTable, width, height, depth);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdTraceRaysIndirectKHR(VkCommandBuffer commandBuffer,
@@ -5954,8 +6117,11 @@ void Vulkan_wDx12::hk_vkCmdTraceRaysIndirectKHR(VkCommandBuffer commandBuffer,
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdTraceRaysIndirectKHR(cmdBuffer, pRaygenShaderBindingTable, pMissShaderBindingTable, pHitShaderBindingTable,
                                 pCallableShaderBindingTable, indirectDeviceAddress);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdSetRayTracingPipelineStackSizeKHR(VkCommandBuffer commandBuffer, uint32_t pipelineStackSize)
@@ -5996,7 +6162,10 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksEXT(VkCommandBuffer commandBuffer, uint3
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawMeshTasksEXT(cmdBuffer, groupCountX, groupCountY, groupCountZ);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectEXT(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -6017,7 +6186,10 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectEXT(VkCommandBuffer commandBuffe
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawMeshTasksIndirectEXT(cmdBuffer, buffer, offset, drawCount, stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer commandBuffer, VkBuffer buffer,
@@ -6040,8 +6212,11 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer command
     LOG_DEBUG("cmdBuffer: {:X}", (size_t) cmdBuffer);
 #endif
 
+    DlssNr::VkNrObservationScope nrWorkScope(DlssNr::VkNrObservation::Work,reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdDrawMeshTasksIndirectCountEXT(cmdBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount,
                                          stride);
+    if(nrWorkScope.Observe())DlssNr::NativeVulkanGuides::Draw(cmdBuffer);
+    if(nrWorkScope.Observe())DlssNr::VulkanNrRecordings().OnWork(cmdBuffer);
 }
 
 #pragma endregion
@@ -6049,7 +6224,10 @@ void Vulkan_wDx12::hk_vkCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer command
 VkResult Vulkan_wDx12::hk_vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo* pCreateInfo,
                                               const VkAllocationCallbacks* pAllocator, VkCommandPool* pCommandPool)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::CreatePool, reinterpret_cast<uintptr_t>(pCreateInfo), device);
     VkResult result = o_vkCreateCommandPool(device, pCreateInfo, pAllocator, pCommandPool);
+    if (nrScope.Observe() && result == VK_SUCCESS && pCreateInfo && pCommandPool)
+        DlssNr::VulkanNrRecordings().OnCreatePool(device, *pCommandPool, *pCreateInfo, result);
 
     if (result == VK_SUCCESS && pCommandPool && *pCommandPool != VK_NULL_HANDLE && pCreateInfo)
     {
@@ -6084,7 +6262,9 @@ void Vulkan_wDx12::hk_vkCmdExecuteCommands(VkCommandBuffer commandBuffer, uint32
         cmdBuffer = virtualCmdBuffer;
     }
 
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Execute, reinterpret_cast<uintptr_t>(cmdBuffer));
     o_vkCmdExecuteCommands(cmdBuffer, commandBufferCount, pCommandBuffers);
+    if (nrScope.Observe() && pCommandBuffers) {DlssNr::NativeVulkanGuides::InvalidateDepthHistory(cmdBuffer);DlssNr::VulkanNrRecordings().OnExecute(cmdBuffer, {pCommandBuffers, commandBufferCount});}
 }
 
 #ifdef USE_QUEUE_SUBMIT_2_KHR
@@ -6384,7 +6564,14 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit(VkQueue queue, uint32_t submitCount, VkS
     if (injected)
         LOG_DEBUG("Submitting {} submits with vkQueueSubmit2KHR", submitCount);
 
-    auto result = o_vkQueueSubmit2KHR(queue, submitCount, submitInfos2.data(), fence);
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Submit2, reinterpret_cast<uintptr_t>(queue));
+    std::vector<VkCommandBuffer> nrBuffers;
+    const auto* nrSubmits = submitInfos2.data();
+    for (uint32_t i = 0; i < submitCount; ++i) if (nrSubmits[i].pCommandBufferInfos)
+        for (uint32_t j = 0; j < nrSubmits[i].commandBufferInfoCount; ++j) nrBuffers.push_back(nrSubmits[i].pCommandBufferInfos[j].commandBuffer);
+    auto result = nrScope.Observe()
+        ? [&]{std::vector<VkSemaphore> waits;for(uint32_t i=0;i<submitCount;++i)if(submitInfos2[i].pWaitSemaphoreInfos)for(uint32_t j=0;j<submitInfos2[i].waitSemaphoreInfoCount;++j)waits.push_back(submitInfos2[i].pWaitSemaphoreInfos[j].semaphore);return DlssNr::ObserveVkNrQueueSubmit(queue,nrBuffers,[&] { return DlssNr::NativeFg::QueueCall(o_vkQueueSubmit2KHR,queue, submitCount, submitInfos2.data(), fence); },waits);}()
+        : DlssNr::NativeFg::QueueCall(o_vkQueueSubmit2KHR,queue, submitCount, submitInfos2.data(), fence);
 
     if (injected)
         LOG_DEBUG("Submitted {} submits with vkQueueSubmit2KHR", submitCount);
@@ -6651,7 +6838,13 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit(VkQueue queue, uint32_t submitCount, con
     }
 
     // Call original function
-    auto result = o_vkQueueSubmit(queue, submitCount, pSubmits, fence);
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Submit, reinterpret_cast<uintptr_t>(queue));
+    std::vector<VkCommandBuffer> nrBuffers;
+    for (uint32_t i = 0; i < submitCount; ++i) if (pSubmits[i].pCommandBuffers)
+        nrBuffers.insert(nrBuffers.end(),pSubmits[i].pCommandBuffers,pSubmits[i].pCommandBuffers+pSubmits[i].commandBufferCount);
+    auto result = nrScope.Observe()
+        ? [&]{std::vector<VkSemaphore> waits;for(uint32_t i=0;i<submitCount;++i)if(pSubmits[i].pWaitSemaphores)waits.insert(waits.end(),pSubmits[i].pWaitSemaphores,pSubmits[i].pWaitSemaphores+pSubmits[i].waitSemaphoreCount);return DlssNr::ObserveVkNrQueueSubmit(queue,nrBuffers,[&] { return DlssNr::NativeFg::QueueCall(o_vkQueueSubmit,queue, submitCount, pSubmits, fence); },waits);}()
+        : DlssNr::NativeFg::QueueCall(o_vkQueueSubmit,queue, submitCount, pSubmits, fence);
     if (result != VK_SUCCESS)
     {
         LOG_ERROR("vkQueueSubmit failed with error code: {}", magic_enum::enum_name(result));
@@ -6881,7 +7074,13 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit2(VkQueue queue, uint32_t submitCount, co
     }
 
     // Call original function
-    auto result = o_vkQueueSubmit2(queue, submitCount, pSubmits, fence);
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Submit2, reinterpret_cast<uintptr_t>(queue));
+    std::vector<VkCommandBuffer> nrBuffers;
+    for (uint32_t i = 0; i < submitCount; ++i) if (pSubmits[i].pCommandBufferInfos)
+        for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j) nrBuffers.push_back(pSubmits[i].pCommandBufferInfos[j].commandBuffer);
+    auto result = nrScope.Observe()
+        ? [&]{std::vector<VkSemaphore> waits;for(uint32_t i=0;i<submitCount;++i)if(pSubmits[i].pWaitSemaphoreInfos)for(uint32_t j=0;j<pSubmits[i].waitSemaphoreInfoCount;++j)waits.push_back(pSubmits[i].pWaitSemaphoreInfos[j].semaphore);return DlssNr::ObserveVkNrQueueSubmit(queue,nrBuffers,[&] { return DlssNr::NativeFg::QueueCall(o_vkQueueSubmit2,queue, submitCount, pSubmits, fence); },waits);}()
+        : DlssNr::NativeFg::QueueCall(o_vkQueueSubmit2,queue, submitCount, pSubmits, fence);
 
     if (result != VK_SUCCESS)
     {
@@ -7077,7 +7276,13 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit2KHR(VkQueue queue, uint32_t submitCount,
     }
 
     // Call original function
-    auto result = o_vkQueueSubmit2KHR(queue, submitCount, pSubmits, fence);
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Submit2, reinterpret_cast<uintptr_t>(queue));
+    std::vector<VkCommandBuffer> nrBuffers;
+    for (uint32_t i = 0; i < submitCount; ++i) if (pSubmits[i].pCommandBufferInfos)
+        for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j) nrBuffers.push_back(pSubmits[i].pCommandBufferInfos[j].commandBuffer);
+    auto result = nrScope.Observe()
+        ? [&]{std::vector<VkSemaphore> waits;for(uint32_t i=0;i<submitCount;++i)if(pSubmits[i].pWaitSemaphoreInfos)for(uint32_t j=0;j<pSubmits[i].waitSemaphoreInfoCount;++j)waits.push_back(pSubmits[i].pWaitSemaphoreInfos[j].semaphore);return DlssNr::ObserveVkNrQueueSubmit(queue,nrBuffers,[&] { return DlssNr::NativeFg::QueueCall(o_vkQueueSubmit2KHR,queue, submitCount, pSubmits, fence); },waits);}()
+        : DlssNr::NativeFg::QueueCall(o_vkQueueSubmit2KHR,queue, submitCount, pSubmits, fence);
 
     if (result != VK_SUCCESS)
     {
@@ -7121,25 +7326,29 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit2KHR(VkQueue queue, uint32_t submitCount,
 VkResult Vulkan_wDx12::hk_vkBeginCommandBuffer(VkCommandBuffer commandBuffer,
                                                const VkCommandBufferBeginInfo* pBeginInfo)
 {
-    if (virtualCmdBuffer == VK_NULL_HANDLE)
-        cmdBufferStateTracker.OnBegin(commandBuffer, pBeginInfo);
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Begin, reinterpret_cast<uintptr_t>(commandBuffer));
+
 
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("commandBuffer: {:X}", (size_t) commandBuffer);
 #endif
 
-    return o_vkBeginCommandBuffer(commandBuffer, pBeginInfo);
+    const auto result = o_vkBeginCommandBuffer(commandBuffer, pBeginInfo);
+    if (result == VK_SUCCESS && virtualCmdBuffer == VK_NULL_HANDLE) cmdBufferStateTracker.OnBegin(commandBuffer, pBeginInfo);
+    if (nrScope.Observe() && pBeginInfo) DlssNr::VulkanNrRecordings().OnBegin(commandBuffer, pBeginInfo->flags, result);
+    return result;
 }
 
 VkResult Vulkan_wDx12::hk_vkEndCommandBuffer(VkCommandBuffer commandBuffer)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::End, reinterpret_cast<uintptr_t>(commandBuffer));
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("commandBuffer: {:X}", (size_t) commandBuffer);
 #endif
 
     if (virtualCmdBuffer == VK_NULL_HANDLE)
     {
-        cmdBufferStateTracker.OnEnd(commandBuffer);
+        // Successful end is observed after the driver returns.
     }
     else if (commandBuffer == lastCmdBuffer)
     {
@@ -7150,24 +7359,35 @@ VkResult Vulkan_wDx12::hk_vkEndCommandBuffer(VkCommandBuffer commandBuffer)
         virtualCmdBuffer = VK_NULL_HANDLE;
     }
 
-    return o_vkEndCommandBuffer(commandBuffer);
+    const auto result = o_vkEndCommandBuffer(commandBuffer);
+    if (result == VK_SUCCESS) cmdBufferStateTracker.OnEnd(commandBuffer);
+    if (nrScope.Observe()) DlssNr::VulkanNrRecordings().OnEnd(commandBuffer, result);
+    return result;
 }
 
 VkResult Vulkan_wDx12::hk_vkResetCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferResetFlags flags)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Reset, reinterpret_cast<uintptr_t>(commandBuffer));
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("commandBuffer: {:X}", (size_t) commandBuffer);
 #endif
 
-    if (virtualCmdBuffer == VK_NULL_HANDLE)
-        cmdBufferStateTracker.OnReset(commandBuffer);
 
-    return o_vkResetCommandBuffer(commandBuffer, flags);
+
+    const auto result = o_vkResetCommandBuffer(commandBuffer, flags);
+    if (result == VK_SUCCESS && virtualCmdBuffer == VK_NULL_HANDLE) cmdBufferStateTracker.OnReset(commandBuffer);
+    if (nrScope.Observe()) {
+        DlssNr::VulkanNrRecordings().OnReset(commandBuffer,result);
+        const auto device=DlssNr::VulkanNrRecordings().CommandDevice(commandBuffer);
+        if(result==VK_SUCCESS&&device)DlssNr::RetryShutdownVk(device);
+    }
+    return result;
 }
 
 void Vulkan_wDx12::hk_vkFreeCommandBuffers(VkDevice device, VkCommandPool commandPool, uint32_t commandBufferCount,
                                            const VkCommandBuffer* pCommandBuffers)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Free, reinterpret_cast<uintptr_t>(commandPool), device);
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("device: {:X}, commandPool: {:X}, commandBufferCount: {}", (size_t) device, (size_t) commandPool,
               commandBufferCount);
@@ -7178,16 +7398,20 @@ void Vulkan_wDx12::hk_vkFreeCommandBuffers(VkDevice device, VkCommandPool comman
 
     // Call original function
     o_vkFreeCommandBuffers(device, commandPool, commandBufferCount, pCommandBuffers);
+    if (nrScope.Observe() && pCommandBuffers) for (uint32_t i = 0; i < commandBufferCount; ++i) DlssNr::VulkanNrRecordings().OnFree(pCommandBuffers[i]);
+    if(nrScope.Observe())DlssNr::RetryShutdownVk(device);
 }
 
 VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pAllocateInfo,
                                                    VkCommandBuffer* pCommandBuffers)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::Allocate, reinterpret_cast<uintptr_t>(pAllocateInfo), device);
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("device: {:X}, pCommandBuffers: {:X}", (size_t) device, (size_t) pCommandBuffers);
 #endif
 
     auto result = o_vkAllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
+    if (nrScope.Observe() && pAllocateInfo) DlssNr::VulkanNrRecordings().OnAllocateBuffers(device, *pAllocateInfo, pCommandBuffers, result);
 
     if (result == VK_SUCCESS && pAllocateInfo != nullptr && pCommandBuffers != nullptr)
     {
@@ -7200,7 +7424,7 @@ VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkComm
         }
 
         // Notify state tracker about new command buffers
-        cmdBufferStateTracker.OnAllocateCommandBuffers(pAllocateInfo->commandPool, pAllocateInfo->commandBufferCount,
+        cmdBufferStateTracker.OnAllocateCommandBuffers(device, pAllocateInfo->commandPool, pAllocateInfo->commandBufferCount,
                                                        pCommandBuffers, queueFamily);
     }
 
@@ -7210,32 +7434,43 @@ VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkComm
 void Vulkan_wDx12::hk_vkDestroyCommandPool(VkDevice device, VkCommandPool commandPool,
                                            const VkAllocationCallbacks* pAllocator)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::DestroyPool, reinterpret_cast<uintptr_t>(commandPool), device);
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("device: {:X}, commandPool: {:X}", (size_t) device, (size_t) commandPool);
 #endif
 
     // Notify state tracker about pool destruction
-    cmdBufferStateTracker.OnDestroyPool(commandPool);
+    cmdBufferStateTracker.OnDestroyPool(device, commandPool);
 
     o_vkDestroyCommandPool(device, commandPool, pAllocator);
+    if (nrScope.Observe()) {DlssNr::VulkanNrRecordings().OnDestroyPool(device, commandPool);DlssNr::RetryShutdownVk(device);}
+    { std::scoped_lock lock(mutexCommandPoolToQueueFamilyMap); commandPoolToQueueFamilyMap.erase(commandPool); }
 }
 
 VkResult Vulkan_wDx12::hk_vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
 {
+    DlssNr::VkNrObservationScope nrScope(DlssNr::VkNrObservation::ResetPool, reinterpret_cast<uintptr_t>(commandPool), device);
 #ifdef LOG_ALL_RECORDS
     LOG_DEBUG("device: {:X}, commandPool: {:X}, flags: {:X}", (size_t) device, (size_t) commandPool, (uint32_t) flags);
 #endif
 
-    // Notify state tracker before reset
-    cmdBufferStateTracker.OnResetPool(commandPool);
-
-    // Call original function
-    return o_vkResetCommandPool(device, commandPool, flags);
+    const auto result = o_vkResetCommandPool(device, commandPool, flags);
+    if (result == VK_SUCCESS) cmdBufferStateTracker.OnResetPool(device, commandPool);
+    if (nrScope.Observe()) {DlssNr::VulkanNrRecordings().OnResetPool(device, commandPool,result);
+        if(result==VK_SUCCESS)DlssNr::RetryShutdownVk(device);}
+    return result;
 }
 
 PFN_vkVoidFunction Vulkan_wDx12::GetDeviceProcAddr(const PFN_vkVoidFunction original, const char* pName)
 {
     return GetAddress(original, pName);
+}
+
+bool Vulkan_wDx12::IsSubmitHookAddress(PFN_vkVoidFunction address)
+{
+    return address==reinterpret_cast<PFN_vkVoidFunction>(hk_vkQueueSubmit)||
+        address==reinterpret_cast<PFN_vkVoidFunction>(hk_vkQueueSubmit2)||
+        address==reinterpret_cast<PFN_vkVoidFunction>(hk_vkQueueSubmit2KHR);
 }
 
 PFN_vkVoidFunction Vulkan_wDx12::GetInstanceProcAddr(const PFN_vkVoidFunction original, const char* pName)
@@ -7247,6 +7482,10 @@ void Vulkan_wDx12::EndCmdBuffer(VkCommandBuffer commandBuffer) { o_vkEndCommandB
 
 PFN_vkVoidFunction Vulkan_wDx12::GetAddress(const PFN_vkVoidFunction original, const char* pName)
 {
+#if defined(NR_DIAG_VULKAN_NO_LEGACY) && NR_DIAG_VULKAN_NO_LEGACY
+    // Bypass resolver interception as well as exported-function detours.
+    return nullptr; // no legacy replacement; the caller keeps its original target
+#else
     if (original == nullptr || pName == nullptr)
         return VK_NULL_HANDLE;
 
@@ -9744,6 +9983,7 @@ PFN_vkVoidFunction Vulkan_wDx12::GetAddress(const PFN_vkVoidFunction original, c
     }
 
     return VK_NULL_HANDLE;
+#endif
 }
 
 void Vulkan_wDx12::InitializeStateTrackerFunctionTable()
@@ -9784,8 +10024,18 @@ void Vulkan_wDx12::InitializeStateTrackerFunctionTable()
     LOG_DEBUG("State tracker function table initialized");
 }
 
+#if defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+static LONG diagnosticInstallStatus = ERROR_IO_PENDING;
+LONG Vulkan_wDx12::DiagnosticInstallStatus() { return diagnosticInstallStatus; }
+#endif
+
 void Vulkan_wDx12::Hook(HMODULE vulkanModule)
 {
+#if defined(NR_DIAG_VULKAN_NO_LEGACY) && NR_DIAG_VULKAN_NO_LEGACY
+    diagnosticInstallStatus = ERROR_NOT_SUPPORTED; // intentionally disabled, not an attempted transaction
+    return;
+#endif
+
     if (o_vkQueueSubmit != nullptr)
         return;
 
@@ -11087,6 +11337,9 @@ void Vulkan_wDx12::Hook(HMODULE vulkanModule)
 #pragma endregion
 
         auto detourResult = DetourTransactionCommit();
+#if defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+    diagnosticInstallStatus = detourResult;
+#endif
         if (detourResult != NO_ERROR)
         {
             LOG_ERROR("Failed to attach Vulkan hooks: %d", detourResult);

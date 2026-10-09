@@ -1,0 +1,316 @@
+#pragma once
+// Trusted, bundled v1 schema; never load a schema or reference from imported data.
+namespace Neurotic::Semantic::Rules { inline constexpr const char* SchemaText=R"NRSCHEMA({
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NeuRotic Object Rules portable configuration v1",
+  "description": "Proposed schema. Application must also apply strict byte/depth/duplicate-key/finite-number/semantic and capability validation. No runtime identities or assets.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "neurotic.object-rules"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "rules": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "match": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "text"
+                  },
+                  "phrases": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "language": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 35
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "language"
+                      ]
+                    }
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "max_instances": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 128
+                  }
+                },
+                "required": [
+                  "kind",
+                  "phrases",
+                  "threshold",
+                  "max_instances"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "fixed_class"
+                  },
+                  "provider_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "class_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "max_instances": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 128
+                  }
+                },
+                "required": [
+                  "kind",
+                  "provider_key",
+                  "class_key",
+                  "threshold",
+                  "max_instances"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "manual_label"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            ]
+          },
+          "scope": {
+            "const": "all_visible_matches"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "overlay": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "show_box": {
+                "type": "boolean"
+              },
+              "show_label": {
+                "type": "boolean"
+              },
+              "box_color_srgb": {
+                "type": "string",
+                "pattern": "^#[0-9A-Fa-f]{6}$"
+              },
+              "label_color_srgb": {
+                "type": "string",
+                "pattern": "^#[0-9A-Fa-f]{6}$"
+              },
+              "line_width_ui": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 6
+              },
+              "opacity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "show_box",
+              "show_label",
+              "box_color_srgb",
+              "label_color_srgb",
+              "line_width_ui",
+              "opacity"
+            ]
+          },
+          "nr": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "strategy": {
+                "enum": [
+                  "inherit",
+                  "blend"
+                ]
+              },
+              "blend_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "strategy",
+              "blend_amount"
+            ]
+          },
+          "appearance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "tint_color_srgb": {
+                "type": "string",
+                "pattern": "^#[0-9A-Fa-f]{6}$"
+              },
+              "tint_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "saturation": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "exposure_ev": {
+                "type": "number",
+                "minimum": -2,
+                "maximum": 2
+              }
+            },
+            "required": [
+              "enabled",
+              "tint_color_srgb",
+              "tint_amount",
+              "saturation",
+              "exposure_ev"
+            ]
+          },
+          "requested_controls": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 96,
+                  "pattern": "^[a-z][a-z0-9_.-]*$"
+                },
+                "value": {
+                  "oneOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "string",
+                      "maxLength": 256
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "value"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "enabled",
+          "match",
+          "scope",
+          "priority",
+          "overlay",
+          "nr",
+          "appearance",
+          "requested_controls"
+        ]
+      }
+    }
+  },
+  "required": [
+    "format",
+    "schema_version",
+    "profile",
+    "rules"
+  ]
+}
+)NRSCHEMA"; }

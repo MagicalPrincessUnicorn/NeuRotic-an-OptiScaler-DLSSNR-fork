@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <nr/diagnostics/HostCost.h>
 #include "input_system_internal.h"
 
 #if defined(_MSC_VER)
@@ -193,7 +194,9 @@ BOOL WINAPI hkGetCursorPos(LPPOINT point)
         return FALSE;
 
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputCursor);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (ShouldBlockCursorInputLocked() && !IsInternalCursorReadCaller(OPTI_INPUT_RETURN_ADDRESS()))
         {
@@ -209,7 +212,9 @@ BOOL WINAPI hkGetCursorPos(LPPOINT point)
 BOOL WINAPI hkSetCursorPos(int x, int y)
 {
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputCursor);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (ShouldBlockCursorInputLocked())
         {
@@ -227,7 +232,9 @@ BOOL WINAPI hkGetPhysicalCursorPos(LPPOINT point)
         return FALSE;
 
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputCursor);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (ShouldBlockCursorInputLocked() && !IsInternalCursorReadCaller(OPTI_INPUT_RETURN_ADDRESS()))
         {
@@ -243,7 +250,9 @@ BOOL WINAPI hkGetPhysicalCursorPos(LPPOINT point)
 BOOL WINAPI hkSetPhysicalCursorPos(int x, int y)
 {
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputCursor);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (ShouldBlockCursorInputLocked())
         {

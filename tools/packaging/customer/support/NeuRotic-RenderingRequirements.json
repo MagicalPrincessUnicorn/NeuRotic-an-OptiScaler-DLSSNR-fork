@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x64",
+  "requiredRuntimeFiles": ["nvngx.dll_dlssnr.dll", "nvngx_dlssnr.dll"],
+  "defaults": {"route": 2, "style": 0, "inputSource": 0, "inputTransport": 0, "presentInputPolicy": 2, "allowCpuFallback": true},
+  "runtimeValidationRequired": true
+}

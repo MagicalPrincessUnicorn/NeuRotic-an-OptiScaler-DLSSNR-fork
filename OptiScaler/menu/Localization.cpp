@@ -1,4 +1,5 @@
 #include "Localization.h"
+#include "localization/LanguageRuntime.h"
 
 #include <algorithm>
 #include <array>
@@ -187,6 +188,10 @@ void SetLanguage(std::string_view code)
 
 std::string Translate(std::string_view source)
 {
+    if (!englishPreviewDepth) {
+        if (auto text=Localization::TranslateBoundRange(source.data(),source.data()+source.size())) return *text;
+        if (Localization::SharedCatalogEnabled()) return std::string(source);
+    }
     if (englishPreviewDepth || context.language == 0 || source.empty())
         return std::string(source);
     const auto key = Normalize(source);
@@ -214,9 +219,13 @@ std::string Translate(std::string_view source)
 
 LocalizedRange::LocalizedRange(const char*& begin, const char*& end)
 {
-    if (!begin || englishPreviewDepth || context.language == 0 || context.depth != 0)
+    if (!begin || englishPreviewDepth || context.depth != 0)
         return;
-    text = Translate(end ? std::string_view(begin, end - begin) : std::string_view(begin));
+    if(auto translated=Localization::TranslateBoundRange(begin,end))text=std::move(*translated);
+    else {
+        if(Localization::SharedCatalogEnabled()||context.language==0)return;
+        text = Translate(end ? std::string_view(begin, end - begin) : std::string_view(begin));
+    }
     begin = text.c_str();
     end = begin + text.size();
     ++context.depth;
@@ -230,4 +239,5 @@ LocalizedRange::~LocalizedRange()
 }
 EnglishPreview::EnglishPreview() { ++englishPreviewDepth; }
 EnglishPreview::~EnglishPreview() { --englishPreviewDepth; }
+LocalizedFormat::LocalizedFormat(const char*& format){if(!format||englishPreviewDepth)return;if(auto translated=Localization::TranslateBoundRange(format,nullptr)){text=std::move(*translated);format=text.c_str();}}
 } // namespace Neurotic

@@ -31,6 +31,8 @@ struct Identity
     uint64_t providerGeneration = 0;
     uint64_t resourceGeneration = 0;
     unsigned int backbuffer = 0;
+    unsigned int requestedPasses = 0;
+    unsigned int completedPasses = 0;
 };
 inline std::string JsonString(std::string_view value)
 {

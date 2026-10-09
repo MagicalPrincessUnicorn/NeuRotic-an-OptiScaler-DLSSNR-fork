@@ -1,12 +1,14 @@
 #pragma once
 
 #include "NrConfigState.h"
+#include "dlssnr/FinalFallbackControl.h"
 #include "dlssnr/DlssNr_BasicMultipass.h"
 #include <new>
 #include <sstream>
 #include <iomanip>
 #include <locale>
 #include <type_traits>
+#include <string_view>
 
 template<class T> void NrDescribeValue(std::ostream& out, const T& value)
 {
@@ -74,8 +76,18 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
 // The explicit list also keeps unrelated config out of the render snapshot.
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
+    X(DlssNrVulkanPrepare) \
+    X(DlssNrAlternateFrame) \
     X(DlssNrMultipassEnabled) \
     X(DlssNrExperimentalMode) \
+    X(DlssNrPreparedDepth) \
+    X(DlssNrNativeDepthDirection) \
+    X(DlssNrNativeGuides) \
+    X(DlssNrInputSource) \
+    X(DlssNrInputTransport) \
+    X(DlssNrAllowCpuFallback) \
+    X(DlssNrNativeFrameGeneration) \
+    X(DlssNrNativeVulkanRenderer) \
     X(DlssNrOverrideMultipassGuardrails) \
     X(DlssNrOverrideHdrGuardrails) \
     X(DlssNrOverrideFgGuardrails) \
@@ -98,6 +110,11 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
     X(DlssNrSecondLayerApplyModel) \
     X(DlssNrExtraLayers) \
     X(DlssNrRoute) \
+    X(DlssNrAnythingScale) \
+    X(DlssNrUiAnythingResolutionPreset) \
+    X(DlssNrUiAnythingManualScale) \
+    X(DlssNrPresentInputPolicy) \
+    X(DlssNrNativeProtocol) \
     X(DlssNrUiManualResolution) \
     X(DlssNrUiManualScale) \
     X(DlssNrUiPresentManualScale) \
@@ -163,9 +180,16 @@ template <class Source> struct NrConfigSnapshot
         std::declval<const NrConfigSynchronization::Transaction&>())) name;
     NR_CONFIG_SNAPSHOT_FIELDS(NR_DECLARE_SNAPSHOT)
 #undef NR_DECLARE_SNAPSHOT
+    // Preserve an explicit adapter depth-arrival declaration for the prepared
+    // guide seam. Absence is distinct from the direct NGX input contract.
+    std::optional<int32_t> depthResourceArrival;
 
-    NrConfigState::RuntimeSnapshot GetDlssNrRuntimeSnapshot() const noexcept { return _runtime; }
+    NrConfigState::RuntimeSnapshot GetDlssNrRuntimeSnapshot() const noexcept { auto runtime=_runtime; runtime.enabled=runtime.enabled&&DlssNrRoute.value_or_default()!=3&&DlssNr::FinalFallback::InGameAllowed(); return runtime; }
+    std::optional<uint64_t> ObservationRevision() const noexcept { return _observationRevision; }
 
+    // Explicit screenshot work uses an owned snapshot; the live enable state is untouched.
+    NrConfigSnapshot ForPrivateDiagnostic() const {auto copy=*this;copy._runtime.enabled=true;copy._privateDiagnostic=true;return copy;}
+    bool IsPrivateDiagnostic() const noexcept {return _privateDiagnostic;}
     std::string Describe() const
     {
         std::ostringstream out;
@@ -182,9 +206,64 @@ template <class Source> struct NrConfigSnapshot
     {
         if (_runtime.enabled != other._runtime.enabled || _runtime.resumeGeneration != other._runtime.resumeGeneration)
             return false;
-#define NR_COMPARE_SNAPSHOT(name) if (!NrSnapshotEqual(name, other.name)) return false;
+#define NR_COMPARE_SNAPSHOT(name) if constexpr (std::string_view(#name) != "DlssNrProxyProbe") \
+        if (!NrSnapshotEqual(name, other.name)) return false;
         NR_CONFIG_SNAPSHOT_FIELDS(NR_COMPARE_SNAPSHOT)
 #undef NR_COMPARE_SNAPSHOT
+        return true;
+    }
+
+    // Scheduling alone must not recreate the opaque model. Preserve every
+    // existing comparison in the broad snapshot and exclude only this option.
+    bool SameModelConfiguration(const NrConfigSnapshot& other) const
+    {
+        if (_runtime.enabled != other._runtime.enabled || _runtime.resumeGeneration != other._runtime.resumeGeneration)
+            return false;
+#define NR_COMPARE_MODEL(name) if constexpr (std::string_view(#name) != "DlssNrAlternateFrame" && \
+        std::string_view(#name) != "DlssNrUiAnythingResolutionPreset" && std::string_view(#name) != "DlssNrUiAnythingManualScale") \
+        if (!NrSnapshotEqual(name, other.name)) return false;
+        NR_CONFIG_SNAPSHOT_FIELDS(NR_COMPARE_MODEL)
+#undef NR_COMPARE_MODEL
+        return true;
+    }
+
+    // Present's FG startup certificate describes resource/model compatibility.
+    // Every pass's composition controls only change per-frame constants (or hide
+    // its result); the immutable captured values still govern this whole frame.
+    // All other current and future fields remain conservatively structural.
+    bool SamePresentReadinessConfiguration(const NrConfigSnapshot& other) const
+    {
+        if (_runtime.enabled != other._runtime.enabled || _runtime.resumeGeneration != other._runtime.resumeGeneration)
+            return false;
+#define NR_COMPARE_PRESENT(name) \
+        if constexpr (std::string_view(#name) != "DlssNrProxyProbe" && \
+                      std::string_view(#name) != "DlssNrUiAnythingResolutionPreset" && \
+                      std::string_view(#name) != "DlssNrUiAnythingManualScale" && \
+                      std::string_view(#name) != "DlssNrColourStrength" && \
+                      std::string_view(#name) != "DlssNrTransferStrength" && \
+                      std::string_view(#name) != "DlssNrMaxRatio" && \
+                      std::string_view(#name) != "DlssNrApplyModel" && \
+                      std::string_view(#name) != "DlssNrSecondLayerColourStrength" && \
+                      std::string_view(#name) != "DlssNrSecondLayerTransferStrength" && \
+                      std::string_view(#name) != "DlssNrSecondLayerMaxRatio" && \
+                      std::string_view(#name) != "DlssNrSecondLayerApplyModel" && \
+                      std::string_view(#name) != "DlssNrExtraLayers") \
+            if (!NrSnapshotEqual(name, other.name)) return false;
+        NR_CONFIG_SNAPSHOT_FIELDS(NR_COMPARE_PRESENT)
+#undef NR_COMPARE_PRESENT
+        for (size_t i = 0; i < DlssNrExtraLayers.size(); ++i)
+        {
+            const auto& a = DlssNrExtraLayers[i];
+            const auto& b = other.DlssNrExtraLayers[i];
+#define NR_COMPARE_PRESENT_LAYER(name) if (!NrSnapshotEqual(a.name, b.name)) return false;
+            NR_COMPARE_PRESENT_LAYER(workingScale) NR_COMPARE_PRESENT_LAYER(scalingDownscaler)
+            NR_COMPARE_PRESENT_LAYER(transfer) NR_COMPARE_PRESENT_LAYER(preset)
+            NR_COMPARE_PRESENT_LAYER(intensity) NR_COMPARE_PRESENT_LAYER(style)
+            NR_COMPARE_PRESENT_LAYER(localStructure) NR_COMPARE_PRESENT_LAYER(localTone)
+            NR_COMPARE_PRESENT_LAYER(skinStructure) NR_COMPARE_PRESENT_LAYER(autoMask)
+            NR_COMPARE_PRESENT_LAYER(reversibleMode)
+#undef NR_COMPARE_PRESENT_LAYER
+        }
         return true;
     }
 
@@ -193,6 +272,8 @@ template <class Source> struct NrConfigSnapshot
 
   private:
     NrConfigState::RuntimeSnapshot _runtime;
+    std::optional<uint64_t> _observationRevision;
+    bool _privateDiagnostic=false;
 
     // The temporary transaction survives all member initializers, then unlocks before return.
     NrConfigSnapshot(const Source& source, const NrConfigSynchronization::Transaction& transaction)
@@ -200,7 +281,16 @@ template <class Source> struct NrConfigSnapshot
 #define NR_COPY_SNAPSHOT(name) name(source.name.CopyForSnapshot(transaction)),
           NR_CONFIG_SNAPSHOT_FIELDS(NR_COPY_SNAPSHOT)
 #undef NR_COPY_SNAPSHOT
-          _runtime(source.GetDlssNrRuntimeSnapshot()) {}
+          depthResourceArrival([&]() -> std::optional<int32_t> {
+              if constexpr(requires {source.DepthResourceBarrier.CopyForSnapshot(transaction);})
+              {
+                  const auto arrival=source.DepthResourceBarrier.CopyForSnapshot(transaction);
+                  if(arrival.has_value())return arrival.value();
+              }
+              return std::nullopt;
+          }()),
+          _runtime(source.GetDlssNrRuntimeSnapshot()),
+          _observationRevision(NrConfigSynchronization::ObservationRevision()) {}
 };
 
 #undef NR_CONFIG_SNAPSHOT_FIELDS

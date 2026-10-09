@@ -1,4 +1,7 @@
 #include "pch.h"
+#if defined(NR_DIAG_VULKAN_NO_AUGMENT) && NR_DIAG_VULKAN_NO_AUGMENT && (!NR_DIAG_VULKAN_ONLY || !NR_DIAG_VULKAN_NO_LEGACY)
+#error Startup augmentation bypass requires the no-legacy Vulkan diagnostic.
+#endif
 #include "Vulkan_Spoofing.h"
 
 #include <Config.h>
@@ -229,6 +232,11 @@ inline static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 VkResult VulkanSpoofing::hkvkCreateInstance(VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator,
                                             VkInstance* pInstance)
 {
+#if defined(NR_DIAG_VULKAN_NO_AUGMENT) && NR_DIAG_VULKAN_NO_AUGMENT
+    // Diagnostic bisection: no added extensions, feature edits or provider queries.
+    // The caller invokes the real Vulkan create operation after this modifier.
+    return pCreateInfo ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+#else
     if (State::Instance().creatingD3DDevice)
     {
         LOG_INFO("Skipping because DXVK/VKD3D is creating a D3D device");
@@ -376,11 +384,17 @@ VkResult VulkanSpoofing::hkvkCreateInstance(VkInstanceCreateInfo* pCreateInfo, c
     pCreateInfo->ppEnabledExtensionNames = newExtensionList.data();
 
     return VK_SUCCESS;
+#endif
 }
 
 VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDeviceCreateInfo* pCreateInfo,
                                           const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
 {
+#if defined(NR_DIAG_VULKAN_NO_AUGMENT) && NR_DIAG_VULKAN_NO_AUGMENT
+    // Diagnostic bisection: no added extensions, feature edits or provider queries.
+    // The caller invokes the real Vulkan create operation after this modifier.
+    return pCreateInfo ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+#else
     if (State::Instance().creatingD3DDevice)
     {
         LOG_INFO("Skipping because DXVK/VKD3D is creating a D3D device");
@@ -593,6 +607,7 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
         LOG_DEBUG("  {0}", pCreateInfo->ppEnabledExtensionNames[i]);
 
     return VK_SUCCESS;
+#endif
 }
 
 inline static VkResult hkvkEnumerateDeviceExtensionProperties(VkPhysicalDevice physicalDevice, const char* pLayerName,

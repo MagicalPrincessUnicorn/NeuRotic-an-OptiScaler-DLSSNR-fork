@@ -17,6 +17,9 @@ bool XeSSFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
 {
     LOG_FUNC();
 
+    // Entry and restore must share one arrival declaration across concurrent edits.
+    const auto depthArrival = Config::Instance()->DepthResourceBarrier.snapshot();
+
     if (!_xessContext || !ModuleLoaded())
     {
         LOG_ERROR("Not inited!");
@@ -157,9 +160,9 @@ bool XeSSFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
             LOG_DEBUG("Depth exist..");
             params.pDepthTexture->SetName(L"params.pDepthTexture");
 
-            if (Config::Instance()->DepthResourceBarrier.has_value())
+            if (depthArrival.has_value())
                 ResourceBarrier(InCommandList, params.pDepthTexture,
-                                (D3D12_RESOURCE_STATES) Config::Instance()->DepthResourceBarrier.value(),
+                                (D3D12_RESOURCE_STATES) depthArrival.value(),
                                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }
         else
@@ -321,9 +324,9 @@ bool XeSSFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
         ResourceBarrier(InCommandList, paramOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                         (D3D12_RESOURCE_STATES) Config::Instance()->OutputResourceBarrier.value());
 
-    if (params.pDepthTexture && Config::Instance()->DepthResourceBarrier.has_value())
+    if (params.pDepthTexture && depthArrival.has_value())
         ResourceBarrier(InCommandList, params.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                        (D3D12_RESOURCE_STATES) Config::Instance()->DepthResourceBarrier.value());
+                        (D3D12_RESOURCE_STATES) depthArrival.value());
 
     if (params.pExposureScaleTexture && Config::Instance()->ExposureResourceBarrier.has_value())
         ResourceBarrier(InCommandList, params.pExposureScaleTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,

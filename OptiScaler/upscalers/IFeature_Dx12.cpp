@@ -24,21 +24,27 @@ void IFeature_Dx12::ResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID
 bool IFeature_Dx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCommandList,
                          NVSDK_NGX_Parameter* InParameters)
 {
+    if(ProviderReleaseQuarantined())return false;
     Device = InDevice;
+    TrackUse(InCommandList);
 
     auto result = InitInternal(InCommandList, InParameters);
 
     if (result)
     {
-        if (!Config::Instance()->OverlayMenu.value_or_default() && (Imgui == nullptr || Imgui.get() == nullptr))
+        {
+        auto menuAction=ImguiUses.Acquire();
+        if (menuAction && !Config::Instance()->OverlayMenu.value_or_default() && (Imgui == nullptr || Imgui.get() == nullptr) &&
+            ImguiUses.BindDevice(InDevice))
             Imgui = std::make_unique<Menu_Dx12>(Util::GetProcessWindow(), InDevice);
+        }
 
         OutputScaler = std::make_unique<OS_Dx12>("Output Scaling", InDevice, (TargetWidth() < DisplayWidth()));
         RCAS = std::make_unique<RCAS_Dx12>("RCAS", InDevice);
         Bias = std::make_unique<Bias_Dx12>("Bias", InDevice); // TODO: not needed on DLSS/DLSSD
         Magnifier = std::make_unique<Magnifier_Dx12>("Magnifier", InDevice);
 
-        UpscalerTime = std::make_unique<GpuTime_Dx12>(InDevice);
+        UpscalerTime = std::make_unique<GpuTime_Dx12>(InDevice, true);
     }
 
     return result;
@@ -46,6 +52,8 @@ bool IFeature_Dx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCo
 
 bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters)
 {
+    if(ProviderReleaseQuarantined())return false;
+    TrackUse(InCommandList);
     if (!IsInited())
     {
         LOG_ERROR("Not inited!");
@@ -92,6 +100,15 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
     ID3D12Resource* paramDepth = nullptr;
 
     InParameters->Get(NVSDK_NGX_Parameter_Output, &paramOutput);
+    if (!paramOutput)
+        return false;
+    // Every early return (including a throwing backend) restores the caller's binding.
+    struct OutputRestore
+    {
+        NVSDK_NGX_Parameter* parameters;
+        ID3D12Resource* output;
+        ~OutputRestore() { parameters->Set(NVSDK_NGX_Parameter_Output, output); }
+    } outputRestore { InParameters, paramOutput };
     InParameters->Get(NVSDK_NGX_Parameter_MotionVectors, &paramMotion);
     InParameters->Get(NVSDK_NGX_Parameter_Depth, &paramDepth);
 
@@ -152,7 +169,7 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
               [&](ID3D12Resource* input, ID3D12Resource* output) -> bool
               {
                   if (!RCAS->CanRender() || !paramMotion || !paramOutput)
-                      return true;
+                      return false;
 
                   RCAS->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
@@ -215,7 +232,7 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
               [&](ID3D12Resource* input, ID3D12Resource* output) -> bool
               {
                   if (!Magnifier->CanRender() || !paramMotion || !paramOutput)
-                      return true;
+                      return false;
 
                   Magnifier->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
@@ -255,28 +272,31 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
         {
             if (!pass.Dispatch(pass.inputBuffer, pass.outputBuffer))
             {
-                return true;
+                return false;
             }
         }
     }
 
     // imgui
-    if (!Config::Instance()->OverlayMenu.value_or_default() && _frameCount > 30)
+    {
+    auto menuAction=ImguiUses.Acquire();
+    if (menuAction && !Config::Instance()->OverlayMenu.value_or_default() && _frameCount > 30)
     {
         if (Imgui != nullptr && Imgui.get() != nullptr)
         {
-            if (Imgui->IsHandleDifferent())
+            if (Imgui->IsHandleDifferent() || !ImguiUses.MatchesDevice(Device))
             {
-                Imgui.reset();
+                ImguiUses.Retire([]{Imgui.reset();});
             }
-            else
+            else if(ImguiUses.Track(InCommandList))
                 Imgui->Render(InCommandList, paramOutput);
         }
         else
         {
-            if (Imgui == nullptr || Imgui.get() == nullptr)
+            if ((Imgui == nullptr || Imgui.get() == nullptr) && ImguiUses.BindDevice(Device))
                 Imgui = std::make_unique<Menu_Dx12>(GetForegroundWindow(), Device);
         }
+    }
     }
 
     InParameters->Set(NVSDK_NGX_Parameter_Output, paramOutput);
@@ -319,12 +339,19 @@ void IFeature_Dx12::ReadDetailedGpuTimes(void* commandQueueVoid, std::vector<Det
 
 IFeature_Dx12::IFeature_Dx12(unsigned int InHandleId, NVSDK_NGX_Parameter* InParameters) {}
 
+bool IFeature_Dx12::TryRetireSharedMenu()
+{
+    auto menuAction=ImguiUses.Acquire();
+    return menuAction&&ImguiUses.Retire([]{Imgui.reset();});
+}
+
 IFeature_Dx12::~IFeature_Dx12()
 {
     if (State::Instance().isShuttingDown)
         return;
 
-    Imgui.reset();
+    // The shared menu may still belong to another feature's GPU recordings.
+    // Its exact aggregate owner handles window/device replacement and shutdown.
     OutputScaler.reset();
     RCAS.reset();
     Bias.reset();

@@ -5,7 +5,9 @@
 
 namespace Neurotic::UiBrightness
 {
-inline float Clamp(float gain) { return std::isfinite(gain) ? std::clamp(gain, 1.0f, 3.0f) : 1.0f; }
+inline constexpr float Minimum = 0.25f;
+inline constexpr float Maximum = 3.0f;
+inline float Clamp(float gain) { return std::isfinite(gain) ? std::clamp(gain, Minimum, Maximum) : 1.0f; }
 inline uint32_t Apply(uint32_t color, float gain)
 {
     gain = Clamp(gain);

@@ -1,5 +1,7 @@
 #pragma once
 #include "FgLifecycle.h"
+#include "PreparedGuideStatusV2.h"
+#include "connections/ConnectionPolicy.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <atomic>
@@ -59,6 +61,25 @@ inline void Collect(ID3D12Device* device, HRESULT reason) noexcept
         report.Write("fault", "device={:p} reason={} configured={} scope=first-device-removal "
             "maxNodes=64 maxOperationsPerNode=32 maxAllocationsPerList=128",
             static_cast<void*>(device), static_cast<uint32_t>(reason), configured.load());
+        // Freeze the effective owner at the first observed loss. The aggregate
+        // is evidence only; it does not identify the offending device/resource.
+        Connections::PolicyWire policy;
+        const auto policyAvailable=NeuRotic_QueryConnectionPolicyV1(&policy,sizeof(policy))!=0;
+        report.Write("connection-policy", "available={} requestedSource={} requestedTransport={} claimedSource={} "
+            "unsafe={} nativeUsable={} scope=first-loss-snapshot resourceAssociation=unknown",
+            policyAvailable,policy.source,policy.transport,policy.claimedSource,policy.unsafe,policy.nativeUsable);
+        const auto prepared=PreparedGuides::QueryStatusV2(GetTickCount64());
+        const auto& s=prepared.status;
+        report.Write("prepared-owner", "available={} fresh={} api={} source={} transport={} stage={} "
+            "producer={} session={} capture={} generation={} updatedTickMs={} candidate={} "
+            "captureRaster={}x{} workRaster={}x{} outputRaster={}x{} depthOrigin={} motionOrigin={} "
+            "creationReady={} guideReady={} modelPreparing={} outputValid={} restartRequired={} "
+            "inputFrames={} modelCompletions={} copybackCompletions={} reason={} resourceAssociation=unknown",
+            prepared.available,prepared.fresh,s.sourceApi,uint32_t(s.selectedSource),uint32_t(s.effectiveTransport),
+            uint32_t(s.stage),s.producerIdentity,s.session,s.capture,s.generation,s.updatedTickMs,s.candidateId,
+            s.captureWidth,s.captureHeight,s.workWidth,s.workHeight,s.outputWidth,s.outputHeight,
+            uint32_t(s.depthOrigin),uint32_t(s.motionOrigin),s.creationReady,s.guideReady,s.modelPreparing,
+            s.outputValid,s.restartRequired,s.inputFrames,s.modelCompletions,s.copybackCompletions,s.reason);
         Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData1> dred;
         const auto query = device->QueryInterface(IID_PPV_ARGS(&dred));
         if (FAILED(query)) { report.Write("unavailable", "interfaceResult={}", static_cast<uint32_t>(query)); }

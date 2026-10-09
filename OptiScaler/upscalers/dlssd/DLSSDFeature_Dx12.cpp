@@ -43,7 +43,7 @@ bool DLSSDFeatureDx12::InitDLSSD(ID3D12GraphicsCommandList* InCommandList, NVSDK
     {
         ProcessInitParams(InParameters);
 
-        _p_dlssdHandle = &_dlssdHandle;
+        _p_dlssdHandle = nullptr;
 
         NVSDK_NGX_Result nvResult;
         {
@@ -121,11 +121,22 @@ DLSSDFeatureDx12::DLSSDFeatureDx12(unsigned int InHandleId, NVSDK_NGX_Parameter*
     LOG_INFO("binding complete!");
 }
 
+NVSDK_NGX_Result DLSSDFeatureDx12::ReleaseProvider()
+{
+    if (!_p_dlssdHandle) return NVSDK_NGX_Result_Success;
+    auto release = NVNGXProxy::D3D12_ReleaseFeature();
+    if (!release) return NVSDK_NGX_Result_FAIL_PlatformError;
+    return _providerRelease.CallOnce(NVSDK_NGX_Result_Success,NVSDK_NGX_Result_FAIL_PlatformError,[&] {
+        const auto result=release(_p_dlssdHandle);
+        if(result==NVSDK_NGX_Result_Success){_p_dlssdHandle=nullptr;SetInit(false);}
+        return result;
+    });
+}
+
 DLSSDFeatureDx12::~DLSSDFeatureDx12()
 {
     if (State::Instance().isShuttingDown)
         return;
 
-    if (NVNGXProxy::D3D12_ReleaseFeature() != nullptr && _p_dlssdHandle != nullptr)
-        NVNGXProxy::D3D12_ReleaseFeature()(_p_dlssdHandle);
+    ReleaseProvider();
 }

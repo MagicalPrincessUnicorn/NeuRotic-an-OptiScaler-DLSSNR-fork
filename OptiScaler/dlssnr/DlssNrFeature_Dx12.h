@@ -1,4 +1,5 @@
 #pragma once
+#include "PresentColor.h"
 
 #include <d3d12.h>
 #include <dxgi.h>
@@ -7,6 +8,9 @@
 #include <nvsdk_ngx.h>
 #include "DlssNr_MenuStatus.h"
 #include "NativeTemporalInputs.h"
+#include "NrPreflightSignals.h"
+#include "NrBridgeOutcome.h"
+#include <mutex>
 
 // DLSS 5 Neural Rendering, run over the upscaler's output.
 //
@@ -20,9 +24,29 @@
 // per rendered frame. Here it is a lookup on the feature handle.
 class Config;
 template<class Source> struct NrConfigSnapshot;
+namespace Neurotic::Protocol { struct NativeTypedEvaluation; class NativeInvocationAdmission; }
 
 namespace DlssNr
 {
+// Existing lifecycle owner borrow held through the bridge publication seam.
+std::unique_lock<std::recursive_mutex> LockBridgeLifecycle();
+std::uint64_t BridgeLifecycleGeneration();
+// Direct milestones from this exact synchronous invocation. No counters grant
+// publication; the bridge's own outcome gates output and owns retirement.
+Bridge::NrWork EvaluateBridgeBeforeUpscale(ID3D12GraphicsCommandList*,NVSDK_NGX_Parameter*,
+    ID3D12CommandQueue*,const NrConfigSnapshot<Config>*);
+Bridge::NrWork EvaluateBridgeAfterUpscale(ID3D12GraphicsCommandList*,NVSDK_NGX_Parameter*,
+    ID3D12CommandQueue*,const NrConfigSnapshot<Config>*);
+// Native protocol bridge: typed qualified values and fresh owner checks at every
+// operation. The caller retains the invocation/owner synchronization throughout.
+// beforeSr uses the existing scratch/restore/copy-back core at its original seam.
+ID3D12Resource* EvaluateNativeProtocolBefore(ID3D12GraphicsCommandList* cmdList,
+    NVSDK_NGX_Parameter* params, ID3D12CommandQueue* queue,
+    const NrConfigSnapshot<Config>& settings, const Neurotic::Protocol::NativeTypedEvaluation& typed,
+    bool authoritativeNativePreSr, Neurotic::Protocol::NativeInvocationAdmission& admission);
+void EvaluateNativeProtocolTyped(ID3D12GraphicsCommandList* cmdList,
+    const Neurotic::Protocol::NativeTypedEvaluation& typed, ID3D12CommandQueue* queue,
+    const NrConfigSnapshot<Config>& settings, Neurotic::Protocol::NativeInvocationAdmission& admission);
 // The model runs immediately after the game's upscaler, before the interface is drawn. It is shown a
 // display-referred proxy of that frame -- the sort of picture it was trained on -- and its answer is
 // composed back over the untouched original.
@@ -54,13 +78,16 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
 // Narrow surface used by the DX12 Present adapter. It accepts only OptiScaler-owned resources and a
 // private command list. Optional test metadata accompanies owned copies of Native guides, never
 // live game resources or exposure. The default remains constant depth and zero motion.
-bool DirectD3D12Available(ID3D12Device* device);
+bool DirectD3D12Available(ID3D12Device* device, const char** unavailable = nullptr);
 bool EvaluateImageOnlyCommandList(ID3D12GraphicsCommandList* cmdList, ID3D12CommandQueue* queue,
                                   ID3D12Resource* frame, ID3D12Resource* constantDepth,
                                   ID3D12Resource* zeroMotion, unsigned int workWidth,
                                   unsigned int workHeight, bool resetHistory,
                                   const DlssNrFrameInfo* nativeGuideFrame = nullptr,
-                                  const NrConfigSnapshot<Config>* settings = nullptr);
+                                  const NrConfigSnapshot<Config>* settings = nullptr,
+                                  const PresentColor::ModelContract* colorContract = nullptr,
+                                  bool requireCompleteChain = false,
+                                  bool* preparationRecorded = nullptr);
 
 // Native-DX11 Post-SR entry. The caller owns every resource and records on a private D3D12
 // command list; no borrowed NGX parameter block crosses the native evaluation boundary.
@@ -91,9 +118,15 @@ bool EvaluateNativeDx11PreSrCommandList(ID3D12GraphicsCommandList* cmdList,
 
 
 // The settings panel, drawn inside OptiScaler's menu.
+bool MenuIsActive(::Config* config);
+enum class MenuReadiness { Waiting, Ready, Blocked };
+MenuReadiness MenuPreflightState(::Config* config);
+enum class MenuPage { Overview, Multipass, Diagnostics, Preflight };
+std::optional<MenuPage> ConsumeMenuPageRequest();
+void RenderCompareMenu(::Config* config, float menuResScale);
 void RenderMenu(::Config* config, float menuResScale,
                 const std::optional<MenuStatus::RuntimeStatus>& status = std::nullopt,
-                const char* gpuName = "");
+                const char* gpuName = "", MenuPage page = MenuPage::Overview);
 
 // The Advisor temporarily exercises each route while its explicit analysis is running.  These
 // hooks keep the state machine moving even when another top-level page is selected and guarantee
@@ -177,6 +210,7 @@ ExposureStatus GameExposureStatus();
 // the model itself evaluates; Guides are the active depth/motion subrect dimensions.
 struct TelemetrySnapshot
 {
+    NrPreflightSignals::NativeInputs nativeInputs;
     unsigned long long frames = 0;
     unsigned long long gameResets = 0;
     unsigned long long featureBuilds = 0;
@@ -188,6 +222,9 @@ struct TelemetrySnapshot
     unsigned long long layer2FeatureRetires = 0;
     unsigned long long successfulEvaluations = 0;
     unsigned long long completedPipelineEvaluations = 0;
+    // Fully composed native records observed submitted and GPU-complete.
+    // Pre-SR still requires its separate SR-delivery/readiness qualification.
+    unsigned long long gpuCompletedOutputEvaluations = 0;
 
     unsigned int frameWidth = 0;
     unsigned int frameHeight = 0;
@@ -230,6 +267,9 @@ struct TelemetrySnapshot
 };
 
 TelemetrySnapshot Telemetry();
+namespace Capability { class WriterPort; struct NativeObservation; }
+Capability::NativeObservation CopyCapabilityObservation(const Capability::WriterPort&,
+                                                        const Capability::WriterPort* lifecycle) noexcept;
 
 // The white point the exposure meter has settled on, or 0 if it has not taken a reading yet. For the
 // overlay, so the number in use is visible rather than inferred.
@@ -247,13 +287,13 @@ bool CaptureInProgress();
 // Experimental Present-only matched stage capture; UI request never changes saved settings.
 void RequestPresentStageCapture();
 std::string PresentStageCaptureStatus();
-void RequestComparisonScreenshot();
+void RequestComparisonScreenshot(bool preserveRaw = false);
 // Same final-output evaluation, immediately before Present copyback; records no model work.
 bool RecordPresentComparison(ID3D12GraphicsCommandList* list, ID3D12Device* device,
     ID3D12Resource* before, D3D12_RESOURCE_STATES beforeState,
     ID3D12Resource* after, D3D12_RESOURCE_STATES afterState,
     const NrConfigSnapshot<::Config>& settings, UINT64 evaluation, UINT64 providerFrame,
-    UINT64 providerGeneration, UINT64 resourceGeneration, UINT backbuffer);
+    UINT64 providerGeneration, UINT64 resourceGeneration, UINT backbuffer, DXGI_COLOR_SPACE_TYPE colorSpace);
 void CompletePresentComparison(bool succeeded);
 // Called at the real Present boundary, before the NeuRotic overlay.
 void CaptureComparisonOutput(IDXGISwapChain* swapChain, IUnknown* presentDevice, UINT presentFlags);

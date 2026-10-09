@@ -154,6 +154,8 @@ typedef ABI::Windows::Foundation::ITypedEventHandler<ABI::Windows::UI::Core::Cor
 int WindowActivated(ABI::Windows::UI::Core::ICoreWindow*, ABI::Windows::UI::Core::IWindowActivatedEventArgs*);
 
 PFN_KeyUp _keyUpMethod = nullptr;
+PFN_KeyDown _keyDownMethod = nullptr;
+PFN_FocusChanged _focusChangedMethod = nullptr;
 
 // Backend data stored in io.BackendPlatformUserData to allow support for multiple Dear ImGui contexts
 // It is STRONGLY preferred that you use docking branch with multi-viewports (== single Dear ImGui context + multiple
@@ -718,6 +720,8 @@ void ImGui_ImplUwp_NewFrame(ImVec2 displaySize)
 }
 
 void ImGui_BindUwpKeyUp(PFN_KeyUp keyUpMethod) { _keyUpMethod = keyUpMethod; }
+void ImGui_BindUwpKeyDown(PFN_KeyDown keyDownMethod) { _keyDownMethod = keyDownMethod; }
+void ImGui_BindUwpFocusChanged(PFN_FocusChanged focusChangedMethod) { _focusChangedMethod = focusChangedMethod; }
 
 // There is no distinct VK_xxx for keypad enter, instead it is VK_RETURN + KF_EXTENDED, we assign it an arbitrary value
 // to make code more readable (VK_ codes go up to 255)
@@ -1005,6 +1009,11 @@ int KeyDown(::IInspectable* sender, ABI::Windows::UI::Core::IKeyEventArgs* args)
     args->get_VirtualKey(&key);
     args->get_KeyStatus(&keyStatus);
 
+    if (_keyDownMethod != nullptr)
+        _keyDownMethod(key, IsVkDown(VK_CONTROL) || IsVkDown(VK_LCONTROL) || IsVkDown(VK_RCONTROL),
+                       IsVkDown(VK_SHIFT) || IsVkDown(VK_LSHIFT) || IsVkDown(VK_RSHIFT),
+                       IsVkDown(VK_MENU) || IsVkDown(VK_LMENU) || IsVkDown(VK_RMENU));
+
     const bool is_key_down = true;
     if (key < 256)
     {
@@ -1216,7 +1225,12 @@ int WindowActivated(ABI::Windows::UI::Core::ICoreWindow* sender,
     ABI::Windows::UI::Core::CoreWindowActivationState state;
     args->get_WindowActivationState(&state);
 
-    io.AddFocusEvent(state != ABI::Windows::UI::Core::CoreWindowActivationState::CoreWindowActivationState_Deactivated);
+    const bool focused=state != ABI::Windows::UI::Core::CoreWindowActivationState::CoreWindowActivationState_Deactivated;
+    // Shortcut press snapshots must expire at the focus event itself, even
+    // when a suspended window receives no intervening render/input frame.
+    if (_focusChangedMethod != nullptr)
+        _focusChangedMethod(focused);
+    io.AddFocusEvent(focused);
 
     return 0;
 }

@@ -1,4 +1,7 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/FsrObservationAdapter.h>
+// NR-FEED-001 END
 #include "FfxApi_Dx12.h"
 
 #include "Util.h"
@@ -193,6 +196,10 @@ static std::optional<float> GetQualityOverrideRatioFfx(const uint32_t input)
 ffxReturnCode_t ffxCreateContext_Dx12(ffxContext* context, ffxCreateContextDescHeader* desc,
                                       const ffxAllocationCallbacks* memCb)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(Neurotic::Feed::FindFfxCreation<ffxCreateContextDescUpscale>(
+        desc, FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE));
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     if (desc == nullptr)
@@ -293,6 +300,9 @@ ffxReturnCode_t ffxCreateContext_Dx12(ffxContext* context, ffxCreateContextDescH
 
     LOG_INFO("context created: {:X}", (size_t) *context);
 
+    // NR-FEED-001 BEGIN
+    if (context) feedCreation.Publish({"FFX.API", Neurotic::Contracts::GraphicsApi::D3D12, "create"}, *context);
+    // NR-FEED-001 END
     return FFX_API_RETURN_OK;
 }
 
@@ -552,6 +562,11 @@ ffxReturnCode_t ffxQuery_Dx12(ffxContext* context, ffxQueryDescHeader* desc)
 
 ffxReturnCode_t ffxDispatch_Dx12(ffxContext* context, ffxDispatchDescHeader* desc)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FFX.API", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch"}, context ? *context : nullptr);
+    if (desc && desc->type == FFX_API_DISPATCH_DESC_TYPE_UPSCALE)
+        Neurotic::Feed::ObserveFsrDispatch(feedObservation, reinterpret_cast<const ffxDispatchDescUpscale*>(desc));
+    // NR-FEED-001 END
     if (desc == nullptr || context == nullptr)
         return FFX_API_RETURN_ERROR_PARAMETER;
 
@@ -607,6 +622,9 @@ ffxReturnCode_t ffxDispatch_Dx12(ffxContext* context, ffxDispatchDescHeader* des
         return FfxApiProxy::D3D12_Dispatch(context, desc);
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FFX.API.to.NGX");
+    // NR-FEED-001 END
     auto contextId = (size_t) *context;
     if (!_contexts.contains(*context) && _initParams.contains(*context) && !CreateDLSSContext(*context, dispatchDesc))
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;

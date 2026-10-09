@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "engine_version": 1,
+  "ruleset_version": "2026-10-03.1",
+  "providers": [
+    {
+      "id": "eac_eos",
+      "name": "Easy Anti-Cheat (EOS)",
+      "source_ids": [
+        "S01",
+        "S02"
+      ]
+    },
+    {
+      "id": "eac_legacy",
+      "name": "Easy Anti-Cheat (legacy)",
+      "source_ids": [
+        "S03"
+      ]
+    },
+    {
+      "id": "battleye",
+      "name": "BattlEye",
+      "source_ids": [
+        "S04"
+      ]
+    },
+    {
+      "id": "ea_javelin",
+      "name": "EA Javelin anticheat",
+      "source_ids": [
+        "S05"
+      ]
+    },
+    {
+      "id": "riot_vanguard",
+      "name": "Riot Vanguard",
+      "source_ids": [
+        "S06"
+      ]
+    },
+    {
+      "id": "vac",
+      "name": "Valve Anti-Cheat (VAC)",
+      "source_ids": [
+        "S07",
+        "S08"
+      ]
+    }
+  ],
+  "file_signals": [
+    {
+      "id": "eac_eos.setup",
+      "provider": "eac_eos",
+      "basenames": [
+        "EasyAntiCheat_EOS_Setup.exe"
+      ],
+      "parent_names": [
+        "EasyAntiCheat",
+        "EasyAntiCheat_EOS"
+      ],
+      "role": "component",
+      "source_ids": [
+        "S01",
+        "S02"
+      ]
+    },
+    {
+      "id": "eac_eos.bootstrap",
+      "provider": "eac_eos",
+      "basenames": [
+        "start_protected_game.exe"
+      ],
+      "parent_names": [],
+      "role": "component",
+      "source_ids": [
+        "S01"
+      ]
+    },
+    {
+      "id": "eac_eos.settings",
+      "provider": "eac_eos",
+      "basenames": [
+        "Settings.json"
+      ],
+      "parent_names": [
+        "EasyAntiCheat",
+        "EasyAntiCheat_EOS"
+      ],
+      "role": "support",
+      "source_ids": [
+        "S01"
+      ]
+    },
+    {
+      "id": "eac_legacy.setup",
+      "provider": "eac_legacy",
+      "basenames": [
+        "EasyAntiCheat_Setup.exe"
+      ],
+      "parent_names": [
+        "EasyAntiCheat"
+      ],
+      "role": "component",
+      "source_ids": [
+        "S03"
+      ]
+    },
+    {
+      "id": "battleye.service",
+      "provider": "battleye",
+      "basenames": [
+        "BEService.exe",
+        "BEService_x64.exe"
+      ],
+      "parent_names": [
+        "BattlEye"
+      ],
+      "role": "component",
+      "source_ids": [
+        "S04"
+      ]
+    },
+    {
+      "id": "battleye.install",
+      "provider": "battleye",
+      "basenames": [
+        "Install_BattlEye.bat"
+      ],
+      "parent_names": [
+        "BattlEye"
+      ],
+      "role": "support",
+      "source_ids": [
+        "S04"
+      ]
+    },
+    {
+      "id": "ea_javelin.installer",
+      "provider": "ea_javelin",
+      "basenames": [
+        "EAAntiCheat.Installer.exe"
+      ],
+      "parent_names": [],
+      "role": "component",
+      "source_ids": [
+        "S05"
+      ]
+    }
+  ],
+  "corroborations": [
+    {
+      "id": "eac_eos.layout_v1",
+      "provider": "eac_eos",
+      "algorithm": "eac_eos_layout_v1",
+      "requires": [
+        "eac_eos.setup",
+        "eac_eos.settings",
+        "eac_eos.bootstrap"
+      ]
+    },
+    {
+      "id": "battleye.layout_v1",
+      "provider": "battleye",
+      "algorithm": "battleye_layout_v1",
+      "requires": [
+        "battleye.service",
+        "battleye.install"
+      ]
+    }
+  ],
+  "system_signals": [
+    {
+      "id": "vanguard.vgc",
+      "provider": "riot_vanguard",
+      "kind": "service",
+      "locator": "vgc",
+      "source_ids": [
+        "S06"
+      ]
+    },
+    {
+      "id": "vanguard.vgk",
+      "provider": "riot_vanguard",
+      "kind": "service",
+      "locator": "vgk",
+      "source_ids": [
+        "S06"
+      ]
+    },
+    {
+      "id": "ea.shared_installer",
+      "provider": "ea_javelin",
+      "kind": "known_folder_file",
+      "locator": "ProgramFiles/EA/AC/EAAntiCheat.Installer.exe",
+      "source_ids": [
+        "S05"
+      ]
+    },
+    {
+      "id": "battleye.shared_service",
+      "provider": "battleye",
+      "kind": "known_folder_file",
+      "locator": "ProgramFilesCommonX86/BattlEye/BEService.exe",
+      "source_ids": [
+        "S04"
+      ]
+    },
+    {
+      "id": "eac_legacy.shared_service",
+      "provider": "eac_legacy",
+      "kind": "known_folder_file",
+      "locator": "ProgramFilesX86/EasyAntiCheat/EasyAntiCheat.exe",
+      "source_ids": [
+        "S09"
+      ]
+    }
+  ],
+  "auxiliary_directory_names": [
+    "backup",
+    "backups",
+    "downloads",
+    "mods",
+    "redist",
+    "_redist",
+    "__installer",
+    "sdk",
+    "tools"
+  ],
+  "notes": []
+}

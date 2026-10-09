@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "models": [
+    {
+      "name": "person_detection_mediapipe_2023mar.onnx",
+      "license": "Apache-2.0",
+      "license_scope": "upstream directory README states all files",
+      "bundled": false,
+      "bytes": 11990159,
+      "sha256": "47fd5599d6fa17608f03e0eb0ae230baa6e597d7e8a2c8199fe00abea55a701f",
+      "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/person_detection_mediapipe/person_detection_mediapipe_2023mar.onnx",
+      "destination": "models/person_detection_mediapipe_2023mar.onnx",
+      "source_revision": "47534e27c9851bb1128ccc0102f1145e27f23f98"
+    },
+    {
+      "name": "pose_estimation_mediapipe_2023mar.onnx",
+      "license": "Apache-2.0",
+      "license_scope": "upstream directory README states all files",
+      "bundled": false,
+      "bytes": 5557238,
+      "sha256": "9d89c599319a18fb7d2e28451a883476164543182bafca5f09eb2cf767ed2f3f",
+      "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/pose_estimation_mediapipe/pose_estimation_mediapipe_2023mar.onnx",
+      "destination": "models/pose_estimation_mediapipe_2023mar.onnx",
+      "source_revision": "47534e27c9851bb1128ccc0102f1145e27f23f98"
+    },
+    {
+      "name": "object_detection_nanodet_2022nov.onnx",
+      "license": "Apache-2.0",
+      "license_scope": "upstream directory README states all files",
+      "bundled": false,
+      "bytes": 3800954,
+      "sha256": "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186",
+      "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet/object_detection_nanodet_2022nov.onnx",
+      "destination": "models/object_detection_nanodet_2022nov.onnx",
+      "source_revision": "47534e27c9851bb1128ccc0102f1145e27f23f98"
+    }
+  ]
+}

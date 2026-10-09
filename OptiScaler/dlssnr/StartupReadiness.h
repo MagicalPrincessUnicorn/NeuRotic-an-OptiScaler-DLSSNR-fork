@@ -17,6 +17,9 @@ struct ReadinessIdentity
     unsigned int workWidth = 0, workHeight = 0, colorSpace = 0;
     uint64_t modelLifecycle = 0;
     uint64_t hdrIdentity = 0;
+    unsigned int colorRecipe = 0, colorProfile = 0;
+    uint64_t additionalModels = 0, additionalRetirements = 0;
+    unsigned int requestedPasses = 1;
     bool operator==(const ReadinessIdentity&) const = default;
 };
 

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <inputs/FG/FgOwnerScope.h>
 #include "XeFG_Dx12.h"
 #include <hudfix/Hudfix_Dx12.h>
 #include <menu/menu_overlay_dx.h>
@@ -17,19 +18,19 @@ void XeFG_Dx12::xefgLogCallback(const char* message, xefg_swapchain_logging_leve
     switch (level)
     {
     case XEFG_SWAPCHAIN_LOGGING_LEVEL_DEBUG:
-        spdlog::debug("XeFG Log: {}", message);
+        LOG_WHILE_ACTIVE(debug, "XeFG Log: {}", message);
         return;
 
     case XEFG_SWAPCHAIN_LOGGING_LEVEL_INFO:
-        spdlog::info("XeFG Log: {}", message);
+        LOG_WHILE_ACTIVE(info, "XeFG Log: {}", message);
         return;
 
     case XEFG_SWAPCHAIN_LOGGING_LEVEL_WARNING:
-        spdlog::warn("XeFG Log: {}", message);
+        LOG_WHILE_ACTIVE(warn, "XeFG Log: {}", message);
         return;
 
     default:
-        spdlog::error("XeFG Log: {}", message);
+        LOG_WHILE_ACTIVE(error, "XeFG Log: {}", message);
         return;
     }
 }
@@ -244,6 +245,8 @@ xefg_swapchain_d3d12_resource_data_t XeFG_Dx12::GetResourceData(FG_ResourceType 
 bool XeFG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQueue, DXGI_SWAP_CHAIN_DESC* desc,
                                 IDXGISwapChain** swapChain, bool readyToRelease)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
     if (State::Instance().currentFGSwapchain != nullptr && _hwnd == desc->OutputWindow)
     {
         if (Config::Instance()->FGPreserveSwapChain.value_or_default())
@@ -263,17 +266,9 @@ bool XeFG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQu
             LOG_INFO("Releasing old swapchain");
             ReleaseSwapchain(_hwnd);
 
-            // Not sure why but XeFG sometimes doesn't release the swapchain properly
-            // so we force release it here to be able to recreate swapchain for same hwnd
-            if (State::Instance().currentRealSwapchain != nullptr)
-            {
-                UINT release = 0;
-                do
-                {
-                    release = State::Instance().currentRealSwapchain->Release();
-                    LOG_DEBUG("Releasing swapchain, ref count: {}", release);
-                } while (release > 0);
-            }
+            // The factory/wrapper owns the returned real swapchain reference.
+            // This state alias cannot release the game's outstanding references.
+            State::Instance().currentRealSwapchain = nullptr;
         }
         else
         {
@@ -450,6 +445,8 @@ bool XeFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
                                  DXGI_SWAP_CHAIN_DESC1* desc, DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
                                  IDXGISwapChain1** swapChain, bool readyToRelease)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
     if (State::Instance().currentFGSwapchain != nullptr && _hwnd == hwnd)
     {
         if (Config::Instance()->FGPreserveSwapChain.value_or_default())
@@ -468,17 +465,8 @@ bool XeFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
             LOG_INFO("Releasing old swapchain");
             ReleaseSwapchain(_hwnd);
 
-            // Not sure why but XeFG sometimes doesn't release the swapchain properly
-            // so we force release it here to be able to recreate swapchain for same hwnd
-            if (State::Instance().currentRealSwapchain != nullptr)
-            {
-                UINT release = 0;
-                do
-                {
-                    release = State::Instance().currentRealSwapchain->Release();
-                    LOG_DEBUG("Releasing swapchain, ref count: {}", release);
-                } while (release > 0);
-            }
+            // Retire the borrowed alias; actual owners release their own refs.
+            State::Instance().currentRealSwapchain = nullptr;
         }
         else
         {
@@ -675,7 +663,10 @@ void XeFG_Dx12::Deactivate()
             auto closeResult = _uiCommandList[fIndex]->Close();
 
             if (closeResult == S_OK)
+            {
                 _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_uiCommandList[fIndex]);
+                ObserveUIBridgeSubmission(fIndex);
+            }
             else
                 LOG_ERROR("_uiCommandList[{}]->Close() error: {:X}", fIndex, (UINT) closeResult);
 
@@ -716,6 +707,8 @@ void XeFG_Dx12::DestroyFGContext()
 
 bool XeFG_Dx12::Shutdown()
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
     MenuOverlayDx::CleanupRenderTarget(true, NULL);
 
     if (_fgContext != nullptr)
@@ -735,7 +728,7 @@ bool XeFG_Dx12::Dispatch()
 
     UINT64 willDispatchFrame = 0;
     auto fIndex = GetDispatchIndex(willDispatchFrame);
-    if (fIndex < 0)
+    if (fIndex < 0 || !StreamlineInputsReady(fIndex))
         return false;
 
     if (!IsActive() || IsPaused())
@@ -1115,6 +1108,8 @@ void XeFG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
 
 void XeFG_Dx12::ReleaseObjects()
 {
+    RetainSCObjectsOnFailure();
+    if(!RetireUIBridgeReaders()) (void)_depthInvert.release();
     for (size_t i = 0; i < BUFFER_COUNT; i++)
     {
         SAFE_RELEASE(_uiCommandAllocator[i]);
@@ -1269,7 +1264,9 @@ void XeFG_Dx12::CreateObjects(ID3D12Device* InDevice)
 
 bool XeFG_Dx12::Present()
 {
+    if (!RetireSCWork()) return false;
     auto fIndex = GetIndexWillBeDispatched();
+    if (!StreamlineInputsReady(fIndex)) return false;
     LOG_DEBUG("fIndex: {}", fIndex);
 
     if (Config::Instance()->FGDrawUIOverFG.value_or_default())
@@ -1296,7 +1293,7 @@ bool XeFG_Dx12::Present()
                 else if (_renderUI->IsInit())
                 {
                     auto commandList = GetSCCommandList(fIndex);
-                    _renderUI->Dispatch((IDXGISwapChain3*) _swapChain, commandList, ui->GetResource(), ui->state);
+                    if (commandList) { PinSCResource(ui->GetResource()); _renderUI->Dispatch((IDXGISwapChain3*) _swapChain, commandList, ui->GetResource(), ui->state); }
                 }
             }
         }
@@ -1326,8 +1323,8 @@ bool XeFG_Dx12::Present()
                     if (_hudlessCompare->IsInit())
                     {
                         auto commandList = GetSCCommandList(fIndex);
-                        _hudlessCompare->Dispatch((IDXGISwapChain3*) _swapChain, commandList, hudless->GetResource(),
-                                                  hudless->state);
+                        if (commandList) { PinSCResource(hudless->GetResource()); _hudlessCompare->Dispatch((IDXGISwapChain3*) _swapChain, commandList, hudless->GetResource(),
+                                                  hudless->state); }
                     }
                 }
             }
@@ -1348,7 +1345,10 @@ bool XeFG_Dx12::Present()
             auto closeResult = _uiCommandList[fIndex]->Close();
 
             if (closeResult == S_OK)
+            {
                 _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_uiCommandList[fIndex]);
+                ObserveUIBridgeSubmission(fIndex);
+            }
             else
                 LOG_ERROR("_uiCommandList[{}]->Close() error: {:X}", fIndex, (UINT) closeResult);
 
@@ -1357,18 +1357,7 @@ bool XeFG_Dx12::Present()
             _uiCommandListResetted[fIndex] = false;
         }
 
-        if (_scCommandListResetted[fIndex])
-        {
-            LOG_DEBUG("Executing _scCommandList[{}]: {:X}", fIndex, (size_t) _scCommandList[fIndex]);
-            auto closeResult = _scCommandList[fIndex]->Close();
-
-            if (closeResult == S_OK)
-                _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_scCommandList[fIndex]);
-            else
-                LOG_ERROR("_scCommandList[{}]->Close() error: {:X}", fIndex, (UINT) closeResult);
-
-            _scCommandListResetted[fIndex] = false;
-        }
+        if (!SubmitSCCommandList(fIndex)) return false;
     }
 
     if ((_fgFramePresentId - _lastFGFramePresentId) > 3 && IsActive() && !_waitingNewFrameData)
@@ -1644,6 +1633,8 @@ void XeFG_Dx12::SetCommandQueue(FG_ResourceType type, ID3D12CommandQueue* queue)
 
 bool XeFG_Dx12::ReleaseSwapchain(HWND hwnd)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
     if (hwnd != _hwnd || _hwnd == NULL)
         return false;
 

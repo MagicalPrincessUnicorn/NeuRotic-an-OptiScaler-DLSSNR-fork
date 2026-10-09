@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "repository": "opencv/opencv_zoo",
+  "revision": "47534e27c9851bb1128ccc0102f1145e27f23f98",
+  "sources": [
+    {
+      "destination": "third_party/opencv_zoo/models/person_detection_mediapipe/mp_persondet.py",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/person_detection_mediapipe/mp_persondet.py",
+      "git_blob_sha1": "39d737200c938913c87362a7077482e72541acc8",
+      "sha256": "e530a8ebc3c218376d5dd1c13aa8ed39a850fac4dbcd6928144746b33477b9c7",
+      "bytes": 148509,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/pose_estimation_mediapipe/mp_pose.py",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/pose_estimation_mediapipe/mp_pose.py",
+      "git_blob_sha1": "86348b6ee04bf4e2881df23c02162c10c6caa05b",
+      "sha256": "7e1953d1fb848c64fd3b44277e615e273e7fb2f325f7633eb9c1e32948d45e67",
+      "bytes": 9521,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/person_detection_mediapipe/LICENSE",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/person_detection_mediapipe/LICENSE",
+      "git_blob_sha1": "7a4a3ea2424c09fbe48d455aed1eaa94d9124835",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "bytes": 11357,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/pose_estimation_mediapipe/LICENSE",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/pose_estimation_mediapipe/LICENSE",
+      "git_blob_sha1": "7a4a3ea2424c09fbe48d455aed1eaa94d9124835",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "bytes": 11357,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/object_detection_nanodet/nanodet.py",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet/nanodet.py",
+      "git_blob_sha1": "53af96b521c5422fe8efe37252004db7c41ea54a",
+      "sha256": "5ba84922eaefdc48d0066cffdfb721d0d434c5f3b92213563161e00da26cea1b",
+      "bytes": 4874,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/object_detection_nanodet/README.md",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet/README.md",
+      "git_blob_sha1": "533c0938df383045618f68263b39c738ca5f29b0",
+      "sha256": "718e15301612de9735d478c573bf876aaa3551912b2c693bd9275a9d4a4d85d0",
+      "bytes": 5927,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/object_detection_nanodet/LICENSE",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet/LICENSE",
+      "git_blob_sha1": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "bundled": true,
+      "license": "Apache-2.0"
+    },
+    {
+      "destination": "third_party/opencv_zoo/models/object_detection_nanodet/demo.py",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/object_detection_nanodet/demo.py",
+      "git_blob_sha1": "ab6e980affe60f3dad401b93584c1d307501f435",
+      "sha256": "43aee38581c4b9c22e5aa16317082f998b4a5164b80f4440f3d692f8e30854e1",
+      "bytes": 7408,
+      "bundled": true,
+      "license": "Apache-2.0"
+    }
+  ]
+}

@@ -7,6 +7,10 @@
 #include <Logger.h>
 #include <Config.h>
 #include "input/input_system.h"
+#include "nr/semantic/character/CharacterRuntime.h"
+#include "nr/semantic/character/CharacterSourcePolicy.h"
+#include "nr/semantic/character/CharacterFgActivity.h"
+#include <dlssnr/PreFg.h>
 
 #include <imgui/imgui_impl_dx11.h>
 #include <imgui/imgui_impl_dx12.h>
@@ -121,6 +125,7 @@ static void CreateRenderTargetDx12(ID3D12Device* device, IDXGISwapChain* pSwapCh
 
 static void CleanupRenderTargetDx12(bool clearQueue)
 {
+    Neurotic::Semantic::Character::CharacterSourceInvalidated();
     if (!_isInited || !_dx12Device || State::Instance().isShuttingDown)
         return;
 
@@ -199,7 +204,7 @@ static void CleanupRenderTargetDx11(bool shutDown)
     _isInited = false;
 }
 
-static void RenderImGui_DX11(IDXGISwapChain* pSwapChain)
+static void RenderImGui_DX11(IDXGISwapChain* pSwapChain,bool physicalOutputQualified)
 {
     bool drawMenu = false;
 
@@ -248,8 +253,16 @@ static void RenderImGui_DX11(IDXGISwapChain* pSwapChain)
 
         if (ImGui::GetCurrentContext() && g_pd3dRenderTarget)
         {
+            const auto inspectorManagedFg=State::Instance().currentFG;
+            const bool inspectorFg=Neurotic::Semantic::Character::CharacterFgReported(
+                Neurotic::Semantic::Character::NativeFgWork().Read(Neurotic::Semantic::Character::CharacterActivityNow()).active,
+                inspectorManagedFg&&inspectorManagedFg->IsActive(),inspectorManagedFg&&inspectorManagedFg->IsPaused());
+            Neurotic::Semantic::Character::CharacterPresentDx11(pSwapChain,g_pd3dDevice,inspectorFg,OptiInput::IsFocused(),
+                Neurotic::Semantic::Character::ReadSettings(*Config::Instance()),physicalOutputQualified);
             ImGui_ImplDX11_NewFrame();
-            OptiInput::PollMenuPlatform(ImGui_ImplWin32_NewFrame);
+            // BeginMenuFrameIfNeeded owns platform polling and its frame clock.
+            // Polling here too overwrites the frame interval with the tiny gap
+            // before that shared call, slowing all elapsed-time UI animations.
 
             if (MenuOverlayBase::RenderMenu())
             {
@@ -262,7 +275,7 @@ static void RenderImGui_DX11(IDXGISwapChain* pSwapChain)
     }
 }
 
-static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain)
+static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain,bool physicalOutputQualified)
 {
     bool drawMenu = false;
     IDXGISwapChain3* pSwapChain = nullptr;
@@ -437,6 +450,17 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain)
         {
             _showRenderImGuiDebugOnce = true;
 
+            const auto inspectorManagedFg=State::Instance().currentFG;
+            const bool inspectorFg=Neurotic::Semantic::Character::CharacterFgReported(
+                Neurotic::Semantic::Character::NativeFgWork().Read(Neurotic::Semantic::Character::CharacterActivityNow()).active,
+                inspectorManagedFg&&inspectorManagedFg->IsActive(),
+                inspectorManagedFg&&inspectorManagedFg->IsPaused());
+            if(physicalOutputQualified)
+                Neurotic::Semantic::Character::CharacterPresent(pSwapChain,
+                static_cast<ID3D12CommandQueue*>(currentSCCommandQueue),inspectorFg,OptiInput::IsFocused(),
+                Neurotic::Semantic::Character::ReadSettings(*Config::Instance()),true,
+                reinterpret_cast<std::uintptr_t>(DlssNr::PreFg::GetOwner(pSwapChain).Get()));
+            else Neurotic::Semantic::Character::CharacterSourceInvalidated();
             ImGui_ImplDX12_NewFrame();
 
             if (MenuOverlayBase::RenderMenu())
@@ -511,6 +535,7 @@ ID3D12GraphicsCommandList* MenuOverlayDx::MenuCommandList() { return g_pd3dComma
 
 void MenuOverlayDx::CleanupRenderTarget(bool clearQueue, HWND hWnd)
 {
+    Neurotic::Semantic::Character::CharacterSourceInvalidated();
     LOG_FUNC();
 
     auto fg = State::Instance().currentFG;
@@ -528,7 +553,8 @@ void MenuOverlayDx::CleanupRenderTarget(bool clearQueue, HWND hWnd)
 }
 
 void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags,
-                            const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP)
+                            const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP,
+                            bool physicalOutputQualified)
 {
     if (!Config::Instance()->OverlayMenu.value_or_default())
     {
@@ -613,9 +639,9 @@ void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 
         // Render menu
         if (_dx11Device)
-            RenderImGui_DX11(pSwapChain);
+            RenderImGui_DX11(pSwapChain,physicalOutputQualified);
         else if (_dx12Device)
-            RenderImGui_DX12(pSwapChain);
+            RenderImGui_DX12(pSwapChain,physicalOutputQualified);
     }
 
     // release used objects

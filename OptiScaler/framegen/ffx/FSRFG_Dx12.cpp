@@ -1,12 +1,50 @@
 #include "pch.h"
+#include <inputs/FG/FgOwnerScope.h>
 
 #include "FSRFG_Dx12.h"
+#include <dlssnr/FrameTrace.h>
+#include <nr/diagnostics/RuntimeProvenance.h>
+#include <nr/lifecycle/Fsr3LoadedContextObservation.h>
+#include <nr/lifecycle/Fsr3SelectedInputObservation.h>
 #include <State.h>
 
 #include <hudfix/Hudfix_Dx12.h>
 #include <menu/menu_overlay_dx.h>
 
 #include <magic_enum.hpp>
+
+namespace {
+void NrFfxContextEvidence(const char* operation,ffxContext context,ffxReturnCode_t result)noexcept
+{
+    namespace P=Neurotic::Diagnostics::RuntimeProvenance;
+    if(!P::Enabled())return;
+    P::LastError preserve;
+    try
+    {
+        // Retain the actual creation call's module/generation. Current global
+        // loader selection may have changed and cannot identify an older context.
+        // This remains an observation; checked service authentication is separate.
+        const auto creation=FfxApiProxy::ObserveCreatedContext(context);
+        const bool creationCurrent=creation&&FfxApiProxy::ContextCreationCurrent(*creation);
+        const auto module=creationCurrent?creation->module:nullptr;
+        const auto query=module?reinterpret_cast<PfnFfxQuery>(KernelBaseProxy::GetProcAddress_()(module,"ffxQuery")):nullptr;
+        const auto loaded=result==FFX_API_RETURN_OK?
+            Neurotic::Lifecycle::ObserveFsr3LoadedContext(query,context):Neurotic::Lifecycle::Fsr3LoadedContextObservation{};
+        const P::Json event={{"schema","NeuRotic.RuntimeProvenance/1"},{"stage","FFX-context"},{"api",operation},
+            {"context",reinterpret_cast<std::uintptr_t>(context)},{"result",result},
+            {"loader_module",P::Module(FfxApiProxy::Dx12Module())},{"fg_dispatch_module",P::Module(FfxApiProxy::Dx12Module_FG())},
+            {"queried_module",P::Module(module)},{"provider_query_result",loaded.result},
+            {"creation_generation",creationCurrent?creation->generation:0},
+            {"creation_observation_current",creationCurrent},
+            {"context_provider_id",loaded.provider},{"context_provider_version",loaded.version},
+            {"drain_capability",loaded.DrainStatus()==Neurotic::Lifecycle::Fsr3DrainCapability::UncheckedWaitResults?
+                "SDK_WAIT_RESULTS_UNCHECKED":"LOADED_DRAIN_CONTRACT_UNQUALIFIED"},
+            {"resident_modules",P::LoadedModules()},
+            {"scope","observed_module_backing_identity; header/override versions do not establish loaded ABI or drain guarantees"}};
+        LOG_INFO("NR_RUNTIME_PROVENANCE {}",event.dump());
+    }catch(...){}
+}
+}
 
 #define FFX_FRAMEGENERATION_SWAPCHAIN_DX12_VERSION_MAJOR 3
 #define FFX_FRAMEGENERATION_SWAPCHAIN_DX12_VERSION_MINOR 1
@@ -313,14 +351,16 @@ static void fgLogCallback(uint32_t type, const wchar_t* message)
     auto message_str = wstring_to_string(std::wstring(message));
 
     if (type == FFX_API_MESSAGE_TYPE_ERROR)
-        spdlog::error("FFX FG Callback: {}", message_str);
+        LOG_WHILE_ACTIVE(error, "FFX FG Callback: {}", message_str);
     else if (type == FFX_API_MESSAGE_TYPE_WARNING)
-        spdlog::warn("FFX FG Callback: {}", message_str);
+        LOG_WHILE_ACTIVE(warn, "FFX FG Callback: {}", message_str);
 }
 
 bool FSRFG_Dx12::Dispatch()
 {
     LOG_FUNC();
+    _nrFinalConsumer.ObserveContext(_fgContext);
+    _nrFinalConsumer.Advance();
 
     if (_fgContext == nullptr)
     {
@@ -330,7 +370,7 @@ bool FSRFG_Dx12::Dispatch()
 
     UINT64 willDispatchFrame = 0;
     auto fIndex = GetDispatchIndex(willDispatchFrame);
-    if (fIndex < 0)
+    if (fIndex < 0 || !StreamlineInputsReady(fIndex))
         return false;
 
     if (!IsActive() || IsPaused())
@@ -459,17 +499,24 @@ bool FSRFG_Dx12::Dispatch()
         fgConfig.generationRect.height = config->FGRectHeight.value_or(defaultHeight);
     }
 
-    fgConfig.frameGenerationCallbackUserContext = this;
+    auto* callbackBinding=_callbackBindings.Open(*this,_fgContext);
+    if(!callbackBinding)
+    {
+        LOG_ERROR("FSR callback binding unavailable; no callback address will be reused");
+        return false;
+    }
+    fgConfig.frameGenerationCallbackUserContext = callbackBinding;
     fgConfig.frameGenerationCallback = [](ffxDispatchDescFrameGeneration* params, void* pUserCtx) -> ffxReturnCode_t
     {
-        FSRFG_Dx12* fsrFG = nullptr;
-
-        if (pUserCtx != nullptr)
-            fsrFG = reinterpret_cast<FSRFG_Dx12*>(pUserCtx);
-
-        if (fsrFG != nullptr)
-            return fsrFG->DispatchCallback(params);
-
+        if(!pUserCtx||!params)return FFX_API_RETURN_ERROR;
+        auto* binding=static_cast<Neurotic::Lifecycle::Fsr3CallbackBindings<FSRFG_Dx12>::Binding*>(pUserCtx);
+        try
+        {
+            const auto result=binding->Invoke([&](FSRFG_Dx12& owner){return owner.DispatchCallback(params);});
+            if(result)return *result;
+        }
+        catch(...){/* No C++ exception crosses the SDK callback boundary. */}
+        params->numGeneratedFrames=0;
         return FFX_API_RETURN_ERROR;
     };
 
@@ -612,7 +659,9 @@ bool FSRFG_Dx12::Dispatch()
 
 ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* params)
 {
+    _nrFinalConsumer.ObserveContext(_fgContext);
     const int fIndex = params->frameID % BUFFER_COUNT;
+    if (!StreamlineInputsReady(fIndex)) {params->numGeneratedFrames=0;return FFX_API_RETURN_ERROR;}
 
     auto& state = State::Instance();
 
@@ -639,10 +688,13 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
         params->numGeneratedFrames = 0;
     }
 
-    static UINT64 _lastFrameId = 0;
-    if (params->frameID == _lastFrameId)
+    auto* callbackBinding=_callbackBindings.Current();
+    if(!callbackBinding||callbackBinding->Context()!=_fgContext)
+    {params->numGeneratedFrames=0;return FFX_API_RETURN_ERROR;}
+    if (callbackBinding->Duplicate(params->frameID))
     {
         LOG_WARN("Dispatched with the same frame id! frameID: {}", params->frameID);
+        _nrFinalConsumer.Skip(params->frameID);
         params->numGeneratedFrames = 0;
         return FFX_API_RETURN_OK;
     }
@@ -679,7 +731,8 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
                 _lastHudlessFormat = FFX_API_SURFACE_FORMAT_UNKNOWN;
 
             params->numGeneratedFrames = 0;
-            _lastFrameId = params->frameID;
+            callbackBinding->Mark(params->frameID);
+            _nrFinalConsumer.Skip(params->frameID);
 
             state.fgChanged = true;
             state.scChanged = true;
@@ -691,7 +744,7 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
     bool applyHudCutoff = Config::Instance()->FGHudCutoff.value_or_default() > 0.0f ||
                           State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup;
 
-    if ((applyHudCutoff || State::Instance().fgHudlessCompare) && !lastFGDisableHudless)
+    if ((applyHudCutoff || State::Instance().fgHudlessCompare) && !lastFGDisableHudless && !_noHudless[fIndex])
     {
         auto presentWithHud = (ID3D12Resource*) params->presentColor.resource;
         auto hudlessResource = _resourceCopy[fIndex][FG_ResourceType::HudlessColor];
@@ -759,10 +812,71 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
         }
     }
 
+    // Observe the explicitly retained scheduling link before the consuming API.
+    // It is diagnostic correlation, never a C03 right or a SourceBound seal.
+    const auto sourceAssociation=_nrFinalConsumer.ObserveSourceCallback(params->frameID);
+    const Neurotic::Lifecycle::Fsr3SelectedInputObservation selectedInput(sourceAssociation,
+        static_cast<ID3D12Resource*>(params->presentColor.resource));
+    if(Neurotic::Diagnostics::RuntimeProvenance::Enabled())try
+    {
+        namespace P=Neurotic::Diagnostics::RuntimeProvenance;P::LastError preserve;
+        static std::atomic<unsigned> observed{0};const auto count=observed.fetch_add(1);
+        if(count<128)
+        {
+            const P::Json event={{"schema","NeuRotic.RuntimeProvenance/1"},{"stage","FFX-consumer-input"},
+                {"callback_binding",reinterpret_cast<std::uintptr_t>(callbackBinding)},
+                {"context",reinterpret_cast<std::uintptr_t>(_fgContext)},{"frame_id",params->frameID},
+                {"command_list",reinterpret_cast<std::uintptr_t>(params->commandList)},
+                {"present_color",reinterpret_cast<std::uintptr_t>(params->presentColor.resource)},
+                {"present_state",params->presentColor.state},{"present_format",params->presentColor.description.format},
+                {"source_association",Neurotic::Lifecycle::SourceAssociationReasonName(sourceAssociation.reason)},
+                {"selected_resource",Neurotic::Lifecycle::Fsr3SelectedInputStatusName(selectedInput.Status())},
+                {"resource_rights","NOT_ESTABLISHED_BY_OBSERVATION"},{"num_generated_frames",params->numGeneratedFrames}};
+            LOG_INFO("NR_RUNTIME_PROVENANCE {}",event.dump());
+        }
+        else if(count==128)LOG_WARN("NR_RUNTIME_PROVENANCE FFX_input_budget_exhausted coverage=incomplete");
+    }catch(...){}
+    if(sourceAssociation.source)
+        NR_FRAME_TRACE("nr-source-bound-unavailable","contract=InterceptedSourceTransaction-v1 frame={} namespace={} transaction={} reason={}",params->frameID,
+            sourceAssociation.source->Subject().id.nameSpace.View(),sourceAssociation.source->Subject().id.value,
+            Neurotic::Lifecycle::SourceAssociationReasonName(sourceAssociation.reason));
+    using NrCallback=Neurotic::Lifecycle::Fsr3FinalConsumerAdapter::Callback;
+    if(params->numGeneratedFrames==0)_nrFinalConsumer.Skip(params->frameID);
+    const auto nrCallback=params->numGeneratedFrames==0?std::nullopt:
+        std::optional{_nrFinalConsumer.BeginCall(params->frameID,
+            static_cast<ID3D12Resource*>(params->presentColor.resource),
+            static_cast<ID3D12GraphicsCommandList*>(params->commandList))};
+    if(nrCallback&&nrCallback->status==NrCallback::Refused)return FFX_API_RETURN_ERROR;
+    if(nrCallback&&nrCallback->status==NrCallback::Offered&&!_nrFinalConsumer.DispatchCurrent(*nrCallback))
+    {
+        _nrFinalConsumer.End(*nrCallback,false);
+        return FFX_API_RETURN_ERROR;
+    }
+    const bool selectedCurrentAtEntry=selectedInput.Current();
     auto dispatchResult = FfxApiProxy::D3D12_Dispatch(&_fgContext, &params->header);
+    if(nrCallback&&nrCallback->status==NrCallback::Offered)
+        _nrFinalConsumer.End(*nrCallback,dispatchResult==FFX_API_RETURN_OK);
     LOG_DEBUG("D3D12_Dispatch result: {}, fIndex: {}", (UINT) dispatchResult, fIndex);
+    if(sourceAssociation.source&&Neurotic::Diagnostics::RuntimeProvenance::Enabled())try
+    {
+        namespace P=Neurotic::Diagnostics::RuntimeProvenance;P::LastError preserve;
+        static std::atomic<unsigned> observedReturns{0};const auto count=observedReturns.fetch_add(1);
+        if(count<128)
+        {
+        const P::Json event={{"schema","NeuRotic.RuntimeProvenance/1"},{"stage","FFX-consumer-return"},
+            {"callback_binding",reinterpret_cast<std::uintptr_t>(callbackBinding)},
+            {"context",reinterpret_cast<std::uintptr_t>(_fgContext)},{"frame_id",params->frameID},
+            {"source_namespace",std::string(sourceAssociation.source->Subject().id.nameSpace.View())},
+            {"source_transaction",sourceAssociation.source->Subject().id.value},
+            {"selected_current_at_entry",selectedCurrentAtEntry},{"selected_current_at_return",selectedInput.Current()},
+            {"dispatch_result",dispatchResult},{"dispatch_accepted",dispatchResult==FFX_API_RETURN_OK},
+            {"provider_release","UNOBSERVED"},{"source_bound_authorization","NOT_ISSUED_BY_OBSERVATION"}};
+        LOG_INFO("NR_RUNTIME_PROVENANCE {}",event.dump());
+        }
+        else if(count==128)LOG_WARN("NR_RUNTIME_PROVENANCE FFX_return_budget_exhausted coverage=incomplete");
+    }catch(...){}
 
-    _lastFrameId = params->frameID;
+    callbackBinding->Mark(params->frameID);
 
     return dispatchResult;
 }
@@ -783,8 +897,40 @@ void* FSRFG_Dx12::SwapchainContext()
     return _swapChainContext;
 }
 
+bool FSRFG_Dx12::CloseCallbacks(CallbackTeardown requested)
+{
+    if(!_callbackBindings.Close())
+    {
+        auto pending=_callbackTeardown.load();
+        while(requested>pending&&!_callbackTeardown.compare_exchange_weak(pending,requested)){}
+        LOG_WARN("FSR callback teardown deferred until a serialized lifecycle retry");
+        return false;
+    }
+    auto expected=requested;
+    _callbackTeardown.compare_exchange_strong(expected,CallbackTeardown::None);
+    return true;
+}
+
+bool FSRFG_Dx12::RetryCallbackTeardown()
+{
+    if(_callbackTeardown.load()==CallbackTeardown::None)return true;
+    if(!_callbackBindings.Close())return false;
+    const auto pending=_callbackTeardown.exchange(CallbackTeardown::None);
+    switch(pending)
+    {
+    case CallbackTeardown::Shutdown: ShutdownImpl(true);break;
+    case CallbackTeardown::Swapchain: ReleaseSwapchainImpl(_hwnd,true);break;
+    case CallbackTeardown::Context: DestroyFGContext();break;
+    default:break;
+    }
+    // Leave recreation to a subsequent lifecycle operation after release.
+    return false;
+}
+
 void FSRFG_Dx12::DestroyFGContext()
 {
+    if(!CloseCallbacks(CallbackTeardown::Context))return;
+    _nrFinalConsumer.ObserveContext(nullptr);
     _frameCount = 1;
     // _lastDispatchedFrame = 0;
     _version = {};
@@ -795,6 +941,7 @@ void FSRFG_Dx12::DestroyFGContext()
 
     if (_fgContext != nullptr)
     {
+        NrFfxContextEvidence("BeforeDestroyFrameGeneration",_fgContext,FFX_API_RETURN_OK);
         auto result = FfxApiProxy::D3D12_DestroyContext(&_fgContext, nullptr);
 
         if (!(State::Instance().isShuttingDown))
@@ -808,11 +955,19 @@ void FSRFG_Dx12::DestroyFGContext()
 
 bool FSRFG_Dx12::Shutdown()
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
+    return ShutdownImpl(false);
+}
+
+bool FSRFG_Dx12::ShutdownImpl(bool lifecycleLockHeld)
+{
+    if(!CloseCallbacks(CallbackTeardown::Shutdown))return false;
     Deactivate();
 
     if (_swapChainContext != nullptr)
     {
-        if (ReleaseSwapchain(_hwnd))
+        if (ReleaseSwapchainImpl(_hwnd,lifecycleLockHeld))
             State::Instance().currentFGSwapchain = nullptr;
     }
 
@@ -824,6 +979,8 @@ bool FSRFG_Dx12::Shutdown()
 bool FSRFG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQueue, DXGI_SWAP_CHAIN_DESC* desc,
                                  IDXGISwapChain** swapChain, bool readyToRelease)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
     if (State::Instance().currentFGSwapchain != nullptr && _hwnd == desc->OutputWindow)
     {
         if (Config::Instance()->FGPreserveSwapChain.value_or_default())
@@ -886,6 +1043,7 @@ bool FSRFG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
     createSwapChainDesc.header.pNext = &versionDesc.header;
 
     auto result = FfxApiProxy::D3D12_CreateContext(&_swapChainContext, &createSwapChainDesc.header, nullptr);
+    NrFfxContextEvidence("CreateSwapchain",_swapChainContext,result);
 
     if (result == FFX_API_RETURN_OK)
     {
@@ -905,6 +1063,8 @@ bool FSRFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
                                   DXGI_SWAP_CHAIN_DESC1* desc, DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
                                   IDXGISwapChain1** swapChain, bool readyToRelease)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
     if (State::Instance().currentFGSwapchain != nullptr && _hwnd == hwnd)
     {
         if (Config::Instance()->FGPreserveSwapChain.value_or_default())
@@ -968,6 +1128,7 @@ bool FSRFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
     createSwapChainDesc.header.pNext = &versionDesc.header;
 
     auto result = FfxApiProxy::D3D12_CreateContext(&_swapChainContext, &createSwapChainDesc.header, nullptr);
+    NrFfxContextEvidence("CreateSwapchainForHwnd",_swapChainContext,result);
 
     if (result == FFX_API_RETURN_OK)
     {
@@ -985,12 +1146,33 @@ bool FSRFG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
 
 bool FSRFG_Dx12::ReleaseSwapchain(HWND hwnd)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return false;
+    return ReleaseSwapchainImpl(hwnd,false);
+}
+
+bool FSRFG_Dx12::ReleaseSwapchainImpl(HWND hwnd,bool lifecycleLockHeld)
+{
     if (hwnd != _hwnd || _hwnd == NULL)
         return false;
 
+    // SDK destruction can reenter the public release through a swapchain
+    // wrapper. Deferred release holds lifecycle owner 555 rather than owner 1;
+    // recognize this same-thread recursion before attempting either lock.
+    static thread_local const FSRFG_Dx12* releasing=nullptr;
+    if(releasing==this)return true;
+    if(!CloseCallbacks(CallbackTeardown::Swapchain))return false;
+    struct ReleaseScope
+    {
+        const FSRFG_Dx12*& slot;const FSRFG_Dx12* previous;
+        ReleaseScope(const FSRFG_Dx12*& s,const FSRFG_Dx12* owner):slot(s),previous(s){slot=owner;}
+        ~ReleaseScope(){slot=previous;}
+    } releaseScope(releasing,this);
+
     LOG_DEBUG("");
 
-    if (Config::Instance()->FGUseMutexForSwapchain.value_or_default())
+    const bool acquireMutex=!lifecycleLockHeld&&Config::Instance()->FGUseMutexForSwapchain.value_or_default();
+    if (acquireMutex)
     {
         if (Mutex.getOwner() == 1)
         {
@@ -1012,6 +1194,7 @@ bool FSRFG_Dx12::ReleaseSwapchain(HWND hwnd)
     {
         if (_swapChainContext != nullptr)
         {
+            NrFfxContextEvidence("BeforeDestroySwapchain",_swapChainContext,FFX_API_RETURN_OK);
             auto result = FfxApiProxy::D3D12_DestroyContext(&_swapChainContext, nullptr);
             LOG_INFO("Destroy Ffx Swapchain Result: {}({})", result, FfxApiProxy::ReturnCodeToString(result));
         }
@@ -1020,7 +1203,7 @@ bool FSRFG_Dx12::ReleaseSwapchain(HWND hwnd)
         State::Instance().currentFGSwapchain = nullptr;
     }
 
-    if (Config::Instance()->FGUseMutexForSwapchain.value_or_default())
+    if (acquireMutex)
     {
         LOG_TRACE("Releasing Mutex: {}", Mutex.getOwner());
         Mutex.unlockThis(1);
@@ -1033,6 +1216,11 @@ void FSRFG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
 {
     LOG_DEBUG("");
 
+    // EvaluateState retries with its lifecycle lock before calling CreateContext.
+    if(_callbackTeardown.load()!=CallbackTeardown::None)return;
+    if (_fgContext != nullptr && (_lastHudlessFormat != _usingHudlessFormat) &&
+        !CloseCallbacks(CallbackTeardown::Context))return;
+
     CreateObjects(device);
 
     _constants = fgConstants;
@@ -1040,6 +1228,7 @@ void FSRFG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
     // Changing the format of the hudless resource requires a new context
     if (_fgContext != nullptr && (_lastHudlessFormat != _usingHudlessFormat))
     {
+        _nrFinalConsumer.ObserveContext(nullptr);
         auto result = FfxApiProxy::D3D12_DestroyContext(&_fgContext, nullptr);
         _fgContext = nullptr;
     }
@@ -1174,6 +1363,7 @@ void FSRFG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
         ScopedSkipHeapCapture skipHeapCapture {};
         ffxReturnCode_t retCode = FfxApiProxy::D3D12_CreateContext(&_fgContext, &createFg.header, nullptr);
+        NrFfxContextEvidence("CreateFrameGeneration",_fgContext,retCode);
 
         LOG_INFO("D3D12_CreateContext result: {:X}", retCode);
         _isActive = (retCode == FFX_API_RETURN_OK);
@@ -1218,7 +1408,10 @@ void FSRFG_Dx12::Deactivate()
             auto closeResult = _uiCommandList[fIndex]->Close();
 
             if (closeResult == S_OK)
+            {
                 _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_uiCommandList[fIndex]);
+                ObserveUIBridgeSubmission(fIndex);
+            }
             else
                 LOG_ERROR("_uiCommandList[{}]->Close() error: {:X}", fIndex, (UINT) closeResult);
 
@@ -1277,6 +1470,10 @@ void FSRFG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
     LOG_FUNC();
 
     OwnedLockGuard lock(Mutex, 555);
+
+    // Retry on the serialized lifecycle path, never in the SDK callback tail.
+    // A CPU callback return is not an SDK/GPU drain or a provider release.
+    if(!RetryCallbackTeardown())return;
 
     _constants = fgConstants;
 
@@ -1365,6 +1562,8 @@ void FSRFG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
 
 void FSRFG_Dx12::ReleaseObjects()
 {
+    RetainSCObjectsOnFailure();
+    RetireUIBridgeReaders();
     for (size_t i = 0; i < BUFFER_COUNT; i++)
     {
         SAFE_RELEASE(_fgCommandAllocator[i]);
@@ -1729,7 +1928,9 @@ void FSRFG_Dx12::CreateObjects(ID3D12Device* InDevice)
 
 bool FSRFG_Dx12::Present()
 {
+    if (!RetireSCWork()) return false;
     auto fIndex = GetIndexWillBeDispatched();
+    if (!StreamlineInputsReady(fIndex)) return false;
 
     if (Config::Instance()->FGDrawUIOverFG.value_or_default())
     {
@@ -1753,7 +1954,7 @@ bool FSRFG_Dx12::Present()
                 else if (_renderUI->IsInit())
                 {
                     auto commandList = GetSCCommandList(fIndex);
-                    _renderUI->Dispatch((IDXGISwapChain3*) _swapChain, commandList, ui->GetResource(), ui->state);
+                    if (commandList) { PinSCResource(ui->GetResource()); _renderUI->Dispatch((IDXGISwapChain3*) _swapChain, commandList, ui->GetResource(), ui->state); }
                 }
             }
         }
@@ -1773,7 +1974,10 @@ bool FSRFG_Dx12::Present()
             auto closeResult = _uiCommandList[fIndex]->Close();
 
             if (closeResult == S_OK)
+            {
                 _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_uiCommandList[fIndex]);
+                ObserveUIBridgeSubmission(fIndex);
+            }
             else
                 LOG_ERROR("_uiCommandList[{}]->Close() error: {:X}", fIndex, (UINT) closeResult);
 
@@ -1782,18 +1986,7 @@ bool FSRFG_Dx12::Present()
             _uiCommandListResetted[fIndex] = false;
         }
 
-        if (_scCommandListResetted[fIndex])
-        {
-            LOG_DEBUG("Executing _scCommandList[{}]: {:X}", fIndex, (size_t) _scCommandList[fIndex]);
-            auto closeResult = _scCommandList[fIndex]->Close();
-
-            if (closeResult == S_OK)
-                _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_scCommandList[fIndex]);
-            else
-                LOG_ERROR("_scCommandList[{}]->Close() error: {:X}", fIndex, (UINT) closeResult);
-
-            _scCommandListResetted[fIndex] = false;
-        }
+        if (!SubmitSCCommandList(fIndex)) return false;
     }
 
     if ((_fgFramePresentId - _lastFGFramePresentId) > 3 && IsActive() && !_waitingNewFrameData)

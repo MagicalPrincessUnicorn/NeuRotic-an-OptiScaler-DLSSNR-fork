@@ -90,6 +90,7 @@ class IFGFeature
     IID streamlineRiid {};
 
     bool CheckForRealObject(std::string functionName, IUnknown* pObject, IUnknown** ppRealObject);
+    virtual bool CanDispatchInputs(int) const noexcept { return true; }
     int GetDispatchIndex(UINT64& willDispatchFrame);
     virtual void NewFrame() = 0;
 
@@ -124,6 +125,7 @@ class IFGFeature
     bool WaitingExecution(int index = -1);
 
     bool IsActive();
+    bool IsWaitingForFrameData() const { return _waitingNewFrameData; }
     bool IsPaused();
     bool IsDispatched();
     bool IsLowResMV();

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <hooks/D3D12_Hooks.h>
 #include "Hudfix_Dx12.h"
 
 #include <Util.h>
@@ -547,6 +548,13 @@ bool Hudfix_Dx12::SkipHudlessChecks() { return _skipHudlessChecks; }
 bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceInfo* resource,
                                   D3D12_RESOURCE_STATES state, bool ignoreBlocked)
 {
+    // Deferred draw capture must revalidate after any intervening barrier,
+    // Reset, split/enhanced barrier or alias invalidation.
+    if(resource && (resource->captureInfo & CaptureInfo::SetGR)) {
+        const auto known=D3D12Hooks::KnownHudResourceState(cmdList,resource->buffer);
+        if(resource->type!=SRV || !known || !(*known&D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)) return false;
+        resource->state=*known; state=*known;
+    }
     auto& s = State::Instance();
 
     if (s.currentFG == nullptr)

@@ -1,4 +1,8 @@
 #include "pch.h"
+#include "../nr/diagnostics/capability/CapabilityNgxObservation.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/NgxObservationAdapter.h>
+// NR-FEED-001 END
 
 #include "Config.h"
 #include "Util.h"
@@ -166,7 +170,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_Init_Ext(unsigned long long InApp
 
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::D3D11_Init_Ext() != nullptr)
         {
-            LOG_INFO("calling NVNGXProxy::D3D11_Init_Ext");
+            LOG_INFO("calling NVNGXProxy::D3D11_Init_Ext: device={} SDK={:X}",
+                     static_cast<void*>(InDevice), static_cast<unsigned int>(InSDKVersion));
 
             auto result = NVNGXProxy::D3D11_Init_Ext()(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion,
                                                        &localFeatureInfo);
@@ -227,7 +232,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_Init(unsigned long long InApplica
 
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::D3D11_Init() != nullptr)
         {
-            LOG_INFO("calling NVNGXProxy::D3D11_Init");
+            LOG_INFO("calling NVNGXProxy::D3D11_Init: device={} SDK={:X}",
+                     static_cast<void*>(InDevice), static_cast<unsigned int>(InSDKVersion));
 
             auto result = NVNGXProxy::D3D11_Init()(InApplicationId, InApplicationDataPath, InDevice, &localFeatureInfo,
                                                    InSDKVersion);
@@ -520,6 +526,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
                                                              NVSDK_NGX_Parameter* InParameters,
                                                              NVSDK_NGX_Handle** OutHandle)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::NgxCreationSnapshot feedCreation(InParameters, NVSDK_NGX_Result_Success);
+    // NR-FEED-001 END
     // FeatureId check
     if (InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction)
     {
@@ -528,6 +537,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
         {
             auto result = NVNGXProxy::D3D11_CreateFeature()(InDevCtx, InFeatureID, InParameters, OutHandle);
             LOG_INFO("D3D11_CreateFeature result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            // NR-FEED-001 BEGIN
+            if (result == NVSDK_NGX_Result_Success && OutHandle && *OutHandle)
+                feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::D3D11, "create"}, *OutHandle, InFeatureID);
+            // NR-FEED-001 END
             return result;
         }
         else
@@ -596,6 +609,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
 
     if (deviceContext->ModuleLoaded() && deviceContext->Init(D3D11Device, InDevCtx, InParameters))
     {
+        // NR-FEED-001 BEGIN
+        feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::D3D11, "create"}, *OutHandle, InFeatureID);
+        // NR-FEED-001 END
         State::Instance().currentFeature = deviceContext;
         return NVSDK_NGX_Result_Success;
     }
@@ -605,6 +621,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
     State::Instance().newBackend = Upscaler::FSR22;
     State::Instance().changeBackend[handleId] = true;
 
+    // NR-FEED-001 BEGIN
+    feedCreation.Publish({"NGX", Neurotic::Contracts::GraphicsApi::D3D11, "create-pending-backend"}, *OutHandle, InFeatureID);
+    // NR-FEED-001 END
     return NVSDK_NGX_Result_Success;
 }
 
@@ -676,6 +695,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_GetFeatureRequirements(
 
         // Some windows 10 os version
         strcpy_s(OutSupported->MinOSVersion, "10.0.10240.16384");
+        DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::D3D11, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), NVSDK_NGX_Result_Success, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Effective);
         return NVSDK_NGX_Result_Success;
     }
 
@@ -688,10 +708,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_GetFeatureRequirements(
         auto result = NVNGXProxy::D3D11_GetFeatureRequirements()(Adapter, FeatureDiscoveryInfo, OutSupported);
         LOG_DEBUG("result for D3D11_GetFeatureRequirements ({0}): {1:X}", (int) FeatureDiscoveryInfo->FeatureID,
                   (UINT) result);
+        DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::D3D11, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), result, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Raw);
         return result;
     }
 
     OutSupported->FeatureSupported = NVSDK_NGX_FeatureSupportResult_AdapterUnsupported;
+    DlssNr::Capability::CaptureRequirementsResult(DlssNr::Capability::GraphicsPath::D3D11, static_cast<uint64_t>(FeatureDiscoveryInfo->FeatureID), NVSDK_NGX_Result_FAIL_FeatureNotSupported, NVSDK_NGX_Result_Success, OutSupported, DlssNr::Capability::RequirementsOrigin::Effective);
     return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
 }
 
@@ -700,6 +722,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_EvaluateFeature(ID3D11DeviceConte
                                                                NVSDK_NGX_Parameter* InParameters,
                                                                PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"NGX", Neurotic::Contracts::GraphicsApi::D3D11, "evaluate"}, InFeatureHandle);
+    Neurotic::Feed::ObserveNgxEvaluation(feedObservation, InParameters, NVSDK_NGX_Result_Success);
+    // NR-FEED-001 END
     if (InFeatureHandle == nullptr)
     {
         LOG_DEBUG("InFeatureHandle is null");

@@ -5,6 +5,9 @@
 
 #include <imgui/imgui.h>
 #include "Localization.h"
+#include "localization/LanguageRuntime.h"
+#include "SleekSections.h"
+#include <atomic>
 
 class ScopedIndent
 {
@@ -17,68 +20,6 @@ class ScopedIndent
     float m_indent;
 };
 
-class ScopedCollapsingHeader
-{
-  public:
-    explicit ScopedCollapsingHeader(const char* label, ImGuiTreeNodeFlags flags = 0,
-                                   bool* enabled = nullptr, const char* toggleLabel = "Enabled",
-                                   bool orangeBold = false)
-    {
-        ImGui::PushID(label);
-
-        ImGui::BeginChild("##CollapsingHeaderChild", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-        const bool inlineToggle = enabled && ImGui::GetContentRegionAvail().x >=
-            ImGui::CalcTextSize(label, nullptr, true).x + ImGui::CalcTextSize(toggleLabel).x + ImGui::GetFrameHeight() * 3;
-        if (inlineToggle && ImGui::BeginTable("##HeaderControls", 2, ImGuiTableFlags_SizingStretchProp))
-        {
-            ImGui::TableSetupColumn("Section", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Toggle", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableNextColumn();
-            _headerOpen = ImGui::CollapsingHeader(label, flags);
-            ImGui::TableNextColumn();
-            ImGui::Checkbox(toggleLabel, enabled);
-            ImGui::EndTable();
-        }
-        else
-        {
-            if (orangeBold) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.48f, 0.10f, 1.0f));
-            auto* draw = ImGui::GetWindowDrawList();
-            const auto titlePosition = ImGui::GetCursorScreenPos();
-            _headerOpen = ImGui::CollapsingHeader(label, flags);
-            if (orangeBold)
-            {
-                // A second subpixel-offset text stroke gives the current localized font a bold face.
-                const ImU32 orange = ImGui::GetColorU32(ImGuiCol_Text);
-                const auto padding = ImGui::GetStyle().FramePadding;
-                draw->PushClipRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), true);
-                draw->AddText(ImVec2(titlePosition.x + ImGui::GetFontSize() + padding.x * 3.0f + 0.6f,
-                                    titlePosition.y + padding.y), orange, Neurotic::Translate(label).c_str());
-                draw->PopClipRect();
-                ImGui::PopStyleColor();
-            }
-            if (enabled) ImGui::Checkbox(toggleLabel, enabled);
-        }
-        _active = true;
-    }
-
-    bool IsHeaderOpen() const { return _headerOpen; }
-
-    ~ScopedCollapsingHeader()
-    {
-        if (_active)
-        {
-            ImGui::EndChild();
-            ImGui::PopID();
-        }
-    }
-
-  private:
-    bool _active = false;
-    bool _headerOpen = false;
-};
-
 template <typename T> struct MenuOption
 {
     T value;
@@ -86,18 +27,21 @@ template <typename T> struct MenuOption
     std::string tooltip;
     bool disabled = false;
     bool hidden = false;
+    std::string labelId,tooltipId;
+    MenuOption(T v,const char* label,const char* tip="",bool disabled=false,bool hidden=false):value(v),label(label),tooltip(tip),disabled(disabled),hidden(hidden),labelId(Neurotic::Localization::BoundLiteralId(label)),tooltipId(Neurotic::Localization::BoundLiteralId(tip)){}
+    MenuOption(T v,std::string label,std::string tip="",bool disabled=false,bool hidden=false):value(v),label(std::move(label)),tooltip(std::move(tip)),disabled(disabled),hidden(hidden){}
 
-    MenuOption& set_disabled(bool condition, const std::string& reason = "")
+    MenuOption& set_disabled(bool condition, const char* reason = "")
     {
         if (condition)
         {
             disabled = true;
-            if (!reason.empty())
-                tooltip = reason;
+            if (*reason) {tooltip = reason;tooltipId=Neurotic::Localization::BoundLiteralId(reason);}
         }
         return *this;
     }
 
+    MenuOption& set_disabled(bool condition,const std::string& reason){if(condition){disabled=true;if(!reason.empty()){tooltip=reason;tooltipId.clear();}}return *this;}
     MenuOption& set_hidden(bool condition)
     {
         if (condition)
@@ -115,6 +59,11 @@ class MenuCommon
     inline static HWND _handle = nullptr;
     // inline static WNDPROC _oWndProc = nullptr;
     inline static bool _isVisible = false;
+    inline static std::atomic<uint64_t> _visibilityGeneration{0};
+    static void SetVisibility(bool visible);
+    inline static bool _rendererOwnsCapture = false;
+    inline static bool _rendererCaptureAvailable = false;
+    inline static double _rendererCapturePresentedAt = 0.0;
     inline static bool _isInited = false;
     inline static bool _isUWP = false;
 
@@ -149,12 +98,12 @@ class MenuCommon
     inline static bool _dx11Ready = false;
     inline static bool _dx12Ready = false;
     inline static bool _vulkanReady = false;
-    inline static bool _showMainMenuGraphs = true;
+    inline static bool _showMainMenuGraphs = false;
 
     inline static void ShowTooltip(const char* tip);
 
     inline static void ShowHelpMarker(const char* tip);
-    inline static void ShowResetButton(CustomOptional<bool, NoDefault>* initFlag, std::string buttonName);
+    inline static void ShowResetButton(CustomOptional<bool, NoDefault>* initFlag, const char* buttonName);
     inline static void ReInitUpscaler();
 
     inline static void SeparatorWithHelpMarker(const char* label, const char* tip);
@@ -165,11 +114,11 @@ class MenuCommon
     static void AddDx11Backends(Upscaler upscaler);
     static void AddDx12Backends(Upscaler upscaler);
     static void AddVulkanBackends(Upscaler upscaler);
-    template <HasDefaultValue B> static void AddResourceBarrier(std::string name, CustomOptional<int32_t, B>* value);
-    template <HasDefaultValue B> static void AddDLSSRenderPreset(std::string name, CustomOptional<uint32_t, B>* value);
-    template <HasDefaultValue B> static void AddDLSSDRenderPreset(std::string name, CustomOptional<uint32_t, B>* value);
+    template <class Option> static void AddResourceBarrier(const char* name, Option* value);
+    template <HasDefaultValue B> static void AddDLSSRenderPreset(const char* name, CustomOptional<uint32_t, B>* value);
+    template <HasDefaultValue B> static void AddDLSSDRenderPreset(const char* name, CustomOptional<uint32_t, B>* value);
     template <typename TStorage, typename T>
-    static void PopulateCombo(const std::string& name, TStorage& currentValue,
+    static void PopulateCombo(const char* name, TStorage& currentValue,
                               const std::vector<MenuOption<T>>& options);
 
     struct RenderMenuContext;
@@ -197,6 +146,7 @@ class MenuCommon
     static void RenderMainMenuTabs(RenderMenuContext& ctx);
     static void RenderGeneralPage(RenderMenuContext& ctx);
     static void RenderUpscalingPage(RenderMenuContext& ctx);
+    static void RenderUpscalerPreflight(RenderMenuContext& ctx);
     // This is the single owner for the Neural Rendering page, including the separate
     // collapsible Multipass section beneath the first-pass controls.
     static void RenderNeuralRenderingPage(RenderMenuContext& ctx);
@@ -226,7 +176,8 @@ class MenuCommon
     static void RenderKeybindSettings(RenderMenuContext& ctx);
     static void RenderMainMenuGraphs(RenderMenuContext& ctx);
     static void RenderMainMenuBottomBar(RenderMenuContext& ctx);
-    static void RenderMainMenuSupportLink();
+    static void RenderMainMenuWindowActions(RenderMenuContext& ctx);
+    static void RenderMainMenuSupportLink(RenderMenuContext& ctx);
     static void RenderMipmapBiasWindow(RenderMenuContext& ctx, ImGuiWindowFlags flags);
     static void RenderHudlessResourcesWindow(RenderMenuContext& ctx, ImGuiWindowFlags flags);
 
@@ -239,10 +190,16 @@ class MenuCommon
     static void VulkanInited() { _vulkanReady = true; }
     static bool IsInited() { return _isInited; }
     static bool IsVisible() { return _isVisible; }
+    static uint64_t VisibilityGeneration() { return _visibilityGeneration.load(); }
     static HWND Handle() { return _handle; }
 
     static bool RenderMenu();
     static void FinalizeFrame();
+    // Vulkan commits capture only after an actual overlay Present succeeds.
+    static void DeferInputCapture();
+    static void SetRendererCaptureAvailable(bool available);
+    static bool CanRetainRendererCaptureOnBusyFrame();
+    static void ProcessUnavailableInput();
     static void Init(HWND InHwnd, bool isUWP);
     static void Shutdown();
     static void HideMenu();

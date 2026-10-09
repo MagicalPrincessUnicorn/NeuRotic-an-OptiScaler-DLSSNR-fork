@@ -51,7 +51,7 @@ void RCAS_Common::FillMotionConstants(InternalConstantsDA& OutConstants, const R
     OutConstants.DepthLinearC = InConstants.CameraFar - InConstants.CameraNear;
 
     OutConstants.DepthTextureScale = (float) OutConstants.DepthWidth / (float) OutConstants.OutputWidth;
-    OutConstants.ClampOutput = Config::Instance()->DAClampOutput.value_or(InConstants.IsHdr) ? 0 : 1;
+    OutConstants.ClampOutput = Config::Instance()->DAClampOutput.value_or(!InConstants.IsHdr) ? 1 : 0;
 
     OutConstants.DisplaySizeMV = OutConstants.MotionWidth == OutConstants.OutputWidth ? 1 : 0;
 

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <runtime/BoundedFileSearch.h>
 
 #include "Util.h"
 #include "dlssnr/DredDiagnostics.h"
@@ -487,7 +488,8 @@ bool Util::GetFileVersion(std::wstring dllPath, version_t* fileVersionOut, versi
 
 bool Util::IsSubpath(const std::filesystem::path& path, const std::filesystem::path& base)
 {
-    auto rel = std::filesystem::relative(path, base);
+    auto rel = path.lexically_relative(base);
+    if (rel.empty()) return false;
     auto first = *rel.begin();
     return first != "." && first != "..";
 }
@@ -501,51 +503,12 @@ std::optional<std::filesystem::path> Util::FindFilePath(const std::filesystem::p
 
     const bool isDlssgOutput = State::Instance().activeFgOutput == FGOutput::DLSSG;
 
-    // 1) Direct check in startDir
-    std::filesystem::path candidate = startDir / fileName;
-    if (std::filesystem::exists(candidate) && std::filesystem::is_regular_file(candidate))
-    {
-        LOG_INFO(L"{} found at {}", fileName.wstring(), candidate.parent_path().wstring());
-        return candidate;
-    }
-
-    // Helper lambda to perform a Breadth-First Search (shallowest files first)
     auto SearchDirectoryBFS = [&](const std::filesystem::path& root) -> std::optional<std::filesystem::path>
     {
-        std::queue<std::filesystem::path> directoriesToSearch;
-        directoriesToSearch.push(root);
-
-        while (!directoriesToSearch.empty())
-        {
-            std::filesystem::path currentDir = directoriesToSearch.front();
-            directoriesToSearch.pop();
-
-            std::error_code ec;
-            auto dirIterator = std::filesystem::directory_iterator(
-                currentDir, std::filesystem::directory_options::skip_permission_denied, ec);
-
-            if (ec)
-                continue;
-
-            for (const auto& entry : dirIterator)
-            {
-                if (entry.is_directory())
-                {
-                    directoriesToSearch.push(entry.path());
-                }
-                else if (entry.path().filename() == fileName)
-                {
-                    auto normalizedPath = entry.path().lexically_normal();
-                    if (isDlssgOutput || !IsSubpath(normalizedPath, normalizedStreamlinePath))
-                    {
-                        return entry.path();
-                    }
-                }
-            }
-        }
-        return std::nullopt;
+        return Neurotic::Runtime::FindDependency(root, fileName, [&](const auto& path) {
+            return isDlssgOutput || !IsSubpath(path.lexically_normal(), normalizedStreamlinePath);
+        });
     };
-
     // 2) Breadth-First search under startDir
     if (auto foundPath = SearchDirectoryBFS(startDir))
     {
@@ -690,6 +653,8 @@ bool Util::CheckForRealObject(std::string functionName, IUnknown* pObject, IUnkn
 void Util::GetDeviceRemovedReason(ID3D11Device* pDevice)
 {
     auto reason = pDevice->GetDeviceRemovedReason();
+    LOG_ERROR("Device removal observation: api=D3D11 device={:p} reason={:08X}",
+              static_cast<void*>(pDevice), static_cast<UINT>(reason));
 
     switch (reason)
     {
@@ -707,6 +672,10 @@ void Util::GetDeviceRemovedReason(ID3D11Device* pDevice)
 
     case DXGI_ERROR_INVALID_CALL:
         LOG_ERROR("Device removed reason: DXGI_ERROR_INVALID_CALL");
+        break;
+
+    case DXGI_ERROR_ACCESS_DENIED:
+        LOG_ERROR("Device removed reason: DXGI_ERROR_ACCESS_DENIED (GPU resource access denied)");
         break;
 
     case E_OUTOFMEMORY:
@@ -725,6 +694,8 @@ void Util::GetDeviceRemovedReason(ID3D11Device* pDevice)
 void Util::GetDeviceRemovedReason(ID3D12Device* pDevice)
 {
     auto reason = pDevice->GetDeviceRemovedReason();
+    LOG_ERROR("Device removal observation: api=D3D12 device={:p} reason={:08X}",
+              static_cast<void*>(pDevice), static_cast<UINT>(reason));
     DlssNr::DredDiagnostics::Collect(pDevice, reason);
 
     switch (reason)
@@ -743,6 +714,10 @@ void Util::GetDeviceRemovedReason(ID3D12Device* pDevice)
 
     case DXGI_ERROR_INVALID_CALL:
         LOG_ERROR("Device removed reason: DXGI_ERROR_INVALID_CALL");
+        break;
+
+    case DXGI_ERROR_ACCESS_DENIED:
+        LOG_ERROR("Device removed reason: DXGI_ERROR_ACCESS_DENIED (GPU resource access denied)");
         break;
 
     case E_OUTOFMEMORY:

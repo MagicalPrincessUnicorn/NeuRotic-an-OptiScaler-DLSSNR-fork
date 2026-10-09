@@ -1,5 +1,7 @@
 #pragma once
 #include "SysUtils.h"
+#include <atomic>
+#include <mutex>
 
 #include <sl.h>
 #include <sl1.h>
@@ -11,6 +13,7 @@
 #include "include/sl.param/parameters.h"
 
 #include "Hook_Utils.h"
+#include <mfg/MfgControl.h>
 
 // Diagnostic-only context copied across the Streamline -> NGX call boundary.
 // The Vulkan diagnostic build uses this to determine whether the two APIs are
@@ -154,9 +157,16 @@ class StreamlineHooks
 
     static void updateForceReflex();
     static void updateDlssgOptions();
+    static Neurotic::Mfg::MfgRequestReceipt mfgRequestReceipt() noexcept;
+    static Neurotic::Mfg::MfgHighRatioRefusal mfgHighRatioRefusal() noexcept;
+    static bool prepareExperimentalMfgCapabilities() noexcept;
+    static bool experimentalFgLane(bool fg) noexcept;
+    static bool prepareNativeMfgCapabilities(HMODULE enteredProvider = nullptr,
+        ID3D12GraphicsCommandList* command = nullptr);
 
     static void unhookInterposer();
     static void hookInterposer(HMODULE slInterposer);
+    static bool PrepareVulkanFullFrame(uint64_t provider,uint64_t frame,uint32_t viewport);
 
     static void unhookDlss();
     static void hookDlss(HMODULE slDlss);
@@ -208,6 +218,7 @@ class StreamlineHooks
     inline static decltype(&slGetNewFrameToken) o_slGetNewFrameToken = nullptr;
     inline static decltype(&slIsFeatureSupported) o_slIsFeatureSupported = nullptr;
     inline static decltype(&slIsFeatureLoaded) o_slIsFeatureLoaded = nullptr;
+    inline static decltype(&slSetFeatureLoaded) o_slSetFeatureLoaded = nullptr;
     inline static decltype(&slGetFeatureRequirements) o_slGetFeatureRequirements = nullptr;
     inline static decltype(&slGetFeatureVersion) o_slGetFeatureVersion = nullptr;
     inline static decltype(&slGetFeatureFunction) o_slGetFeatureFunction = nullptr;
@@ -223,6 +234,7 @@ class StreamlineHooks
     static sl::Result hkslInit(const sl::Preferences& pref, uint64_t sdkVersion);
     static sl::Result hkslIsFeatureSupported(sl::Feature feature, const sl::AdapterInfo& adapterInfo);
     static sl::Result hkslIsFeatureLoaded(sl::Feature feature, bool& loaded);
+    static sl::Result hkslSetFeatureLoaded(sl::Feature feature, bool loaded);
     static sl::Result hkslGetFeatureRequirements(sl::Feature feature, sl::FeatureRequirements& requirements);
     static sl::Result hkslGetFeatureVersion(sl::Feature feature, sl::FeatureVersion& version);
     static sl::Result hkslGetFeatureFunction(sl::Feature feature, const char* functionName, void*& function);
@@ -267,6 +279,10 @@ class StreamlineHooks
     inline static decltype(&slDLSSGGetState) o_slDLSSGGetState = nullptr;
     static inline sl::ViewportHandle lastDlssgViewport {}; // For updating options when we change them
     static inline sl::DLSSGOptions lastDlssgOptions {};
+    static inline bool lastDlssgOptionsReplayable = false;
+    static inline uint64_t lastDlssgOptionsHookGeneration = 0;
+    static inline std::atomic<HMODULE> mfgSelectedWrapper { nullptr };
+    static inline std::mutex lastDlssgOptionsMutex;
 
     static bool hkdlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
     static sl::Result hkslSetConstants(const sl::Constants& values, const sl::FrameToken& frame,
@@ -275,6 +291,8 @@ class StreamlineHooks
     static sl::Result hkslDLSSGGetState(const sl::ViewportHandle& viewport, sl::DLSSGState& state,
                                         const sl::DLSSGOptions* options);
     static void* hkdlssg_slGetPluginFunction(const char* functionName);
+    static void bindNativeMfgWrapper(const void* function);
+    static void wrapNativeDlssgFunction(const char* name, void*& function);
     static const char* hkdlssg_slGetPluginJSONConfig_sl1();
 
     // Local DLSSG

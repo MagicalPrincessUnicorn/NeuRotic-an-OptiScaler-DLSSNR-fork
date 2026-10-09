@@ -1,0 +1,2253 @@
+{
+  "schema_version": 1,
+  "dataset_id": "neurotic-anticheat-warning-2026-10-02",
+  "review_date": "2026-10-02",
+  "platform": "Windows",
+  "counts": {
+    "game_family_records": 95,
+    "game_alias_records": 162,
+    "unique_basename_only_warning_aliases": 135,
+    "unique_context_required_aliases": 15,
+    "steam_app_identities": 92
+  },
+  "policy": {
+    "action": "warn_allow_explicit_override",
+    "no_match_means": "unknown_not_safe"
+  },
+  "games": [
+    {
+      "id": "apex-legends",
+      "title": "Apex Legends",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1172470"
+      ],
+      "executables": [
+        {
+          "basename": "EAAntiCheat.GameServiceLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "r5apex.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "r5apex_dx12.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "arc-raiders",
+      "title": "ARC Raiders",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1808500"
+      ],
+      "executables": [
+        {
+          "basename": "PioneerGame.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Denuvo Anti-Cheat"
+      ]
+    },
+    {
+      "id": "arena-breakout-infinite",
+      "title": "Arena Breakout: Infinite",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2073620"
+      ],
+      "executables": [
+        {
+          "basename": "arena_breakout_infinite_launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Anti-Cheat Expert (ACE)"
+      ]
+    },
+    {
+      "id": "ark-survival-ascended",
+      "title": "ARK: Survival Ascended",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2399830"
+      ],
+      "executables": [
+        {
+          "basename": "ArkAscended.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "ArkAscended_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "ark-survival-evolved",
+      "title": "ARK: Survival Evolved",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "346110"
+      ],
+      "executables": [
+        {
+          "basename": "ShooterGame.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "ShooterGame_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "arma-3",
+      "title": "Arma 3",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "107410"
+      ],
+      "executables": [
+        {
+          "basename": "arma3launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "arma-reforger",
+      "title": "Arma Reforger",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1874880"
+      ],
+      "executables": [
+        {
+          "basename": "ArmaReforger_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "ArmaReforgerSteam.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "back-4-blood",
+      "title": "Back 4 Blood",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "924970"
+      ],
+      "executables": [
+        {
+          "basename": "Back4Blood.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "battlebit-remastered",
+      "title": "BattleBit Remastered",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "671860"
+      ],
+      "executables": [
+        {
+          "basename": "BattleBit.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "BattleBitEAC.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "battlefield-1",
+      "title": "Battlefield 1",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1238840"
+      ],
+      "executables": [
+        {
+          "basename": "bf1.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "bf1Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "battlefield-2042",
+      "title": "Battlefield 2042",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1517290"
+      ],
+      "executables": [
+        {
+          "basename": "BF2042.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "BF2042Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "battlefield-4",
+      "title": "Battlefield 4",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1238860"
+      ],
+      "executables": [
+        {
+          "basename": "bf4.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "bf4_x86.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "PunkBuster"
+      ]
+    },
+    {
+      "id": "battlefield-6",
+      "title": "Battlefield 6",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2807960"
+      ],
+      "executables": [
+        {
+          "basename": "bf6.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "EAAntiCheat.GameServiceLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "battlefield-v",
+      "title": "Battlefield V",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1238810"
+      ],
+      "executables": [
+        {
+          "basename": "bfv.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "bfvTrial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "black-desert",
+      "title": "Black Desert",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "582660"
+      ],
+      "executables": [
+        {
+          "basename": "BlackDesertLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "XIGNCODE3",
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "black-squad",
+      "title": "Black Squad",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "550650"
+      ],
+      "executables": [
+        {
+          "basename": "BSLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye",
+        "nProtect GameGuard"
+      ]
+    },
+    {
+      "id": "brawlhalla",
+      "title": "Brawlhalla",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "291550"
+      ],
+      "executables": [
+        {
+          "basename": "Brawlhalla.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "caliber",
+      "title": "Caliber",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "307950"
+      ],
+      "executables": [
+        {
+          "basename": "Caliber.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "SARDRunner.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "SARD"
+      ]
+    },
+    {
+      "id": "call-of-duty-hq-warzone",
+      "title": "Call of Duty HQ / Warzone",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1938090"
+      ],
+      "executables": [
+        {
+          "basename": "bootstrapper.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "cod.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "RICOCHET Anti-Cheat"
+      ]
+    },
+    {
+      "id": "chivalry-2",
+      "title": "Chivalry 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1824220"
+      ],
+      "executables": [
+        {
+          "basename": "Chivalry2Launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "conan-exiles-enhanced",
+      "title": "Conan Exiles Enhanced",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "440900"
+      ],
+      "executables": [
+        {
+          "basename": "FuncomLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "conqueror-s-blade-migrated-steam-build",
+      "title": "Conqueror's Blade (migrated Steam build)",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "905370"
+      ],
+      "executables": [
+        {
+          "basename": "proven_ground_client.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "NetEase Yidun"
+      ]
+    },
+    {
+      "id": "counter-strike-2-legacy-cs-go",
+      "title": "Counter-Strike 2 / legacy CS:GO",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "730"
+      ],
+      "executables": [
+        {
+          "basename": "cs2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "csgo.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "counter-strike-source",
+      "title": "Counter-Strike: Source",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "240"
+      ],
+      "executables": [
+        {
+          "basename": "cstrike.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "cstrike_win64.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "hl2.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "crossout",
+      "title": "Crossout",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "386180"
+      ],
+      "executables": [
+        {
+          "basename": "Crossout.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "day-of-defeat-source",
+      "title": "Day of Defeat: Source",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "300"
+      ],
+      "executables": [
+        {
+          "basename": "dod.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "dod_win64.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "hl2.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "dayz",
+      "title": "DayZ",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "221100"
+      ],
+      "executables": [
+        {
+          "basename": "DayZ_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "DayZ_x64.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "DayZLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "dead-by-daylight",
+      "title": "Dead by Daylight",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "381210"
+      ],
+      "executables": [
+        {
+          "basename": "DeadByDaylight-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "DeadByDaylight.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "delta-force",
+      "title": "Delta Force",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2507950"
+      ],
+      "executables": [
+        {
+          "basename": "DeltaForceClient-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "df_launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Anti-Cheat Expert (ACE)"
+      ]
+    },
+    {
+      "id": "destiny-2",
+      "title": "Destiny 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1085660"
+      ],
+      "executables": [
+        {
+          "basename": "destiny2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "destiny2launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "dota-2",
+      "title": "Dota 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "570"
+      ],
+      "executables": [
+        {
+          "basename": "dota2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "dungeon-defenders",
+      "title": "Dungeon Defenders",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "65800"
+      ],
+      "executables": [
+        {
+          "basename": "DunDefGame.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "ea-sports-fc-24",
+      "title": "EA SPORTS FC 24",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2195250"
+      ],
+      "executables": [
+        {
+          "basename": "FC24.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FC24_Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "ea-sports-fc-25",
+      "title": "EA SPORTS FC 25",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2669320"
+      ],
+      "executables": [
+        {
+          "basename": "FC25.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FC25_Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "ea-sports-fc-26",
+      "title": "EA SPORTS FC 26",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3405690"
+      ],
+      "executables": [
+        {
+          "basename": "FC26.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FC26_Showcase.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FC26_Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "ea-sports-fc-27",
+      "title": "EA SPORTS FC 27",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "4080220"
+      ],
+      "executables": [
+        {
+          "basename": "FC27.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FC27_Showcase.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FC27_Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "ea-sports-wrc",
+      "title": "EA SPORTS WRC",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1849250"
+      ],
+      "executables": [
+        {
+          "basename": "EAAntiCheat.GameServiceLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "elden-ring",
+      "title": "ELDEN RING",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1245620"
+      ],
+      "executables": [
+        {
+          "basename": "eldenring.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "start_protected_game.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "elden-ring-nightreign",
+      "title": "ELDEN RING NIGHTREIGN",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2622380"
+      ],
+      "executables": [
+        {
+          "basename": "start_protected_game.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "escape-from-tarkov",
+      "title": "Escape from Tarkov",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3932890"
+      ],
+      "executables": [
+        {
+          "basename": "EscapeFromTarkov.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "EscapeFromTarkov_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "f1-24",
+      "title": "F1 24",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2488620"
+      ],
+      "executables": [
+        {
+          "basename": "EAAntiCheat.GameServiceLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "F1_24.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "fall-guys",
+      "title": "Fall Guys",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1097150"
+      ],
+      "executables": [
+        {
+          "basename": "FallGuys_client.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FallGuys_client_game.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "fifa-23",
+      "title": "FIFA 23",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1811260"
+      ],
+      "executables": [
+        {
+          "basename": "FIFA23.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "FIFA23_Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA AntiCheat"
+      ]
+    },
+    {
+      "id": "fortnite",
+      "title": "Fortnite",
+      "identity_match_enabled": false,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [],
+      "executables": [
+        {
+          "basename": "FortniteClient-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "grand-theft-auto-v-enhanced-gta-online",
+      "title": "Grand Theft Auto V Enhanced / GTA Online",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3240220"
+      ],
+      "executables": [
+        {
+          "basename": "GTA5_Enhanced.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "GTA5_Enhanced_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "PlayGTAV.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "grand-theft-auto-v-legacy-gta-online",
+      "title": "Grand Theft Auto V Legacy / GTA Online",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "271590"
+      ],
+      "executables": [
+        {
+          "basename": "GTA5.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "GTA5_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "GTAVLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "PlayGTAV.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "gray-zone-warfare",
+      "title": "Gray Zone Warfare",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2479810"
+      ],
+      "executables": [
+        {
+          "basename": "GZWClientEAC.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat",
+        "AnyBrain"
+      ]
+    },
+    {
+      "id": "halo-infinite",
+      "title": "Halo Infinite",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1240440"
+      ],
+      "executables": [
+        {
+          "basename": "HaloInfinite.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "halo-the-master-chief-collection",
+      "title": "Halo: The Master Chief Collection",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "976730"
+      ],
+      "executables": [
+        {
+          "basename": "mcc-win64-shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "mcclauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "hell-let-loose",
+      "title": "Hell Let Loose",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "686810"
+      ],
+      "executables": [
+        {
+          "basename": "HLL-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "Launch_HLL.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "helldivers-2",
+      "title": "HELLDIVERS 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "553850"
+      ],
+      "executables": [
+        {
+          "basename": "helldivers2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "nProtect GameGuard"
+      ]
+    },
+    {
+      "id": "hunt-showdown-1896",
+      "title": "Hunt: Showdown 1896",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "594650"
+      ],
+      "executables": [
+        {
+          "basename": "hunt.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "HuntGame.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "hurtworld",
+      "title": "Hurtworld",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "393420"
+      ],
+      "executables": [
+        {
+          "basename": "hurtworld.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "insurgency-2014",
+      "title": "Insurgency (2014)",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "222880"
+      ],
+      "executables": [
+        {
+          "basename": "insurgency.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "insurgency-sandstorm",
+      "title": "Insurgency: Sandstorm",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "581320"
+      ],
+      "executables": [
+        {
+          "basename": "Insurgency.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "InsurgencyEAC.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "ironsight-legacy-installation",
+      "title": "Ironsight (legacy installation)",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "783770"
+      ],
+      "executables": [
+        {
+          "basename": "launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "league-of-legends-teamfight-tactics-pc",
+      "title": "League of Legends / Teamfight Tactics (PC)",
+      "identity_match_enabled": false,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [],
+      "executables": [
+        {
+          "basename": "League of Legends.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "LeagueClient.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Riot Vanguard"
+      ]
+    },
+    {
+      "id": "left-4-dead",
+      "title": "Left 4 Dead",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "500"
+      ],
+      "executables": [
+        {
+          "basename": "left4dead.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "left-4-dead-2",
+      "title": "Left 4 Dead 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "550"
+      ],
+      "executables": [
+        {
+          "basename": "left4dead2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "lost-ark",
+      "title": "Lost Ark",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1599340"
+      ],
+      "executables": [
+        {
+          "basename": "LOSTARK.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "start_protected_game.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat",
+        "AnyBrain"
+      ]
+    },
+    {
+      "id": "madden-nfl-26",
+      "title": "Madden NFL 26",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3230400"
+      ],
+      "executables": [
+        {
+          "basename": "Madden26.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "Madden26_Trial.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA AntiCheat"
+      ]
+    },
+    {
+      "id": "maplestory",
+      "title": "MapleStory",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "216150"
+      ],
+      "executables": [
+        {
+          "basename": "MapleStory.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "nxsteam.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Nexon BlackCipher"
+      ]
+    },
+    {
+      "id": "marathon",
+      "title": "Marathon",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3065800"
+      ],
+      "executables": [
+        {
+          "basename": "Marathon.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "MarathonLauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "marvel-rivals",
+      "title": "Marvel Rivals",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2767030"
+      ],
+      "executables": [
+        {
+          "basename": "Marvel-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "MarvelRivals_Launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "NetEase Game Security"
+      ]
+    },
+    {
+      "id": "miscreated",
+      "title": "Miscreated",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "299740"
+      ],
+      "executables": [
+        {
+          "basename": "Miscreated.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "nba-2k25",
+      "title": "NBA 2K25",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2878980"
+      ],
+      "executables": [
+        {
+          "basename": "NBA2K25.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "nba-2k26",
+      "title": "NBA 2K26",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3472040"
+      ],
+      "executables": [
+        {
+          "basename": "NBA2K26.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "start_protected_game.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "no-more-room-in-hell",
+      "title": "No More Room in Hell",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "224260"
+      ],
+      "executables": [
+        {
+          "basename": "nmrih.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "paladins",
+      "title": "Paladins",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "444090"
+      ],
+      "executables": [
+        {
+          "basename": "PaladinsEAC.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "planetside-2",
+      "title": "PlanetSide 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "218230"
+      ],
+      "executables": [
+        {
+          "basename": "LaunchPad.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "plants-vs-zombies-garden-warfare-2",
+      "title": "Plants vs. Zombies Garden Warfare 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1922560"
+      ],
+      "executables": [
+        {
+          "basename": "GW2.Main_Win64_Retail.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "EA Javelin Anticheat"
+      ]
+    },
+    {
+      "id": "pubg-battlegrounds",
+      "title": "PUBG: BATTLEGROUNDS",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "578080"
+      ],
+      "executables": [
+        {
+          "basename": "ExecPubg.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "TslGame.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "TslGame_BE.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "rainbow-six-siege",
+      "title": "Rainbow Six Siege",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "359550"
+      ],
+      "executables": [
+        {
+          "basename": "RainbowSix.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "rising-storm-2-vietnam",
+      "title": "Rising Storm 2: Vietnam",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "418460"
+      ],
+      "executables": [
+        {
+          "basename": "RisingStorm2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "start_protected_game.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "robocraft-legacy-installation",
+      "title": "Robocraft (legacy installation)",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "301520"
+      ],
+      "executables": [
+        {
+          "basename": "robocraft.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "rocket-league",
+      "title": "Rocket League",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "252950"
+      ],
+      "executables": [
+        {
+          "basename": "RocketLeague.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "RocketLeague_EAC.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "rust",
+      "title": "Rust",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "252490"
+      ],
+      "executables": [
+        {
+          "basename": "Rust.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "RustClient.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "scum",
+      "title": "SCUM",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "513710"
+      ],
+      "executables": [
+        {
+          "basename": "SCUM.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "SCUM_Launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "sea-of-thieves",
+      "title": "Sea of Thieves",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1172620"
+      ],
+      "executables": [
+        {
+          "basename": "SeaOfThieves.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "SoTGame.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "smite",
+      "title": "SMITE",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "386360"
+      ],
+      "executables": [
+        {
+          "basename": "SmiteEAC64.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "smite-2",
+      "title": "SMITE 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2437170"
+      ],
+      "executables": [
+        {
+          "basename": "Hemingway.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "sniper-elite-5",
+      "title": "Sniper Elite 5",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1029690"
+      ],
+      "executables": [
+        {
+          "basename": "sniperelite5.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "squad",
+      "title": "Squad",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "393380"
+      ],
+      "executables": [
+        {
+          "basename": "squad_launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "SquadGame-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "squad-44-formerly-post-scriptum",
+      "title": "Squad 44 (formerly Post Scriptum)",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "736220"
+      ],
+      "executables": [
+        {
+          "basename": "squad44_launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "starship-troopers-extermination",
+      "title": "Starship Troopers: Extermination",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "1268750"
+      ],
+      "executables": [
+        {
+          "basename": "Yakisoba.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "team-fortress-2",
+      "title": "Team Fortress 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "440"
+      ],
+      "executables": [
+        {
+          "basename": "tf.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "tf_win64.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Valve Anti-Cheat (VAC)"
+      ]
+    },
+    {
+      "id": "the-finals",
+      "title": "THE FINALS",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2073850"
+      ],
+      "executables": [
+        {
+          "basename": "Discovery-d.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "Discovery-e.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "Discovery.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Denuvo Anti-Cheat"
+      ]
+    },
+    {
+      "id": "the-first-descendant",
+      "title": "The First Descendant",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "2074920"
+      ],
+      "executables": [
+        {
+          "basename": "M1-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "TheFirstDescendant.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat",
+        "Nexon BlackCipher / NGS"
+      ]
+    },
+    {
+      "id": "tree-of-savior-english",
+      "title": "Tree of Savior (English)",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "372000"
+      ],
+      "executables": [
+        {
+          "basename": "tos.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Nexon BlackCipher"
+      ]
+    },
+    {
+      "id": "valorant",
+      "title": "VALORANT",
+      "identity_match_enabled": false,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [],
+      "executables": [
+        {
+          "basename": "VALORANT-Win64-Shipping.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "VALORANT.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Riot Vanguard"
+      ]
+    },
+    {
+      "id": "vindictus",
+      "title": "Vindictus",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "212160"
+      ],
+      "executables": [
+        {
+          "basename": "nxsteam.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "Vindictus.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Nexon BlackCipher"
+      ]
+    },
+    {
+      "id": "vrchat",
+      "title": "VRChat",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "438100"
+      ],
+      "executables": [
+        {
+          "basename": "launch.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "VRChat.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "war-thunder",
+      "title": "War Thunder",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "236390"
+      ],
+      "executables": [
+        {
+          "basename": "beac_wt_mlauncher.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "BattlEye"
+      ]
+    },
+    {
+      "id": "warhammer-vermintide-2",
+      "title": "Warhammer: Vermintide 2",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "552500"
+      ],
+      "executables": [
+        {
+          "basename": "launcher.exe",
+          "active_warning_rule": true,
+          "match_mode": "requires_game_identity"
+        },
+        {
+          "basename": "vermintide2.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        },
+        {
+          "basename": "vermintide2_dx12.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Easy Anti-Cheat"
+      ]
+    },
+    {
+      "id": "wuthering-waves",
+      "title": "Wuthering Waves",
+      "identity_match_enabled": true,
+      "runtime_verified": false,
+      "action": "warn_allow_override",
+      "steam_app_ids": [
+        "3513350"
+      ],
+      "executables": [
+        {
+          "basename": "Wuthering Waves.exe",
+          "active_warning_rule": true,
+          "match_mode": "exact_basename"
+        }
+      ],
+      "anti_cheat_reported": [
+        "Anti-Cheat Expert (ACE)"
+      ]
+    }
+  ]
+}

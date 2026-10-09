@@ -127,9 +127,9 @@ static void fgLogCallback(uint32_t type, const wchar_t* message)
     auto message_str = wstring_to_string(std::wstring(message));
 
     if (type == FFX_API_MESSAGE_TYPE_ERROR)
-        spdlog::error("FFX FG Callback: {}", message_str);
+        LOG_WHILE_ACTIVE(error, "FFX FG Callback: {}", message_str);
     else if (type == FFX_API_MESSAGE_TYPE_WARNING)
-        spdlog::warn("FFX FG Callback: {}", message_str);
+        LOG_WHILE_ACTIVE(warn, "FFX FG Callback: {}", message_str);
 }
 
 static D3D12_RESOURCE_STATES GetD3D12State(FfxApiResourceState state)

@@ -1,4 +1,7 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/FsrObservationAdapter.h>
+// NR-FEED-001 END
 #include "FSR2_Dx11.h"
 
 #include "Util.h"
@@ -164,6 +167,9 @@ static std::optional<float> GetQualityOverrideRatioFfx(const FfxFsr2QualityMode 
 // FSR2 Upscaler
 static FfxErrorCode ffxFsr2ContextCreate_Dx11(FfxFsr2Context* context, FfxFsr2ContextDescription* contextDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(contextDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     if (contextDescription == nullptr || contextDescription->device == nullptr)
@@ -188,6 +194,9 @@ static FfxErrorCode ffxFsr2ContextCreate_Dx11(FfxFsr2Context* context, FfxFsr2Co
     }
 
     // check for d3d11 device
+    // NR-FEED-001 BEGIN
+    feedCreation.Publish({"FSR2", Neurotic::Contracts::GraphicsApi::D3D11, "create"}, context);
+    // NR-FEED-001 END
     // to prevent crashes when game is using custom interface and
     if (_d3d11Device == nullptr)
     {
@@ -251,6 +260,10 @@ static FfxErrorCode ffxFsr2ContextCreate_Dx11(FfxFsr2Context* context, FfxFsr2Co
 static FfxErrorCode ffxFsr2ContextDispatch_Dx11(FfxFsr2Context* context,
                                                 const FfxFsr2DispatchDescription* dispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR2", Neurotic::Contracts::GraphicsApi::D3D11, "dispatch"}, context);
+    Neurotic::Feed::ObserveFsrDispatch(feedObservation, dispatchDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     // Skip OptiScaler stuff
@@ -267,6 +280,9 @@ static FfxErrorCode ffxFsr2ContextDispatch_Dx11(FfxFsr2Context* context,
         return FFX_ERROR_INVALID_ARGUMENT;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR2.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(context) && _initParams.contains(context) &&
         !CreateDLSSContext(context, dispatchDescription))
         return FFX_ERROR_INVALID_ARGUMENT;

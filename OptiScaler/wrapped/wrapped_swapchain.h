@@ -6,6 +6,7 @@
 
 #include "dxgi1_6.h"
 #include "d3d12.h"
+#include <wrl/client.h>
 
 #define USE_LOCAL_MUTEX
 
@@ -91,6 +92,8 @@ class DECLSPEC_UUID("3af622a3-82d0-49cd-994f-cce05122c222") WrappedIDXGISwapChai
 
     IUnknown* _device = nullptr;
     IUnknown* _device2 = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> _resizedQueue;
+    bool _inspectorQueueQualified = true;
 
     HWND _handle = nullptr;
 

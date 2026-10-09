@@ -4,6 +4,7 @@
 #include <resource_tracking/ResTrack_dx12.h>
 #include "shaders/depth_scale/DS_Dx12.h"
 #include "MathUtils.h"
+#include <framegen/ffx/FSRFG_Dx12.h>
 
 using namespace OptiMath;
 static DS_Dx12* DepthScale = nullptr;
@@ -125,7 +126,9 @@ void UpscalerInputsDx12::UpscaleStart(ID3D12GraphicsCommandList* InCmdList, NVSD
     InParameters->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &jitterX);
     InParameters->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &jitterY);
 
-    fg->StartNewFrame();
+    const auto scheduledFrame=fg->StartNewFrame();
+    if(auto* selectedFsr=dynamic_cast<FSRFG_Dx12*>(fg))
+        selectedFsr->ObserveSourceTransaction(scheduledFrame,Neurotic::Lifecycle::NativeSourceTransactionScope::Current());
 
     auto aspectRatio = (float) feature->DisplayWidth() / (float) feature->DisplayHeight();
     fg->SetCameraValues(cameraNear, cameraFar, cameraVFov, aspectRatio, meterFactor);

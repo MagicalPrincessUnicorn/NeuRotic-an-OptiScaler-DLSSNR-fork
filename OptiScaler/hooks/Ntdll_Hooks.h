@@ -44,6 +44,9 @@ class NtdllHooks
     static NTSTATUS NTAPI hkLdrLoadDll(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName,
                                        PHANDLE ModuleHandle)
     {
+        if (NtdllProxy::IsInternalLoad())
+            return o_LdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
+
         if (ModuleHandle == nullptr)
             return STATUS_INVALID_PARAMETER;
 
@@ -98,6 +101,9 @@ class NtdllHooks
     static NTSTATUS NTAPI hkNtLoadDll(PUNICODE_STRING PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName,
                                       PHANDLE ModuleHandle)
     {
+        if (NtdllProxy::IsInternalLoad())
+            return o_NtLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
+
         if (ModuleHandle == nullptr)
             return STATUS_INVALID_PARAMETER;
 

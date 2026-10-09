@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "Shader_Vk.h"
+#ifndef NR_VK_GPU_FIXTURE
 #include "Util.h"
+#endif
 
 Shader_Vk::Shader_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InPhysicalDevice)
     : _name(InName), _device(InDevice), _physicalDevice(InPhysicalDevice)
@@ -52,6 +54,25 @@ Shader_Vk::~Shader_Vk()
     }
 
     ReleaseImageResource();
+}
+
+void Shader_Vk::AbandonDevice()
+{
+    _pipeline = VK_NULL_HANDLE;
+    _pipelineLayout = VK_NULL_HANDLE;
+    _descriptorSetLayout = VK_NULL_HANDLE;
+    _descriptorPool = VK_NULL_HANDLE;
+    _descriptorSets.clear();
+    _constantBuffer = VK_NULL_HANDLE;
+    _constantBufferMemory = VK_NULL_HANDLE;
+    _mappedConstantBuffer = nullptr;
+    _textureSampler = VK_NULL_HANDLE;
+    _intermediateImageView = VK_NULL_HANDLE;
+    _intermediateImage = VK_NULL_HANDLE;
+    _intermediateMemory = VK_NULL_HANDLE;
+    _device = VK_NULL_HANDLE;
+    _physicalDevice = VK_NULL_HANDLE;
+    _init = false;
 }
 
 void Shader_Vk::CreateDescriptorPool(const std::vector<VkDescriptorPoolSize>& poolSizes, uint32_t maxSets)
@@ -106,7 +127,7 @@ uint32_t Shader_Vk::FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typ
     }
 
     LOG_ERROR("Failed to find suitable memory type!");
-    return -1;
+    return UINT32_MAX;
 }
 
 bool Shader_Vk::CreateComputePipeline(VkDevice device, VkPipelineLayout pipelineLayout, VkPipeline* pipeline,

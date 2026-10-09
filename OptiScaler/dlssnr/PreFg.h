@@ -1,4 +1,5 @@
 #pragma once
+#include "../nr/diagnostics/capability/CapabilityOwnerAdapters.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -94,12 +95,14 @@ struct CompletionDependency
     uint64_t sequence = 0;
     uint64_t reservation = 0;
     CompletionKind kind = CompletionKind::Output;
+    bool retiring = false; // ordering an already-started group, never new NR admission
     std::shared_ptr<GpuSafety::ExternalWaitStatus> status;
 };
 enum class CompletionClaimResult { None, Ready, Refused };
 struct CompletionClaim
 {
     CompletionClaimResult result = CompletionClaimResult::None;
+    const char* reason = "no-packet";
     CompletionDependency dependency;
 };
 class CompletionLedger
@@ -116,8 +119,10 @@ class CompletionLedger
         Microsoft::WRL::ComPtr<ID3D12Fence> fence;
         uint64_t value = 0;
         bool ready = false;
-        bool claimed = false;
+        unsigned int claimed = 0, generated = 0;
+        bool allowMfg = false;
         bool invalidated = false;
+        bool closing = false;
         CompletionKind kind = CompletionKind::Output;
         std::shared_ptr<GpuSafety::ExternalWaitStatus> status;
     };
@@ -132,13 +137,13 @@ class CompletionLedger
     void RetireInvalidated()
     {
         for (auto& entry : entries)
-            if (entry.invalidated && Completed(entry)) entry = {};
+            if ((entry.invalidated || entry.closing) && Completed(entry)) entry = {};
     }
   public:
     uint64_t Reserve(ID3D12Resource* resource, uint64_t providerGeneration,
                      uint64_t nativeFgGeneration, uint64_t nativeFgInstance,
                      uint64_t token, uint64_t sequence, CompletionKind kind = CompletionKind::Output,
-                     std::atomic<uint64_t>* failureEpoch = nullptr)
+                     std::atomic<uint64_t>* failureEpoch = nullptr, bool allowMfg = false)
     {
         if (!resource || !providerGeneration || !nativeFgGeneration || !nativeFgInstance || !token || !sequence)
             return 0;
@@ -164,6 +169,7 @@ class CompletionLedger
                 entry.token = token;
                 entry.sequence = sequence;
                 entry.kind = kind;
+                entry.allowMfg = allowMfg;
                 entry.status = std::make_shared<GpuSafety::ExternalWaitStatus>();
                 entry.status->failureEpoch = failureEpoch;
                 return reservation;
@@ -178,7 +184,7 @@ class CompletionLedger
             if (entry.reservation == reservation && entry.resource == resource && !entry.ready)
             {
                 entry.fence = fence; entry.value = value; entry.ready = true; entry.kind = kind;
-                return !entry.invalidated;
+                return !entry.invalidated && !entry.closing;
             }
         return false;
     }
@@ -195,33 +201,59 @@ class CompletionLedger
     std::shared_ptr<GpuSafety::ExternalWaitStatus> Status(uint64_t reservation) const
     {
         for (const auto& entry : entries)
-            if (entry.reservation == reservation && !entry.invalidated) return entry.status;
+            if (entry.reservation == reservation && !entry.invalidated && !entry.closing) return entry.status;
         return {};
     }
     CompletionClaim Claim(ID3D12Resource* resource, uint64_t providerGeneration,
                           uint64_t nativeFgGeneration, uint64_t nativeFgInstance,
-                          uint64_t exactToken = 0, uint64_t exactSequence = 0)
+                          uint64_t exactToken = 0, uint64_t exactSequence = 0,
+                          unsigned int generated = 1, unsigned int index = 1)
     {
         CompletionClaim claim;
         RetireInvalidated();
         for (auto& entry : entries)
         {
             if (!entry.reservation || entry.resource != resource) continue;
-            if (entry.providerGeneration != providerGeneration ||
-                entry.nativeFgGeneration != nativeFgGeneration ||
-                entry.nativeFgInstance != nativeFgInstance || entry.invalidated || entry.claimed || !entry.ready ||
-                !entry.fence || !entry.value || (exactToken && entry.token != exactToken) ||
-                (exactSequence && entry.sequence != exactSequence))
-            { claim.result = CompletionClaimResult::Refused; return claim; }
+            // Settings/off revokes future work, not the ordering obligation of
+            // child 1 already handed to this exact live native consumer. Only
+            // its ordered remaining indices can finish under the old packet.
+            const bool retiringTail = entry.closing && entry.claimed > 0 &&
+                entry.generated == generated && index > 1;
+            const char* refusal = entry.invalidated ? "packet-invalidated" :
+                entry.closing && !retiringTail ? "admission-closed-no-started-tail" :
+                entry.providerGeneration != providerGeneration && !retiringTail ? "provider-generation" :
+                entry.nativeFgGeneration != nativeFgGeneration ? "native-generation" :
+                entry.nativeFgInstance != nativeFgInstance ? "native-instance" :
+                !entry.ready || !entry.fence || !entry.value ? "producer-not-committed" :
+                exactToken && entry.token != exactToken ? "frame-token" :
+                exactSequence && entry.sequence != exactSequence ? "frame-sequence" :
+                !generated || generated > (entry.allowMfg ? 5u : 1u) ? "generated-count" :
+                !index || index > generated || index != entry.claimed + 1 ? "child-index" :
+                entry.generated && entry.generated != generated ? "group-count-changed" :
+                entry.status->failed.load() ? "wait-group-failed" : nullptr;
+            if (refusal)
+            { claim.result = CompletionClaimResult::Refused; claim.reason = refusal; return claim; }
+            if (!entry.generated)
+            {
+                entry.generated = generated;
+                entry.status->expectedWaits = generated;
+            }
             claim.result = CompletionClaimResult::Ready;
+            claim.reason = retiringTail ? "retiring-tail" : "current-group";
             claim.dependency.fence = entry.fence;
             claim.dependency.value = entry.value;
             claim.dependency.token = entry.token;
             claim.dependency.sequence = entry.sequence;
             claim.dependency.reservation = entry.reservation;
             claim.dependency.kind = entry.kind;
-            claim.dependency.status = entry.status;
-            entry.claimed = true;
+            claim.dependency.retiring = retiringTail;
+            if (generated == 1) claim.dependency.status = entry.status;
+            else
+            {
+                claim.dependency.status = std::make_shared<GpuSafety::ExternalWaitStatus>();
+                claim.dependency.status->group = entry.status;
+            }
+            ++entry.claimed;
             return claim;
         }
         return claim;
@@ -231,6 +263,11 @@ class CompletionLedger
         // Invalidation cannot erase a GPU dependency. Keep a refusal until the
         // producer completes, or the caller cancels before any copyback submission.
         for (auto& entry : entries) if (entry.reservation) entry.invalidated = true;
+        RetireInvalidated();
+    }
+    void CloseAdmission()
+    {
+        for (auto& entry : entries) if (entry.reservation) entry.closing = true;
         RetireInvalidated();
     }
     unsigned int Count() const
@@ -372,6 +409,7 @@ struct ProviderState
 {
     bool known = false, enabled = false, supported = false;
     uint64_t generation = 0;
+    unsigned int requestedGenerated = 0, observedGenerated = 0;
 };
 struct ConsumerKey
 {
@@ -474,22 +512,48 @@ inline void ObserveLedger(const char* operation, uint32_t frame, uint32_t viewpo
     if (auto observer = ledgerObserver.load(std::memory_order_relaxed))
         observer(operation, frame, viewport, before, State().ledger.Inspect());
 }
-inline void PublishProvider(bool enabled, bool supported)
+inline void PublishProvider(bool enabled, bool supported, unsigned int requestedGenerated = 1)
 {
     std::lock_guard lock(State().mutex);
     auto& provider = State().provider;
-    if (!provider.known || provider.enabled != enabled || provider.supported != supported)
+    if (!provider.known || provider.enabled != enabled || provider.supported != supported ||
+        provider.requestedGenerated != requestedGenerated)
     {
         ++provider.generation;
         RevokeReadiness();
-        State().completions.Reset();
+        State().completions.CloseAdmission();
+        provider.observedGenerated = 0;
     }
     provider.known = true; provider.enabled = enabled; provider.supported = supported;
+    provider.requestedGenerated = requestedGenerated;
+}
+// Post-override NGX parameters are observations, not the game request or a
+// capability maximum. A transition revokes readiness without erasing the NR
+// dependency already submitted for the current real input.
+inline void ObserveGeneratedCount(uintptr_t handle, unsigned int generated, unsigned int index)
+{
+    std::lock_guard lock(State().mutex);
+    const auto native = State().nativeFg.Read();
+    if (!State().provider.enabled || native.active != 1 ||
+        State().nativeFg.Find(handle) != native.instance) return;
+    const auto observed = generated >= 1 && generated <= 5 && index >= 1 && index <= generated ? generated : 0;
+    auto& provider = State().provider;
+    if (provider.observedGenerated != observed)
+    {
+        provider.observedGenerated = observed;
+        RevokeReadiness();
+#if defined(LOG_INFO) && !defined(NR_GPU_SAFETY_TEST)
+        LOG_INFO("NR Present FG multiplier observation: requestedGenerated={} ngxGenerated={} ngxIndex={} "
+                 "supportedFixedCount={} provider={}; readiness revoked", provider.requestedGenerated,
+                 generated, index, observed, provider.generation);
+#endif
+    }
 }
 inline void PublishNativeFgCreated(uintptr_t handle)
 {
     std::lock_guard lock(State().mutex);
     State().nativeFg.Create(handle);
+    State().provider.observedGenerated = 0;
     RevokeReadiness();
     State().completions.Reset();
 }
@@ -520,7 +584,7 @@ inline uint64_t ReserveCompletion(ID3D12Resource* resource, const Frame& frame)
         return 0;
     return State().completions.Reserve(resource, frame.providerGeneration, frame.nativeFgGeneration,
         frame.nativeFgInstance, frame.key, frame.sequence,
-        frame.allowOutput ? CompletionKind::Output : CompletionKind::Probe, &State().readinessEpoch);
+        frame.allowOutput ? CompletionKind::Output : CompletionKind::Probe, &State().readinessEpoch, true);
 }
 inline bool CommitCompletion(uint64_t reservation, ID3D12Resource* resource, ID3D12Fence* fence, uint64_t value,
                              CompletionKind kind = CompletionKind::Output)
@@ -539,7 +603,7 @@ inline void CancelCompletion(uint64_t reservation)
     State().completions.Cancel(reservation);
 }
 inline CompletionClaim ClaimCompletion(ID3D12Resource* resource, uint64_t providerGeneration,
-                                       uintptr_t nativeHandle)
+                                       uintptr_t nativeHandle, unsigned int generated = 1, unsigned int index = 1)
 {
     std::lock_guard lock(State().mutex);
     const auto native = State().nativeFg.Read();
@@ -547,7 +611,7 @@ inline CompletionClaim ClaimCompletion(ID3D12Resource* resource, uint64_t provid
     const auto* frame = forwardingFrame;
     auto result = State().completions.Claim(resource, providerGeneration, native.generation,
         native.active == 1 && instance == native.instance ? instance : 0,
-        frame ? frame->key : 0, frame ? frame->sequence : 0);
+        frame ? frame->key : 0, frame ? frame->sequence : 0, generated, index);
     if (result.result == CompletionClaimResult::Refused) RevokeReadiness();
     return result;
 }
@@ -577,22 +641,77 @@ inline void ResetCompletions()
     RevokeReadiness();
     State().completions.Reset();
 }
+inline void CloseCompletionAdmission()
+{
+    std::lock_guard lock(State().mutex);
+    RevokeReadiness();
+    State().completions.CloseAdmission();
+}
 inline ProviderState Provider()
 {
     std::lock_guard lock(State().mutex);
     return State().provider;
 }
-inline uint64_t CurrentFrame()
+inline Capability::ProviderObservation CopyCapabilityObservation(const Capability::WriterPort& port) noexcept
 {
+    std::lock_guard lock(State().mutex);
+    const auto p=State().provider;
+    return {Capability::ReserveSample(port).sequence,p.known,p.enabled,p.supported,p.generation};
+}
+// Correlate a Native capture with the actual enclosing temporal evaluation,
+// not constants another thread may already have published for the next frame.
+// This token is correlation only; the guide bridge still proves submission/order.
+class NativeFrameScope
+{
+    inline static thread_local NativeFrameScope* current = nullptr;
+    NativeFrameScope* previous;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;
+    uint64_t key = 0;
+    uint64_t providerGeneration = 0;
+  public:
+    NativeFrameScope() : previous(current) { current = this; }
+    void Configure(bool temporal, uint32_t frame, ID3D12GraphicsCommandList* commandList)
+    {
+        if (!temporal || !commandList) return;
+        list = NativeIdentity::Resolve<ID3D12GraphicsCommandList>(commandList).object;
+        if (list && list->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT)
+        { key = uint64_t(frame) + 1; providerGeneration = Provider().generation; }
+    }
+    NativeFrameScope(const NativeFrameScope&) = delete;
+    NativeFrameScope& operator=(const NativeFrameScope&) = delete;
+    ~NativeFrameScope() { list.Reset(); current = previous; }
+    static bool Active() { return current != nullptr; }
+    static uint64_t Generation() { return current ? current->providerGeneration : 0; }
+    static uint64_t Frame(ID3D12GraphicsCommandList* commandList)
+    {
+        if (!current || !current->key || !commandList) return 0;
+        const auto native = NativeIdentity::Resolve<ID3D12GraphicsCommandList>(commandList).object;
+        return native.Get() == current->list.Get() ? current->key : 0;
+    }
+};
+struct NativeFrameIdentity { uint64_t key = 0, providerGeneration = 0; };
+inline NativeFrameIdentity CurrentFrameIdentity(ID3D12GraphicsCommandList* commandList = nullptr)
+{
+    const bool scoped = NativeFrameScope::Active();
+    const auto scopedKey = scoped ? NativeFrameScope::Frame(commandList) : 0;
+    const auto scopedGeneration = scoped ? NativeFrameScope::Generation() : 0;
     auto& state = State();
     std::lock_guard lock(state.mutex);
+    // An in-flight old callback must keep its original producer epoch even if
+    // FG turns off before capture. Otherwise key zero relabels it as a fresh
+    // ordinary interval, allowing the new provider to admit stale metadata.
+    if (scopedGeneration && scopedGeneration != state.provider.generation)
+        return {0, scopedGeneration};
     // Native capture only carries a provider token while that provider will also
     // select an exact frame at Present. Games such as DD2 disable FG for dialogue
     // and menus while continuing to publish Streamline constants; retaining that
     // unclaimed token would reject the otherwise unique Native/Present interval.
-    return state.swapchains == 1 && state.provider.enabled
-        ? state.ledger.Current(state.provider.generation) : 0;
+    if (state.swapchains != 1 || !state.provider.enabled) return {0, state.provider.generation};
+    return {scoped ? (scopedGeneration == state.provider.generation ? scopedKey : 0)
+                  : state.ledger.Current(state.provider.generation), state.provider.generation};
 }
+inline uint64_t CurrentFrame(ID3D12GraphicsCommandList* commandList = nullptr)
+{ return CurrentFrameIdentity(commandList).key; }
 inline void ObserveConstants(uint32_t frame, uint32_t viewport)
 {
     auto& state = State();
@@ -704,3 +823,4 @@ inline bool BypassLate(IDXGISwapChain* chain)
     return true;
 }
 }
+

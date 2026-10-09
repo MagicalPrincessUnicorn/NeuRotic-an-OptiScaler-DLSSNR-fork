@@ -1,204 +1,251 @@
-```text
-███╗   ██╗███████╗██╗   ██╗██████╗  ██████╗ ████████╗██╗ ██████╗
-████╗  ██║██╔════╝██║   ██║██╔══██╗██╔═══██╗╚══██╔══╝██║██╔════╝
-██╔██╗ ██║█████╗  ██║   ██║██████╔╝██║   ██║   ██║   ██║██║
-██║╚██╗██║██╔══╝  ██║   ██║██╔══██╗██║   ██║   ██║   ██║██║
-██║ ╚████║███████╗╚██████╔╝██║  ██║╚██████╔╝   ██║   ██║╚██████╗
-╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚═╝ ╚═════╝
-```
+<p align="center">
+  <img src="assets/neurotic-banner-wide.png" alt="NeuRotic — official horizontal logo and wordmark" width="900">
+</p>
 
-# A forked branch of OptiScaler DLSS-NR
+# NeuRotic
 
-NeuRotic is an experimental OptiScaler fork focused on making Neural Rendering practical, playable, and approachable in real games.
+## An OptiScaler DLSS-NR fork
 
-It builds on the excellent work of [OptiScaler](https://github.com/optiscaler/OptiScaler) and the [OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR). NeuRotic extends that foundation with additional rendering routes, performance controls, Multipass processing, compatibility work, diagnostics, a redesigned interface, and safer installation tooling.
-
-> NeuRotic is experimental rendering middleware. Results vary by game, GPU, driver, graphics API, DLSS files, display mode, and other tools in the rendering chain.
+NeuRotic is a Windows application and rendering middleware built on [OptiScaler](https://github.com/optiscaler/OptiScaler) and [Dagherbou's OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR). It provides neural rendering, in-game rendering controls, and desktop window processing, with an App for game discovery, installation, configuration, and diagnostics.
 
 ## Table of Contents
 
-- [The mission](#the-mission)
-- [Latest release: Alpha 0.9.6](#latest-release-alpha-096)
-- [Important: Experimental Mode](#important-experimental-mode)
-- [What Alpha 0.9.6 adds](#what-alpha-096-adds)
-- [An interface designed for easy access](#an-interface-designed-for-easy-access)
-  - [Neural Rendering Advisor](#neural-rendering-advisor)
-  - [DLSS Neural Rendering](#dlss-neural-rendering)
-  - [Basic and Advanced Multipass](#basic-and-advanced-multipass)
-- [Current status and roadmap](#current-status-and-roadmap)
+- [What NeuRotic Does](#what-neurotic-does)
+- [Latest Release: Alpha 0.9.7](#latest-release-alpha-097)
+- [An Interface Designed for Easy Access](#an-interface-designed-for-easy-access)
+- [Workflows](#workflows)
+- [Compatibility](#compatibility)
+- [Current Status and Roadmap](#current-status-and-roadmap)
 - [Installation](#installation)
-  - [Getting the NVIDIA model](#getting-the-nvidia-model)
-  - [Installer safeguards](#installer-safeguards)
 - [Uninstallation](#uninstallation)
-- [Help shape NeuRotic](#help-shape-neurotic)
+- [Help Shape NeuRotic](#help-shape-neurotic)
 - [Support NeuRotic](#support-neurotic)
-- [Special thanks](#special-thanks)
-- [Source, credits, and licensing](#source-credits-and-licensing)
+- [Credits and Attribution](#credits-and-attribution)
+- [Source, Credits, and Licensing](#source-credits-and-licensing)
 
-## The Mission
+## What NeuRotic Does
 
-NeuRotic exists to make Neural Rendering as accessible, approachable, compatible, and useful as possible across a broad range of games.
+- **Neural rendering:** Native Temporal uses compatible game rendering inputs. Present routes process the presented image in supported DirectX 11, DirectX 12, and Vulkan games, including games without native DLSS integration.
+- **Image and workload controls:** adjust model and detail strengths, color where supported, processing resolution, and supported downscaling choices.
+- **Multipass:** use Basic shared settings or Advanced per-pass controls for as many as ten passes on compatible routes.
+- **Upscaling and reconstruction:** configure applicable upscaling controls and use neural rendering alongside supported Super Resolution and Ray Reconstruction paths.
+- **Frame generation:** configure supported FG and MFG providers, with ratios and activity shown separately from requested settings.
+- **Game management:** discover games, select executables, install or remove NeuRotic, edit per-game settings, and export diagnostics from the desktop App.
+- **Desktop processing:** NR Anything applies neural rendering to a selected window, with visual controls, comparison views, and PNG capture.
+- **Comparison and diagnostics:** view Original, processed, Split, and Stripes comparisons where supported, and inspect rendering inputs, timing, connections, and output status.
 
-Performance is fundamental to that mission. Not everyone owns an RTX 5090—or even a 50-series card—and a visual improvement is not especially useful if the game no longer runs well enough to enjoy. NeuRotic therefore provides multiple rendering routes, lower-cost workload choices, resolution controls, and per-pass tuning so people can pursue a worthwhile visual improvement on the hardware they actually own.
+## Latest Release: Alpha 0.9.7
 
-Even at this early Alpha stage, I firmly believe NeuRotic has achieved the core of that goal in the configurations where it has been successfully tested: improving Neural Rendering visuals and effectiveness while also increasing performance.
+Alpha 0.9.7 adds the desktop application and expands the existing rendering pipeline, game compatibility, interface, and language tools.
 
-Some additions exist because they move that mission forward. Others exist because I thought they would be fun to build. Both are part of what NeuRotic is.
+- **Desktop application:** game discovery, installation, component management, per-game settings, and diagnostic exports.
+- **Expanded rendering routes:** DirectX 11, DirectX 12, and Vulkan Present processing, including supported games without native DLSS integration.
+- **Multipass and rendering combinations:** Present Multipass and improved integration with HDR, Ray Reconstruction, and frame generation on supported paths.
+- **Multi Frame Generation:** RTX 40 series support on compatible paths, with opt-in experimental RTX 20/30 compatibility.
+- **Renewed in-game menu:** light and dark themes, rendering controls, comparison tools, and diagnostics.
+- **Translations:** completed interface translations, shared community language packs, and an import/export editor.
+- **Desktop NR Anything:** early-alpha neural rendering for selected windows, with visual controls, comparisons, and PNG capture.
 
-Anti-cheat is a separate problem. NeuRotic cannot promise compatibility with protected online games, and it should only be used where game modifications are permitted.
-
-## Latest Release: Alpha 0.9.6
-
-[NeuRotic Alpha 0.9.6](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.6) is the largest NeuRotic update so far. It substantially rebuilds the Present rendering foundation introduced in Alpha 0.9.5 and adds DirectX 11 transport, experimental HDR handling, a new interface, smarter configuration guidance, stronger Frame Generation recovery, and a complete public installer/uninstaller workflow.
-
-The final Advisor pass also makes blocked routes much easier to understand. It now separates Before- and After-upscaling analysis, responds sooner when a route cannot begin, and tells you when Present Enhanced specifically requires a saved Experimental Mode setting instead of leaving you to wonder why Neural Rendering is not running.
-
-Read the [complete Alpha 0.9.6 patch notes](ALPHA-0.9.6.md) for the full feature list, experimental boundaries, and known limitations.
-
-## NEW LANGUAGE PATCH: 0.9.6.1
-
-[NeuRotic Alpha 0.9.6.1](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases#release-alpha-0.9.6.1) is an optional update, targeted at improving all non-english translations.
-- Spanish
-- French
-- German
-- Portuguese
-- Chinese (New)
-
-A special thank you to **Alfred**, for consulting on a few key Chinese translations.
-
-## Important: Experimental Mode
-
-If Neural Rendering says **BLOCKED**, refuses to start, or returns to the original game image, it may be protecting you from a rendering combination that is not supported by the normal out-of-box configuration.
-
-Many of the frontier combinations people have asked for—including certain uses of Frame Generation, HDR, Multipass, DirectX 11, and Present Enhanced—live behind **Unlock Experimental Mode**. Ray Reconstruction also has route and placement restrictions; some combinations remain unavailable even in Experimental Mode when NeuRotic cannot support them safely.
-
-To try an available experimental path:
-
-1. Open the **Neural Rendering** page.
-2. Scroll below Multipass to **Neural Rendering — Experimental Overrides**.
-3. Enable **Unlock Experimental Mode** and accept the warning.
-4. Enable only the override needed for the feature you are testing.
-5. Select **Save experimental settings** or use the global **Save Settings** button. Checking a box without saving it does not activate the override.
-6. Read any BLOCKED, waiting, or fallback explanation shown by NeuRotic. The Advisor will name the required saved override when it recognizes a supported experimental prerequisite.
-
-Experimental Mode does not force every combination to run. It opens implemented but less-tested paths while leaving known unsafe GPU-resource behavior and confirmed hard failures locked.
-
-> **Personal commentary:** I am one person with one computer. I have fixed or isolated every issue I could reproduce and put this release through as many hardening and validation passes as I reasonably could. I believe NeuRotic has received unusually thorough hardening for a project at this stage, and I am proud of that—but I cannot reproduce every game, system, or rendering combination. That is why NeuRotic is still in Alpha. The normal experience is intentionally conservative; Experimental Mode is there for people who want to explore newer paths that may still crash, behave strangely, or need more work. Known GPU-resource corruption risks and other confirmed hard failures remain blocked. If you encounter a bug, I am sorry; I tried my best to keep the default experience safe, and your report may help me improve the next release.
-
-## What Alpha 0.9.6 Adds
-
-- **Three Neural Rendering routes:** Native Temporal, Present Compatibility, and experimental Present Enhanced.
-- **Native Temporal improvements:** better handling of inputs, guide dimensions, route transitions, resolution changes, and an optional experimental camera-cut preservation mode.
-- **Rebuilt Present behavior:** stronger resource ownership, history handling, fallback, resize recovery, and Frame Generation synchronization.
-- **DirectX 11 Neural Rendering:** Native and Present paths can use NeuRotic's synchronized DirectX 12 bridge in compatible games.
-- **Experimental HDR handling:** successful color-space, format, resize, metadata, and swapchain observations are tracked independently instead of relying on one inferred process-wide state.
-- **Neural Rendering Advisor:** analyze Before- or After-upscaling routes, receive useful feedback sooner, and see the exact saved experimental prerequisite when a supported route is blocked.
-- **Simpler resolution choices:** match the game's render resolution, process at full output, or choose a manual workload.
-- **Basic and Advanced Multipass:** quickly tune a selected pass range or take individual control of as many as ten passes.
-- **Experimental Options:** deliberately unlock less-tested combinations while confirmed unsafe conditions remain blocked.
-- **Comparison screenshots:** create matched PNG comparisons with NeuRotic version and configuration information embedded inside the images.
-- **Improved Frame Generation recovery:** Present modes can pause and safely requalify across supported graphics and compute handoffs instead of leaving gameplay frozen.
-- **Optional camera-cut preservation:** an experimental, default-off Native Temporal option can preserve NR through compatible reset-only cuts.
-- **Independent menu input controls:** choose whether mouse, keyboard, and controller input remain available to the game while the overlay is open.
-- **Interface brightness:** tune the brightness of NeuRotic's interface without changing the game, HDR output, or captured screenshots.
-- **OptiClip:** a completely essential Clippy-inspired assistant. This description of his importance has not been independently verified.
-- **Safer Setup and Uninstall tools:** verified packages, backups, rollback, repair, proxy changes, ReShade coexistence, interrupted-operation recovery, and preservation of user settings and models.
+Read the [complete Alpha 0.9.7 patch notes](RELEASE_NOTES.md) for feature details and the reported game-test list. Downloads are available on the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.7).
 
 ## An Interface Designed for Easy Access
 
-Alpha 0.9.6 reorganizes NeuRotic around the choices most people actually need. Essential controls and current status appear first; detailed diagnostics remain available when they are useful.
+Available controls and appearance vary by version and rendering path. Game titles shown do not establish compatibility.
 
-### Neural Rendering Advisor
+### Installation Library
 
-The **Neural Rendering Advisor** considers the current graphics path, GPU, output, guide availability, Frame Generation state, and your preferred performance/quality goal. Choose whether to analyze Neural Rendering **Before** or **After** upscaling: After exposes all three compatible route cards, while Before focuses on Native Temporal.
+The Library provides game discovery, executable selection, installation, per-game settings, and diagnostics. It also opens the game folder, INI file, and screenshot folder.
 
-The Advisor now stops an unproductive initial wait after five seconds and shows the current reason when one is available. If Present Enhanced is blocked by Frame Generation policy, its card names **Unlock Experimental Mode**, **Override FG Guardrails**, and **Save experimental settings** directly. It never enables or saves those choices for you.
+[![NeuRotic desktop Library with search, game list, executable selection and installation tabs](assets/library.png)](assets/library.png)
 
-It rejects measurements that are incomplete or stale and recommends the best option from the routes it successfully tests.
+*Installation Library with Baldur’s Gate 3 selected.*
 
-Temporary analysis settings are restored after the test. The final choice remains yours.
+### NR Anything
+
+NR Anything is an early-alpha tool for processing a selected desktop window. Controls include window selection, NR quality, detail and color strength, saved profiles, comparison modes, and PNG capture.
+
+[![NR Anything showing Processing, Targeted Window, Look, comparison modes, and capture controls in the dark theme](assets/anything-dark.png)](assets/anything-dark.png)
+
+*NR Anything interface preview. Processing is inactive; settings shown are sample values.*
 
 ### DLSS Neural Rendering
 
-The redesigned **DLSS Neural Rendering** page places activation, Apply, live status, timing, route, and working dimensions where they are easier to understand. Advanced diagnostics and less-common settings stay available without dominating the main experience.
+The in-game menu provides model, detail, color, resolution, and style controls. Available options depend on the rendering path.
+
+[![In-game neural rendering controls with Rendering and Model and composition panels](assets/neural-rendering.png)](assets/neural-rendering.png)
+
+*Neural-rendering controls with processing inactive.*
+
+### Neural Rendering Advisor
+
+The Advisor tests eligible Before- or After-upscaling routes using the current graphics path, available inputs, and selected processing resolution. It reports availability, observed timing, and reasons a route cannot run.
+
+Recommendations use completed observations. Temporary analysis settings are restored after testing; applying a recommendation remains an explicit choice.
 
 ### Basic and Advanced Multipass
 
-In **Basic Multipass**, choose your maximum pass count and use the shared **Model Strength** and **Detail Strength** sliders to adjust the selected additional passes with far less clicking. Pass 1 remains independent.
+Basic Multipass provides shared controls for pass count, model strength, detail strength, and processing resolution. Advanced Multipass provides individual pass settings on supported routes.
 
-**Advanced Multipass** retains individual pass tabs, model choices, resolution, composition, strength, and diagnostic controls for users who want precise control over every layer.
+Additional passes increase processing cost. Pass count and resolution control the workload; strength controls adjust the appearance.
 
-Two passes are the sensible starting point. Higher counts become increasingly expensive and experimental.
+### Rendering diagnostics
+
+The in-game **Diagnostics → Rendering** panel displays rendering status, input availability, timing, and connections. It provides Refresh observations and Copy observation report actions. Detected inputs and inputs in use have separate indicators.
+
+[![In-game Rendering diagnostics with signal states, observation actions and Runtime, Inputs, Timing and Connections tabs](assets/rendering-diagnostics.png)](assets/rendering-diagnostics.png)
+
+*Rendering diagnostics with no active rendering session.*
+
+<details>
+<summary><strong>Additional interface screenshots</strong></summary>
+
+#### Installation progress
+
+[![Library installation progress and library scanning with a visible Cancel scan action](assets/installation-progress.png)](assets/installation-progress.png)
+
+*Installation and scan progress with sample data.*
+
+#### Light theme
+
+[![NR Anything in the light theme with separate processing and look controls](assets/anything-light.png)](assets/anything-light.png)
+
+*NR Anything interface preview in the light theme. Processing is inactive.*
+
+#### Upscaling
+
+[![In-game upscaling controls showing upscaler selection, ratio overrides and output scaling](assets/upscaling.png)](assets/upscaling.png)
+
+*Upscaling controls with sample backend values.*
+
+#### Multipass
+
+[![In-game Multipass controls showing pass count, model resolution, model strength and detail strength](assets/multipass.png)](assets/multipass.png)
+
+*Multipass settings. Processing is inactive.*
+
+#### Input diagnostics
+
+[![Rendering Inputs diagnostics showing unobserved exposure and color information and unverified frame-generation providers](assets/input-diagnostics.png)](assets/input-diagnostics.png)
+
+*Input diagnostics with no active rendering session.*
+
+#### Translation editor
+
+[![Simplified Chinese translation editor with search, source context, draft editing, preview, import and export](assets/language-editor.png)](assets/language-editor.png)
+
+*Translation editor with a sample Simplified Chinese language pack.*
+
+#### Chinese interface
+
+[![NR Anything with Simplified Chinese interface captions in the dark theme](assets/anything-chinese.png)](assets/anything-chinese.png)
+
+*Simplified Chinese interface preview. Processing is inactive.*
+
+[![Installation Library in Simplified Chinese with a populated game list and Monster Hunter Wilds cover art](assets/library-chinese.png)](assets/library-chinese.png)
+
+*Simplified Chinese Library in the light theme with sample game entries.*
+
+</details>
+
+## Workflows
+
+| | NR Anything | In-game integration |
+| --- | --- | --- |
+| Processing | Captures and processes a selected desktop window. | Processes a supported rendering path inside the game. |
+| Setup | Select a window in the desktop App. | Select the game's executable in the Library and install. |
+| Controls | Quality, visual profiles, detail and color strength, comparison, capture, Start/Stop. | Applicable neural rendering, upscaling, frame-generation settings, and diagnostics. |
+| Inputs | Captured window pixels. | Game inputs and guides available to the selected route. |
+
+Comparison modes include original, processed, Split, and Stripes. Captures save PNG images of the selected comparison view.
+
+## Compatibility
+
+Rendering support depends on the game, executable architecture, graphics API, GPU, driver, and provider files.
+
+Supported in-game NR routes can work without a native DLSS integration. Reported tests include Vulkan rendering in Detroit: Become Human without DLSS and DirectX 11 Present rendering in Borderlands 3. Compatible capture routes can acquire available depth and motion guides without native DLSS inputs. See the [reported game tests](RELEASE_NOTES.md#reported-game-tests) for the current list and game-specific notes. Frame-generation availability is separate from neural-rendering compatibility.
+
+- Neural rendering requires a supported NVIDIA GPU and compatible user-supplied NR model.
+- DirectX and Vulkan support depend on the selected integration route. Support for one game or route does not guarantee support for another.
+- In-game installation requires matching executable and package architectures. Renaming a DLL does not resolve a 32-bit/64-bit mismatch. Use **NR Anything** when compatible in-game integration is unavailable.
+- NR Anything captures SDR window images. It does not receive native game depth or motion vectors through window capture.
+- Desktop super resolution, frame generation, Multipass, and depth estimation are unavailable in this package. In-game SR and FG controls depend on the active backend.
+- Interface languages include English, Simplified Chinese, Japanese, Korean, German, French, Spanish, Portuguese (Brazil), Polish, and Russian. Translations are complete across the supported languages.
+- Anti-cheat compatibility is not guaranteed. Check the game's rules before using modifications, especially online.
 
 ## Current Status and Roadmap
 
-| Area | Status |
+| Area | Current status |
 | --- | --- |
-| Experimental Mode | Included; unlocks implemented but less-tested paths while hard safety blocks remain |
-| DirectX 12 Native Temporal | Available; primary foundation |
-| Present Compatibility | Available; substantially revised in 0.9.6 |
-| Present Enhanced | Available; **Experimental** |
-| DirectX 11 through the D3D12 bridge | Included; **Experimental and game-dependent** |
-| HDR observation and guarded Present attempts | Included; **Experimental** |
-| Multipass | Available; higher counts are **Experimental** |
-| Vulkan Native path | Limited and less extensively tested |
-| Vulkan Present routes | Roadmap; not ready |
-| Anti-cheat compatibility | Separate problem; not guaranteed |
+| DirectX 12 Native Temporal | Available on compatible game paths |
+| DirectX 11 through the DirectX 12 bridge | Available on supported paths; game-dependent |
+| Vulkan Native and Present | Available on supported paths |
+| HDR and Ray Reconstruction combinations | Supported combinations depend on the route |
+| Basic and Advanced Multipass | Available on compatible Native and Present paths; additional passes increase cost |
+| Native RTX 40 MFG | Available on supported DirectX 12 paths within provider limits |
+| RTX 20/30 MFG | Opt-in experimental compatibility |
+| Desktop NR Anything | Early-alpha window neural rendering; desktop upscaling and FG remain future work |
+| Community languages | Completed included translations, with pack editing, import, and export |
 
-The next phase of development will continue strengthening the DirectX foundation while expanding game coverage, HDR and Ray Reconstruction compatibility, Frame Generation transitions, Vulkan support, performance tuning, and the broader rendering framework.
+Development priorities for future updates:
 
-Vulkan is absolutely a direction I want to pursue. It has simply received less implementation and testing attention because I have fewer Vulkan games available, and I want the existing DirectX foundation to be dependable before expanding too aggressively.
+- Lower Multipass processing cost and improve control over quality and frame rate.
+- Expand frame generation across more games, applications, and hardware, using available depth and motion data where supported.
+- Add desktop upscaling and frame generation to NR Anything, including DLSS and FSR options where applicable.
+- Make input capture more customizable and develop compatible routes for older graphics APIs and 32-bit games.
+- Improve motion clarity, temporal stability, and direct color adjustment in Native Temporal.
+- Integrate upscaling and neural rendering into a more consistent workflow.
+- Explore processing weights for specific objects.
+- Complete light-mode coverage and improve contrast and control styling.
+
+See the [feature report](RELEASE_NOTES.md#planned-improvements) for more detail.
 
 ## Installation
 
-1. Download the complete `NeuRotic-Alpha-0.9.6.zip` release package from the [Alpha 0.9.6 release](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.6). GitHub's automatic source archives are not installation packages.
-2. Extract the complete package somewhere outside the game directory.
+Download the complete installer bundle from the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.7). GitHub's automatic source archives are not installation packages.
+
+### Desktop App
+
+1. Extract the complete bundle outside the game directory and open `NeuRotic.exe`.
+2. In **Components**, open the NR model folder and supply your compatible `nvngx_dlssnr.dll`. Add matching Streamline files when the selected rendering path needs them.
 3. Fully close the game.
-4. Run `NeuRotic-Setup.cmd`.
-5. Select the game's real executable rather than its launcher.
-6. Choose an appropriate proxy filename. DirectX games commonly use `dxgi.dll`; Vulkan games commonly use `winmm.dll`.
-7. Wait for Setup to report that the complete installation was verified.
-8. Supply the required NVIDIA Neural Rendering model, launch the game, and press `Insert` to open NeuRotic unless you have saved a different shortcut.
+4. Open **Installation Library** to discover games, scan a selected directory, or add the game's real executable manually.
+5. Select the executable and an appropriate proxy filename, then choose **Install**. Resolve any existing-file choices and wait for the result.
+6. Adjust the per-game INI settings if needed, launch the game, and press **Insert** to open the in-game menu unless you have saved another shortcut.
+
+For desktop window processing, open **NR Anything**, select a window directly or by countdown, and set the quality and visual controls. Select Start to process it and Stop to end processing.
 
 ### Getting the NVIDIA Model
 
-NVIDIA's proprietary `nvngx_dlssnr.dll` model is not distributed with NeuRotic. Obtain a genuine NVIDIA-signed copy from a game installation or NVIDIA driver package that legitimately includes it, then place it beside the game executable.
+The compatible NVIDIA model `nvngx_dlssnr.dll` is user-supplied and is not bundled. Add it through the App's component folder; the installer copies accepted supplied components into the selected game's installation.
 
-The included `nvngx.dll_dlssnr.dll` is NeuRotic's forwarder. Despite the similar name, it is not the NVIDIA model. Neural Rendering requires both files.
+NeuRotic's `nvngx.dll_dlssnr.dll` is a forwarder, not the NVIDIA model. Keep the complete bundled App, worker, and forwarder together.
 
-The third-party [DLSS Version Toolkit](https://github.com/scubamount/dlss-version-toolkit) can help locate, inspect, and manage compatible NVIDIA DLLs already available on your computer. It is not affiliated with NeuRotic and may not be able to download every required model automatically.
+### Manual Setup
 
-Avoid proprietary DLLs from random mirrors.
+The bundle includes `NeuRotic-Manual-Setup.cmd`. Close the game, run the script, and select its real executable. Follow the proxy and file-conflict choices shown by Setup.
 
-### Installer Safeguards
+### Existing Files and ReShade
 
-Setup verifies the package, records the selected proxy, protects existing settings and models, creates recovery data, and rolls the complete operation back if installation cannot finish safely.
-
-It supports nine proxy choices, managed updates and repairs, repeated proxy changes, explicit ReShade coexistence, long game-directory paths, interrupted-operation recovery, and refusal to overwrite unrelated files changed after installation.
-
-Setup never guesses who owns an existing DLL. If it finds a collision, it asks what you want to do.
+Installation handles unfamiliar files individually. Recognized ReShade installations can offer a recorded coexistence rename where supported. Select the appropriate proxy for the game's graphics mode; renaming a DLL does not resolve an executable/package architecture mismatch.
 
 ## Uninstallation
 
-Run either `NeuRotic-Uninstall.cmd` from the downloaded package or `Uninstall NeuRotic.cmd` from the game directory.
+1. Fully close the game.
+2. Copy any game INI or model files you want to retain before removing the installation.
+3. Select the game in **Installation Library** and choose **Uninstall**. Alternatively, run `NeuRotic-Manual-Uninstall.cmd` from the bundle or `Uninstall NeuRotic.cmd` from the game directory.
+4. Read the removal result and any remaining-file notes.
 
-The uninstaller offers:
-
-- **Keep Settings — Recommended**
-- **Remove Settings**
-- **Full Cleanup**
-
-Keep Settings restores the recorded pre-NeuRotic game files while retaining your configuration for a future reinstall. The private NVIDIA model remains user-owned and is preserved unless its separate removal is explicitly requested and confirmed.
-
-You are completely free to uninstall NeuRotic. I will take it personally, but only jokingly. Mostly.
+Uninstall removes files recorded as installed by NeuRotic, including recorded settings and supplied components. A recorded ReShade rename is reversed when the original filename is available.
 
 ## Help Shape NeuRotic
 
-Before reporting a problem, please ask:
+When reporting a problem, compare separate game starts with:
 
-**Does the same problem still happen when NeuRotic is completely turned off or Neural Rendering is disabled?**
+- **NeuRotic unloaded:** the middleware is not loaded.
+- **NeuRotic loaded, NR off:** the middleware is loaded with neural rendering disabled.
+- **NeuRotic loaded, NR on:** neural rendering is enabled.
 
-If the answer is yes, please do not report it as a NeuRotic bug. It is not being caused by NeuRotic.
+Include which conditions you tested, the game, build ID, graphics API, GPU and driver, settings, and relevant logs or screenshots. An issue with NR disabled can still involve loaded middleware; keep those observations in the report.
 
 For NeuRotic-specific bugs, compatibility results, ideas, logs, screenshots, and wonderfully strange edge cases, join the [RenoDX Discord](https://discord.gg/Ce9bQHQrSV) and let me know how it is holding up.
 
@@ -214,19 +261,14 @@ If NeuRotic has improved a game for you and you would like to help support its c
 
 Any support is deeply appreciated, but never a requirement.
 
-## Special Thanks
+## Credits and Attribution
 
-- The OptiScaler maintainers and contributors.
-- Dagherbou and the contributors to the OptiScaler DLSS-NR fork.
-- **Tommy Creo**, for testing Vulkan issues and helping investigate a particularly stubborn problem.
-- **JuanTacos**, for testing an unusual scene-transition bug and helping isolate its conditions.
-- The RenoDX community.
-- Everyone who has contributed testing, logs, screenshots, recordings, ideas, and bug reports.
+Contributor, community-supporter, and upstream-project acknowledgments are collected on the separate [Credits and attribution page](ATTRIBUTION.md). It includes the original Special Thanks contributors and the sources of adapted code, libraries, fonts, and graphics components.
 
 ## Source, Credits, and Licensing
 
-- [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases)
+- [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.7)
 - [Official OptiScaler](https://github.com/optiscaler/OptiScaler)
 - [Parent OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR)
 
-Review [LICENSE](LICENSE), the `Licenses` directory, and the parent projects for original authorship, attribution, and licensing.
+Review [LICENSE](LICENSE), [third-party notices](THIRD_PARTY_NOTICES.md), and the parent projects for original authorship, attribution, and licensing.

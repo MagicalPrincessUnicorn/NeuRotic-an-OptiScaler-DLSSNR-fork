@@ -1,4 +1,6 @@
+#include <inputs/FG/FgOwnerScope.h>
 #include "pch.h"
+#include "IncrementalPresent.h"
 #include "dx11_with_dx12_sc.h"
 
 #include <with_dx12/with_dx12.h>
@@ -269,10 +271,10 @@ ULONG STDMETHODCALLTYPE Dx11wDx12SC::Release()
 
         State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
 
-        auto fg = State::Instance().currentFG;
-        if (fg != nullptr && fg->Mutex.getOwner() != 1 && fg->SwapchainContext() != nullptr)
+        Neurotic::Runtime::FgOwnerTransition transition;
+        auto fg = transition ? State::Instance().currentFG : nullptr;
+        if (fg != nullptr && fg->OwnsSwapchain(_fgSwapChain) && fg->Mutex.getOwner() != 1 && fg->SwapchainContext() != nullptr)
         {
-            fg->Deactivate();
             fg->ReleaseSwapchain(_handle);
         }
 
@@ -308,6 +310,9 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::GetDevice(REFIID riid, void** ppDevice)
 }
 
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::Present(UINT SyncInterval, UINT Flags)
+{ return _Present(SyncInterval,Flags,nullptr); }
+
+HRESULT Dx11wDx12SC::_Present(UINT SyncInterval,UINT Flags,const DXGI_PRESENT_PARAMETERS* parameters)
 {
     if (_real == nullptr || _fgSwapChain == nullptr)
         return DXGI_ERROR_DEVICE_REMOVED;
@@ -316,7 +321,14 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::Present(UINT SyncInterval, UINT Flags)
         _fg = State::Instance().currentFG;
 
     if ((Flags & DXGI_PRESENT_TEST) != 0)
-        return _real->Present(SyncInterval, Flags);
+        return parameters && _real1 ? _real1->Present1(SyncInterval,Flags,parameters) : _real->Present(SyncInterval, Flags);
+
+    if (parameters) {
+        DXGI_SWAP_CHAIN_DESC desc{};
+        if (FAILED(_real->GetDesc(&desc)) ||
+            !Neurotic::Presentation::Plan(desc.BufferDesc.Width, desc.BufferDesc.Height, parameters, _presentHistoryValid))
+            return DXGI_ERROR_INVALID_CALL;
+    }
 
     if (!_InitInteropObjects())
         return DXGI_ERROR_DEVICE_REMOVED;
@@ -326,7 +338,7 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::Present(UINT SyncInterval, UINT Flags)
     if (!_RequestSharedBackBuffer(dx11Index))
         return DXGI_ERROR_DEVICE_REMOVED;
 
-    if (!_CopyDx11BackBufferToShared(dx11Index))
+    if (!_CopyDx11BackBufferToShared(dx11Index,parameters))
         return DXGI_ERROR_DEVICE_REMOVED;
 
     if (!_WaitDx11ThenDx12())
@@ -359,10 +371,10 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::Present(UINT SyncInterval, UINT Flags)
         UINT realFlags = Flags;
 
         // Do not wait for it
-        auto realPresentResult = _real->Present(0, realFlags);
+        auto realPresentResult = parameters && _real1 ? _real1->Present1(0,realFlags,parameters) : _real->Present(0, realFlags);
 
-        if (FAILED(realPresentResult))
-            LOG_WARN("hidden real DX11 Present failed: {:X}", (UINT) realPresentResult);
+        if (FAILED(realPresentResult)) { _presentHistoryValid=false; return realPresentResult; }
+        _presentHistoryValid=realPresentResult==S_OK;
     }
 
     auto result = _fgSwapChain->Present(SyncInterval, Flags);
@@ -420,7 +432,7 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers(UINT BufferCount, UINT Widt
               (UINT) NewFormat, SwapChainFlags);
 
     if (!_WaitForCopyQueueIdle())
-        LOG_WARN("continuing ResizeBuffers after copy fence wait failure");
+        return DXGI_ERROR_WAS_STILL_DRAWING;
 
     MenuOverlayDx::CleanupRenderTarget(true, _handle);
     _ReleaseInteropBackBuffers();
@@ -539,8 +551,8 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::GetCoreWindow(REFIID refiid, void** ppUnk
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::Present1(UINT SyncInterval, UINT Flags,
                                                 const DXGI_PRESENT_PARAMETERS* pPresentParameters)
 {
-    UNREFERENCED_PARAMETER(pPresentParameters);
-    return Present(SyncInterval, Flags);
+    if(!pPresentParameters || !_real1)return DXGI_ERROR_INVALID_CALL;
+    return _Present(SyncInterval,Flags,pPresentParameters);
 }
 
 BOOL STDMETHODCALLTYPE Dx11wDx12SC::IsTemporaryMonoSupported(void)
@@ -661,7 +673,7 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
               (UINT) Format, SwapChainFlags);
 
     if (!_WaitForCopyQueueIdle())
-        LOG_WARN("continuing ResizeBuffers1 after copy fence wait failure");
+        return DXGI_ERROR_WAS_STILL_DRAWING;
 
     MenuOverlayDx::CleanupRenderTarget(true, _handle);
     _ReleaseInteropBackBuffers();
@@ -978,7 +990,7 @@ bool Dx11wDx12SC::_RequestSharedBackBuffer(UINT index)
     return true;
 }
 
-bool Dx11wDx12SC::_CopyDx11BackBufferToShared(UINT index)
+bool Dx11wDx12SC::_CopyDx11BackBufferToShared(UINT index,const DXGI_PRESENT_PARAMETERS* parameters)
 {
     if (_currentFakeIndex >= _sharedDx11BackBufferCopies.size() ||
         _sharedDx11BackBufferCopies[_currentFakeIndex] == nullptr)
@@ -1000,7 +1012,25 @@ bool Dx11wDx12SC::_CopyDx11BackBufferToShared(UINT index)
     LOG_DEBUG("Copying DX11 backbuffer {} sourceTexture: {:X} to shadow copy {:X}", index, (size_t) sourceTexture,
               (size_t) _sharedDx11BackBufferCopies[_currentFakeIndex]);
 
-    _dx11Context->CopyResource(_sharedDx11BackBufferCopies[_currentFakeIndex], sourceTexture);
+    D3D11_TEXTURE2D_DESC desc{};sourceTexture->GetDesc(&desc);
+    const auto plan=Neurotic::Presentation::Plan(desc.Width,desc.Height,parameters,_presentHistoryValid);
+    if(!plan){sourceTexture->Release();return false;}
+    if(!_WaitForCopyQueueIdle()){sourceTexture->Release();return false;}
+    if(!_presentHistory) {
+        desc.MiscFlags=0;desc.BindFlags=0;desc.CPUAccessFlags=0;desc.Usage=D3D11_USAGE_DEFAULT;
+        if(FAILED(_dx11Device->CreateTexture2D(&desc,nullptr,&_presentHistory))) {sourceTexture->Release();return false;}
+    }
+    auto* destination=_sharedDx11BackBufferCopies[_currentFakeIndex];
+    _ingressPending=true; _copyCompletionUnknown=true; // includes ingress work if later D11 Signal fails
+    if(plan->full)_dx11Context->CopyResource(destination,sourceTexture);
+    else {
+        _dx11Context->CopyResource(destination,_presentHistory);
+        if(plan->scroll){const auto& r=*plan->scroll;D3D11_BOX box{UINT(r.source.left),UINT(r.source.top),0,UINT(r.source.right),UINT(r.source.bottom),1};
+            _dx11Context->CopySubresourceRegion(destination,0,UINT(r.x),UINT(r.y),0,_presentHistory,0,&box);}
+        for(const auto& r:plan->dirty){D3D11_BOX box{UINT(r.left),UINT(r.top),0,UINT(r.right),UINT(r.bottom),1};
+            _dx11Context->CopySubresourceRegion(destination,0,UINT(r.left),UINT(r.top),0,sourceTexture,0,&box);}
+    }
+    _dx11Context->CopyResource(_presentHistory,destination);
     sourceTexture->Release();
     return true;
 }
@@ -1020,6 +1050,7 @@ bool Dx11wDx12SC::_WaitDx11ThenDx12()
         return false;
     }
 
+    _lastDx11FenceValue=waitValue;
     _dx11Context4->Flush();
 
     // Important:
@@ -1032,11 +1063,13 @@ bool Dx11wDx12SC::_WaitDx11ThenDx12()
         return false;
     }
 
+    _copyCompletionUnknown=false;
     return true;
 }
 
 bool Dx11wDx12SC::_WaitForCopyAllocator(UINT slot)
 {
+    if (_copyCompletionUnknown) return false;
     if (_copyFence == nullptr || _copyFenceEvent == nullptr)
         return true;
 
@@ -1052,7 +1085,7 @@ bool Dx11wDx12SC::_WaitForCopyAllocator(UINT slot)
         return true;
 
     const auto completedValue = _copyFence->GetCompletedValue();
-    if (completedValue >= fenceValue)
+    if (completedValue != UINT64_MAX && completedValue >= fenceValue)
         return true;
 
     auto result = _copyFence->SetEventOnCompletion(fenceValue, _copyFenceEvent);
@@ -1071,7 +1104,7 @@ bool Dx11wDx12SC::_WaitForCopyAllocator(UINT slot)
         return false;
     }
 
-    return true;
+    return _copyFence->GetCompletedValue() != UINT64_MAX && _copyFence->GetCompletedValue() >= fenceValue;
 }
 
 bool Dx11wDx12SC::_CopyDx11SharedToDx12FGBackBuffer(UINT dx11Index)
@@ -1144,6 +1177,7 @@ bool Dx11wDx12SC::_CopyDx11SharedToDx12FGBackBuffer(UINT dx11Index)
     }
 
     ID3D12CommandList* lists[] = { _copyCommandLists[copySlot] };
+    _copyCompletionUnknown = true; // Execute has no result; only a later accepted signal proves a retirement point.
     _dx12CommandQueue->ExecuteCommandLists(1, lists);
 
     const auto signalValue = ++_copyFenceValue;
@@ -1155,6 +1189,7 @@ bool Dx11wDx12SC::_CopyDx11SharedToDx12FGBackBuffer(UINT dx11Index)
         return false;
     }
 
+    _copyCompletionUnknown = false;
     _copyAllocatorFenceValues[copySlot] = signalValue;
     _lastInteropCopyFenceValue = signalValue;
 
@@ -1181,6 +1216,18 @@ bool Dx11wDx12SC::_WaitForInteropCopyOnPresentQueue()
 
 bool Dx11wDx12SC::_WaitForCopyQueueIdle()
 {
+    if (_copyCompletionUnknown) return false;
+    if(_ingressPending) {
+        if(!_dx11Fence || !_dx11FenceEvent || !_lastDx11FenceValue) return false;
+        auto completed=_dx11Fence->GetCompletedValue();
+        if(completed==UINT64_MAX)return false;
+        if(completed<_lastDx11FenceValue &&
+           (FAILED(_dx11Fence->SetEventOnCompletion(_lastDx11FenceValue,_dx11FenceEvent)) ||
+            WaitForSingleObject(_dx11FenceEvent,5000)!=WAIT_OBJECT_0))return false;
+        completed=_dx11Fence->GetCompletedValue();
+        if(completed==UINT64_MAX || completed<_lastDx11FenceValue)return false;
+        _ingressPending=false;
+    }
     if (_copyFence == nullptr || _copyFenceEvent == nullptr)
         return true;
 
@@ -1193,7 +1240,7 @@ bool Dx11wDx12SC::_WaitForCopyQueueIdle()
         return true;
 
     const auto completedValue = _copyFence->GetCompletedValue();
-    if (completedValue >= waitValue)
+    if (completedValue != UINT64_MAX && completedValue >= waitValue)
         return true;
 
     auto result = _copyFence->SetEventOnCompletion(waitValue, _copyFenceEvent);
@@ -1212,6 +1259,8 @@ bool Dx11wDx12SC::_WaitForCopyQueueIdle()
         return false;
     }
 
+    if (_copyFence->GetCompletedValue() == UINT64_MAX || _copyFence->GetCompletedValue() < waitValue) return false;
+
     for (auto& fenceValue : _copyAllocatorFenceValues)
         fenceValue = 0;
 
@@ -1223,6 +1272,7 @@ bool Dx11wDx12SC::_WaitForCopyQueueIdle()
 void Dx11wDx12SC::_ReleaseInteropBackBuffers()
 {
     _interopInitialized = false;
+    SafeRelease(_presentHistory); _presentHistoryValid=false;
 
     for (auto& resource : _openedDx11BackBuffers)
         SafeRelease(resource);
@@ -1241,7 +1291,20 @@ void Dx11wDx12SC::_ReleaseInteropBackBuffers()
 
 void Dx11wDx12SC::_ReleaseInteropObjects()
 {
-    _WaitForCopyQueueIdle();
+    if (!_WaitForCopyQueueIdle())
+    {
+        // A healthy timeout can resume. Retain the entire cross-API generation,
+        // including the hidden/presenting swapchains and the producer context.
+        // Device loss on one API alone never proves its independent peer retired.
+        LOG_ERROR("Retaining unresolved D11/D12 presentation generation until process teardown");
+        if (_dx12CommandQueue) _dx12CommandQueue->AddRef();
+        if (_dx12Device) _dx12Device->AddRef();
+        _real = nullptr; _real1 = nullptr; _real2 = nullptr; _real3 = nullptr; _real4 = nullptr;
+        _fgSwapChain = nullptr; _dx11Context = nullptr; _dx11Context4 = nullptr;
+        _dx11Device = nullptr; _dx11Device5 = nullptr;
+        _interopInitialized = false;
+        return;
+    }
     _ReleaseInteropBackBuffers();
 
     _lastInteropCopyFenceValue = 0;

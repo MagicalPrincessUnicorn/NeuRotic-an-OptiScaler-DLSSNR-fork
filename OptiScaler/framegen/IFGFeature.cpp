@@ -154,6 +154,8 @@ int IFGFeature::GetDispatchIndex(UINT64& willDispatchFrame)
         }
     }
 
+    if (!CanDispatchInputs(static_cast<int>(willDispatchFrame % BUFFER_COUNT))) return -1;
+
     _lastDispatchedFrame = willDispatchFrame;
     _lastFGFrame = State::Instance().fgLastFrame;
 

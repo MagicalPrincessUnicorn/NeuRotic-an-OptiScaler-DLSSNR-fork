@@ -2,6 +2,7 @@
 #include "IFGFeature_Dx12.h"
 #include <State.h>
 #include <Config.h>
+#include <dlssnr/NrGpuSafety.h>
 
 #include <magic_enum.hpp>
 
@@ -102,6 +103,7 @@ bool IFGFeature_Dx12::SubmitUICommandList(UINT index)
 
     _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_uiCommandList[index]);
     _uiCommandListResetted[index] = false;
+    if (!ObserveUIBridgeSubmission(index)) return false;
 
     auto signalResult = _gameCommandQueue->Signal(_uiFence, _uiAllocatorFenceValues[index]);
     if (FAILED(signalResult))
@@ -114,7 +116,7 @@ bool IFGFeature_Dx12::SubmitUICommandList(UINT index)
     return true;
 }
 
-ID3D12GraphicsCommandList* IFGFeature_Dx12::GetUICommandList(int index)
+ID3D12GraphicsCommandList* IFGFeature_Dx12::GetUICommandList(int index, bool bridgeReader)
 {
     if (index < 0 || index >= BUFFER_COUNT)
         index = GetIndex();
@@ -142,8 +144,13 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetUICommandList(int index)
         }
     }
 
+    // Only the bridge-cache consumer enrolls this optional observation. An
+    // already-open, unobserved recording is unavailable until its normal reset.
+    if (bridgeReader && _uiCommandListResetted[index] && !_uiBridgeReader[index]) return nullptr;
+    if (bridgeReader && !DlssNr::GpuSafety::PrepareRecordingHooks(_uiCommandList[index])) return nullptr;
     if (!_uiCommandListResetted[index])
     {
+        if (!DlssNr::GpuSafety::Reusable(_uiBridgeUse[index])) return nullptr;
         if (!WaitForUIAllocator((UINT) index))
             return nullptr;
 
@@ -155,6 +162,7 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetUICommandList(int index)
 
             if (result == S_OK)
             {
+                _uiBridgeReader[index]=bridgeReader;
                 _uiCommandListResetted[index] = true;
                 _uiAllocatorFenceValues[index] = ++_uiFenceValue;
             }
@@ -171,13 +179,125 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetUICommandList(int index)
         }
     }
 
+    if (bridgeReader)
+    {
+        _uiBridgeUse[index]=DlssNr::GpuSafety::Record(_uiCommandList[index]);
+        if (!_uiBridgeUse[index]) { _uiBridgeReader[index]=false; return nullptr; }
+    }
     return _uiCommandList[index];
+}
+
+bool IFGFeature_Dx12::ObserveUIBridgeSubmission(UINT index)
+{
+    if (!_uiBridgeReader[index]) return true;
+    _uiBridgeReader[index]=false;
+    const bool observed=DlssNr::GpuSafety::OrderedOn(_uiBridgeUse[index],_gameCommandQueue);
+    const bool sealed=DlssNr::GpuSafety::SealOwnedRecording(_uiCommandList[index]);
+    if (!observed || !sealed) LOG_ERROR("Bridge cache reader submission became untrackable; retaining its use");
+    return observed && sealed;
+}
+
+bool IFGFeature_Dx12::RetainUIBridgeReader(const DlssNr::GpuSafety::LocalRecordingAction& action)
+{
+    for (UINT i=0;i<BUFFER_COUNT;++i)
+    {
+        if (action.CommandList()!=_uiCommandList[i] || !_uiBridgeReader[i]) continue;
+        // Retain this exact reader's execution objects along with its cache
+        // inputs. Never store the ticket inside its own retained backing.
+        auto pins=std::make_shared<std::array<Microsoft::WRL::ComPtr<IUnknown>,5>>();
+        (*pins)[0]=_uiCommandList[i]; (*pins)[1]=_uiCommandAllocator[i];
+        (*pins)[2]=_uiFence; (*pins)[3]=_gameCommandQueue; (*pins)[4]=_device;
+        return DlssNr::GpuSafety::RetainDerivedUse(action,pins);
+    }
+    return false;
+}
+
+bool IFGFeature_Dx12::RetireUIBridgeReaders()
+{
+    bool retired=true;
+    for(UINT i=0;i<BUFFER_COUNT;++i)
+    {
+        auto& use=_uiBridgeUse[i];
+        if(!use)continue;
+        if(!DlssNr::GpuSafety::Reusable(use)&&
+           !DlssNr::GpuSafety::CancelOwnedUnsubmittedRecording(_uiCommandList[i],use,_uiCommandAllocator[i]))
+        { retired=false;continue; }
+        _uiBridgeReader[i]=false;
+        use.reset();
+    }
+    // Failed/possibly submitted readers retain their existing recording pins.
+    // These shaders also record GPU dependencies on that same owned UI list.
+    if(!retired)
+    {
+        (void)_mvFlip.release();(void)_depthFlip.release();
+        LOG_WARN("Retaining unresolved UI bridge shader dependencies until process teardown");
+    }
+    return retired;
+}
+
+bool IFGFeature_Dx12::OwnsSwapchain(IUnknown* candidate) const
+{
+    if (!candidate || !_swapChain) return false;
+    Microsoft::WRL::ComPtr<IUnknown> a,b;
+    return SUCCEEDED(candidate->QueryInterface(IID_PPV_ARGS(&a))) &&
+           SUCCEEDED(_swapChain->QueryInterface(IID_PPV_ARGS(&b))) && a.Get()==b.Get();
+}
+
+bool IFGFeature_Dx12::RetireSCWork()
+{
+    if (_scCompletionUnknown) return false;
+    if (!_scFenceValue) return true;
+    if (!_scFence || !_scFenceEvent) return false;
+    auto completed=_scFence->GetCompletedValue();
+    if(completed==UINT64_MAX) return false;
+    if(completed<_scFenceValue) {
+        if(FAILED(_scFence->SetEventOnCompletion(_scFenceValue,_scFenceEvent)) ||
+           WaitForSingleObject(_scFenceEvent,5000)!=WAIT_OBJECT_0) return false;
+        completed=_scFence->GetCompletedValue();
+    }
+    if(completed==UINT64_MAX || completed<_scFenceValue) return false;
+    if(std::none_of(std::begin(_scCommandListResetted),std::end(_scCommandListResetted),[](bool open){return open;})) _scPins.clear();
+    return true;
+}
+
+bool IFGFeature_Dx12::SubmitSCCommandList(UINT index)
+{
+    if(index>=BUFFER_COUNT || !_scCommandListResetted[index]) return true;
+    if(!_gameCommandQueue || !_scFence || _scCompletionUnknown) return false;
+    if(FAILED(_scCommandList[index]->Close())) return false;
+    _scCommandListResetted[index]=false;
+    _scCompletionUnknown=true;
+    _gameCommandQueue->ExecuteCommandLists(1,(ID3D12CommandList**)&_scCommandList[index]);
+    const auto value=++_scFenceValue;
+    if(FAILED(_gameCommandQueue->Signal(_scFence,value))) return false;
+    _scAllocatorFenceValues[index]=value;
+    _scCompletionUnknown=false;
+    // SC shaders share descriptor/constant storage across logical slots. Retire
+    // that dependency as well as the allocator before the next composition.
+    return RetireSCWork();
+}
+
+void IFGFeature_Dx12::RetainSCObjectsOnFailure()
+{
+    if(RetireSCWork()) { SAFE_RELEASE(_scFence);if(_scFenceEvent)CloseHandle(_scFenceEvent);_scFenceEvent=nullptr;_scFenceValue=0;return; }
+    _scCompletionUnknown=true;
+    for(UINT i=0;i<BUFFER_COUNT;++i) {
+        _scCommandList[i]=nullptr; _scCommandAllocator[i]=nullptr;
+        _scCommandListResetted[i]=false;
+    }
+    for(auto& pin:_scPins) (void)pin.Detach();
+    _scPins.clear();
+    if(_swapChain) _swapChain->AddRef();
+    if(_gameCommandQueue) _gameCommandQueue->AddRef();
+    (void)_renderUI.release(); (void)_hudlessCompare.release();
+    LOG_ERROR("SC composition completion unknown; retained GPU dependencies and stopped new SC admission");
 }
 
 ID3D12GraphicsCommandList* IFGFeature_Dx12::GetSCCommandList(int index)
 {
     if (index < 0)
         index = GetIndex();
+    if (index >= BUFFER_COUNT || !RetireSCWork()) return nullptr;
 
     LOG_DEBUG("index: {}", index);
 
@@ -207,6 +327,7 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetSCCommandList(int index)
         }
     }
 
+    if (!_scCommandList[index] || !_scCommandAllocator[index]) return nullptr;
     if (!_scCommandListResetted[index])
     {
         auto result = _scCommandAllocator[index]->Reset();
@@ -226,7 +347,7 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetSCCommandList(int index)
         }
     }
 
-    return _scCommandList[index];
+    return _scCommandListResetted[index] ? _scCommandList[index] : nullptr;
 }
 
 LockedDx12Resource IFGFeature_Dx12::GetResource(FG_ResourceType type, int index)
@@ -243,6 +364,35 @@ LockedDx12Resource IFGFeature_Dx12::GetResource(FG_ResourceType type, int index)
         return { &it->second, std::move(lock) };
 
     return { nullptr, std::move(lock) };
+}
+
+void IFGFeature_Dx12::RevokeResource(FG_ResourceType type, int index)
+{
+    if (index < 0 || index >= BUFFER_COUNT) return;
+    std::unique_lock lock(_resourceMutex[index]);
+    // This map is eligibility only. Private copies remain with _resourceCopy
+    // and their command/retirement owner until it permits release.
+    _frameResources[index].erase(type);
+    _resourceReady[index].erase(type);
+    if(type==FG_ResourceType::HudlessColor) _noHudless[index]=true;
+    if(type==FG_ResourceType::UIColor) _noUi[index]=true;
+    if(type==FG_ResourceType::Distortion) _noDistortionField[index]=true;
+}
+
+bool IFGFeature_Dx12::OwnsBackbuffer(ID3D12Resource* resource) const
+{
+    if (!_swapChain || !resource) return false;
+    DXGI_SWAP_CHAIN_DESC desc {};
+    if (FAILED(_swapChain->GetDesc(&desc)) || desc.BufferCount > 16) return false;
+    Microsoft::WRL::ComPtr<IUnknown> identity;
+    if (FAILED(resource->QueryInterface(IID_PPV_ARGS(&identity)))) return false;
+    for (UINT index = 0; index < desc.BufferCount; ++index)
+    {
+        Microsoft::WRL::ComPtr<IUnknown> buffer;
+        if (SUCCEEDED(_swapChain->GetBuffer(index, IID_PPV_ARGS(&buffer))) && buffer.Get() == identity.Get())
+            return true;
+    }
+    return false;
 }
 
 void IFGFeature_Dx12::NewFrame()

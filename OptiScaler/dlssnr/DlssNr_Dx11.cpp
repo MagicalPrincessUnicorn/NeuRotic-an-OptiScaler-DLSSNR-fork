@@ -1,9 +1,13 @@
 #include <pch.h>
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/PresentGuideObservationAdapter.h>
+// NR-FEED-001 END
 #include "DlssNr_Dx11.h"
 #include "DlssNr_Dx11Transport.h"
 #include "NrNativeDx11OutputContract.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
+#include "DlssNr_PresentInputPolicy.h"
 #include <with_dx12/with_dx12.h>
 #include <Config.h>
 #include <array>
@@ -184,6 +188,16 @@ void ResizeSwapchain(IDXGISwapChain* swapchain)
     std::lock_guard lock(registry.mutex);
     if (registry.live.contains(swapchain)) PresentGuides::Instance().Invalidate();
 }
+bool QualifiedPresentInputs(IDXGISwapChain* swapchain)
+{
+    if (!swapchain) return false;
+    DXGI_SWAP_CHAIN_DESC desc {};
+    if (FAILED(swapchain->GetDesc(&desc))) return false;
+    auto identity = PresentGuides::Identity(swapchain);
+    auto& runtime = Transport(); std::lock_guard lock(runtime.mutex);
+    return PresentGuides::Instance().CurrentQualified(runtime.queue.Get(), identity.Get(),
+        desc.BufferDesc.Width, desc.BufferDesc.Height);
+}
 Feature::Feature() : state(std::make_unique<State>()) {}
 Feature::~Feature()
 {
@@ -226,8 +240,10 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     const auto settings = TryNrConfigSnapshot(*config);
     if (!settings) return;
     const auto route = settings->DlssNrRoute.value_or_default();
-    const bool presentObserve = route == 2 || (route == 1 &&
-        PresentResolution::Selected(*settings).mode == PresentResolution::FollowNative);
+    const auto presentPolicy = PresentInput::Selected(*settings);
+    const bool presentObserve = route != 0 &&
+        (presentPolicy != PresentInput::Policy::ImageOnly ||
+         PresentResolution::Selected(*settings).mode == PresentResolution::FollowNative);
     const bool nativePostSr = route == 0 && !settings->DlssNrRunBeforeSr.value_or_default();
     const bool nativePreSr = route == 0 && settings->DlssNrRunBeforeSr.value_or_default();
     const auto runtimeSettings = settings->GetDlssNrRuntimeSnapshot();
@@ -237,7 +253,8 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (!nativePostSr && !nativePreSr && !presentObserve) return;
     if (!s.created || !context || !p || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
     { s.Reject("native feature contract or immediate context unavailable"); return; }
-    s.copyGuides = nativePostSr || nativePreSr || route == 2;
+    s.copyGuides = nativePostSr || nativePreSr ||
+        (presentObserve && presentPolicy != PresentInput::Policy::ImageOnly);
     s.nativePostSr = nativePostSr;
     s.nativePreSr = nativePreSr;
     s.settings = *settings;
@@ -296,7 +313,11 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (outputContract == OutputContractResult::PartialOrUnsupported)
     { s.Reject("native output texture/subrect is partial or unsupported"); return; }
     if (outputContract == OutputContractResult::PresentTargetMismatch)
-    { s.Reject("native output does not match the full Present target"); return; }
+    { s.Reject("native output does not match the full Present target: declared=" +
+        std::to_string(s.outWidth) + "x" + std::to_string(s.outHeight) + " backing=" +
+        std::to_string(outputDesc.Width) + "x" + std::to_string(outputDesc.Height) + " render=" +
+        std::to_string(s.width) + "x" + std::to_string(s.height) + " present=" +
+        std::to_string(chainDesc.Width) + "x" + std::to_string(chainDesc.Height)); return; }
     s.frame = {};
     s.frame.RenderSubrectWidth = s.width; s.frame.RenderSubrectHeight = s.height;
     p->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &s.frame.RenderSubrectWidth);
@@ -320,6 +341,12 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     const bool lowResolutionMotion = (s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
     s.frame.MotionSubrectWidth = lowResolutionMotion ? rw : s.outWidth;
     s.frame.MotionSubrectHeight = lowResolutionMotion ? rh : s.outHeight;
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedEffective({"Native.D3D11", Neurotic::Contracts::GraphicsApi::D3D11,
+        "legacy-effective", {}, Neurotic::Contracts::SourceClass::HostObserved}, this);
+    Neurotic::Feed::ObservePresentGuide(feedEffective, s.frame, depth.Get(), motion.Get());
+    feedEffective.Value("host.firstEvaluationReset", s.evaluation == 1);
+    // NR-FEED-001 END
     if (!rw || !rh || rw > s.outWidth || rh > s.outHeight || colorX > colorDesc.Width || colorY > colorDesc.Height ||
         rw > colorDesc.Width - colorX || rh > colorDesc.Height - colorY)
     { s.Reject("render subrect exceeds native color/output dimensions"); return; }

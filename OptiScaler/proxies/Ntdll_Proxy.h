@@ -5,10 +5,23 @@
 #include <detours/detours.h>
 
 #include <winternl.h>
+#include "KernelBase_Proxy.h"
 
 class NtdllProxy
 {
+    // Win32's original loader still enters our NTDLL detour. Internal loads
+    // must retain the native search policy without recursively re-interposing.
+    inline static thread_local unsigned internalLoadDepth = 0;
+    struct InternalLoadScope
+    {
+        InternalLoadScope() { ++internalLoadDepth; }
+        ~InternalLoadScope() { --internalLoadDepth; }
+        InternalLoadScope(const InternalLoadScope&) = delete;
+        InternalLoadScope& operator=(const InternalLoadScope&) = delete;
+    };
+
   public:
+    static bool IsInternalLoad() noexcept { return internalLoadDepth != 0; }
     typedef NTSTATUS(NTAPI* PFN_LdrLoadDll)(PWSTR PathToFile OPTIONAL, PULONG Flags OPTIONAL,
                                             PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle);
 
@@ -22,6 +35,36 @@ class NtdllProxy
     // It's a partial implementation
     static HMODULE LoadLibraryExW_Ldr(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
     {
+        // Win32 search flags are not LdrLoadDll flags. Preserve their dependency
+        // search semantics through the original Win32 trampoline.
+        constexpr DWORD searchFlags = LOAD_WITH_ALTERED_SEARCH_PATH | LOAD_LIBRARY_SEARCH_APPLICATION_DIR |
+            LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS |
+            LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
+        if (dwFlags & searchFlags)
+        {
+            KernelBaseProxy::Init();
+            auto load = KernelBaseProxy::LoadLibraryExW_();
+            if (!load) { SetLastError(ERROR_PROC_NOT_FOUND); return nullptr; }
+            std::wstring qualifiedName;
+            auto requestedName = lpLibFileName;
+            if ((dwFlags & searchFlags) == LOAD_LIBRARY_SEARCH_SYSTEM32 && lpLibFileName &&
+                *lpLibFileName && !std::filesystem::path(lpLibFileName).has_parent_path())
+            {
+                // Search flags do not override Windows' loaded-module lookup.
+                // A bare proxy name (winmm/dxgi/etc.) otherwise resolves to us.
+                wchar_t systemDirectory[MAX_PATH]{};
+                auto length = GetSystemDirectoryW(systemDirectory, MAX_PATH);
+                if (!length || length >= MAX_PATH)
+                {
+                    SetLastError(ERROR_INSUFFICIENT_BUFFER);
+                    return nullptr;
+                }
+                qualifiedName = (std::filesystem::path(systemDirectory) / lpLibFileName).wstring();
+                requestedName = qualifiedName.c_str();
+            }
+            InternalLoadScope internalLoad;
+            return load(requestedName, hFile, dwFlags);
+        }
         // LdrLoadDll wants a ULONG*, remove unsupported flags
         ULONG ldrFlags = dwFlags & ~(LOAD_WITH_ALTERED_SEARCH_PATH | LOAD_LIBRARY_SEARCH_APPLICATION_DIR |
                                      LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS |

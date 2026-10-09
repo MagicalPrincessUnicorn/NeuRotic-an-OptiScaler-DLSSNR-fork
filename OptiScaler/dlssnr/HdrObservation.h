@@ -1,15 +1,26 @@
 #pragma once
 
 #include <dxgi1_6.h>
+#include "NativeIdentity.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <unordered_map>
+#include <atomic>
+#include <optional>
 
 namespace DlssNr::HdrObservation
 {
+constexpr DXGI_COLOR_SPACE_TYPE DefaultColorSpace(DXGI_FORMAT format)
+{
+    if (format == DXGI_FORMAT_R16G16B16A16_FLOAT)
+        return DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+    if (format == DXGI_FORMAT_UNKNOWN)
+        return DXGI_COLOR_SPACE_CUSTOM;
+    return DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+}
 enum class ColorClass : std::uint8_t
 {
     Unknown,
@@ -75,7 +86,7 @@ struct Snapshot
     std::uint64_t resizeGeneration = 0;
     std::uint64_t metadataGeneration = 0;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
     DXGI_COLOR_SPACE_TYPE requestedColorSpace = DXGI_COLOR_SPACE_CUSTOM;
     HRESULT colorSpaceResult = S_FALSE;
     HRESULT resizeResult = S_FALSE;
@@ -88,6 +99,11 @@ struct Snapshot
     HRESULT metadataResult = S_FALSE;
 };
 
+using CapabilityObserver=void(*)(const Snapshot&) noexcept;
+inline std::atomic<CapabilityObserver> capabilityObserver{nullptr};
+inline void SetCapabilityObserver(CapabilityObserver observer) noexcept { capabilityObserver.store(observer); }
+inline void ObserveCapability(const Snapshot& snapshot) noexcept { if(auto observer=capabilityObserver.load()) observer(snapshot); }
+
 class Registry
 {
   public:
@@ -95,6 +111,57 @@ class Registry
     {
         static Registry registry;
         return registry;
+    }
+
+    // Producers see wrapped interfaces; pre-FG Present can see their native base.
+    // Join observations using the existing bounded identity resolver, then COM
+    // IUnknown identity. Never substitute this interface for rendering. Temporary
+    // references end with the call; this registry retains metadata only.
+    Snapshot Register(IUnknown* swapChain, DXGI_FORMAT format)
+    {
+        const auto key = Identity(swapChain);
+        return Register(static_cast<const void*>(key.Get()), format);
+    }
+    void Unregister(IUnknown* swapChain)
+    {
+        const auto key = Identity(swapChain);
+        Unregister(static_cast<const void*>(key.Get()));
+    }
+    Snapshot RecordColorSpace(IUnknown* swapChain, DXGI_COLOR_SPACE_TYPE requested, HRESULT result)
+    {
+        const auto key = Identity(swapChain);
+        return RecordColorSpace(static_cast<const void*>(key.Get()), requested, result);
+    }
+    Snapshot BeginResize(IUnknown* swapChain)
+    {
+        const auto key = Identity(swapChain);
+        return BeginResize(static_cast<const void*>(key.Get()));
+    }
+    Snapshot CompleteResize(IUnknown* swapChain, HRESULT result, DXGI_FORMAT format)
+    {
+        const auto key = Identity(swapChain);
+        return CompleteResize(static_cast<const void*>(key.Get()), result, format);
+    }
+    Snapshot RecordMetadata(IUnknown* swapChain, DXGI_HDR_METADATA_TYPE type, UINT size,
+                            const void* metadata, HRESULT result)
+    {
+        const auto key = Identity(swapChain);
+        return RecordMetadata(static_cast<const void*>(key.Get()), type, size, metadata, result);
+    }
+    Snapshot Read(IUnknown* swapChain) const
+    {
+        const auto key = Identity(swapChain);
+        return Read(static_cast<const void*>(key.Get()));
+    }
+    // Optional render-thread observer: contention is unavailable, never a wait.
+    std::optional<Snapshot> TryRead(IUnknown* swapChain) const
+    {
+        const auto key=Identity(swapChain);
+        std::unique_lock lock(_mutex,std::try_to_lock);
+        if(!lock)return {};
+        const auto found=_chains.find(static_cast<const void*>(key.Get()));
+        if(found==_chains.end())return Snapshot{};
+        return found->second.snapshot;
     }
 
     Snapshot Register(const void* swapChain, DXGI_FORMAT format)
@@ -107,10 +174,12 @@ class Registry
             entry.snapshot = {};
             entry.snapshot.registered = true;
             entry.snapshot.format = format;
+            entry.snapshot.colorSpace = DefaultColorSpace(format);
             entry.snapshot.generation = 1;
             entry.snapshot.observationSequence = NextSequence();
             entry.snapshot.identityGeneration = entry.snapshot.observationSequence;
         }
+        ObserveCapability(entry.snapshot);
         return entry.snapshot;
     }
 
@@ -123,7 +192,10 @@ class Registry
         if (found->second.owners > 1)
             --found->second.owners;
         else
+        {
+            auto closed=found->second.snapshot; closed.registered=false; closed.colorSpaceObserved=false; closed.transitioning=true; ObserveCapability(closed);
             _chains.erase(found);
+        }
     }
 
     Snapshot RecordColorSpace(const void* swapChain, DXGI_COLOR_SPACE_TYPE requested, HRESULT result)
@@ -145,6 +217,7 @@ class Registry
             snapshot.colorSpace = requested;
             snapshot.colorSpaceObserved = true;
         }
+        ObserveCapability(snapshot);
         return snapshot;
     }
 
@@ -160,6 +233,7 @@ class Registry
         }
         snapshot.transitioning = true;
         snapshot.observationSequence = NextSequence();
+        ObserveCapability(snapshot);
         return snapshot;
     }
 
@@ -178,7 +252,10 @@ class Registry
             ++snapshot.resizeGeneration;
             if (format != DXGI_FORMAT_UNKNOWN)
                 snapshot.format = format;
+            if (!snapshot.colorSpaceObserved)
+                snapshot.colorSpace = DefaultColorSpace(snapshot.format);
         }
+        ObserveCapability(snapshot);
         return snapshot;
     }
 
@@ -201,6 +278,7 @@ class Registry
             ++snapshot.metadataGeneration;
             ++snapshot.generation;
         }
+        ObserveCapability(snapshot);
         return snapshot;
     }
 
@@ -213,6 +291,12 @@ class Registry
     }
 
   private:
+    static Microsoft::WRL::ComPtr<IUnknown> Identity(IUnknown* input)
+    {
+        const auto identity = NativeIdentity::ResolveSwapchainIdentity(input);
+        return SUCCEEDED(identity.result) ? identity.object : Microsoft::WRL::ComPtr<IUnknown> {};
+    }
+
     struct Entry
     {
         Snapshot snapshot;
@@ -254,3 +338,4 @@ class Registry
     std::uint64_t _nextSequence = 0;
 };
 } // namespace DlssNr::HdrObservation
+

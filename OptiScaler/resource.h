@@ -35,7 +35,7 @@
 // published GitHub release tags and deliberately does not follow upstream's DLL version.
 #define NEUROTIC_VERSION_MAJOR 0
 #define NEUROTIC_VERSION_MINOR 9
-#define NEUROTIC_VERSION_PATCH 6
+#define NEUROTIC_VERSION_PATCH 7
 
 #define VER_DEV_RELEASE
 // #define VER_PRE_RELEASE
@@ -47,7 +47,21 @@
 
 #define VER_PRODUCT_VERSION VER_FILE_VERSION
 
-#ifdef VER_DEV_RELEASE
+#if defined(NR_DIAG_VULKAN_NO_SUBMIT) && NR_DIAG_VULKAN_NO_SUBMIT
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-vulkan-no-submit (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(NR_DIAG_VULKAN_COMMAND_ONLY) && NR_DIAG_VULKAN_COMMAND_ONLY
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-vulkan-command-only (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(NR_DIAG_VULKAN_NO_OBSERVERS) && NR_DIAG_VULKAN_NO_OBSERVERS
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-vulkan-no-observers (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(NR_DIAG_VULKAN_NO_AUGMENT) && NR_DIAG_VULKAN_NO_AUGMENT
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-vulkan-no-augmentation (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(NR_DIAG_VULKAN_NO_LEGACY) && NR_DIAG_VULKAN_NO_LEGACY
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-vulkan-no-legacy (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-vulkan-only (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(NR_DIAG_FORWARD_ONLY) && NR_DIAG_FORWARD_ONLY
+#define VER_PRODUCT_VERSION_STR "10.0.0-diagnostic-forward-only (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
+#elif defined(VER_DEV_RELEASE)
 #define VER_PRODUCT_VERSION_STR                                                                                        \
     STRINGIZE(VER_MAJOR_VERSION) "." STRINGIZE(VER_MINOR_VERSION) "." STRINGIZE(VER_HOTFIX_VERSION) "-dev (" VER_BUILD_COMMIT ") (" VER_BUILD_DATE ")"
 #elif VER_PRE_RELEASE

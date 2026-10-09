@@ -71,6 +71,11 @@ void SetFocusStateLocked(bool focused, const char* reason, HWND foreground, DWOR
                          DWORD foregroundThreadId)
 {
     const bool oldFocused = _state.Focused;
+    if (oldFocused != focused)
+    {
+        ++_state.FocusGeneration;
+        ResetKeyboardEdgesForFocusLocked();
+    }
     _state.Focused = focused;
     if (oldFocused && !focused)
     {
@@ -252,6 +257,8 @@ void ClearTargetWindowLocked()
     _state.TargetProcessId = 0;
     _state.TargetThreadId = 0;
     _state.ExternalTargetProcess = false;
+    ++_state.FocusGeneration;
+    ResetKeyboardEdgesForFocusLocked();
     _state.Focused = false;
 
     if (!_state.HasExplicitInputHwnd)

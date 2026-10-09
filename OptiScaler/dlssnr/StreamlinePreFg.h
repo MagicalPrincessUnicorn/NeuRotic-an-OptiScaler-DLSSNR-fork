@@ -8,6 +8,8 @@
 #include "DlssNr_PresentGuides.h"
 #include "DlssNrFeature_Dx12.h"
 #include "FrameTrace.h"
+#include <nr/semantic/character/CharacterRuntime.h>
+#include <menu/input/input_system.h>
 #include <sl.h>
 #include <sl_dlss_g.h>
 #include <detours/detours.h>
@@ -158,6 +160,22 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
     }
     struct ForwardScope { ForwardScope() { forwardingPresent = true; } ~ForwardScope() { forwardingPresent = false; } } scope;
     auto* config = Config::Instance();
+    // Observe the application's real image before the original interposer Present
+    // generates any outputs. Keep this independent of the selected NR method.
+    if (Neurotic::Semantic::Character::CharacterWorkerRequested())
+    {
+        ComPtr<IDXGISwapChain3> inspectorChain;
+        if (owner->queue && State().swapchains == 1 &&
+            SUCCEEDED(chain->QueryInterface(IID_PPV_ARGS(&inspectorChain))))
+        {
+            const auto inspectorProvider = Provider();
+            Neurotic::Semantic::Character::CharacterPresent(inspectorChain.Get(), owner->queue.Get(),
+                inspectorProvider.known && inspectorProvider.enabled, OptiInput::IsFocused(),
+                Neurotic::Semantic::Character::ReadSettings(*config), true,
+                reinterpret_cast<std::uintptr_t>(owner.Get()), true, PresentFrame());
+        }
+        else Neurotic::Semantic::Character::CharacterSourceInvalidated();
+    }
     const auto runtime = config->GetDlssNrRuntimeSnapshot();
     const unsigned int route = config->DlssNrRoute.value_or_default();
     const bool requested = runtime.enabled && (route == 1 || route == 2);
@@ -170,7 +188,7 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         {
             StopConsumerObservation();
             owner->startup.Reset();
-            ResetCompletions();
+            CloseCompletionAdmission();
             PresentGuides::Instance().Enable(false);
             {
                 std::lock_guard lock(State().mutex);
@@ -255,11 +273,11 @@ inline HRESULT Dispatch(IDXGISwapChain* chain, UINT sync, UINT flags, const DXGI
         }
         if (!provider.known || !provider.supported || ::State::Instance().activeFgOutput != FGOutput::NoFG ||
             ::State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOn ||
-            ::State::Instance().dlssgDetectedInterpolationCount > 1 ||
+            provider.observedGenerated < 1 || provider.observedGenerated > 5 ||
             nativeFg.active != 1 || !nativeFg.instance)
         {
             frame.valid = false;
-            frame.refusal = "Pre-FG adapter requires one native Streamline 2x provider with NR Multipass off";
+            frame.refusal = "Present FG needs an observed fixed 2x-6x native provider and supported queue/UI settings";
             owner->startup.Reset();
         }
         if (frame.valid)
@@ -404,6 +422,7 @@ inline HRESULT STDMETHODCALLTYPE Resize(IDXGISwapChain* chain, UINT count, UINT 
     auto owner = GetOwner(chain);
     std::unique_lock<std::recursive_mutex> ownerLock;
     if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
+    if (!Neurotic::Semantic::Character::CharacterBeforeResize()) return DXGI_ERROR_WAS_STILL_DRAWING;
     if (owner) owner->startup.Reset();
     Invalidate();
     PresentGuides::Instance().Enable(false);
@@ -421,6 +440,7 @@ inline HRESULT STDMETHODCALLTYPE Resize1(IDXGISwapChain3* chain, UINT count, UIN
     auto owner = GetOwner(chain);
     std::unique_lock<std::recursive_mutex> ownerLock;
     if (owner) ownerLock = std::unique_lock(owner->presentationMutex);
+    if (!Neurotic::Semantic::Character::CharacterBeforeResize()) return DXGI_ERROR_WAS_STILL_DRAWING;
     if (owner) owner->startup.Reset();
     Invalidate();
     PresentGuides::Instance().Enable(false);

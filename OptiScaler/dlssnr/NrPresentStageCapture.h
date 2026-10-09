@@ -20,6 +20,7 @@ struct StageInput
     ID3D12Resource* image;
     D3D12_RESOURCE_STATES state;
     float whitePoint = 0.0f;
+    Screenshots::Encoding encoding = Screenshots::Encoding::DisplayEncoded;
 };
 
 // Diagnostic only: no source texture or model history is changed. All stages of a
@@ -45,12 +46,13 @@ class PresentStages
     }
 
     void request(ULONGLONG now, unsigned int delayMs = 5000, unsigned int frames = MaxFrames, bool png = false,
-                 std::string buildIdentity = "offline-fixture")
+                 std::string buildIdentity = "offline-fixture", bool preserveRaw = false)
     {
         if (active()) return;
         start_ = now + delayMs;
         limit_ = (std::max)(1u, (std::min)(frames, MaxFrames));
         png_ = png;
+        preserveRaw_ = png && preserveRaw;
         buildIdentity_ = std::move(buildIdentity);
         armed_ = true;
         status_ = delayMs ? "Capture starts in 5 seconds. Close the menu." :
@@ -82,7 +84,7 @@ class PresentStages
         {
             if (!inputs[i].image || stages_[i].name != inputs[i].name ||
                 !sameShape(inputs[i].image->GetDesc(), stages_[i].desc) ||
-                inputs[i].whitePoint != stages_[i].whitePoint)
+                inputs[i].whitePoint != stages_[i].whitePoint || inputs[i].encoding != stages_[i].encoding)
             { cancel(); return false; }
         }
         // Do not silently mix configuration or history discontinuities into a motion sample.
@@ -213,15 +215,22 @@ class PresentStages
                     stage.name + "_" + std::to_string(i) + ".raw");
                 if (png_) cleanup.staged.push_back(path);
                 ok = dump(path, stage, i, png_);
+                if (ok && preserveRaw_)
+                {
+                    auto rawPath = path; rawPath.replace_extension(".raw");
+                    cleanup.staged.push_back(rawPath);
+                    ok = dump(rawPath, stage, i, false);
+                }
             }
         // Every image contains its matching provenance; no user-facing sidecar.
         if (ok && png_)
         {
             std::ostringstream manifest;
-            manifest << "{\n  \"schema\": 1,\n  \"batch\": " << Screenshots::JsonString(prefix)
+            manifest << "{\n  \"schema\": " << (preserveRaw_ ? 2 : 1) << ",\n  \"batch\": " << Screenshots::JsonString(prefix)
                      << ",\n  \"build_identity\": " << Screenshots::JsonString(buildIdentity_)
                      << ",\n  \"settings\": " << Screenshots::JsonString(settings_)
-                     << ",\n  \"brightness_adjustment\": false,\n  \"frames\": [";
+                     << ",\n  \"brightness_adjustment\": false,\n  \"raw_preserved\": " << (preserveRaw_ ? "true" : "false")
+                     << ",\n  \"capture_boundary\": \"completed GPU readback and recording release; not scanout\",\n  \"frames\": [";
             for (size_t i = 0; i < frames_.size(); ++i)
             {
                 const auto& frame = frames_[i];
@@ -231,10 +240,12 @@ class PresentStages
                          << ",\"provider_frame\":" << frame.identity.providerFrame
                          << ",\"provider_generation\":" << frame.identity.providerGeneration
                          << ",\"resource_generation\":" << frame.identity.resourceGeneration
-                         << ",\"backbuffer\":" << frame.identity.backbuffer << '}';
+                         << ",\"backbuffer\":" << frame.identity.backbuffer
+                         << ",\"requested_passes\":" << frame.identity.requestedPasses
+                         << ",\"completed_passes\":" << frame.identity.completedPasses << '}';
             }
             manifest << "],\n  \"limitations\": " << Screenshots::JsonString(
-                "Native Temporal original-image display conversion can produce a darker reference; experimental. Performance request-only pairs use fresh history, not accumulated live history. Present Enhanced runtime acceptance is pending. No brightness adjustment.")
+                "Native pairs are scene-stage SDR previews before later game effects. Performance request-only pairs use fresh history, not accumulated live history. HDR display images are converted to SDR previews with one fixed reference for both sides; monitor tone mapping is not reproduced. No per-image exposure adjustment.")
                 << ",\n  \"images\": [";
             bool first = true;
             for (const auto& stage : stages_)
@@ -242,12 +253,38 @@ class PresentStages
                 {
                     if (!first) manifest << ',';
                     first = false;
-                    manifest << "{\"file\":" << Screenshots::JsonString(screenshotName(prefix, stage.name, i))
+                    const auto pngName = screenshotName(prefix, stage.name, i);
+                    manifest << "{\"file\":" << Screenshots::JsonString(pngName)
                              << ",\"width\":" << stage.desc.Width << ",\"height\":" << stage.desc.Height
-                             << ",\"format\":" << int(stage.desc.Format) << '}';
+                             << ",\"format\":" << int(stage.desc.Format)
+                             << ",\"color_conversion\":" << Screenshots::JsonString(Screenshots::EncodingName(stage.encoding, stage.whitePoint))
+                             << ",\"preview_white_point\":" << stage.whitePoint;
+                    if (preserveRaw_)
+                    {
+                        auto rawName = std::filesystem::path(pngName); rawName.replace_extension(".raw");
+                        manifest << ",\"raw_file\":" << Screenshots::JsonString(rawName.string())
+                                 << ",\"stage\":" << Screenshots::JsonString(stage.name)
+                                 << ",\"frame_index\":" << i
+                                 << ",\"row_pitch\":" << stage.layout.Footprint.RowPitch
+                                 << ",\"raw_bytes\":" << stage.bytes
+                                 << ",\"rect\":[0,0," << stage.desc.Width << ',' << stage.desc.Height << ']';
+                    }
+                    manifest << '}';
                 }
             manifest << "]\n}\n";
             const auto bytes = manifest.str();
+            const auto sidecarName = prefix + "_CAPTURE.json";
+            if (preserveRaw_)
+            {
+                const auto path = directory / sidecarName;
+                cleanup.staged.push_back(path);
+                if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
+                {
+                    const bool written = std::fwrite(bytes.data(), 1, bytes.size(), file) == bytes.size();
+                    ok = std::fclose(file) == 0 && written;
+                }
+                else ok = false;
+            }
             for (const auto& stage : stages_)
                 for (unsigned int i = 0; ok && i < captured_; ++i)
                     ok = Screenshots::EmbedPngManifest(directory / screenshotName(prefix, stage.name, i), bytes);
@@ -259,7 +296,22 @@ class PresentStages
                     cleanup.published.emplace_back(destination, false);
                     ok = MoveFileExW((directory / name).c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE;
                     cleanup.published.back().second = ok;
+                    if (ok && preserveRaw_)
+                    {
+                        auto rawName = std::filesystem::path(name); rawName.replace_extension(".raw");
+                        const auto rawDestination = root / rawName;
+                        cleanup.published.emplace_back(rawDestination, false);
+                        ok = MoveFileExW((directory / rawName).c_str(), rawDestination.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE;
+                        cleanup.published.back().second = ok;
+                    }
                 }
+            if (ok && preserveRaw_)
+            {
+                const auto destination = root / sidecarName;
+                cleanup.published.emplace_back(destination, false);
+                ok = MoveFileExW((directory / sidecarName).c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE;
+                cleanup.published.back().second = ok;
+            }
         }
         if (ok && !png_)
         {
@@ -297,6 +349,7 @@ class PresentStages
         captured_ = wanted_ = 0;
         armed_ = ready_ = discarded_ = false;
         publicationPending_ = false;
+        preserveRaw_ = false;
         settings_.clear();
     }
 
@@ -305,6 +358,7 @@ class PresentStages
     {
         std::string name;
         float whitePoint = 0.0f;
+        Screenshots::Encoding encoding = Screenshots::Encoding::DisplayEncoded;
         D3D12_RESOURCE_DESC desc {};
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout {};
         UINT64 bytes = 0;
@@ -316,6 +370,7 @@ class PresentStages
     unsigned int captured_ = 0, wanted_ = 0;
     unsigned int limit_ = MaxFrames;
     bool png_ = false;
+    bool preserveRaw_ = false;
     ULONGLONG start_ = 0;
     bool armed_ = false, ready_ = false, discarded_ = false;
     bool publicationPending_ = false;
@@ -360,9 +415,15 @@ class PresentStages
                 status_ = reason.str();
                 return false;
             }
+            if (png_ && !Screenshots::ValidConversion(input.image->GetDesc().Format, input.whitePoint, input.encoding))
+            {
+                status_ = "Capture failed: color representation does not match the image format.";
+                return false;
+            }
             Stage stage;
             stage.name = input.name;
             stage.whitePoint = input.whitePoint;
+            stage.encoding = input.encoding;
             stage.desc = input.image->GetDesc();
             device->GetCopyableFootprints(&stage.desc, 0, 1, 0, &stage.layout, nullptr, nullptr, &stage.bytes);
             if (!stage.bytes || stage.bytes == UINT64_MAX)
@@ -438,7 +499,7 @@ class PresentStages
         if (png)
             ok = Screenshots::WritePng(path, static_cast<const unsigned char*>(mapped),
                 static_cast<UINT>(stage.desc.Width), stage.desc.Height, stage.layout.Footprint.RowPitch, stage.desc.Format,
-                stage.whitePoint);
+                stage.whitePoint, stage.encoding);
         else if (auto* file = _wfopen(path.wstring().c_str(), L"wb"))
         {
             const auto written = std::fwrite(mapped, 1, static_cast<size_t>(stage.bytes), file);

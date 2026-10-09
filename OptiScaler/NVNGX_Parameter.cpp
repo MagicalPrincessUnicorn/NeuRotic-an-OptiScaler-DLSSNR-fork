@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "nr/diagnostics/capability/CapabilityNgxObservation.h"
 
 #include "NVNGX_Parameter.h"
 
@@ -827,6 +828,7 @@ void InitNGXParameters(NVSDK_NGX_Parameter* InParams, API api)
             InParams->Set("FrameGeneration.MinDriverVersionMajor", 0);
         }
     }
+    DlssNr::Capability::CaptureSyntheticDefaults();
 }
 
 NVNGX_Parameters* GetNGXParameters(API api, bool isPersistent)

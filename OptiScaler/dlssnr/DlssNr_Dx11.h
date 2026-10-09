@@ -10,6 +10,7 @@ namespace DlssNr::NativeDx11
 void RegisterSwapchain(IDXGISwapChain* swapchain);
 void UnregisterSwapchain(IDXGISwapChain* swapchain);
 void ResizeSwapchain(IDXGISwapChain* swapchain);
+bool QualifiedPresentInputs(IDXGISwapChain* swapchain);
 
 class Feature
 {

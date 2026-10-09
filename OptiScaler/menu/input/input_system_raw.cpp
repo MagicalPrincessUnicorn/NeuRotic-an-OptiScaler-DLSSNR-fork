@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <nr/diagnostics/HostCost.h>
 #include "input_system_internal.h"
 
 #include <array>
@@ -808,7 +809,9 @@ void SanitizeRawKeyboardLocked(RAWINPUT& input)
 
 UINT WINAPI hkGetRawInputData(HRAWINPUT rawInput, UINT command, LPVOID data, PUINT size, UINT headerSize)
 {
+    Neurotic::HostCost::Scope nrOriginalCost(Neurotic::HostCost::Kind::InputOriginal);
     const UINT result = o_GetRawInputData(rawInput, command, data, size, headerSize);
+    nrOriginalCost.Finish();
 
     if (result == static_cast<UINT>(-1))
         return result;
@@ -828,7 +831,9 @@ UINT WINAPI hkGetRawInputData(HRAWINPUT rawInput, UINT command, LPVOID data, PUI
         return result;
 
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputRaw);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (bypassHookDepth == 0)
         {
@@ -850,7 +855,9 @@ UINT WINAPI hkGetRawInputData(HRAWINPUT rawInput, UINT command, LPVOID data, PUI
 UINT WINAPI hkGetRawInputBuffer(PRAWINPUT data, PUINT size, UINT headerSize)
 {
     const UINT bufferSize = size != nullptr ? *size : 0;
+    Neurotic::HostCost::Scope nrOriginalCost(Neurotic::HostCost::Kind::InputOriginal);
     const UINT result = o_GetRawInputBuffer(data, size, headerSize);
+    nrOriginalCost.Finish();
 
     if (result == static_cast<UINT>(-1))
         return result;
@@ -866,7 +873,9 @@ UINT WINAPI hkGetRawInputBuffer(PRAWINPUT data, PUINT size, UINT headerSize)
     PRAWINPUT current = data;
 
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputRaw);
         std::unique_lock lock(_state.Mutex);
+        nrHostCost.Acquired();
 
         if (bypassHookDepth != 0)
             return result;

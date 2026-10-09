@@ -1,10 +1,19 @@
 #include "pch.h"
+#include "dlssnr/NativeFgVulkan.h"
 
 #include "Config.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include "mfg/ExperimentalMfgRuntime.h"
+#include "menu/UiBrightness.h"
+#include "menu/LegacyMenuSettings.h"
 #include "dlssnr/DlssNr_PresentResolution.h"
+#include "dlssnr/DlssNr_PresentInputPolicy.h"
 #include "dlssnr/FrameTrace.h"
 #include "dlssnr/DlssNr_StageUi.h"
 #include "dlssnr/NrExperimentalPolicy.h"
+#include "dlssnr/NativeGuideRoute.h"
+#include "nr/semantic/character/CharacterInspectorSettings.h"
+#include "nr/semantic/object_rules/ObjectRules.h"
 
 #include "Util.h"
 
@@ -13,6 +22,7 @@
 #include <misc/IdentifyGpu.h>
 
 #include <SimpleIni.h>
+#include "CheckedIniFile.h"
 
 static CSimpleIniA ini;
 
@@ -23,14 +33,7 @@ template<class Edit> bool SaveIniSubset(const std::filesystem::path& path, Edit&
     CSimpleIniA partial;
     if (partial.LoadFile(path.c_str()) != SI_OK) return false;
     edit(partial);
-    auto temporary = path;
-    temporary += L".neurotic-" + std::to_wstring(GetCurrentProcessId()) + L".tmp";
-    if (partial.SaveFile(temporary.c_str()) < 0) return false;
-    if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-    {
-        DeleteFileW(temporary.c_str());
-        return false;
-    }
+    if (!Neurotic::CheckedIniFile::Save(partial, path)) return false;
     return ini.LoadFile(path.c_str()) == SI_OK;
 }
 }
@@ -67,6 +70,8 @@ Config::Config()
 {
     absoluteFileName = Util::DllPath().parent_path() / fileName;
     Reload(absoluteFileName);
+    FGDLSSGNativeMfgAtStartup = FGDLSSGNativeMfgExperimental.value_or_default();
+    Neurotic::Mfg::Experimental::BeginSession({FGDLSSGExperimentalUnlockRTX30.value_or_default(), FGDLSSGExperimentalUnlockRTX20.value_or_default()});
 }
 
 void Config::SetDlssNrEnabled(bool enabled)
@@ -78,7 +83,9 @@ void Config::SetDlssNrEnabled(bool enabled)
 
 Config::DlssNrRuntimeSnapshot Config::GetDlssNrRuntimeSnapshot() const noexcept
 {
-    return _dlssNrState.Snapshot();
+    auto runtime = _dlssNrState.Snapshot();
+    runtime.enabled = runtime.enabled && DlssNrRoute.value_or_default()!=3 && DlssNr::FinalFallback::InGameAllowed();
+    return runtime;
 }
 
 void Config::SetDlssNrRenderingMode(int32_t mode)
@@ -98,8 +105,24 @@ bool Config::Reload(std::filesystem::path iniPath)
     LOG_INFO("Trying to load ini from: {0}", wstring_to_string(pathWStr));
     if (ini.LoadFile(iniPath.c_str()) == SI_OK)
     {
+        Neurotic::MenuConfig::DiscardRetiredKeys(ini);
         State::Instance().nvngxIniDetected = exists(iniPath.parent_path() / "nvngx.ini");
         _log.clear();
+
+        Neurotic::Semantic::Character::LoadSettings(*this,
+            [&](const char* section,const char* key) { return readBool(section,key); },
+            [&](const char* section,const char* key) { return readUInt(section,key); },
+            [&](const char* section,const char* key) { return readString(section,key); });
+
+        ObjectRulesProfileHex.set_from_config(readString("ObjectRules","ProfileHex"));
+        try {
+            const auto encoded=ObjectRulesProfileHex.value_or_default();
+            if(encoded!="auto"&&!encoded.empty()){
+                auto& rules=Neurotic::Semantic::Rules::GameStore();
+                const auto ack=rules.Commit(rules.Read()->revision,Neurotic::Semantic::Rules::DecodeIni(encoded));
+                Neurotic::Semantic::Rules::LoadError()=ack.accepted?"":ack.reason;
+            }else{auto& rules=Neurotic::Semantic::Rules::GameStore();rules.Commit(rules.Read()->revision,Neurotic::Semantic::Rules::DefaultProfile());Neurotic::Semantic::Rules::LoadError().clear();}
+        }catch(const std::exception& error){Neurotic::Semantic::Rules::LoadError()=error.what();LOG_WARN("Object Rules saved profile rejected: {}",error.what());}
 
         // Upscalers
         {
@@ -283,6 +306,10 @@ bool Config::Reload(std::filesystem::path iniPath)
             if (FGDLSSGOverrideInterpolationCount.has_value() &&
                 (FGDLSSGOverrideInterpolationCount.value() < 0 || FGDLSSGOverrideInterpolationCount.value() > 6))
                 FGDLSSGOverrideInterpolationCount.reset();
+            FGDLSSGNativeMfgExperimental.set_from_config(readBool("DLSSG", "NativeMfgExperimental"));
+            FGDLSSGExperimentalUnlockRTX30.set_from_config(readBool("DLSSG", "ExperimentalUnlockRTX30").value_or(false));
+            FGDLSSGExperimentalUnlockRTX20.set_from_config(readBool("DLSSG", "ExperimentalUnlockRTX20").value_or(false));
+            Neurotic::Mfg::Experimental::SettingsSaved({FGDLSSGExperimentalUnlockRTX30.value_or_default(), FGDLSSGExperimentalUnlockRTX20.value_or_default()}, true);
 
             FGDLSSGFramerateTargetDMFG.set_from_config(readFloat("DLSSG", "FramerateTargetDMFG"));
             FGDLSSGOverrideForceDMFG.set_from_config(readBool("DLSSG", "OverrideForceDMFG"));
@@ -366,9 +393,28 @@ bool Config::Reload(std::filesystem::path iniPath)
             NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
             NrConfigSynchronization::InvalidateProfileEdits();
             _dlssNrState.LoadEnabled(DlssNrEnabled, readBool("DlssNr", "Enabled"));
+            DlssNrVulkanPrepare.set_from_config(readBool("DlssNr", "VulkanPrepare"));
             const auto multipassEnabled = readBool("DlssNr", "MultipassEnabled");
             DlssNrMultipassEnabled.set_from_config(multipassEnabled);
+            DlssNrNativeProtocol.set_from_config(readBool("DlssNr", "NativeProtocol"));
+            DlssNrAlternateFrame.set_from_config(readBool("DlssNr", "AlternateFrame"));
             DlssNrExperimentalMode.set_from_config(readBool("DlssNr", "ExperimentalMode"));
+            DlssNrPreparedDepth.set_from_config(readBool("DlssNr", "PreparedDepth"));
+            DlssNrNativeGuides.set_from_config(readBool("DlssNr", "NativeGuides"));
+            DlssNr::NativeGuides::Configure(DlssNrNativeGuides.value_or_default());
+            const auto inputSource=readInt("DlssNr", "InputSource");
+            DlssNrInputSource.set_from_config(inputSource);
+            DlssNrInputTransport.set_from_config(readInt("DlssNr", "InputTransport"));
+            DlssNrAllowCpuFallback.set_from_config(readBool("DlssNr", "AllowCpuFallback"));
+            DlssNr::NativeGuides::ConfigureInput(inputSource.value_or(-1),
+                DlssNrInputTransport.value_or_default(),DlssNrAllowCpuFallback.value_or_default());
+            if(!inputSource.has_value())DlssNrInputSource.set_from_config(DlssNr::NativeGuides::SelectedSource());
+            DlssNrNativeFrameGeneration.set_from_config(readBool("DlssNr", "NativeFrameGeneration"));
+            DlssNrNativeVulkanRenderer.set_from_config(readBool("DlssNr", "NativeVulkanRenderer"));
+            DlssNr::NativeGuides::ConfigureVulkanRenderer(DlssNrNativeVulkanRenderer.value_or_default());
+            DlssNr::NativeFg::Configure(DlssNrNativeFrameGeneration.value_or_default());
+            DlssNrNativeDepthDirection.set_from_config(readInt("DlssNr", "NativeDepthDirection"));
+            DlssNr::NativeGuides::ConfigureDepthDirection(DlssNrNativeDepthDirection.value_or_default());
             DlssNrOverrideMultipassGuardrails.set_from_config(readBool("DlssNr", "OverrideMultipassGuardrails"));
             DlssNrOverrideHdrGuardrails.set_from_config(readBool("DlssNr", "OverrideHdrGuardrails"));
             DlssNrOverrideFgGuardrails.set_from_config(readBool("DlssNr", "OverrideFgGuardrails"));
@@ -377,10 +423,14 @@ bool Config::Reload(std::filesystem::path iniPath)
                 [&](const char* key) { return readFloat("DlssNrBasic", key); },
                 multipassEnabled.has_value() || DlssNrSecondLayer.has_value() ||
                 readUInt("DlssNr", "Passes").has_value() || ini.GetSectionSize("DlssNrLayer2") > 0));
-            if (auto route = readUInt("DlssNr", "Route"))
-                DlssNrRoute.set_from_config(std::min(route.value(), 2u));
-            else
-                DlssNrRoute.reset();
+            const auto savedRoute = readUInt("DlssNr", "Route");
+            DlssNr::StageUi::LoadRoute(*this, savedRoute);
+            DlssNrAnythingScale.set_from_config(readUInt("DlssNr", "AnythingScale"));
+            DlssNrUiAnythingResolutionPreset.set_from_config(readUInt("DlssNr", "UiAnythingResolutionPreset"));
+            DlssNrUiAnythingManualScale.set_from_config(readUInt("DlssNr", "UiAnythingManualScale"));
+            DlssNr::PresentInput::LoadConfig(*this, readUInt("DlssNr", "PresentInputPolicy"),
+                ini.GetValue("DlssNr", "PresentInputPolicy") != nullptr,
+                savedRoute.has_value());
             DlssNr::PresentResolution::LoadConfig(*this,
                 [&](const char* key) { return readUInt("DlssNr", key); }, ini.GetSectionSize("DlssNr") > 0);
             // PerformanceMode is the user-facing name. Keep accepting the older experimental
@@ -436,6 +486,12 @@ bool Config::Reload(std::filesystem::path iniPath)
             else
                 DlssNrScalingDownscaler.reset();
             DlssNrProxyProbe.set_from_config(readBool("DlssNr", "ProxyProbe"));
+            if(DlssNrProxyProbe.value_or_default())
+            {
+                static std::atomic<bool> deprecatedProbeReported{false};
+                if(!deprecatedProbeReported.exchange(true))
+                    LOG_INFO("DlssNr ProxyProbe is deprecated and retained for configuration compatibility; capability-only model probes are disabled.");
+            }
             DlssNrUseProxy.set_from_config(readBool("DlssNr", "UseProxy"));
             DlssNrScanExposure.set_from_config(readBool("DlssNr", "ScanExposure"));
             DlssNrWhitePointSource.set_from_config(readUInt("DlssNr", "WhitePointSource"));
@@ -727,9 +783,9 @@ bool Config::Reload(std::filesystem::path iniPath)
         // Menu
         {
             MenuLanguage.set_from_config(readString("Menu", "Language", true));
-            OptiClip.set_from_config(readBool("Menu", "OptiClip"));
+            MenuPreflightExpanded.set_from_config(readBool("Menu", "PreflightExpanded"));
             if (auto brightness = readFloat("Menu", "Brightness"); brightness.has_value())
-                MenuBrightness.set_from_config(std::isfinite(*brightness) ? std::clamp(*brightness, 1.0f, 3.0f) : 1.0f);
+                MenuBrightness.set_from_config(Neurotic::UiBrightness::Clamp(*brightness));
             AllowGameMouse.set_from_config(readBool("Menu", "AllowGameMouse"));
             AllowGameKeyboard.set_from_config(readBool("Menu", "AllowGameKeyboard"));
             AllowGameController.set_from_config(readBool("Menu", "AllowGameController"));
@@ -739,6 +795,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             // Don't enable again if set false because of Linux issue
             OverlayMenu.set_from_config(readBool("Menu", "OverlayMenu"));
             ShortcutKey.set_from_config(readInt("Menu", "ShortcutKey"));
+            EscapeClosesMenu.set_from_config(readBool("Menu", "EscapeClosesMenu"));
             ExtendedLimits.set_from_config(readBool("Menu", "ExtendedLimits"));
             ShowFps.set_from_config(readBool("Menu", "ShowFps"));
             UseHQFont.set_from_config(readBool("Menu", "UseHQFont"));
@@ -771,6 +828,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGShortcutKey.set_from_config(readInt("Menu", "FGShortcutKey"));
 
             LightTheme.set_from_config(readBool("Menu", "LightTheme"));
+            MenuReduceMotion.set_from_config(readBool("Menu", "ReduceMotion"));
             OverlaysUseTheme.set_from_config(readBool("Menu", "OverlaysUseTheme"));
             MenuAccentColorR.set_from_config(readFloat("Menu", "AccentColorR"));
             MenuAccentColorG.set_from_config(readFloat("Menu", "AccentColorG"));
@@ -964,6 +1022,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             DxgiFactoryWrapping.set_from_config(readBool("Spoofing", "DxgiFactoryWrapping"));
             DxgiBlacklist.set_from_config(readString("Spoofing", "DxgiBlacklist"));
             DxgiVRAM.set_from_config(readInt("Spoofing", "DxgiVRAM"));
+            VulkanUseCopyForInputs.set_from_config(readBool("Vulkan", "UseCopyForInputs"));
+            VulkanUseCopyForOutput.set_from_config(readBool("Vulkan", "UseCopyForOutput"));
+
             VulkanSpoofing.set_from_config(readBool("Spoofing", "Vulkan"));
             VulkanExtensionSpoofing.set_from_config(readBool("Spoofing", "VulkanExtensionSpoofing"));
             VulkanVRAM.set_from_config(readInt("Spoofing", "VulkanVRAM"));
@@ -1080,9 +1141,14 @@ bool Config::Reload(std::filesystem::path iniPath)
             _DONTUSE_Fsr4ForceEnableInt8.set_from_config(readBool("FSR", "Fsr4ForceEnableInt8"));
         }
 
+        LOG_INFO("DLSS-NR config load: path={} success=true enabledIntent={} VulkanPrepare={} route={}",
+            wstring_to_string(pathWStr), DlssNrEnabled.value_or_default(),
+            DlssNrVulkanPrepare.value_or_default(), DlssNrRoute.value_or_default());
         return true;
     }
 
+    LOG_WARN("DLSS-NR config load: path={} success=false; existing/default intent retained",
+        wstring_to_string(pathWStr));
     return false;
 }
 
@@ -1140,7 +1206,7 @@ std::string GetFloatValue(std::optional<float> value)
     return std::to_string(value.value());
 }
 
-bool Config::SaveIni()
+bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraft)
 {
     // Upscalers
     {
@@ -1294,6 +1360,10 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->FGDLSSGUseGamesReflexMarkers.value_for_config()).c_str());
         ini.SetValue("DLSSG", "OverrideInterpolationCount",
                      GetIntValue(Instance()->FGDLSSGOverrideInterpolationCount.value_for_config()).c_str());
+        ini.SetBoolValue("DLSSG", "ExperimentalUnlockRTX30", Instance()->FGDLSSGExperimentalUnlockRTX30.value_or_default());
+        ini.SetBoolValue("DLSSG", "ExperimentalUnlockRTX20", Instance()->FGDLSSGExperimentalUnlockRTX20.value_or_default());
+        ini.SetValue("DLSSG", "NativeMfgExperimental",
+                     GetBoolValue(Instance()->FGDLSSGNativeMfgExperimental.value_for_config()).c_str());
         ini.SetValue("DLSSG", "FramerateTargetDMFG",
                      GetFloatValue(Instance()->FGDLSSGFramerateTargetDMFG.value_for_config()).c_str());
         ini.SetValue("DLSSG", "OverrideForceDMFG",
@@ -1415,6 +1485,8 @@ bool Config::SaveIni()
 
     // XeSS
     {
+        Neurotic::Semantic::Character::SaveSettings(ini,*Instance());
+        ini.SetValue("ObjectRules","ProfileHex",Instance()->ObjectRulesProfileHex.value_or_default().c_str());
         ini.SetValue("XeSS", "BuildPipelines", GetBoolValue(Instance()->BuildPipelines.value_for_config()).c_str());
         ini.SetValue("XeSS", "CreateHeaps", GetBoolValue(Instance()->CreateHeaps.value_for_config()).c_str());
         ini.SetValue("XeSS", "NetworkModel", GetIntValue(Instance()->NetworkModel.value_for_config()).c_str());
@@ -1430,9 +1502,18 @@ bool Config::SaveIni()
     // inside this transaction: scanner code may read NR config while holding its own mutex.
     NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "VulkanPrepare", GetBoolValue(Instance()->DlssNrVulkanPrepare.value_for_config()).c_str());
     ini.SetValue("DlssNr", "MultipassEnabled",
                  GetBoolValue(Instance()->DlssNrMultipassEnabled.value_for_config()).c_str());
     ini.SetBoolValue("DlssNr", "ExperimentalMode", Instance()->DlssNrExperimentalMode.value_or_default());
+    ini.SetBoolValue("DlssNr", "PreparedDepth", Instance()->DlssNrPreparedDepth.value_or_default());
+    ini.SetBoolValue("DlssNr", "NativeGuides", Instance()->DlssNrNativeGuides.value_or_default());
+    ini.SetLongValue("DlssNr", "InputSource", Instance()->DlssNrInputSource.value_or_default());
+    ini.SetLongValue("DlssNr", "InputTransport", Instance()->DlssNrInputTransport.value_or_default());
+    ini.SetBoolValue("DlssNr", "AllowCpuFallback", Instance()->DlssNrAllowCpuFallback.value_or_default());
+    ini.SetBoolValue("DlssNr", "NativeFrameGeneration", Instance()->DlssNrNativeFrameGeneration.value_or_default());
+    ini.SetBoolValue("DlssNr", "NativeVulkanRenderer", Instance()->DlssNrNativeVulkanRenderer.value_or_default());
+    ini.SetLongValue("DlssNr", "NativeDepthDirection", Instance()->DlssNrNativeDepthDirection.value_or_default());
     ini.SetBoolValue("DlssNr", "OverrideMultipassGuardrails",
                      Instance()->DlssNrOverrideMultipassGuardrails.value_or_default());
     ini.SetBoolValue("DlssNr", "OverrideHdrGuardrails",
@@ -1478,6 +1559,12 @@ bool Config::SaveIni()
         ini.SetValue(section.c_str(), "ApplyModel", GetBoolValue(layer.applyModel.value_for_config()).c_str());
     }
     ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "AnythingScale", GetIntValue(Instance()->DlssNrAnythingScale.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "UiAnythingResolutionPreset", GetIntValue(Instance()->DlssNrUiAnythingResolutionPreset.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "UiAnythingManualScale", GetIntValue(Instance()->DlssNrUiAnythingManualScale.value_for_config()).c_str());
+    DlssNr::PresentInput::SaveConfig(ini, *Instance());
+    ini.SetValue("DlssNr", "NativeProtocol", GetBoolValue(Instance()->DlssNrNativeProtocol.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "AlternateFrame", GetBoolValue(Instance()->DlssNrAlternateFrame.value_for_config()).c_str());
     DlssNr::PresentResolution::SaveConfig(ini, *Instance());
     DlssNr::StageUi::SaveHints(ini, *Instance());
     DlssNr::BasicMultipass::Save(ini, Instance()->DlssNrBasicMultipass.value_or_default());
@@ -1490,6 +1577,17 @@ bool Config::SaveIni()
     ini.SetValue("DlssNr", "PreDlaa", GetBoolValue(Instance()->DlssNrPreDlaa.value_for_config()).c_str());
     ini.SetValue("DlssNr", "PreSrSoftReset",
                  GetBoolValue(Instance()->DlssNrPreSrSoftReset.value_for_config()).c_str());
+    // Global Save serializes pending choices without exposing them to render snapshots.
+    // The menu publishes the complete group only after the checked save succeeds.
+    if (experimentalDraft)
+    {
+        ini.SetBoolValue("DlssNr", "ExperimentalMode", DlssNr::ExperimentalPolicy::AnySelected(*experimentalDraft));
+        ini.SetBoolValue("DlssNr", "OverrideMultipassGuardrails", false);
+        ini.SetBoolValue("DlssNr", "OverrideHdrGuardrails", false);
+        ini.SetBoolValue("DlssNr", "OverrideFgGuardrails", false);
+        ini.SetBoolValue("DlssNr", "PreSrSoftReset", experimentalDraft->preSrSoftReset);
+        ini.SetBoolValue("DlssNr", "PreparedDepth", experimentalDraft->preparedDepth);
+    }
     ini.SetValue("Screenshots", "NrOff", GetBoolValue(Instance()->ScreenshotNrOff.value_for_config()).c_str());
     ini.SetValue("Screenshots", "NativeNr", GetBoolValue(Instance()->ScreenshotNativeNr.value_for_config()).c_str());
     ini.SetValue("Screenshots", "PresentNr", GetBoolValue(Instance()->ScreenshotPresentNr.value_for_config()).c_str());
@@ -1668,7 +1766,8 @@ bool Config::SaveIni()
     {
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
         ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());
-        ini.SetBoolValue("Menu", "OptiClip", Instance()->OptiClip.value_or_default());
+        ini.SetBoolValue("Menu", "PreflightExpanded", Instance()->MenuPreflightExpanded.value_or_default());
+        Neurotic::MenuConfig::DiscardRetiredKeys(ini);
         ini.SetValue("Menu", "Brightness", GetFloatValue(Instance()->MenuBrightness).c_str());
         ini.SetBoolValue("Menu", "AllowGameMouse", Instance()->AllowGameMouse.value_or_default());
         ini.SetBoolValue("Menu", "AllowGameKeyboard", Instance()->AllowGameKeyboard.value_or_default());
@@ -1678,6 +1777,7 @@ bool Config::SaveIni()
         auto setting = Instance()->ShortcutKey.value_for_config();
         ini.SetValue("Menu", "ShortcutKey",
                      GetIntValue(Instance()->ShortcutKey.value_for_config(), setting > 0).c_str());
+        ini.SetBoolValue("Menu", "EscapeClosesMenu", Instance()->EscapeClosesMenu.value_or_default());
 
         ini.SetValue("Menu", "ExtendedLimits", GetBoolValue(Instance()->ExtendedLimits.value_for_config()).c_str());
         ini.SetValue("Menu", "ShowFps", GetBoolValue(Instance()->ShowFps.value_for_config()).c_str());
@@ -1707,6 +1807,7 @@ bool Config::SaveIni()
                      wstring_to_string(Instance()->TTFFontPath.value_for_config_or(L"auto")).c_str());
 
         ini.SetValue("Menu", "LightTheme", GetBoolValue(Instance()->LightTheme.value_for_config()).c_str());
+        ini.SetValue("Menu", "ReduceMotion", GetBoolValue(Instance()->MenuReduceMotion.value_for_config()).c_str());
         ini.SetValue("Menu", "OverlaysUseTheme", GetBoolValue(Instance()->OverlaysUseTheme.value_for_config()).c_str());
         ini.SetValue("Menu", "AccentColorR", GetFloatValue(Instance()->MenuAccentColorR.value_for_config()).c_str());
         ini.SetValue("Menu", "AccentColorG", GetFloatValue(Instance()->MenuAccentColorG.value_for_config()).c_str());
@@ -1878,6 +1979,9 @@ bool Config::SaveIni()
         ini.SetValue("Spoofing", "DxgiFactoryWrapping",
                      GetBoolValue(Instance()->DxgiFactoryWrapping.value_for_config()).c_str());
         ini.SetValue("Spoofing", "DxgiBlacklist", Instance()->DxgiBlacklist.value_for_config_or("auto").c_str());
+        ini.SetValue("Vulkan", "UseCopyForInputs", GetBoolValue(Instance()->VulkanUseCopyForInputs.value_for_config()).c_str());
+        ini.SetValue("Vulkan", "UseCopyForOutput", GetBoolValue(Instance()->VulkanUseCopyForOutput.value_for_config()).c_str());
+
         ini.SetValue("Spoofing", "Vulkan", GetBoolValue(Instance()->VulkanSpoofing.value_for_config()).c_str());
         ini.SetValue("Spoofing", "VulkanExtensionSpoofing",
                      GetBoolValue(Instance()->VulkanExtensionSpoofing.value_for_config()).c_str());
@@ -2015,7 +2119,21 @@ bool Config::SaveIni()
 
     LOG_INFO("Trying to save ini to: {0}", wstring_to_string(pathWStr));
 
-    return ini.SaveFile(absoluteFileName.wstring().c_str()) >= 0;
+    const auto saveResult = Neurotic::CheckedIniFile::SaveDetailed(ini, absoluteFileName);
+    const bool saved = saveResult.succeeded;
+    ConfigPersistence::Current().Publish(absoluteFileName,saved,saveResult.errorCode,saveResult.stage,
+        [](const ConfigPersistence::Snapshot& failure) {
+            LOG_WARN("Config file-use query: sequence={} path={} error={} detectedUsers={} (file users may include the game; no processes were stopped)",
+                     failure.sequence, failure.path, failure.fileUsers.errorCode, failure.fileUsers.owners.size());
+            for (const auto& owner : failure.fileUsers.owners)
+                LOG_WARN("Config file user: sequence={} pid={} name={}", failure.sequence, owner.processId, owner.name);
+        });
+    if (!saved) LOG_ERROR("Config save failed: stage={} error={} path={}",saveResult.stage,saveResult.errorCode,wstring_to_string(pathWStr));
+    Neurotic::Mfg::Experimental::SettingsSaved({Instance()->FGDLSSGExperimentalUnlockRTX30.value_or_default(), Instance()->FGDLSSGExperimentalUnlockRTX20.value_or_default()}, saved);
+    LOG_INFO("DLSS-NR config save: path={} success={} enabledIntent={} VulkanPrepare={} route={}",
+        wstring_to_string(pathWStr), saved, ini.GetValue("DlssNr", "Enabled", "auto"),
+        ini.GetValue("DlssNr", "VulkanPrepare", "auto"), ini.GetValue("DlssNr", "Route", "auto"));
+    return saved;
 }
 
 bool Config::SaveMenuInputSettings(bool mouse, bool keyboard, bool controller)
@@ -2031,21 +2149,31 @@ bool Config::SaveMenuInputSettings(bool mouse, bool keyboard, bool controller)
     return true;
 }
 
-bool Config::SaveExperimentalSettings(bool active, bool multipass, bool hdr, bool frameGeneration,
-                                      bool preSrSoftReset)
+bool Config::SaveExperimentalSettings(bool multipass, bool hdr, bool frameGeneration, bool preSrSoftReset,
+                                      bool preparedDepth)
 {
+    // Keep the old call/INI shape for compatibility; these ordinary paths no
+    // longer require a crash-recovery experiment marker or separate overrides.
+    multipass = hdr = frameGeneration = false;
+    const bool active = preSrSoftReset || preparedDepth;
     if (!SaveIniSubset(absoluteFileName, [&](CSimpleIniA& file) {
         file.SetBoolValue("DlssNr", "ExperimentalMode", active);
         file.SetBoolValue("DlssNr", "OverrideMultipassGuardrails", multipass);
         file.SetBoolValue("DlssNr", "OverrideHdrGuardrails", hdr);
         file.SetBoolValue("DlssNr", "OverrideFgGuardrails", frameGeneration);
         file.SetBoolValue("DlssNr", "PreSrSoftReset", preSrSoftReset);
+        file.SetBoolValue("DlssNr", "PreparedDepth", preparedDepth);
     })) return false;
+    NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
+    // Persistence succeeded; marker publication must precede the first use of
+    // the new choices. Applied reopens readiness after its marker write succeeds.
+    DlssNr::ExperimentalPolicy::SessionReady.store(false, std::memory_order_release);
     DlssNrExperimentalMode = active;
     DlssNrOverrideMultipassGuardrails = multipass;
     DlssNrOverrideHdrGuardrails = hdr;
     DlssNrOverrideFgGuardrails = frameGeneration;
     DlssNrPreSrSoftReset = preSrSoftReset;
+    DlssNrPreparedDepth = preparedDepth;
     DlssNr::ExperimentalPolicy::Changed();
     return true;
 }
@@ -2059,7 +2187,7 @@ bool Config::SaveXeFG()
     auto pathWStr = absoluteFileName.wstring();
     LOG_INFO("Trying to save ini to: {0}", wstring_to_string(pathWStr));
 
-    return ini.SaveFile(absoluteFileName.wstring().c_str()) >= 0;
+    return Neurotic::CheckedIniFile::Save(ini, absoluteFileName);
 }
 
 void Config::CheckUpscalerFiles()

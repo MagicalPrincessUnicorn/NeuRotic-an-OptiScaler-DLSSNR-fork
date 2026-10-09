@@ -10,10 +10,23 @@
 #include <shaders/bias/Bias_Dx12.h>
 #include <shaders/magnifier/Magnifier_Dx12.h>
 #include <gpu_time/GpuTime_Dx12.h>
+#include <dlssnr/NrGpuSafety.h>
+#include <runtime/OwnedFeatureReleasePolicy.h>
+#include <dlssnr/SharedDx12MenuUses.h>
 
 class IFeature_Dx12 : public virtual IFeature
 {
   private:
+    DlssNr::GpuSafety::CompletionSet _recordedUses;
+    bool _unobservedUse = false;
+    void TrackUse(ID3D12GraphicsCommandList* list)
+    {
+        std::erase_if(_recordedUses, [](const auto& ticket) { return ticket && DlssNr::GpuSafety::Reusable(ticket); });
+        auto ticket = DlssNr::GpuSafety::Record(list);
+        if (!ticket) _unobservedUse = true;
+        else if (std::find(_recordedUses.begin(), _recordedUses.end(), ticket) == _recordedUses.end())
+            _recordedUses.push_back(std::move(ticket));
+    }
     struct ShaderPass
     {
         // Requests the target buffer it needs to write to. Returns the buffer the PREVIOUS stage must write to
@@ -30,6 +43,7 @@ class IFeature_Dx12 : public virtual IFeature
   protected:
     ID3D12Device* Device = nullptr;
     static inline std::unique_ptr<Menu_Dx12> Imgui = nullptr;
+    static inline DlssNr::SharedDx12MenuUses ImguiUses;
     std::unique_ptr<OS_Dx12> OutputScaler = nullptr;
     std::unique_ptr<RCAS_Dx12> RCAS = nullptr;
     std::unique_ptr<Bias_Dx12> Bias = nullptr;
@@ -44,6 +58,27 @@ class IFeature_Dx12 : public virtual IFeature
     virtual bool EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) = 0;
 
   public:
+    // Called by the owning context before destruction, while failure can still
+    // preserve the complete object and permit a later release retry.
+    virtual NVSDK_NGX_Result ReleaseProvider() { return NVSDK_NGX_Result_Success; }
+    virtual bool ProviderReleaseQuarantined() const { return false; }
+    static bool TryRetireSharedMenu();
+    bool CanRetire() const
+    {
+        return !ProviderReleaseQuarantined() && !_unobservedUse && std::all_of(_recordedUses.begin(), _recordedUses.end(),
+            [](const auto& ticket) { return ticket && DlssNr::GpuSafety::Reusable(ticket); });
+    }
+    // Waiting is a distinct state from missing observation, device loss or
+    // opaque provider failure. This grants retention, never GPU reuse/release.
+    bool CanDeferRetirement() const
+    {
+        if(ProviderReleaseQuarantined()||_unobservedUse||!Device||
+           FAILED(Device->GetDeviceRemovedReason())||_recordedUses.empty())return false;
+        return std::all_of(_recordedUses.begin(),_recordedUses.end(),[](const auto& ticket){
+            const auto observed=DlssNr::GpuSafety::InspectRecording(ticket,nullptr,false);
+            return ticket&&observed.valid&&observed.registryHealthy;
+        });
+    }
     bool Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters);
     bool Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters);
 

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <nr/diagnostics/HostCost.h>
 #include "MenuInputPolicy.h"
 #include "input_system_internal.h"
 
@@ -313,6 +314,7 @@ void LogInputHealthSnapshotLocked(const char* origin)
     lastExternalVirtualMouseActive = _state.ExternalVirtualMouseActive;
     lastExternalVirtualMouseAuthoritative = _state.ExternalVirtualMouseAuthoritative;
     lastExternalLowLevelMouseHookInstalled = _state.ExternalLowLevelMouseHookInstalled;
+    lastAcquisitionMode = _state.AcquisitionMode;
     lastTargetProcessId = _state.TargetProcessId;
     lastInputProcessId = _state.InputProcessId;
 }
@@ -880,6 +882,8 @@ void ResetStateAfterShutdown()
 
     _state.Initialized = false;
     _state.HooksInstalled = false;
+    ++_state.FocusGeneration;
+    ResetKeyboardEdgesForFocusLocked();
     _state.Focused = false;
 
     _state.MenuVisible = false;
@@ -1112,7 +1116,9 @@ static void BeginFrameLocked(HWND targetHwnd, HWND inputHwnd, bool hasInputHwnd,
 
 void BeginFrame(HWND targetHwnd, bool isUwp)
 {
+    Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputBegin);
     std::unique_lock lock(_state.Mutex);
+    nrHostCost.Acquired();
 
     if (!_state.Initialized)
         Initialize(targetHwnd, isUwp);
@@ -1122,7 +1128,9 @@ void BeginFrame(HWND targetHwnd, bool isUwp)
 
 void BeginFrame(HWND targetHwnd, HWND inputHwnd, bool isUwp)
 {
+    Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputBegin);
     std::unique_lock lock(_state.Mutex);
+    nrHostCost.Acquired();
 
     if (!_state.Initialized)
         Initialize(targetHwnd, inputHwnd, isUwp);
@@ -1132,7 +1140,9 @@ void BeginFrame(HWND targetHwnd, HWND inputHwnd, bool isUwp)
 
 void FeedImGui(bool menuVisible)
 {
+    Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputFeed);
     std::unique_lock lock(_state.Mutex);
+    nrHostCost.Acquired();
 
     ImGuiIO& io = ImGui::GetIO();
 
@@ -1272,7 +1282,9 @@ void FeedImGui(bool menuVisible)
 
 void EndFrame(bool menuVisible)
 {
+    Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::InputEnd);
     std::unique_lock lock(_state.Mutex);
+    nrHostCost.Acquired();
 
     ApplyMenuVisibilityChangeLocked(menuVisible);
     LogInputHealthSnapshotLocked("EndFrame");
@@ -1305,6 +1317,12 @@ bool IsFocused()
 {
     std::unique_lock lock(_state.Mutex);
     return _state.Focused;
+}
+
+std::uint64_t GetFocusGeneration()
+{
+    std::unique_lock lock(_state.Mutex);
+    return _state.FocusGeneration;
 }
 
 bool IsKeyDown(int vk)

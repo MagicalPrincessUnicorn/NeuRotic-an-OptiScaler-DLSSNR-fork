@@ -14,9 +14,23 @@
 
 #include "Hook_Utils.h"
 
-static DxgiProxy::PFN_CreateDxgiFactory o_CreateDXGIFactory = nullptr;
-static DxgiProxy::PFN_CreateDxgiFactory1 o_CreateDXGIFactory1 = nullptr;
-static DxgiProxy::PFN_CreateDxgiFactory2 o_CreateDXGIFactory2 = nullptr;
+static std::atomic<DxgiProxy::PFN_CreateDxgiFactory> o_CreateDXGIFactory = nullptr;
+static std::atomic<DxgiProxy::PFN_CreateDxgiFactory1> o_CreateDXGIFactory1 = nullptr;
+static std::atomic<DxgiProxy::PFN_CreateDxgiFactory2> o_CreateDXGIFactory2 = nullptr;
+// Serialize installers only. Hook callers never wait on a loader-facing lock.
+static std::mutex hookMutex;
+struct FactoryDispatch
+{
+    DxgiProxy::PFN_CreateDxgiFactory create;
+    DxgiProxy::PFN_CreateDxgiFactory1 create1;
+    DxgiProxy::PFN_CreateDxgiFactory2 create2;
+};
+static FactoryDispatch ReadFactoryDispatch()
+{
+    return {o_CreateDXGIFactory.load(std::memory_order_acquire),
+            o_CreateDXGIFactory1.load(std::memory_order_acquire),
+            o_CreateDXGIFactory2.load(std::memory_order_acquire)};
+}
 static bool creatingD3D12DeviceForLuma = false;
 
 #pragma intrinsic(_ReturnAddress)
@@ -88,19 +102,27 @@ static void CheckLumaAndReShade(IDXGIFactory* factory)
 VALIDATE_HOOK(hkCreateDXGIFactory, DxgiProxy::PFN_CreateDxgiFactory)
 inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
 {
+    const auto original = ReadFactoryDispatch();
+    if (!original.create) return E_FAIL;
+
+    // Driver teardown can create a factory after CloseLogger(). Preserve the
+    // native call without touching logging, config, wrappers or plugin loaders.
+    if (State::Instance().isShuttingDown)
+        return original.create(riid, ppFactory);
+
     auto caller = Util::WhoIsTheCaller(_ReturnAddress());
     LOG_DEBUG("Caller: {}", caller);
 
     if (creatingD3D12DeviceForLuma)
     {
         LOG_DEBUG("Bypassing hooking/wrapping during Luma D3D12 device creation");
-        return o_CreateDXGIFactory(riid, ppFactory);
+        return original.create(riid, ppFactory);
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
     {
         LOG_INFO("Skipping wrapping for: {}", caller);
-        return o_CreateDXGIFactory(riid, ppFactory);
+        return original.create(riid, ppFactory);
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() &&
@@ -114,9 +136,9 @@ inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
     auto owner = State::GetOwner();
     State::DisableChecks(owner, "dxgi");
 #ifndef DXGI_DEBUG_ENABLED
-    result = o_CreateDXGIFactory(riid, ppFactory);
+    result = original.create(riid, ppFactory);
 #else
-    result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+    result = original.create2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
 #endif
 
     State::EnableChecks(owner);
@@ -147,19 +169,25 @@ inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
 VALIDATE_HOOK(hkCreateDXGIFactory1, DxgiProxy::PFN_CreateDxgiFactory1)
 inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactory)
 {
+    const auto original = ReadFactoryDispatch();
+    if (!original.create1) return E_FAIL;
+
+    if (State::Instance().isShuttingDown)
+        return original.create1(riid, ppFactory);
+
     auto caller = Util::WhoIsTheCaller(_ReturnAddress());
     LOG_DEBUG("Caller: {}", caller);
 
     if (creatingD3D12DeviceForLuma)
     {
         LOG_DEBUG("Bypassing hooking/wrapping during Luma D3D12 device creation");
-        return o_CreateDXGIFactory1(riid, ppFactory);
+        return original.create1(riid, ppFactory);
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
     {
         LOG_INFO("Skipping wrapping for: {}", caller);
-        return o_CreateDXGIFactory1(riid, ppFactory);
+        return original.create1(riid, ppFactory);
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() &&
@@ -173,9 +201,9 @@ inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactor
     auto owner = State::GetOwner();
     State::DisableChecks(owner, "dxgi");
 #ifndef DXGI_DEBUG_ENABLED
-    result = o_CreateDXGIFactory1(riid, ppFactory);
+    result = original.create1(riid, ppFactory);
 #else
-    result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+    result = original.create2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
 #endif
     State::EnableChecks(owner);
 
@@ -205,19 +233,25 @@ inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactor
 VALIDATE_HOOK(hkCreateDXGIFactory2, DxgiProxy::PFN_CreateDxgiFactory2)
 inline static HRESULT hkCreateDXGIFactory2(UINT Flags, REFIID riid, IDXGIFactory2** ppFactory)
 {
+    const auto original = ReadFactoryDispatch();
+    if (!original.create2) return E_FAIL;
+
+    if (State::Instance().isShuttingDown)
+        return original.create2(Flags, riid, ppFactory);
+
     auto caller = Util::WhoIsTheCaller(_ReturnAddress());
     LOG_DEBUG("Caller: {}", caller);
 
     if (creatingD3D12DeviceForLuma)
     {
         LOG_DEBUG("Bypassing hooking/wrapping during Luma D3D12 device creation");
-        return o_CreateDXGIFactory2(Flags, riid, ppFactory);
+        return original.create2(Flags, riid, ppFactory);
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
     {
         LOG_INFO("Skipping wrapping for: {}", caller);
-        return o_CreateDXGIFactory2(Flags, riid, ppFactory);
+        return original.create2(Flags, riid, ppFactory);
     }
 
     LOG_DEBUG("Caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
@@ -233,9 +267,9 @@ inline static HRESULT hkCreateDXGIFactory2(UINT Flags, REFIID riid, IDXGIFactory
     auto owner = State::GetOwner();
     State::DisableChecks(owner, "dxgi");
 #ifndef DXGI_DEBUG_ENABLED
-    result = o_CreateDXGIFactory2(Flags, riid, ppFactory);
+    result = original.create2(Flags, riid, ppFactory);
 #else
-    result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+    result = original.create2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
 #endif
     State::EnableChecks(owner);
 
@@ -283,12 +317,41 @@ void DxgiHooks::Hook()
 
     LOG_DEBUG("");
 
-    if (o_CreateDXGIFactory == nullptr)
-        o_CreateDXGIFactory = DxgiProxy::Hook_CreateDxgiFactory(hkCreateDXGIFactory);
+    if (o_CreateDXGIFactory.load(std::memory_order_acquire))
+        return;
 
-    if (o_CreateDXGIFactory1 == nullptr)
-        o_CreateDXGIFactory1 = DxgiProxy::Hook_CreateDxgiFactory1(hkCreateDXGIFactory1);
-
-    if (o_CreateDXGIFactory2 == nullptr)
-        o_CreateDXGIFactory2 = DxgiProxy::Hook_CreateDxgiFactory2(hkCreateDXGIFactory2);
+    // Publish all prepared originals before any factory hook becomes callable.
+    // Publishing after Commit allows the startup GPU worker into a null call.
+    auto module = State::Instance().workingMode == WorkingMode::Dxgi ? dllModule : DxgiProxy::Module();
+    PVOID targets[] = {
+        reinterpret_cast<PVOID>(KernelBaseProxy::GetProcAddress_()(module, "CreateDXGIFactory")),
+        reinterpret_cast<PVOID>(KernelBaseProxy::GetProcAddress_()(module, "CreateDXGIFactory1")),
+        reinterpret_cast<PVOID>(KernelBaseProxy::GetProcAddress_()(module, "CreateDXGIFactory2"))};
+    PVOID hooks[] = {reinterpret_cast<PVOID>(hkCreateDXGIFactory),
+                     reinterpret_cast<PVOID>(hkCreateDXGIFactory1),
+                     reinterpret_cast<PVOID>(hkCreateDXGIFactory2)};
+    PDETOUR_TRAMPOLINE prepared[3]{};
+    auto error = DetourTransactionBegin();
+    if (error != NO_ERROR) return;
+    error = DetourUpdateThread(GetCurrentThread());
+    for (unsigned i = 0; error == NO_ERROR && i < 3; ++i)
+        error = targets[i] ? DetourAttachEx(&targets[i], hooks[i], &prepared[i], nullptr, nullptr)
+                           : ERROR_PROC_NOT_FOUND;
+    if (error != NO_ERROR)
+    {
+        DetourTransactionAbort();
+        LOG_ERROR("Failed to prepare DXGI factory hooks: {:X}", error);
+        return;
+    }
+    o_CreateDXGIFactory.store(reinterpret_cast<DxgiProxy::PFN_CreateDxgiFactory>(prepared[0]), std::memory_order_release);
+    o_CreateDXGIFactory1.store(reinterpret_cast<DxgiProxy::PFN_CreateDxgiFactory1>(prepared[1]), std::memory_order_release);
+    o_CreateDXGIFactory2.store(reinterpret_cast<DxgiProxy::PFN_CreateDxgiFactory2>(prepared[2]), std::memory_order_release);
+    error = DetourTransactionCommit();
+    if (error != NO_ERROR)
+    {
+        o_CreateDXGIFactory.store(nullptr, std::memory_order_release);
+        o_CreateDXGIFactory1.store(nullptr, std::memory_order_release);
+        o_CreateDXGIFactory2.store(nullptr, std::memory_order_release);
+        LOG_ERROR("Failed to commit DXGI factory hooks: {:X}", error);
+    }
 }

@@ -3,6 +3,8 @@
 #include <ankerl/unordered_dense.h>
 
 void PrepareLogger();
+// Terminal, idempotent close: disable output and flush while retaining the
+// default logger for late teardown callbacks until normal CRT destruction.
 void CloseLogger();
 void WaitForEnter();
 
@@ -328,7 +330,7 @@ inline static void DumpNvParams(const NVSDK_NGX_Parameter* InParams)
 {
     FillNvParamNames();
 
-    spdlog::debug("DumpNvParams Dumping known NvParam values");
+    LOG_WHILE_ACTIVE(debug, "DumpNvParams Dumping known NvParam values");
 
     for (const auto& [key, value] : nvParamNames)
     {
@@ -346,8 +348,8 @@ inline static void DumpNvParams(const NVSDK_NGX_Parameter* InParams)
         InParams->Get(value.c_str(), &i);
         InParams->Get(value.c_str(), &v);
 
-        spdlog::debug("DumpNvParams {0} => ULL: {1}, F: {2}, D: {3}, UI: {4}, I: {5}, V*: {6:x}", key, ull, f, d, ui, i,
-                      (UINT64) v);
+        LOG_WHILE_ACTIVE(debug, "DumpNvParams {0} => ULL: {1}, F: {2}, D: {3}, UI: {4}, I: {5}, V*: {6:x}", key, ull, f, d,
+                         ui, i, (UINT64) v);
     }
 }
 

@@ -28,3 +28,7 @@ IMGUI_IMPL_API void     ImGui_ImplUwp_NewFrame(ImVec2 displaySize);
 
 typedef void (*PFN_KeyUp)(unsigned int vKey);
 void ImGui_BindUwpKeyUp(PFN_KeyUp keyUpMethod);
+typedef void (*PFN_KeyDown)(unsigned int vKey, bool ctrl, bool shift, bool alt);
+void ImGui_BindUwpKeyDown(PFN_KeyDown keyDownMethod);
+typedef void (*PFN_FocusChanged)(bool focused);
+void ImGui_BindUwpFocusChanged(PFN_FocusChanged focusChangedMethod);

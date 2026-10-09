@@ -33,6 +33,22 @@ class NrConfigState
         return { (state & 1u) != 0, state >> 1u };
     }
 
+    // Atomic-only: called inside the connection-policy commit. Preserve the
+    // user's enabled setting and let each existing owner retire its session.
+    bool RequestNewSession() noexcept
+    {
+        uint64_t current = _runtimeState.load(std::memory_order_acquire);
+        for (;;)
+        {
+            if ((current >> 1u) == (UINT64_MAX >> 1u))
+                return false;
+            if (_runtimeState.compare_exchange_weak(current, current + 2u,
+                                                    std::memory_order_acq_rel,
+                                                    std::memory_order_acquire))
+                return true;
+        }
+    }
+
     static void SetRoutingMode(NrOptional<int32_t>& mode, NrOptional<bool>& beforeSr, int32_t value)
     {
         NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());

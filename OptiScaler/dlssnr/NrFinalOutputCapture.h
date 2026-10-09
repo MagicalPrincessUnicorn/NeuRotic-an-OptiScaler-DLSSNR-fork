@@ -45,7 +45,8 @@ class FinalOutputSubmission
 
     bool submit(ID3D12CommandQueue* queue, ID3D12Resource* output,
                 StageCapture::PresentStages& capture, const char* name,
-                UINT64 frameId, const std::string& settings, const Identity& identity = {})
+                UINT64 frameId, const std::string& settings, const Identity& identity = {},
+                const DisplayTransform& color = {})
     {
         if (active() || !queue || !output) return false;
         Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -69,7 +70,7 @@ class FinalOutputSubmission
         if (FAILED(hr)) return fail("create capture recording", hr);
         use_ = GpuSafety::Record(list_.Get());
         if (!use_) return fail("track capture completion", E_FAIL);
-        if (!capture.record(list_.Get(), device.Get(), {{name, output, D3D12_RESOURCE_STATE_PRESENT}},
+        if (!capture.record(list_.Get(), device.Get(), {{name, output, D3D12_RESOURCE_STATE_PRESENT, color.whitePoint, color.encoding}},
                             frameId, false, settings, identity))
         {
             releaseAfterDrain();

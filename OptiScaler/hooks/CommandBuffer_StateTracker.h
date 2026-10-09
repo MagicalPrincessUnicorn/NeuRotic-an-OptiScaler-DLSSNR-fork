@@ -1,4 +1,7 @@
+#include <map>
 #pragma once
+#include <nr/diagnostics/HostCost.h>
+#include <dlssnr/VulkanNrImageFacts.h>
 
 #include <pch.h>
 
@@ -18,7 +21,8 @@
 #include <atomic>
 #include <shared_mutex>
 
-#define LOW_PRECISION_TRACKING
+// Native NR needs authenticated image layouts and outside-render-pass state.
+// Keep full tracking enabled for Vulkan parity.
 
 namespace vk_state
 {
@@ -44,13 +48,26 @@ inline std::optional<BindPointIndex> ToIndex(VkPipelineBindPoint bp)
     case VK_PIPELINE_BIND_POINT_COMPUTE:
         return BindPointIndex::Compute;
     case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:
-        // Ray tracing bind point - not tracked by this system
-        LOG_DEBUG("Ray tracing bind point not tracked by state tracker");
+    {
+        // This is a normal game command, not an error. Local static initialization
+        // bounds the diagnostic across rendering threads; logging may flush synchronously.
+        static const bool reported = [] {
+            LOG_DEBUG("Ray tracing bind point not tracked by state tracker (reported once)");
+            return true;
+        }();
+        (void) reported;
         return std::nullopt;
+    }
     default:
+    {
         // Unknown bind point - don't track to avoid corrupting other state
-        LOG_WARN("Unknown pipeline bind point {} - ignoring to avoid state corruption", (uint32_t) bp);
+        static const bool reported = [bp] {
+            LOG_WARN("Unknown pipeline bind point {} - ignoring to avoid state corruption (reported once)", (uint32_t) bp);
+            return true;
+        }();
+        (void) reported;
         return std::nullopt;
+    }
     }
 }
 
@@ -181,6 +198,7 @@ struct CommandBufferState
 
 #ifndef LOW_PRECISION_TRACKING
     std::unordered_map<VkImage, VkImageLayout> ImageLayouts;
+    std::unordered_map<VkImage, VkImageSubresourceRange> ImageLayoutRanges;
 
     bool InRenderPass = false;
     VkRenderPass ActiveRenderPass = VK_NULL_HANDLE;
@@ -240,13 +258,16 @@ struct CommandBufferStateEntry
 
 class CommandBufferStateTracker
 {
+    using PoolKey = std::pair<VkDevice,VkCommandPool>;
   public:
     CommandBufferStateTracker() { _state = &State::Instance(); }
 
     // Call this when command buffers are allocated from a pool
-    void OnAllocateCommandBuffers(VkCommandPool pool, uint32_t count, const VkCommandBuffer* pCommandBuffers,
+    void OnAllocateCommandBuffers(VkDevice device, VkCommandPool rawPool, uint32_t count, const VkCommandBuffer* pCommandBuffers,
                                   uint32_t queueFamilyIndex)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
+        const PoolKey pool{device,rawPool};
         // Phase 1: Ensure pool metadata exists (only _poolMetadataMutex)
         {
             std::shared_lock poolLock(_poolMetadataMutex);
@@ -283,7 +304,8 @@ class CommandBufferStateTracker
 
     void OnBegin(VkCommandBuffer cmd, const VkCommandBufferBeginInfo* pBeginInfo)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackLifecycle, 1);
+        if (!TracksGameState())
             return;
 
         const uint32_t flags = (pBeginInfo) ? pBeginInfo->flags : 0;
@@ -308,7 +330,7 @@ class CommandBufferStateTracker
         }
 
         // Get pool and epoch info (only needs _cmdBufferToPool lock)
-        VkCommandPool pool = VK_NULL_HANDLE;
+        PoolKey pool{};
         {
             std::shared_lock mapLock(_statesMapMutex);
             auto poolIt = _cmdBufferToPool.find(cmd);
@@ -317,7 +339,7 @@ class CommandBufferStateTracker
         }
 
         uint64_t currentEpoch = 0;
-        if (pool != VK_NULL_HANDLE)
+        if (pool.second != VK_NULL_HANDLE)
         {
             // Lock-free atomic read
             std::shared_lock poolLock(_poolMetadataMutex);
@@ -348,6 +370,7 @@ class CommandBufferStateTracker
 
         // Now lock only THIS command buffer's state
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
         if (!entry->State)
             entry->State = std::make_shared<CommandBufferState>();
 
@@ -356,7 +379,8 @@ class CommandBufferStateTracker
 
     void OnEnd(VkCommandBuffer cmd)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackLifecycle, 1);
+        if (!TracksGameState())
             return;
 
         // Fast path: get entry with read lock
@@ -373,13 +397,15 @@ class CommandBufferStateTracker
 
         // Lock only this command buffer's state
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
         if (entry->State)
             entry->State->Recording = false;
     }
 
     void OnReset(VkCommandBuffer cmd)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackLifecycle, 1);
+        if (!TracksGameState())
             return;
 
         // Fast path: get entry with read lock
@@ -396,13 +422,16 @@ class CommandBufferStateTracker
 
         // Lock only this command buffer's state
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
         if (entry->State)
             entry->State->ResetAll();
     }
 
-    void OnResetPool(VkCommandPool pool)
+    void OnResetPool(VkDevice device, VkCommandPool rawPool)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        const PoolKey pool{device,rawPool};
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackLifecycle, 1);
+        if (!TracksGameState())
             return;
 
         // Atomic increment - lock-free for the epoch counter
@@ -424,7 +453,12 @@ class CommandBufferStateTracker
 
     void OnBindPipeline(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipeline pipeline)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBinding, 64);
+        if (!TracksGameState())
+            return;
+
+        const auto idx = ToIndex(bindPoint);
+        if (!idx.has_value())
             return;
 
         // Fast path: Try to get existing entry with read lock
@@ -448,12 +482,9 @@ class CommandBufferStateTracker
 
         // Now lock only THIS command buffer's state
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
         if (!entry->State)
             entry->State = std::make_shared<CommandBufferState>();
-
-        auto idx = ToIndex(bindPoint);
-        if (!idx.has_value())
-            return;
 
         entry->State->BP[static_cast<uint32_t>(*idx)].Pipeline = pipeline;
     }
@@ -462,7 +493,12 @@ class CommandBufferStateTracker
                               uint32_t firstSet, uint32_t descriptorSetCount, const VkDescriptorSet* pDescriptorSets,
                               uint32_t dynamicOffsetCount, const uint32_t* pDynamicOffsets)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBinding, 64);
+        if (!TracksGameState())
+            return;
+
+        const auto idx = ToIndex(bindPoint);
+        if (!idx.has_value())
             return;
 
         // Fast path: Try to get existing entry with read lock
@@ -486,58 +522,57 @@ class CommandBufferStateTracker
 
         // Now lock only THIS command buffer's state
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
         if (!entry->State)
             entry->State = std::make_shared<CommandBufferState>();
-
-        auto idx = ToIndex(bindPoint);
-        if (!idx.has_value())
-            return;
 
         auto& bp = entry->State->BP[static_cast<uint32_t>(*idx)];
         bp.CurrentPipelineLayout = layout;
 
-        // Record the bind call verbatim
-        DescriptorBindCall bindCall;
+        if ((descriptorSetCount && !pDescriptorSets) || (dynamicOffsetCount && !pDynamicOffsets))
+        {
+            LOG_ERROR("vkCmdBindDescriptorSets has a missing set or dynamic-offset array");
+            return;
+        }
+
+        // Reuse a superseded exact range even when disjoint ranges alternate.
+        // Moving an update across disjoint bindings with this identical layout
+        // preserves set state and dynamic offsets. A different layout or an
+        // overlapping range stops the search: disturbance/chronology must survive.
+        size_t replacement = bp.DescriptorBindCalls.size();
+        for (size_t i = bp.DescriptorBindCalls.size(); i > 0; --i)
+        {
+            const auto& previous = bp.DescriptorBindCalls[i - 1];
+            if (previous.Layout != layout)
+                break;
+            if (previous.FirstSet == firstSet && previous.DescriptorSetCount == descriptorSetCount)
+            {
+                replacement = i - 1;
+                break;
+            }
+            if (!descriptorSetCount || !previous.DescriptorSetCount ||
+                (uint64_t(firstSet) < uint64_t(previous.FirstSet) + previous.DescriptorSetCount &&
+                 uint64_t(previous.FirstSet) < uint64_t(firstSet) + descriptorSetCount))
+                break;
+        }
+        if (replacement == bp.DescriptorBindCalls.size())
+            bp.DescriptorBindCalls.emplace_back();
+        const auto bindCallIndex = static_cast<uint32_t>(replacement);
+        auto& bindCall = bp.DescriptorBindCalls[replacement];
         bindCall.Layout = layout;
         bindCall.FirstSet = firstSet;
         bindCall.DescriptorSetCount = descriptorSetCount;
 
-        // Copy descriptor sets into vector - validate pointer is non-null when count > 0
+        // Reuse capacity for the replacement call's arrays.
         if (descriptorSetCount > 0)
-        {
-            if (pDescriptorSets)
-            {
-                bindCall.Sets.assign(pDescriptorSets, pDescriptorSets + descriptorSetCount);
-            }
-            else
-            {
-                LOG_ERROR("vkCmdBindDescriptorSets called with descriptorSetCount={} but pDescriptorSets=nullptr",
-                          descriptorSetCount);
-                return;
-            }
-        }
+            bindCall.Sets.assign(pDescriptorSets, pDescriptorSets + descriptorSetCount);
         else
-        {
-            bindCall.Sets.resize(descriptorSetCount, VK_NULL_HANDLE);
-        }
+            bindCall.Sets.clear();
 
-        // Copy dynamic offsets - validate pointer is non-null when count > 0
         if (dynamicOffsetCount > 0)
-        {
-            if (pDynamicOffsets)
-            {
-                bindCall.DynamicOffsets.assign(pDynamicOffsets, pDynamicOffsets + dynamicOffsetCount);
-            }
-            else
-            {
-                LOG_ERROR("vkCmdBindDescriptorSets called with dynamicOffsetCount={} but pDynamicOffsets=nullptr",
-                          dynamicOffsetCount);
-                return;
-            }
-        }
-
-        uint32_t bindCallIndex = static_cast<uint32_t>(bp.DescriptorBindCalls.size());
-        bp.DescriptorBindCalls.push_back(std::move(bindCall));
+            bindCall.DynamicOffsets.assign(pDynamicOffsets, pDynamicOffsets + dynamicOffsetCount);
+        else
+            bindCall.DynamicOffsets.clear();
 
         // Update per-set tracking for quick queries
         for (uint32_t i = 0; i < descriptorSetCount; ++i)
@@ -557,15 +592,17 @@ class CommandBufferStateTracker
     void OnPushConstants(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout,
                          VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size, const void* pValues)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBinding, 64);
+        if (!TracksGameState())
+            return;
+
+        const auto idx = ToIndex(bindPoint);
+        if (!idx.has_value())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
-
-        auto idx = ToIndex(bindPoint);
-        if (!idx.has_value())
-            return;
+        nrHostCost.Acquired();
 
         auto& bp = entry->State->BP[static_cast<uint32_t>(*idx)];
         bp.CurrentPipelineLayout = layout;
@@ -591,12 +628,33 @@ class CommandBufferStateTracker
             return;
         }
 
-        entry->State->PushConstantHistory.push_back(pushEntry);
+        auto& history = entry->State->PushConstantHistory;
+        // Only reorder across disjoint bytes/stages with an identical layout.
+        // Overlapping mixed-stage writes retain their original chronology.
+        for (size_t i = history.size(); i > 0; --i)
+        {
+            auto& previous = history[i - 1];
+            if (previous.Layout != pushEntry.Layout)
+                break;
+            if (previous.Stages == pushEntry.Stages && previous.Offset == pushEntry.Offset &&
+                previous.Size == pushEntry.Size)
+            {
+                previous = pushEntry;
+                return;
+            }
+            if (!pushEntry.Size || !previous.Size ||
+                ((previous.Stages & pushEntry.Stages) &&
+                 uint64_t(pushEntry.Offset) < uint64_t(previous.Offset) + previous.Size &&
+                 uint64_t(previous.Offset) < uint64_t(pushEntry.Offset) + pushEntry.Size))
+                break;
+        }
+        history.push_back(pushEntry);
     }
 
     void OnSetViewport(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport* pViewports)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
+        if (!TracksGameState())
             return;
 
         if (count > 0 && !pViewports)
@@ -607,6 +665,7 @@ class CommandBufferStateTracker
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         for (uint32_t i = 0; i < count; ++i)
         {
@@ -621,7 +680,8 @@ class CommandBufferStateTracker
 
     void OnSetScissor(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D* pScissors)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
+        if (!TracksGameState())
             return;
 
         if (count > 0 && !pScissors)
@@ -632,6 +692,7 @@ class CommandBufferStateTracker
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         for (uint32_t i = 0; i < count; ++i)
         {
@@ -647,7 +708,8 @@ class CommandBufferStateTracker
     void OnBindVertexBuffers(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer* pBuffers,
                              const VkDeviceSize* pOffsets)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBinding, 64);
+        if (!TracksGameState())
             return;
 
         if (count > 0 && (!pBuffers || !pOffsets))
@@ -659,6 +721,7 @@ class CommandBufferStateTracker
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         for (uint32_t i = 0; i < count; ++i)
         {
@@ -674,11 +737,13 @@ class CommandBufferStateTracker
 
     void OnBindIndexBuffer(VkCommandBuffer cmd, VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBinding, 64);
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->VI.IndexBufferValid = true;
         entry->State->VI.IndexBuffer = buffer;
@@ -692,28 +757,52 @@ class CommandBufferStateTracker
                            const VkBufferMemoryBarrier* pBufferMemoryBarriers, uint32_t imageMemoryBarrierCount,
                            const VkImageMemoryBarrier* pImageMemoryBarriers)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBarrier, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i)
         {
             const auto& barrier = pImageMemoryBarriers[i];
             entry->State->ImageLayouts[barrier.image] = barrier.newLayout;
+            entry->State->ImageLayoutRanges[barrier.image] = barrier.subresourceRange;
+        }
+#endif
+    }
+
+    void OnPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo* info)
+    {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackBarrier, 64);
+#ifndef LOW_PRECISION_TRACKING
+        if (!TracksGameState() || !info) return;
+        auto entry = GetOrCreateEntry(cmd,true);
+        std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
+        for (uint32_t i=0;i<info->imageMemoryBarrierCount;++i) {
+            const auto& b=info->pImageMemoryBarriers[i];
+            // Synchronization2 ignores layout values on an equal-layout,
+            // equal-family dependency. It cannot establish or replace a layout observation.
+            if (b.oldLayout==b.newLayout && b.srcQueueFamilyIndex==b.dstQueueFamilyIndex) continue;
+            entry->State->ImageLayouts[b.image]=b.newLayout;
+            entry->State->ImageLayoutRanges[b.image]=b.subresourceRange;
         }
 #endif
     }
 
     void OnSetCullMode(VkCommandBuffer cmd, VkCullModeFlags cullMode)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.CullMode = cullMode;
         entry->State->Dyn.CullModeSet = true;
@@ -721,11 +810,13 @@ class CommandBufferStateTracker
 
     void OnSetFrontFace(VkCommandBuffer cmd, VkFrontFace frontFace)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.FrontFace = frontFace;
         entry->State->Dyn.FrontFaceSet = true;
@@ -733,11 +824,13 @@ class CommandBufferStateTracker
 
     void OnSetPrimitiveTopology(VkCommandBuffer cmd, VkPrimitiveTopology primitiveTopology)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.PrimitiveTopology = primitiveTopology;
         entry->State->Dyn.PrimitiveTopologySet = true;
@@ -745,12 +838,14 @@ class CommandBufferStateTracker
 
     void OnSetDepthTestEnable(VkCommandBuffer cmd, VkBool32 depthTestEnable)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.DepthTestEnable = depthTestEnable;
         entry->State->Dyn.DepthTestEnableSet = true;
@@ -759,12 +854,14 @@ class CommandBufferStateTracker
 
     void OnSetDepthWriteEnable(VkCommandBuffer cmd, VkBool32 depthWriteEnable)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.DepthWriteEnable = depthWriteEnable;
         entry->State->Dyn.DepthWriteEnableSet = true;
@@ -773,12 +870,14 @@ class CommandBufferStateTracker
 
     void OnSetDepthCompareOp(VkCommandBuffer cmd, VkCompareOp depthCompareOp)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.DepthCompareOp = depthCompareOp;
         entry->State->Dyn.DepthCompareOpSet = true;
@@ -787,12 +886,14 @@ class CommandBufferStateTracker
 
     void OnSetDepthBoundsTestEnable(VkCommandBuffer cmd, VkBool32 depthBoundsTestEnable)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.DepthBoundsTestEnable = depthBoundsTestEnable;
         entry->State->Dyn.DepthBoundsTestEnableSet = true;
@@ -801,12 +902,14 @@ class CommandBufferStateTracker
 
     void OnSetStencilTestEnable(VkCommandBuffer cmd, VkBool32 stencilTestEnable)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.StencilTestEnable = stencilTestEnable;
         entry->State->Dyn.StencilTestEnableSet = true;
@@ -816,12 +919,14 @@ class CommandBufferStateTracker
     void OnSetStencilOp(VkCommandBuffer cmd, VkStencilFaceFlags faceMask, VkStencilOp failOp, VkStencilOp passOp,
                         VkStencilOp depthFailOp, VkCompareOp compareOp)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->Dyn.StencilOpFaceMask = faceMask;
         entry->State->Dyn.StencilFailOp = failOp;
@@ -835,12 +940,14 @@ class CommandBufferStateTracker
     // NEW: Render pass tracking
     void OnBeginRenderPass(VkCommandBuffer cmd, const VkRenderPassBeginInfo* pRenderPassBegin)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->InRenderPass = true;
         entry->State->ActiveRenderPass = pRenderPassBegin ? pRenderPassBegin->renderPass : VK_NULL_HANDLE;
@@ -850,12 +957,14 @@ class CommandBufferStateTracker
 
     void OnEndRenderPass(VkCommandBuffer cmd)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
 #ifndef LOW_PRECISION_TRACKING
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return;
 
         auto entry = GetOrCreateEntry(cmd, true);
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
 
         entry->State->InRenderPass = false;
 #endif
@@ -863,12 +972,14 @@ class CommandBufferStateTracker
 
     void OnCommandBufferDestroyed(VkCommandBuffer cmd)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
         std::unique_lock lock(_statesMapMutex);
         _states.erase(cmd);
     }
 
     void OnFreeCommandBuffers(VkCommandPool pool, uint32_t count, const VkCommandBuffer* pCommandBuffers)
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackOther, 64);
         std::unique_lock lock(_statesMapMutex);
         for (uint32_t i = 0; i < count; ++i)
         {
@@ -876,13 +987,15 @@ class CommandBufferStateTracker
             _cmdBufferToPool.erase(pCommandBuffers[i]);
         }
 
-        // LOG_DEBUG("Freed {} command buffers from pool {:X}", count, (size_t) pool);
+        // LOG_DEBUG("Freed {} command buffers from pool {:X}", count, (size_t) pool.second);
     }
 
     // Call this when a command pool is destroyed
-    void OnDestroyPool(VkCommandPool pool)
+    void OnDestroyPool(VkDevice device, VkCommandPool rawPool)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        const PoolKey pool{device,rawPool};
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackLifecycle, 1);
+        if (!TracksGameState())
             return;
 
         std::unique_lock poolLock(_poolMetadataMutex);
@@ -903,12 +1016,13 @@ class CommandBufferStateTracker
         }
 
         _poolEpochs.erase(pool);
-        LOG_DEBUG("Pool {:X} destroyed - removed all associated command buffers", (size_t) pool);
+        _poolToQueueFamily.erase(pool);
+        LOG_DEBUG("Pool {:X} destroyed - removed all associated command buffers", (size_t) pool.second);
     }
 
     bool CaptureAndReplay(VkCommandBuffer srcCmd, VkCommandBuffer dstCmd, const ReplayParams& params) const
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return false;
 
         if (!_hasCachedFns)
@@ -923,7 +1037,7 @@ class CommandBufferStateTracker
     bool ReplayForGraphicsDraw(const VulkanCmdFns& fns, VkCommandBuffer srcCmd, VkCommandBuffer dstCmd,
                                const ReplayParams& params) const
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        if (!TracksGameState())
             return false;
 
         CommandBufferState snapshot;
@@ -1017,7 +1131,7 @@ class CommandBufferStateTracker
     std::optional<uint32_t> GetCommandBufferQueueFamily(VkCommandBuffer cmd) const
     {
         // Phase 1: Get pool handle (only _statesMapMutex)
-        VkCommandPool pool = VK_NULL_HANDLE;
+        PoolKey pool{};
         {
             std::shared_lock mapLock(_statesMapMutex);
             auto poolIt = _cmdBufferToPool.find(cmd);
@@ -1036,7 +1150,7 @@ class CommandBufferStateTracker
             auto familyIt = _poolToQueueFamily.find(pool);
             if (familyIt == _poolToQueueFamily.end())
             {
-                LOG_WARN("Pool {:X} has no queue family info", (size_t) pool);
+                LOG_WARN("Pool {:X} has no queue family info", (size_t) pool.second);
                 return std::nullopt;
             }
             return familyIt->second;
@@ -1045,6 +1159,9 @@ class CommandBufferStateTracker
 
   private:
     inline static State* _state;
+    inline static std::atomic<bool> nativeDeviceObserved_ {false};
+    bool TracksGameState() const noexcept
+    { return DlssNr::TrackVkNrCommandState(_state->currentFeature && _state->currentFeature->IsWithDx12(),nativeDeviceObserved_.load(std::memory_order_relaxed)); }
 
     // Helper method to replay descriptor sets with proper slicing and timeline ordering
     void ReplayDescriptorSets(const VulkanCmdFns& fns, VkCommandBuffer dstCmd, const BindPointState& bindPoint,
@@ -1364,10 +1481,21 @@ class CommandBufferStateTracker
 #endif
     }
 
+  public:
+    void EnableNativeObservations() { nativeDeviceObserved_.store(true,std::memory_order_release); }
     bool HasFunctionTable() const noexcept { return _hasCachedFns; }
+    bool CaptureNrState(VkCommandBuffer cmd, CommandBufferState& out) const
+    { return _hasCachedFns && TryGetSnapshot(cmd,out); }
+    bool ReplaySaved(VkCommandBuffer cmd, const CommandBufferState& saved, const ReplayParams& params) const
+    {
+        return _hasCachedFns && ReplayFromSnapshot(_cachedFns, saved, cmd, params);
+    }
+
+  private:
 
     bool TryGetSnapshot(VkCommandBuffer cmd, CommandBufferState& out) const
     {
+        Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::TrackSnapshot, 1);
         // Get entry with read lock
         std::shared_ptr<CommandBufferStateEntry> entry;
         {
@@ -1382,7 +1510,7 @@ class CommandBufferStateTracker
             return false;
 
         // Get pool info
-        VkCommandPool pool = VK_NULL_HANDLE;
+        PoolKey pool{};
         {
             std::shared_lock mapLock(_statesMapMutex);
             auto poolIt = _cmdBufferToPool.find(cmd);
@@ -1399,7 +1527,7 @@ class CommandBufferStateTracker
         auto epochIt = _poolEpochs.find(pool);
         if (epochIt == _poolEpochs.end())
         {
-            LOG_ERROR("Pool {:X} has no epoch entry", (size_t) pool);
+            LOG_ERROR("Pool {:X} has no epoch entry", (size_t) pool.second);
             return false;
         }
 
@@ -1408,13 +1536,14 @@ class CommandBufferStateTracker
 
         // Lock THIS command buffer's state for snapshot
         std::scoped_lock stateLock(entry->Mutex);
+        nrHostCost.Acquired();
         if (!entry->State)
             return false;
 
         if (entry->State->BeginEpoch < currentPoolEpoch)
         {
             LOG_WARN("Command buffer {:p} has stale state (epoch {} < pool {:X} epoch {})", (void*) cmd,
-                     entry->State->BeginEpoch, (size_t) pool, currentPoolEpoch);
+                     entry->State->BeginEpoch, (size_t) pool.second, currentPoolEpoch);
             return false;
         }
 
@@ -1449,7 +1578,7 @@ class CommandBufferStateTracker
             }
 
             // Get pool info
-            VkCommandPool pool = VK_NULL_HANDLE;
+            PoolKey pool{};
             {
                 std::shared_lock mapLock(_statesMapMutex);
                 auto poolIt = _cmdBufferToPool.find(srcCmd);
@@ -1469,7 +1598,7 @@ class CommandBufferStateTracker
             if (epochIt == _poolEpochs.end())
             {
                 LOG_ERROR("Pool {:X} for command buffer {:p} has no epoch entry. Internal state corruption?",
-                          (size_t) pool, (void*) srcCmd);
+                          (size_t) pool.second, (void*) srcCmd);
                 return false;
             }
 
@@ -1489,7 +1618,7 @@ class CommandBufferStateTracker
                 LOG_WARN("Command buffer {:p} has stale state (epoch {} < pool {:X} epoch {}), refusing replay. "
                          "This command buffer was invalidated by vkResetCommandPool and must not be used until "
                          "vkBeginCommandBuffer is called.",
-                         (void*) srcCmd, entry->State->BeginEpoch, (size_t) pool, currentPoolEpoch);
+                         (void*) srcCmd, entry->State->BeginEpoch, (size_t) pool.second, currentPoolEpoch);
                 return false;
             }
 
@@ -1579,58 +1708,24 @@ class CommandBufferStateTracker
             }
         }
 
-        // 3. Push Constants - Graphics
-        if (params.ReplayPushConstants)
+        // Push constants share one chronological history. A mixed graphics/compute
+        // entry must not be repeated after a later graphics-only update.
+        if (params.ReplayPushConstants && fns.CmdPushConstants)
         {
-            // Replay push constants from global timeline in order
-            // Filter by stage mask compatibility (optional) and layout compatibility
             constexpr VkShaderStageFlags graphicsStages =
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
                 VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_GEOMETRY_BIT |
                 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT;
-
             for (const auto& entry : snapshot.PushConstantHistory)
             {
-                // Optional: filter to graphics-relevant stages (conservative - keeps ALL_GRAPHICS too)
-                // Skip only if exclusively compute/ray-tracing stages
-                bool hasGraphicsStages = (entry.Stages & graphicsStages) != 0;
-                bool hasAllGraphics = (entry.Stages & VK_SHADER_STAGE_ALL_GRAPHICS) != 0;
-
-                if (!hasGraphicsStages && !hasAllGraphics)
-                {
-                    // This is exclusively compute or ray tracing - skip for graphics replay
-                    continue;
-                }
-
-                VkPipelineLayout layoutToUse =
-                    params.OverrideGraphicsLayout ? params.OverrideGraphicsLayout : entry.Layout;
-
-                if (layoutToUse && entry.Size > 0 && fns.CmdPushConstants)
-                {
-                    fns.CmdPushConstants(dstCmd, layoutToUse, entry.Stages, entry.Offset, entry.Size, &entry.Data[0]);
-                }
+                const bool graphics = (entry.Stages & graphicsStages) != 0;
+                const bool compute = params.ReplayComputeToo && (entry.Stages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
+                if (!graphics && !compute) continue;
+                const auto layout = graphics && params.OverrideGraphicsLayout ? params.OverrideGraphicsLayout : entry.Layout;
+                if (layout && entry.Size > 0)
+                    fns.CmdPushConstants(dstCmd, layout, entry.Stages, entry.Offset, entry.Size, entry.Data.data());
             }
         }
-
-        // 3.5. Push Constants - Compute (if requested)
-        if (params.ReplayComputeToo && params.ReplayPushConstants)
-        {
-            // Replay compute push constants from global timeline in order
-            constexpr VkShaderStageFlags computeStages = VK_SHADER_STAGE_COMPUTE_BIT;
-
-            for (const auto& entry : snapshot.PushConstantHistory)
-            {
-                // Only replay compute-stage push constants
-                if (!(entry.Stages & computeStages))
-                    continue;
-
-                if (entry.Layout && entry.Size > 0 && fns.CmdPushConstants)
-                {
-                    fns.CmdPushConstants(dstCmd, entry.Layout, entry.Stages, entry.Offset, entry.Size, &entry.Data[0]);
-                }
-            }
-        }
-
         // 4. Dynamic State
         if (params.ReplayViewportScissor)
         {
@@ -1688,9 +1783,9 @@ class CommandBufferStateTracker
     bool _hasCachedFns = false;
 
     // Per-pool epoch tracking for accurate invalidation
-    std::unordered_map<VkCommandBuffer, VkCommandPool> _cmdBufferToPool;
-    std::unordered_map<VkCommandPool, uint32_t> _poolToQueueFamily;
-    std::unordered_map<VkCommandPool, std::shared_ptr<std::atomic<uint64_t>>> _poolEpochs;
+    std::unordered_map<VkCommandBuffer, PoolKey> _cmdBufferToPool;
+    std::map<PoolKey, uint32_t> _poolToQueueFamily;
+    std::map<PoolKey, std::shared_ptr<std::atomic<uint64_t>>> _poolEpochs;
     std::atomic<uint64_t> _globalEpochCounter { 1 };
 };
 } // namespace vk_state

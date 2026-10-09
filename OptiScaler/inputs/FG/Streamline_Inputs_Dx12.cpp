@@ -4,61 +4,118 @@
 #include <resource_tracking/ResTrack_dx12.h>
 #include <magic_enum.hpp>
 
-void Sl_Inputs_Dx12::CheckForFrame(IFGFeature_Dx12* fg, uint32_t frameId)
+uint64_t Sl_Inputs_Dx12::CaptureOwner()
 {
-    std::scoped_lock lock(_frameBoundaryMutex);
-
-    if (_isFrameFinished && _lastPresentFrameId == _currentFrameId && frameId == 0 && frameId != _currentFrameId)
+    std::scoped_lock lock(Neurotic::Runtime::FgOwnerMutex());
+    if (Neurotic::Runtime::FgOwnerChanging()) return 0;
+    auto* fg = State::Instance().currentFG;
+    if (!fg) return 0;
+    static uint64_t previousOwner = 0, previousEpoch = 0, stamp = 0;
+    const auto epoch = Neurotic::Runtime::FgOwnerEpoch();
+    if (previousOwner != fg->inputOwner || previousEpoch != epoch)
     {
-        LOG_DEBUG("1> CheckForFrame: frameId={}, currentFrameId={}, lastPresentFrameId={}, isFrameFinished={}", frameId,
-                  _currentFrameId, _lastPresentFrameId, _isFrameFinished);
-
-        _isFrameFinished = false;
-
-        fg->StartNewFrame();
-        _currentIndex = fg->GetIndex();
-
-        if (frameId != 0)
-            _currentFrameId = frameId;
-        else
-            _currentFrameId = _lastPresentFrameId + 1;
-
-        _frameIdIndex[_currentIndex] = _currentFrameId;
+        previousOwner = fg->inputOwner; previousEpoch = epoch; ++stamp;
     }
-    else if (frameId != 0 && frameId > _currentFrameId)
-    {
-        LOG_DEBUG("2> CheckForFrame: frameId={}, currentFrameId={}, lastPresentFrameId={}, isFrameFinished={}", frameId,
-                  _currentFrameId, _lastPresentFrameId, _isFrameFinished);
-
-        _isFrameFinished = false;
-        //_lastPresentFrameId = frameId - 1;
-
-        fg->StartNewFrame();
-        _currentIndex = fg->GetIndex();
-        _currentFrameId = frameId;
-        _frameIdIndex[_currentIndex] = _currentFrameId;
-    }
+    return stamp;
 }
 
+void Sl_Inputs_Dx12::acceptedTags(const sl::ResourceTag* tags, uint32_t count, ID3D12GraphicsCommandList* list,
+    uint32_t frame, uint32_t viewport, uint64_t provider, uint64_t owner, bool accepted)
+{
+    std::scoped_lock ownerLock(Neurotic::Runtime::FgOwnerMutex());
+    std::scoped_lock frameLock(_frameBoundaryMutex);
+    auto* fg = State::Instance().currentFG;
+    if (!fg || !owner || CaptureOwner() != owner || !provider || count > 128 || (!tags && count)) return;
+    if (_owner != owner || _provider != provider || _chain != fg->SwapchainIdentity())
+    {
+        _owner = owner; _provider = provider; _chain = fg->SwapchainIdentity(); _viewport.reset(); _haveFrame = false;
+        std::fill(std::begin(_frameIdIndex), std::end(_frameIdIndex), UINT32_MAX);
+        std::fill(std::begin(_frameSlotValid), std::end(_frameSlotValid), false);
+        for (int slot = 0; slot < BUFFER_COUNT; ++slot)
+        {
+            fg->SetStreamlineInputsReady(slot, false);
+            for (auto type : {FG_ResourceType::Depth, FG_ResourceType::Velocity, FG_ResourceType::HudlessColor, FG_ResourceType::UIColor})
+                fg->RevokeResource(type, slot);
+        }
+    }
+    // The tag API has no swapchain argument. Bind a viewport only from an
+    // accepted actual backbuffer identity, never from global currentFG alone.
+    if (!_viewport && accepted)
+        for (uint32_t i = 0; i < count; ++i)
+            if (tags[i].type == sl::kBufferTypeBackbuffer && tags[i].resource &&
+                fg->OwnsBackbuffer(static_cast<ID3D12Resource*>(tags[i].resource->native))) _viewport = viewport;
+    if (!_viewport || *_viewport != viewport) return;
+    if (_haveFrame && frame == _currentFrameId && _isFrameFinished) return;
+    if (_haveFrame && frame != _currentFrameId && static_cast<int32_t>(frame - _currentFrameId) <= 0) return;
+    CheckForFrame(fg, frame);
+    const int slot = IndexForFrameId(frame);
+    if (slot < 0) return;
+    fg->SetStreamlineInputsReady(slot, false);
+    if (!tags)
+    {
+        for (auto type : {FG_ResourceType::Depth, FG_ResourceType::Velocity, FG_ResourceType::HudlessColor, FG_ResourceType::UIColor})
+            fg->RevokeResource(type, slot);
+        fg->SetStreamlineInputsReady(slot, _haveConstants);
+        return;
+    }
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const auto& tag = tags[i];
+        std::optional<FG_ResourceType> type;
+        if (tag.type == sl::kBufferTypeDepth || tag.type == sl::kBufferTypeHiResDepth || tag.type == sl::kBufferTypeLinearDepth) type = FG_ResourceType::Depth;
+        else if (tag.type == sl::kBufferTypeMotionVectors) type = FG_ResourceType::Velocity;
+        else if (tag.type == sl::kBufferTypeHUDLessColor) type = FG_ResourceType::HudlessColor;
+        else if (tag.type == sl::kBufferTypeUIColorAndAlpha) type = FG_ResourceType::UIColor;
+        if (!type) continue;
+        if (!accepted || !tag.resource || !tag.resource->native || !reportResource(tag, list, frame))
+            fg->RevokeResource(*type, slot);
+    }
+    fg->SetStreamlineInputsReady(slot, _haveConstants);
+}
+
+void Sl_Inputs_Dx12::CheckForFrame(IFGFeature_Dx12* fg, uint32_t frameId)
+{
+    // Caller holds the owner and complete feeder transaction locks.
+    if (_haveFrame && (frameId == _currentFrameId || static_cast<int32_t>(frameId - _currentFrameId) <= 0)) return;
+    _isFrameFinished = false;
+    _haveConstants = false;
+    mvsWidth = 0;
+    mvsHeight = 0;
+    fg->SetStreamlineInputsReady((fg->GetIndex() + 1) % BUFFER_COUNT, false);
+    fg->StartNewFrame();
+    _currentIndex = fg->GetIndex();
+    fg->SetStreamlineInputsReady(_currentIndex, false);
+    _currentFrameId = frameId;
+    _frameIdIndex[_currentIndex] = frameId;
+    _frameSlotValid[_currentIndex] = true;
+    _haveFrame = true;
+}
 int Sl_Inputs_Dx12::IndexForFrameId(uint32_t frameId) const
 {
     for (int i = 0; i < BUFFER_COUNT; i++)
     {
-        if (_frameIdIndex[i] == frameId)
+        if (_frameSlotValid[i] && _frameIdIndex[i] == frameId)
             return i;
     }
 
     return -1;
 }
 
-bool Sl_Inputs_Dx12::setConstants(const sl::Constants& values, uint32_t frameId)
+bool Sl_Inputs_Dx12::setConstants(const sl::Constants& values, uint32_t frameId, uint32_t viewport,
+                                    uint64_t provider, uint64_t owner)
 {
+    std::scoped_lock ownerLock(Neurotic::Runtime::FgOwnerMutex());
+    std::scoped_lock frameLock(_frameBoundaryMutex);
+    if (!_viewport || *_viewport != viewport || _provider != provider || _owner != owner || CaptureOwner() != owner) return false;
+    if (_haveFrame && frameId == _currentFrameId && _isFrameFinished) return false;
+    if (_haveFrame && frameId != _currentFrameId && static_cast<int32_t>(frameId - _currentFrameId) <= 0) return false;
     auto fgOutput = State::Instance().currentFG;
 
     if (fgOutput == nullptr)
         return false;
 
     CheckForFrame(fgOutput, frameId);
+    fgOutput->SetStreamlineInputsReady(_currentIndex, false);
 
     auto data = sl::Constants {};
     bool dataFound = false;
@@ -197,7 +254,7 @@ bool Sl_Inputs_Dx12::setConstants(const sl::Constants& values, uint32_t frameId)
             return true;
         };
 
-        static bool dontRecalc = false;
+        bool dontRecalc = false;
 
         LOG_TRACE("Camera from SL pre recalc near: {}, far: {}", data.cameraNear, data.cameraFar);
 
@@ -229,6 +286,8 @@ bool Sl_Inputs_Dx12::setConstants(const sl::Constants& values, uint32_t frameId)
         // But UE games and Dead Rising expect that multiplication to be done, even if the scale is 1.0.
         // bool multiplyByResolution = dataCopy.mvecScale.x != 1.f || dataCopy.mvecScale.y != 1.f;
         bool multiplyByResolution = true;
+        _mvScaleX = data.mvecScale.x;
+        _mvScaleY = data.mvecScale.y;
         if (multiplyByResolution)
             fgOutput->SetMVScale(data.mvecScale.x * mvsWidth, data.mvecScale.y * mvsHeight);
         else
@@ -246,11 +305,16 @@ bool Sl_Inputs_Dx12::setConstants(const sl::Constants& values, uint32_t frameId)
         LOG_ERROR("Wrong constant struct version");
     }
 
+    _haveConstants = dataFound;
+    fgOutput->SetStreamlineInputsReady(_currentIndex, dataFound);
     return dataFound;
 }
 
 bool Sl_Inputs_Dx12::evaluateState()
 {
+    std::scoped_lock ownerLock(Neurotic::Runtime::FgOwnerMutex());
+    std::scoped_lock frameLock(_frameBoundaryMutex);
+    if (Neurotic::Runtime::FgOwnerChanging()) return false;
     auto fgOutput = State::Instance().currentFG;
 
     if (fgOutput == nullptr)
@@ -283,6 +347,9 @@ bool Sl_Inputs_Dx12::evaluateState()
 
 bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCommandList* cmdBuffer, uint32_t frameId)
 {
+    std::scoped_lock ownerLock(Neurotic::Runtime::FgOwnerMutex());
+    std::scoped_lock frameLock(_frameBoundaryMutex);
+    if (Neurotic::Runtime::FgOwnerChanging()) return false;
     auto& state = State::Instance();
     state.dlssgLastFrame = state.fgLastFrame;
 
@@ -306,7 +373,7 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
 
     CheckForFrame(fgOutput, frameId);
 
-    if (tag.resource->native == nullptr)
+    if (!tag.resource || tag.resource->native == nullptr)
     {
         LOG_TRACE("tag.resource->native is null");
         return false;
@@ -317,12 +384,21 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
 
     auto d3dRes = (ID3D12Resource*) tag.resource->native;
     auto desc = d3dRes->GetDesc();
+    if (tag.extent && (tag.extent.left > desc.Width || tag.extent.width > desc.Width - tag.extent.left ||
+        tag.extent.top > desc.Height || tag.extent.height > desc.Height - tag.extent.top)) return false;
+    Microsoft::WRL::ComPtr<ID3D12Device> resourceDevice, chainDevice;
+    Microsoft::WRL::ComPtr<IDXGISwapChain> chain;
+    if (!_chain || FAILED(_chain->QueryInterface(IID_PPV_ARGS(&chain))) ||
+        FAILED(d3dRes->GetDevice(IID_PPV_ARGS(&resourceDevice))) ||
+        FAILED(chain->GetDevice(IID_PPV_ARGS(&chainDevice))) || resourceDevice.Get() != chainDevice.Get()) return false;
 
     Dx12Resource res = {};
     res.resource = d3dRes;
     res.cmdList = cmdBuffer; // Critical for eOnlyValidNow
     res.width = tag.extent ? tag.extent.width : desc.Width;
     res.height = tag.extent ? tag.extent.height : desc.Height;
+    res.left = tag.extent.left;
+    res.top = tag.extent.top;
     res.state = (D3D12_RESOURCE_STATES) tag.resource->state;
     res.validity =
         (tag.lifecycle == sl::eValidUntilPresent) ? FG_ResourceValidity::UntilPresent : FG_ResourceValidity::ValidNow;
@@ -330,8 +406,7 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
     // If eValidUntilEvaluate is provided without cmdList when there's not much we can do
     if (!res.cmdList && res.validity != FG_ResourceValidity::UntilPresent)
     {
-        LOG_WARN("YOLOing resource validity due to missing cmdList");
-        res.validity = FG_ResourceValidity::UntilPresent;
+        return false; // Missing copy rights never extends the caller lifetime.
     }
 
     if (frameId > 0)
@@ -344,16 +419,24 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
         }
         else
         {
-            LOG_WARN("Frame ID {} not found in tracking, using current index {}", frameId, _currentIndex);
-            res.frameIndex = _currentIndex;
+            return false;
         }
     }
     else
     {
-        res.frameIndex = -1;
+        res.frameIndex = IndexForFrameId(frameId);
+        if (res.frameIndex < 0) return false;
     }
 
     bool handled = true;
+    const auto publish = [&]() {
+        // Snapshot short-lived data now, inside the caller's copy rights. The
+        // provider owns this private copy in its existing per-slot storage;
+        // dispatch remains closed until matching constants commit.
+        if (!_haveConstants && res.cmdList)
+            res.validity = FG_ResourceValidity::ValidButMakeCopy;
+        return fgOutput->SetResource(&res);
+    };
 
     // Map types
     if (tag.type == sl::kBufferTypeDepth || tag.type == sl::kBufferTypeHiResDepth ||
@@ -371,7 +454,7 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
             res.validity = FG_ResourceValidity::ValidNow;
 
         res.type = FG_ResourceType::Depth;
-        fgOutput->SetResource(&res);
+        handled = publish();
     }
     else if (tag.type == sl::kBufferTypeMotionVectors)
     {
@@ -389,7 +472,9 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
         res.type = FG_ResourceType::Velocity;
         mvsWidth = res.width; // Track locally for dispatch logic
         mvsHeight = res.height;
-        fgOutput->SetResource(&res);
+        handled = publish();
+        if (handled && _haveConstants)
+            fgOutput->SetMVScale(_mvScaleX * mvsWidth, _mvScaleY * mvsHeight);
     }
     else if (tag.type == sl::kBufferTypeHUDLessColor)
     {
@@ -407,7 +492,7 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
             res.validity = FG_ResourceValidity::ValidNow;
 
         fgOutput->SetInterpolationRect(res.width, res.height);
-        fgOutput->SetResource(&res);
+        handled = publish();
     }
     else if (tag.type == sl::kBufferTypeUIColorAndAlpha)
     {
@@ -429,7 +514,7 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
         if (width == 0)
             fgOutput->SetInterpolationRect(res.width, res.height);
 
-        fgOutput->SetResource(&res);
+        handled = publish();
     }
     else
     {
@@ -441,16 +526,31 @@ bool Sl_Inputs_Dx12::reportResource(const sl::ResourceTag& tag, ID3D12GraphicsCo
 
 bool Sl_Inputs_Dx12::dispatchFG()
 {
+    std::scoped_lock ownerLock(Neurotic::Runtime::FgOwnerMutex());
+    std::scoped_lock frameLock(_frameBoundaryMutex);
     LOG_FUNC();
     return true;
 }
 
 void Sl_Inputs_Dx12::markPresent(uint64_t frameId)
 {
+    std::scoped_lock ownerLock(Neurotic::Runtime::FgOwnerMutex());
+    std::scoped_lock frameLock(_frameBoundaryMutex);
+    if (!_haveFrame || !_viewport || CaptureOwner() != _owner ||
+        frameId != _currentFrameId) return;
     std::scoped_lock lock(_frameBoundaryMutex);
     LOG_TRACE("frameId: {}", frameId);
     _isFrameFinished = true;
     _lastPresentFrameId = static_cast<uint32_t>(frameId);
+
+    if (!_haveConstants)
+    {
+        auto* fg = State::Instance().currentFG;
+        fg->SetStreamlineInputsReady(_currentIndex, false);
+        for (auto type : {FG_ResourceType::Depth, FG_ResourceType::Velocity, FG_ResourceType::HudlessColor, FG_ResourceType::UIColor})
+            fg->RevokeResource(type, _currentIndex);
+        return; // UntilPresent rights expire here; late constants cannot resurrect them.
+    }
 
     if (State::Instance().currentFG != nullptr)
         State::Instance().currentFG->SetFrameCount(frameId);

@@ -1,37 +1,28 @@
 #pragma once
 
-// What the Neural Rendering model needs from a Vulkan device, and whether it can be arranged.
-//
-// The model ships a complete native Vulkan surface -- fourteen entry points, more than either D3D
-// interface has -- so there is no reason for the pass to go through a D3D12 bridge on Vulkan. What
-// stops it is not the model, it is the device: NGX loads its kernels through two NVIDIA vendor
-// extensions that no game enables, and a Vulkan device's extension list is fixed at creation. Ask
-// afterwards and the answer is no, permanently.
-//
-// OptiScaler already hooks vkCreateInstance and vkCreateDevice and already hands the real call a
-// mutable copy of the create info, so appending to that list is what the hook is shaped for. This
-// header is the list and the appending, kept in the module so it leaves with it.
-//
-// The names come from the model binary itself rather than from documentation: scanning
-// nvngx_dlssnr.dll for VK_*_* yields exactly these.
+// This is the existing backend compatibility list, derived from model binary names.
+// It is not a feature requirements query: in particular the BDA name alone does not
+// establish that bufferDeviceAddress must be enabled. Keep feature facts separate.
+// Device extensions are immutable after creation; preparation uses this list without
+// treating it as proof that every private provider requirement has been discovered.
 
 #include <vulkan/vulkan.h>
 
 #include <string>
 #include <vector>
+#include <cstring>
 
 namespace DlssNr::VkExt
 {
 
-// Instance level. get_physical_device_properties2 is core from Vulkan 1.1 and every game enables it
-// anyway; it is listed because the model names it and a 1.0 instance would still need it.
+// Instance-level compatibility entry; core promotion and effective instance API
+// version still need to be considered before using this with a Vulkan 1.0 host.
 inline const char* const kInstance[] = {
     VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 };
 
-// Device level. The two NVX entries are the ones that matter and the reason this file exists --
-// binary_import is how NGX hands the driver its cubins, and image_view_handle is how it addresses
-// the textures it was given. Neither appears in a game's own list, ever.
+// Existing native backend device extension group; not a substitute for a
+// version-qualified Feature 18 requirements query or feature manifest.
 inline const char* const kDevice[] = {
     "VK_NVX_binary_import",
     "VK_NVX_image_view_handle",
@@ -49,9 +40,11 @@ struct Merged
 
 // Everything the physical device is willing to offer, by name.
 inline std::vector<std::string> SupportedDeviceExtensions(PFN_vkGetInstanceProcAddr getInstanceProcAddr,
-                                                          VkInstance instance, VkPhysicalDevice physicalDevice)
+                                                          VkInstance instance, VkPhysicalDevice physicalDevice,
+                                                          bool* querySucceeded = nullptr)
 {
     std::vector<std::string> out;
+    if (querySucceeded != nullptr) *querySucceeded = false;
 
     if (getInstanceProcAddr == nullptr || physicalDevice == VK_NULL_HANDLE)
         return out;
@@ -64,13 +57,20 @@ inline std::vector<std::string> SupportedDeviceExtensions(PFN_vkGetInstanceProcA
 
     uint32_t count = 0;
 
-    if (enumerate(physicalDevice, nullptr, &count, nullptr) != VK_SUCCESS || count == 0)
+    if (enumerate(physicalDevice, nullptr, &count, nullptr) != VK_SUCCESS)
         return out;
+    if (count == 0)
+    {
+        if (querySucceeded != nullptr) *querySucceeded = true;
+        return out;
+    }
 
     std::vector<VkExtensionProperties> props(count);
 
     if (enumerate(physicalDevice, nullptr, &count, props.data()) != VK_SUCCESS)
         return out;
+    if (querySucceeded != nullptr) *querySucceeded = true;
+    props.resize(count);
 
     out.reserve(count);
 
@@ -93,9 +93,10 @@ inline bool Contains(const std::vector<std::string>& haystack, const char* needl
 
 inline bool ListHas(const char* const* list, uint32_t count, const char* needle)
 {
+    if (list == nullptr) return false;
     for (uint32_t i = 0; i < count; ++i)
     {
-        if (list[i] != nullptr && std::string(list[i]) == needle)
+        if (list[i] != nullptr && std::strcmp(list[i], needle) == 0)
             return true;
     }
 

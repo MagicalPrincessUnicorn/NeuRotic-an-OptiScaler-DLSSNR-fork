@@ -19,6 +19,7 @@
 #include <ffx_upscale.h>
 
 #include <magic_enum.hpp>
+#include <nr/lifecycle/Fsr3ContextCreation.h>
 
 // A mess to be able to import both
 #define FFX_API_CONFIGURE_FG_SWAPCHAIN_KEY_WAITCALLBACK FFX_API_CONFIGURE_FG_SWAPCHAIN_KEY_WAITCALLBACK_DX12
@@ -88,7 +89,14 @@ class FfxApiProxy
     inline static FfxModule radiance_dx12_hooked;
     inline static FfxModule main_vk_hooked;
 
-    inline static ankerl::unordered_dense::map<ffxContext, FFXStructType> contextToType;
+    using ContextCreations=Neurotic::Lifecycle::Fsr3ContextCreations<ffxContext,HMODULE,FFXStructType>;
+    inline static ContextCreations contextCreations;
+    static void ObserveContextCreation(ffxReturnCode_t result,ffxContext* context,HMODULE module,
+                                       FFXStructType requested,FFXStructType routing)noexcept
+    {
+        try {if(result==FFX_API_RETURN_OK&&context)contextCreations.ObserveCreate(true,*context,module,requested,routing);}
+        catch(...) {/* Missing observation refuses checked enrollment; native result is preserved. */}
+    }
 
     inline static bool _skipDestroyCalls = false;
 
@@ -101,6 +109,11 @@ class FfxApiProxy
     }
 
   public:
+    using ContextCreationBinding=ContextCreations::Binding;
+    static std::optional<ContextCreationBinding> ObserveCreatedContext(ffxContext context)
+    {return contextCreations.Find(context);}
+    static bool ContextCreationCurrent(const ContextCreationBinding& binding)
+    {return contextCreations.Current(binding);}
     static HMODULE Dx12Module() { return main_dx12.dll; }
     static HMODULE Dx12Module_SR() { return upscaling_dx12.dll; }
     static HMODULE Dx12Module_FG() { return fg_dx12.dll; }
@@ -1190,32 +1203,36 @@ class FfxApiProxy
         if (isFg && fg_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with fg_dx12");
-            result = fg_dx12.CreateContext(context, desc, memCb);
-            contextToType[*context] = type;
+            const auto module=fg_dx12.dll;const auto create=fg_dx12.CreateContext;
+            result = create(context, desc, memCb);
+            ObserveContextCreation(result,context,module,type,type);
             LOG_DEBUG("Created with fg_dx12: {:X}", (size_t) *context);
             return result;
         }
         else if (type == FFXStructType::Upscaling && upscaling_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with upscaling_dx12");
-            result = upscaling_dx12.CreateContext(context, desc, memCb);
-            contextToType[*context] = type;
+            const auto module=upscaling_dx12.dll;const auto create=upscaling_dx12.CreateContext;
+            result = create(context, desc, memCb);
+            ObserveContextCreation(result,context,module,type,type);
             LOG_DEBUG("Created with upscaling_dx12: {:X}", (size_t) *context);
             return result;
         }
         else if (type == FFXStructType::Denoiser && denoiser_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with denoiser_dx12");
-            result = denoiser_dx12.CreateContext(context, desc, memCb);
-            contextToType[*context] = type;
+            const auto module=denoiser_dx12.dll;const auto create=denoiser_dx12.CreateContext;
+            result = create(context, desc, memCb);
+            ObserveContextCreation(result,context,module,type,type);
             LOG_DEBUG("Created with denoiser_dx12: {:X}", (size_t) *context);
             return result;
         }
         else if (type == FFXStructType::RadianceCache && radiance_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with radiance_dx12");
-            result = radiance_dx12.CreateContext(context, desc, memCb);
-            contextToType[*context] = type;
+            const auto module=radiance_dx12.dll;const auto create=radiance_dx12.CreateContext;
+            result = create(context, desc, memCb);
+            ObserveContextCreation(result,context,module,type,type);
             LOG_DEBUG("Created with radiance_dx12: {:X}", (size_t) *context);
             return result;
         }
@@ -1232,7 +1249,10 @@ class FfxApiProxy
             else if (type == FFXStructType::Upscaling)
                 upscaling_dx12.skipCreateCalls = true;
 
-            result = main_dx12.CreateContext(context, desc, memCb);
+            const auto module=main_dx12.dll;const auto create=main_dx12.CreateContext;
+            result = create(context, desc, memCb);
+            // Retain the actual called module without changing legacy fallback routing.
+            ObserveContextCreation(result,context,module,type,FFXStructType::Unknown);
 
             if (isFg)
                 fg_dx12.skipCreateCalls = false;
@@ -1249,12 +1269,17 @@ class FfxApiProxy
     {
         ffxReturnCode_t result = FFX_API_RETURN_ERROR;
         auto type = FFXStructType::Unknown;
-
-        if (contextToType.contains(*context))
+        const auto creation=context?contextCreations.Find(*context):std::nullopt;
+        struct ObserveDestroy
         {
-            type = contextToType[*context];
+            ContextCreations& owner;const std::optional<ContextCreationBinding>& binding;ffxReturnCode_t& result;
+            ~ObserveDestroy(){if(binding)owner.ObserveDestroy(result==FFX_API_RETURN_OK,*binding);}
+        } observeDestroy{contextCreations,creation,result};
+
+        if (creation)
+        {
+            type = creation->routingKind;
             LOG_DEBUG("Found context type mapping: {}", magic_enum::enum_name(type));
-            contextToType.erase(*context);
         }
         else
         {
@@ -1350,8 +1375,8 @@ class FfxApiProxy
     {
         auto type = GetType(desc->type);
 
-        if (type == FFXStructType::General && contextToType.contains(*context))
-            type = contextToType[*context];
+        if (type == FFXStructType::General && context)
+            if(const auto creation=contextCreations.Find(*context))type=creation->routingKind;
 
         auto isFg = type == FFXStructType::FG || type == FFXStructType::SwapchainDX12;
 

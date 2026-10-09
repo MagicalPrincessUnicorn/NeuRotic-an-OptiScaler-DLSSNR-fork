@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "NvApiHooks.h"
+#include <mfg/ExperimentalMfgRuntime.h>
 #include <NvApiDriverSettings.h>
 
 #include "State.h"
@@ -20,6 +21,11 @@
 NvAPI_Status __stdcall NvApiHooks::hkNvAPI_GPU_GetArchInfo(NvPhysicalGpuHandle hPhysicalGpu,
                                                            NV_GPU_ARCH_INFO* pGpuArchInfo)
 {
+    // CloseLogger publishes terminal DLL teardown before CRT-owned state dies.
+    // Already-issued callbacks may outlive Config/State and must only forward.
+    if (loggerClosed.load(std::memory_order_relaxed))
+        return o_NvAPI_GPU_GetArchInfo ? o_NvAPI_GPU_GetArchInfo(hPhysicalGpu, pGpuArchInfo) : NVAPI_ERROR;
+
     if (!o_NvAPI_GPU_GetArchInfo)
     {
         LOG_DEBUG("nullptr");
@@ -28,8 +34,17 @@ NvAPI_Status __stdcall NvApiHooks::hkNvAPI_GPU_GetArchInfo(NvPhysicalGpuHandle h
 
     const auto status = o_NvAPI_GPU_GetArchInfo(hPhysicalGpu, pGpuArchInfo);
 
+    if (loggerClosed.load(std::memory_order_relaxed))
+        return status;
+
     if (status == NVAPI_OK && pGpuArchInfo)
     {
+        auto architecture = static_cast<uint32_t>(pGpuArchInfo->architecture_id);
+        if (Neurotic::Mfg::Experimental::ExposeArchitecture(reinterpret_cast<uintptr_t>(hPhysicalGpu), status, architecture))
+        {
+            pGpuArchInfo->architecture_id = static_cast<NV_GPU_ARCHITECTURE_ID>(architecture);
+            return status;
+        }
         if (pGpuArchInfo->architecture_id <= NV_GPU_ARCHITECTURE_GP100)
         {
             // Check if values were volatile, override them if so
@@ -64,6 +79,9 @@ NvAPI_Status __stdcall NvApiHooks::hkNvAPI_DRS_GetSetting(NvDRSSessionHandle hSe
         return NVAPI_ERROR;
 
     auto result = o_NvAPI_DRS_GetSetting(hSession, hProfile, settingId, pSetting);
+    if (loggerClosed.load(std::memory_order_relaxed))
+        return result;
+
     if (pSetting && result == NVAPI_OK)
     {
 #ifdef LOG_ALL_DRS_GET_CALLS
@@ -189,6 +207,19 @@ NvAPI_Status __stdcall NvApiHooks::hkNvAPI_DRS_GetSetting(NvDRSSessionHandle hSe
 
 void* __stdcall NvApiHooks::hkNvAPI_QueryInterface(unsigned int InterfaceId)
 {
+    // This flag has process lifetime; Config, GPU discovery, Reflex and the
+    // NvApiTypes/fakenvapi maps do not. Check it before touching any of them.
+    // Unhook clears the slot after Detours reclaims its trampoline, so a late
+    // direct caller then receives nullptr rather than calling stale authority.
+    if (loggerClosed.load(std::memory_order_relaxed))
+    {
+        const auto original = o_NvAPI_QueryInterface;
+        if (!original || original == reinterpret_cast<PFN_NvApi_QueryInterface>(fakenvapi::queryInterface) ||
+            original == hkNvAPI_QueryInterface)
+            return nullptr;
+        return original(InterfaceId);
+    }
+
     if (!o_NvAPI_QueryInterface)
         if (Config::Instance()->UseFakenvapi.value_or_default())
             o_NvAPI_QueryInterface = (PFN_NvApi_QueryInterface) fakenvapi::queryInterface;

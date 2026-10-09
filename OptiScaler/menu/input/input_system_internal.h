@@ -127,6 +127,7 @@ struct InputState
     bool Initialized = false;
     bool HooksInstalled = false;
     bool Focused = false;
+    std::uint64_t FocusGeneration = 0;
 
     bool MenuVisible = false;
     bool BlockMouse = false;
@@ -565,6 +566,7 @@ BOOL RealGetCursorPosSafe(LPPOINT point);
 void SetMouseDownFromRawState(int button, DWORD messageTime, bool blocked);
 void SetMouseUpFromRawState(int button, DWORD messageTime);
 void ResetButtonBlockedStateLocked();
+void ResetKeyboardEdgesForFocusLocked();
 void SetKeyUpStateOnly(int vk, DWORD messageTime);
 void SetMouseUpStateOnly(int button, DWORD messageTime);
 

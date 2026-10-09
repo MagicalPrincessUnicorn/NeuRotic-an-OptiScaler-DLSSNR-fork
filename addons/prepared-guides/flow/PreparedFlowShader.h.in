@@ -1,0 +1,2 @@
+#pragma once
+inline constexpr char PreparedFlowShader[] = R"NR_FLOW(@NR_FLOW_SHADER_SOURCE@)NR_FLOW";

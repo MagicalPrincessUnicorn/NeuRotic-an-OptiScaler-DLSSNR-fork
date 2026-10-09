@@ -1117,6 +1117,7 @@ CODE
 
 #include "imgui.h"
 #include "../../menu/Localization.h"
+#include "../../menu/SleekUi.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 
@@ -2219,6 +2220,7 @@ int ImFormatString(char* buf, size_t buf_size, const char* fmt, ...)
 
 int ImFormatStringV(char* buf, size_t buf_size, const char* fmt, va_list args)
 {
+    Neurotic::LocalizedFormat localized_format(fmt);
 #ifdef IMGUI_USE_STB_SPRINTF
     int w = stbsp_vsnprintf(buf, (int)buf_size, fmt, args);
 #else
@@ -2247,6 +2249,7 @@ void ImFormatStringToTempBuffer(const char** out_buf, const char** out_buf_end, 
 //  ImFormatStringToTempBuffer(token, ...);
 void ImFormatStringToTempBufferV(const char** out_buf, const char** out_buf_end, const char* fmt, va_list args)
 {
+    Neurotic::LocalizedFormat localized_format(fmt);
     ImGuiContext& g = *GImGui;
     if (fmt[0] == '%' && fmt[1] == 's' && fmt[2] == 0)
     {
@@ -12566,6 +12569,9 @@ void ImGui::ClosePopupToLevel(int remaining, bool restore_focus_to_window_under_
         for (int n = remaining; n < g.OpenPopupStack.Size; n++)
             IMGUI_DEBUG_LOG_POPUP("[popup] - Closing PopupID 0x%08X Window \"%s\"\n", g.OpenPopupStack[n].PopupId, g.OpenPopupStack[n].Window ? g.OpenPopupStack[n].Window->Name : NULL);
 
+    for (int n=remaining;n<g.OpenPopupStack.Size;++n)
+        Neurotic::Sleek::NotePopupClose(g.OpenPopupStack[n].Window);
+
     // Trim open popup stack
     ImGuiPopupData prev_popup = g.OpenPopupStack[remaining];
     g.OpenPopupStack.resize(remaining);
@@ -12620,7 +12626,9 @@ bool ImGui::BeginPopupEx(ImGuiID id, ImGuiWindowFlags extra_window_flags)
     if (!IsPopupOpen(id, ImGuiPopupFlags_None))
     {
         g.NextWindowData.ClearFlags(); // We behave like Begin() and need to consume those values
-        return false;
+        char fading_name[20];
+        ImFormatString(fading_name, IM_ARRAYSIZE(fading_name), "##Popup_%08x", id);
+        return Neurotic::Sleek::BeginClosingPopup(fading_name,id);
     }
 
     char name[20];
@@ -12630,6 +12638,7 @@ bool ImGui::BeginPopupEx(ImGuiID id, ImGuiWindowFlags extra_window_flags)
     bool is_open = Begin(name, NULL, extra_window_flags | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoDocking);
     if (!is_open) // NB: Begin can return false when the popup is completely clipped (e.g. zero size display)
         EndPopup();
+    if (is_open) Neurotic::Sleek::PreparePopupPresentation(g.CurrentWindow);
     //g.CurrentWindow->FocusRouteParentWindow = g.CurrentWindow->ParentWindowInBeginStack;
     return is_open;
 }
@@ -12659,7 +12668,10 @@ bool ImGui::BeginPopup(const char* str_id, ImGuiWindowFlags flags)
     if (g.OpenPopupStack.Size <= g.BeginPopupStack.Size) // Early out for performance
     {
         g.NextWindowData.ClearFlags(); // We behave like Begin() and need to consume those values
-        return false;
+        char fading_name[20];
+        ImGuiID fading_id=g.CurrentWindow->GetID(str_id);
+        ImFormatString(fading_name,IM_ARRAYSIZE(fading_name),"##Popup_%08x",fading_id);
+        return Neurotic::Sleek::BeginClosingPopup(fading_name,fading_id);
     }
     flags |= ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings;
     ImGuiID id = g.CurrentWindow->GetID(str_id);
@@ -12708,6 +12720,11 @@ void ImGui::EndPopup()
 {
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
+    if (Neurotic::Sleek::ClosingPopup(window)) {
+        Neurotic::Sleek::PopupPresentation(window);
+        EndDisabled(); End(); return;
+    }
+    Neurotic::Sleek::PopupPresentation(window);
     if ((window->Flags & ImGuiWindowFlags_Popup) == 0 || g.BeginPopupStack.Size == 0)
     {
         IM_ASSERT_USER_ERROR(0, "Calling EndPopup() too many times or in wrong window!");

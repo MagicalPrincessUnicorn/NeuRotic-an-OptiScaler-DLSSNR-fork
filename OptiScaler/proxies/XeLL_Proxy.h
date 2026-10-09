@@ -89,19 +89,19 @@ class XeLLProxy
         switch (loggingLevel)
         {
         case XELL_LOGGING_LEVEL_DEBUG:
-            spdlog::debug("XeLL Log: {}", message);
+            LOG_WHILE_ACTIVE(debug, "XeLL Log: {}", message);
             return;
 
         case XELL_LOGGING_LEVEL_INFO:
-            spdlog::info("XeLL Log: {}", message);
+            LOG_WHILE_ACTIVE(info, "XeLL Log: {}", message);
             return;
 
         case XELL_LOGGING_LEVEL_WARNING:
-            spdlog::warn("XeLL Log: {}", message);
+            LOG_WHILE_ACTIVE(warn, "XeLL Log: {}", message);
             return;
 
         default:
-            spdlog::error("XeLL Log: {}", message);
+            LOG_WHILE_ACTIVE(error, "XeLL Log: {}", message);
             return;
         }
     }

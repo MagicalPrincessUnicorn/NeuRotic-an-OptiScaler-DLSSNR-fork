@@ -1,9 +1,11 @@
 #include "pch.h"
+#include <mfg/ExperimentalMfgRuntime.h>
 #include "Kernel_Hooks.h"
 
 #include "Gdi32_Hooks.h"
 #include "Streamline_Hooks.h"
 #include "LibraryLoad_Hooks.h"
+#include <mfg/MfgAdaUnlock.h>
 
 #include <fsr4/FSR4ModelSelection.h>
 
@@ -53,6 +55,7 @@ static inline bool IsInsideWindowsDirectory(const std::string& path)
 
 static inline HMODULE CheckLoad(const std::wstring& name)
 {
+    if (NtdllProxy::IsInternalLoad()) return nullptr;
     do
     {
         if (State::Instance().isShuttingDown || LibraryLoadHooks::IsApiSetName(name))
@@ -120,7 +123,11 @@ FARPROC WINAPI KernelHooks::hk_K32_GetProcAddress(HMODULE hModule, LPCSTR lpProc
         return o_K32_GetProcAddress(KernelBaseProxy::GetModuleHandleW_()(L"amdxc64.dll"), lpProcName);
     }
 
-    return o_K32_GetProcAddress(hModule, lpProcName);
+    const auto resolved = o_K32_GetProcAddress(hModule, lpProcName);
+    if (Config::Instance()->FGDLSSGNativeMfgExperimental.value_or_default())
+        Neurotic::Mfg::ObserveAdaExportResolution(hModule, lpProcName,
+            reinterpret_cast<const void*>(resolved), _ReturnAddress());
+    return resolved;
 }
 
 VALIDATE_HOOK(hk_K32_GetModuleHandleA, Kernel32Proxy::PFN_GetModuleHandleA)
@@ -232,7 +239,11 @@ FARPROC WINAPI KernelHooks::hk_KB_GetProcAddress(HMODULE hModule, LPCSTR lpProcN
     //               Util::WhoIsTheCaller(_ReturnAddress()));
     // }
 
-    return o_KB_GetProcAddress(hModule, lpProcName);
+    const auto resolved = o_KB_GetProcAddress(hModule, lpProcName);
+    if (Config::Instance()->FGDLSSGNativeMfgExperimental.value_or_default())
+        Neurotic::Mfg::ObserveAdaExportResolution(hModule, lpProcName,
+            reinterpret_cast<const void*>(resolved), _ReturnAddress());
+    return resolved;
 }
 
 VALIDATE_HOOK(hk_K32_GetFileAttributesW, Kernel32Proxy::PFN_GetFileAttributesW)
@@ -323,6 +334,15 @@ VOID WINAPI KernelHooks::hk_K32_OutputDebugStringA(LPCSTR lpOutputString)
 
 // Load Library checks
 
+static HMODULE NativeMfgLoadResult(HMODULE module, DWORD flags = 0) noexcept
+{
+    const DWORD error = GetLastError();
+    Neurotic::Mfg::ObserveAdaLoadedModule(module, flags);
+    Neurotic::Mfg::Experimental::ObserveModuleLoad(module, flags);
+    SetLastError(error);
+    return module;
+}
+
 VALIDATE_HOOK(hk_K32_LoadLibraryW, Kernel32Proxy::PFN_LoadLibraryW)
 HMODULE KernelHooks::hk_K32_LoadLibraryW(LPCWSTR lpLibFileName)
 {
@@ -338,9 +358,9 @@ HMODULE KernelHooks::hk_K32_LoadLibraryW(LPCWSTR lpLibFileName)
     auto result = CheckLoad(name);
 
     if (result != nullptr)
-        return result;
+        return NativeMfgLoadResult(result);
 
-    return o_K32_LoadLibraryW(lpLibFileName);
+    return NativeMfgLoadResult(o_K32_LoadLibraryW(lpLibFileName));
 }
 
 VALIDATE_HOOK(hk_K32_LoadLibraryA, Kernel32Proxy::PFN_LoadLibraryA)
@@ -359,9 +379,9 @@ HMODULE KernelHooks::hk_K32_LoadLibraryA(LPCSTR lpLibFileName)
     auto result = CheckLoad(name);
 
     if (result != nullptr)
-        return result;
+        return NativeMfgLoadResult(result);
 
-    return o_K32_LoadLibraryA(lpLibFileName);
+    return NativeMfgLoadResult(o_K32_LoadLibraryA(lpLibFileName));
 }
 
 VALIDATE_HOOK(hk_K32_LoadLibraryExW, Kernel32Proxy::PFN_LoadLibraryExW)
@@ -379,9 +399,9 @@ HMODULE KernelHooks::hk_K32_LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, 
     auto result = CheckLoad(name);
 
     if (result != nullptr)
-        return result;
+        return NativeMfgLoadResult(result, dwFlags);
 
-    return o_K32_LoadLibraryExW(lpLibFileName, hFile, dwFlags);
+    return NativeMfgLoadResult(o_K32_LoadLibraryExW(lpLibFileName, hFile, dwFlags), dwFlags);
 }
 
 VALIDATE_HOOK(hk_K32_LoadLibraryExA, Kernel32Proxy::PFN_LoadLibraryExA)
@@ -400,9 +420,9 @@ HMODULE KernelHooks::hk_K32_LoadLibraryExA(LPCSTR lpLibFileName, HANDLE hFile, D
     auto result = CheckLoad(name);
 
     if (result != nullptr)
-        return result;
+        return NativeMfgLoadResult(result, dwFlags);
 
-    return o_K32_LoadLibraryExA(lpLibFileName, hFile, dwFlags);
+    return NativeMfgLoadResult(o_K32_LoadLibraryExA(lpLibFileName, hFile, dwFlags), dwFlags);
 }
 
 VALIDATE_HOOK(hk_KB_LoadLibraryExW, KernelBaseProxy::PFN_LoadLibraryExW)
@@ -420,9 +440,9 @@ HMODULE KernelHooks::hk_KB_LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, D
     auto result = CheckLoad(name);
 
     if (result != nullptr)
-        return result;
+        return NativeMfgLoadResult(result, dwFlags);
 
-    return o_KB_LoadLibraryExW(lpLibFileName, hFile, dwFlags);
+    return NativeMfgLoadResult(o_KB_LoadLibraryExW(lpLibFileName, hFile, dwFlags), dwFlags);
 }
 
 VALIDATE_HOOK(hk_K32_FreeLibrary, Kernel32Proxy::PFN_FreeLibrary)
@@ -430,6 +450,8 @@ BOOL KernelHooks::hk_K32_FreeLibrary(HMODULE lpLibrary)
 {
     if (lpLibrary == nullptr)
         return STATUS_INVALID_PARAMETER;
+
+    const bool observeAdaRelease = Neurotic::Mfg::IsAdaMfgModule(lpLibrary);
 
 #ifdef _DEBUG
     // LOG_TRACE("{:X}", (size_t) lpLibrary);
@@ -440,8 +462,14 @@ BOOL KernelHooks::hk_K32_FreeLibrary(HMODULE lpLibrary)
         auto result = LibraryLoadHooks::FreeLibrary(lpLibrary);
 
         if (result.has_value())
-            return result.value() == TRUE;
+        {
+            const bool freed = result.value() == TRUE;
+            if (freed && observeAdaRelease) Neurotic::Mfg::NoteAdaModuleRelease(lpLibrary);
+            return freed;
+        }
     }
 
-    return o_K32_FreeLibrary(lpLibrary);
+    const bool freed = o_K32_FreeLibrary(lpLibrary) == TRUE;
+    if (freed && observeAdaRelease) Neurotic::Mfg::NoteAdaModuleRelease(lpLibrary);
+    return freed;
 }

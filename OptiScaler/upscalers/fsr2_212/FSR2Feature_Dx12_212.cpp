@@ -19,6 +19,9 @@ bool FSR2FeatureDx12_212::EvaluateInternal(ID3D12GraphicsCommandList* InCommandL
 {
     LOG_FUNC();
 
+    // Entry and restore must share one arrival declaration across concurrent edits.
+    const auto depthArrival = Config::Instance()->DepthResourceBarrier.snapshot();
+
     auto& state = State::Instance();
     auto& cfg = *Config::Instance();
 
@@ -139,9 +142,9 @@ bool FSR2FeatureDx12_212::EvaluateInternal(ID3D12GraphicsCommandList* InCommandL
     {
         LOG_DEBUG("Depth exist..");
 
-        if (Config::Instance()->DepthResourceBarrier.has_value())
+        if (depthArrival.has_value())
             ResourceBarrier(InCommandList, paramDepth,
-                            (D3D12_RESOURCE_STATES) Config::Instance()->DepthResourceBarrier.value(),
+                            (D3D12_RESOURCE_STATES) depthArrival.value(),
                             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         params.depth = Fsr212::ffxGetResourceDX12_212(&_context, paramDepth, (wchar_t*) L"FSR2_Depth",
@@ -342,9 +345,9 @@ bool FSR2FeatureDx12_212::EvaluateInternal(ID3D12GraphicsCommandList* InCommandL
         ResourceBarrier(InCommandList, paramOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                         (D3D12_RESOURCE_STATES) Config::Instance()->OutputResourceBarrier.value());
 
-    if (paramDepth && Config::Instance()->DepthResourceBarrier.has_value())
+    if (paramDepth && depthArrival.has_value())
         ResourceBarrier(InCommandList, paramDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                        (D3D12_RESOURCE_STATES) Config::Instance()->DepthResourceBarrier.value());
+                        (D3D12_RESOURCE_STATES) depthArrival.value());
 
     if (paramExp && Config::Instance()->ExposureResourceBarrier.has_value())
         ResourceBarrier(InCommandList, paramExp, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,

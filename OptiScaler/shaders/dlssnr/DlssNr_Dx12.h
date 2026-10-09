@@ -20,6 +20,7 @@
 #include "DlssNr_Common.h"
 #include "NrCompositionPool.h"
 #include <dlssnr/NrGpuSafety.h>
+#include <dlssnr/NativeDispatchOutcome.h>
 
 #include <d3d12.h>
 #include <d3dx/d3dx12.h>
@@ -27,7 +28,9 @@
 #include <shaders/Shader_Dx12Utils.h>
 
 class Config;
+namespace DlssNr { class NativeRendererInvocationBorrow; }
 template<class Source> struct NrConfigSnapshot;
+namespace Neurotic::Protocol { class NativeExecutionObserver; }
 
 class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
 {
@@ -65,12 +68,16 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // Sizes come from the resources. Everything the pass cannot work out for itself is in
     // DlssNrFrameInfo; everything the user chose stays in Config. colour and output may be the same
     // resource. timingQueue is the queue this list will be executed on, when the caller knows it.
+    // completedPasses reports only this call's composed prefix, and stays zero on lifecycle-only work.
     void Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                   ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
                   ID3D12CommandQueue* timingQueue, const NrConfigSnapshot<Config>& cfg,
                   bool privateCommandList = false, unsigned int exactWorkWidth = 0,
                   unsigned int exactWorkHeight = 0, bool nativeTemporalDomain = false,
-                  bool nativePreSrRoute = false);
+                  bool nativePreSrRoute = false,
+                  Neurotic::Protocol::NativeExecutionObserver* observer = nullptr,
+                  DlssNr::NativeRendererInvocationBorrow* rendererBorrow = nullptr,
+                  unsigned int* completedPasses = nullptr, bool* preparationRecorded = nullptr);
 
     // Records one pass. Resources that a given mode does not read may be null; a stand-in is bound in
     // their place so every descriptor in the table is valid.
@@ -82,5 +89,5 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
                   // nothing reads it now and every caller passes nullptr. Kept only so the binding
                   // table keeps its shape -- not evidence that temporal accumulation exists.
                   ID3D12Resource* InPrevEdit, ID3D12Resource* OutTarget,
-                  ID3D12Resource* OutKeep);
+                  ID3D12Resource* OutKeep, DlssNr::NativeDispatchOutcome* outcome = nullptr);
 };

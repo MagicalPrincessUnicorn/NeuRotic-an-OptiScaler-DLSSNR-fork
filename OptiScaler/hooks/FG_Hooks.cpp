@@ -1,4 +1,6 @@
 #include "pch.h"
+#include <inputs/FG/FgOwnerScope.h>
+#include <framegen/ScopedFgReentry.h>
 #include <dlssnr/FrameTrace.h>
 #include "FG_Hooks.h"
 #include <Config.h>
@@ -93,6 +95,8 @@ static bool CheckForFGStatus()
 HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
                                  IDXGISwapChain** ppSwapChain)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return DXGI_ERROR_WAS_STILL_DRAWING;
     if (!CheckForFGStatus())
     {
         LOG_WARN("Can't init FG Feature or invalid FGOutput setting!");
@@ -204,6 +208,8 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
                                         DXGI_SWAP_CHAIN_DESC1* pDesc, DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
                                         IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return DXGI_ERROR_WAS_STILL_DRAWING;
     if (!CheckForFGStatus())
     {
         LOG_WARN("Can't init FG Feature or invalid FGOutput setting!");
@@ -579,11 +585,13 @@ HRESULT FGHooks::hkGetFullscreenState(IDXGISwapChain* This, BOOL* pFullscreen, I
 HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat,
                                  UINT SwapChainFlags)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return DXGI_ERROR_WAS_STILL_DRAWING;
+    ScopedFgReentry reentry(This,1);
     // Skip XeFG's internal call
-    if (_skipResize)
+    if (reentry.Recursive())
     {
         LOG_DEBUG("XeFG call skipping");
-        _skipResize = false;
 
         IDXGISwapChain* sc = nullptr;
 
@@ -720,7 +728,6 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
         fg->Deactivate();
     }
 
-    _skipResize1 = true;
 
     // Release swapchain backbuffers to prevent errors when resizing
     if (State::Instance().activeFgOutput == FGOutput::XeFG)
@@ -733,12 +740,9 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
             if (bbResult == S_OK)
             {
                 LOG_DEBUG("Backbuffer {}: {:X}", i, (size_t) backBuffer);
-                auto refCount = backBuffer->Release();
-                while (refCount > XEFG_RESOURCE_REF_LIMIT)
-                {
-                    LOG_DEBUG("Releasing backbuffer {}: RefCount {}", i, refCount);
-                    refCount = backBuffer->Release();
-                }
+                // Balance only GetBuffer's reference. Other references belong
+                // to the swapchain, game or provider and must survive resize.
+                backBuffer->Release();
 
 #if (XEFG_RESOURCE_REF_LIMIT == 0)
                 oldBackBuffers.push_back(backBuffer);
@@ -758,7 +762,6 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
         result = o_FGSCResizeBuffers(This, BufferCount, Width, Height, NewFormat, SwapChainFlags);
     }
 
-    _skipResize1 = false;
 
     LOG_DEBUG("Result: {:X}, Caller: {}", (UINT) result, Util::WhoIsTheCaller(_ReturnAddress()));
 
@@ -814,11 +817,13 @@ HRESULT FGHooks::hkResizeTarget(IDXGISwapChain* This, const DXGI_MODE_DESC* pNew
 HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT Format,
                                   UINT SwapChainFlags, const UINT* pCreationNodeMask, IUnknown* const* ppPresentQueue)
 {
+    Neurotic::Runtime::FgOwnerTransition ownerTransition;
+    if(!ownerTransition)return DXGI_ERROR_WAS_STILL_DRAWING;
+    ScopedFgReentry reentry(This,1);
     // Skip XeFG's internal call
-    if (_skipResize1)
+    if (reentry.Recursive())
     {
         LOG_DEBUG("XeFG call skipping");
-        _skipResize1 = false;
 
         IDXGISwapChain3* sc = nullptr;
 
@@ -970,12 +975,8 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
             if (bbResult == S_OK)
             {
                 LOG_DEBUG("Backbuffer {}: {:X}", i, (size_t) backBuffer);
-                auto refCount = backBuffer->Release();
-                while (refCount > XEFG_RESOURCE_REF_LIMIT)
-                {
-                    LOG_DEBUG("Releasing backbuffer {}: RefCount {}", i, refCount);
-                    refCount = backBuffer->Release();
-                }
+                // Balance only GetBuffer's reference.
+                backBuffer->Release();
 
 #if (XEFG_RESOURCE_REF_LIMIT == 0)
                 oldBackBuffers.push_back(backBuffer);
@@ -992,12 +993,10 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
     HRESULT result;
     {
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
-        _skipResize = true;
 
         result = o_FGSCResizeBuffers1(This, BufferCount, Width, Height, Format, SwapChainFlags, pCreationNodeMask,
                                       ppPresentQueue);
 
-        _skipResize = false;
     }
 
     LOG_DEBUG("Result: {:X}, Caller: {}", (UINT) result, Util::WhoIsTheCaller(_ReturnAddress()));
@@ -1033,8 +1032,9 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
 
 HRESULT FGHooks::hkFGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
 {
+    ScopedFgReentry reentry(This,2);
     // Skip XeFG's internal call
-    if (_skipPresent)
+    if (reentry.Recursive())
     {
         LOG_DEBUG("XeFG call skipping");
 
@@ -1058,9 +1058,7 @@ HRESULT FGHooks::hkFGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags
 
     LOG_DEBUG("SyncInterval: {}, Flags: {:X}", SyncInterval, Flags);
 
-    _skipPresent1 = true;
     auto result = FGPresent(This, SyncInterval, Flags, nullptr);
-    _skipPresent1 = false;
 
     return result;
 }
@@ -1068,8 +1066,9 @@ HRESULT FGHooks::hkFGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags
 HRESULT FGHooks::hkFGPresent1(IDXGISwapChain1* This, UINT SyncInterval, UINT Flags,
                               const DXGI_PRESENT_PARAMETERS* pPresentParameters)
 {
+    ScopedFgReentry reentry(This,2);
     // Skip XeFG's internal call
-    if (_skipPresent1)
+    if (reentry.Recursive())
     {
         LOG_DEBUG("XeFG call skipping");
 
@@ -1092,9 +1091,7 @@ HRESULT FGHooks::hkFGPresent1(IDXGISwapChain1* This, UINT SyncInterval, UINT Fla
     }
 
     LOG_DEBUG("SyncInterval: {}, Flags: {:X}", SyncInterval, Flags);
-    _skipPresent = true;
     auto result = FGPresent(This, SyncInterval, Flags, pPresentParameters);
-    _skipPresent = false;
 
     return result;
 }
@@ -1102,6 +1099,22 @@ HRESULT FGHooks::hkFGPresent1(IDXGISwapChain1* This, UINT SyncInterval, UINT Fla
 HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
                            const DXGI_PRESENT_PARAMETERS* pPresentParameters)
 {
+    // NR-DIAG-001 BEGIN: values already held by the FG owner; no swapchain/device query.
+    const auto m0Publisher = DlssNr::FrameTrace::WithM0Publisher([&]() noexcept {
+        using SourceSnapshot = Neurotic::Diagnostics::M0::SourceSnapshot;
+        using OwnerDomain = Neurotic::Contracts::OwnerDomain;
+        const auto& sourceState = State::Instance();
+        auto source = SourceSnapshot::OwnerPublication(OwnerDomain::FrameGeneration,
+            "Alpha.FrameGeneration.Present", "FG_Hooks", 1, "FGPresent");
+        source.Add("alpha.presentFlags", static_cast<std::uint64_t>(Flags));
+        source.Add("alpha.syncInterval", static_cast<std::uint64_t>(SyncInterval));
+        source.Add("alpha.presentParametersProvided", pPresentParameters != nullptr);
+        source.Add("alpha.activeFgInput", static_cast<std::uint64_t>(sourceState.activeFgInput));
+        source.Add("alpha.activeFgOutput", static_cast<std::uint64_t>(sourceState.activeFgOutput));
+        return source;
+    });
+    (void) m0Publisher;
+    // NR-DIAG-001 END
     const auto traceFgPresent = DlssNr::FrameTrace::Event("fg-present-enter",
         "swapchain={:p} flags={} sync={} input={} output={}", static_cast<void*>(This), Flags, SyncInterval,
         static_cast<unsigned int>(State::Instance().activeFgInput),
@@ -1356,10 +1369,15 @@ ULONG FGHooks::hkFGRelease(IUnknown* This)
     }
 #endif // (XEFG_RESOURCE_REF_LIMIT == 0)
 
-    static bool skipReleaseChecks = false;
+    ScopedFgReentry reentry(This,3);
 
-    if (skipReleaseChecks || State::Instance().currentFGSwapchain != This || State::Instance().isShuttingDown)
+    if (reentry.Recursive() || State::Instance().currentFGSwapchain != This || State::Instance().isShuttingDown)
         return o_FGRelease(This);
+
+    Neurotic::Runtime::FgOwnerTransition transition;
+    if (!transition) return 1; // Retain this generation while another owner transition is active.
+    auto* owner = State::Instance().currentFG;
+    if (!owner || !owner->OwnsSwapchain(This)) return o_FGRelease(This);
 
     This->AddRef();
 
@@ -1399,12 +1417,8 @@ ULONG FGHooks::hkFGRelease(IUnknown* This)
                     if (bbResult == S_OK)
                     {
                         LOG_DEBUG("Backbuffer {}: {:X}", i, (size_t) backBuffer);
-                        auto refCount = backBuffer->Release();
-                        while (refCount > XEFG_RESOURCE_REF_LIMIT)
-                        {
-                            LOG_DEBUG("Releasing backbuffer {}: RefCount {}", i, refCount);
-                            refCount = backBuffer->Release();
-                        }
+                        // Balance only GetBuffer's reference.
+                        backBuffer->Release();
 
 #if (XEFG_RESOURCE_REF_LIMIT == 0)
                         oldBackBuffers.push_back(backBuffer);
@@ -1418,14 +1432,8 @@ ULONG FGHooks::hkFGRelease(IUnknown* This)
                 }
             }
 
-            // To prevent deadlock when FG release the swapchain
-            skipReleaseChecks = true;
-
-            if (State::Instance().currentFG != nullptr)
-            {
-                LOG_DEBUG("FG Swapchain released, release FG & swapchain context");
-                State::Instance().currentFG->ReleaseSwapchain(_hwnd);
-            }
+            // Reentry is scoped to this thread, swapchain and operation.
+            if (!owner->ReleaseSwapchain(_hwnd)) return 1;
 
             LOG_DEBUG("FG Swapchain released, clearing currentFGSwapchain");
             State::Instance().currentFGSwapchain = nullptr;
@@ -1433,17 +1441,12 @@ ULONG FGHooks::hkFGRelease(IUnknown* This)
             if (State::Instance().currentWrappedSwapchain != nullptr &&
                 State::Instance().currentSwapchainDesc.OutputWindow == _hwnd)
             {
-                auto refCount = State::Instance().currentWrappedSwapchain->Release();
-
-                while (refCount > 0 && refCount < 0xffffff00)
-                {
-                    refCount = State::Instance().currentWrappedSwapchain->Release();
-                }
-
+                // Factory creation returns the wrapper to the caller. This
+                // state pointer is a borrowed alias, with no Release ownership.
                 State::Instance().currentWrappedSwapchain = nullptr;
             }
 
-            skipReleaseChecks = false;
+            // Owner aliases retired only after provider release succeeds.
 
             return 0;
         }

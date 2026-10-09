@@ -1,60 +1,20 @@
 #include "pch.h"
 #include "UpscalerTime_Vk.h"
+#include <mutex>
 
-#include <State.h>
-
-void UpscalerTimeVk::Init(VkDevice device, VkPhysicalDevice pd)
+// The legacy global two-query pool had no device/recording completion identity.
+// It also consumed unavailable/stale results. Keep these entry points inert
+// until a completion-qualified timing owner can replace it. In particular,
+// measuring an upscaler must not inject reset/timestamp dependencies into every
+// game evaluation, including when NR is off, solely to populate an overlay.
+void UpscalerTimeVk::Init(VkDevice, VkPhysicalDevice)
 {
-    VkQueryPoolCreateInfo queryPoolInfo = {};
-    queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryPoolInfo.queryCount = 2; // Start and End timestamps
-
-    vkCreateQueryPool(device, &queryPoolInfo, nullptr, &_queryPool);
-
-    VkPhysicalDeviceProperties deviceProperties;
-    vkGetPhysicalDeviceProperties(pd, &deviceProperties);
-    _timeStampPeriod = deviceProperties.limits.timestampPeriod;
+    static std::once_flag notice;
+    std::call_once(notice, [] {
+        LOG_INFO("Vulkan legacy upscaler GPU timing disabled: no query pool, resets, timestamps or host reads; "
+                 "completion-qualified timing unavailable");
+    });
 }
-
-void UpscalerTimeVk::UpscaleStart(VkCommandBuffer cmdBuffer)
-{
-    if (_queryPool == VK_NULL_HANDLE)
-        return;
-
-    vkCmdResetQueryPool(cmdBuffer, _queryPool, 0, 2);
-    vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, _queryPool, 0);
-}
-
-void UpscalerTimeVk::UpscaleEnd(VkCommandBuffer cmdBuffer)
-{
-    if (_queryPool == VK_NULL_HANDLE)
-        return;
-
-    vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, _queryPool, 1);
-    _vkUpscaleTrig = true;
-}
-
-void UpscalerTimeVk::ReadUpscalingTime(VkDevice device)
-{
-    if (_vkUpscaleTrig && _queryPool != VK_NULL_HANDLE)
-    {
-        // Retrieve timestamps
-        uint64_t timestamps[2];
-        vkGetQueryPoolResults(device, _queryPool, 0, 2, sizeof(timestamps), timestamps, sizeof(uint64_t),
-                              VK_QUERY_RESULT_64_BIT);
-
-        // Calculate elapsed time in milliseconds
-        double elapsedTimeMs = (timestamps[1] - timestamps[0]) * _timeStampPeriod / 1e6;
-
-        if (elapsedTimeMs > 0.0 && elapsedTimeMs < 5000.0)
-        {
-            State::Instance().frameTimeMutex.lock();
-            State::Instance().upscaleTimes.push_back(elapsedTimeMs);
-            State::Instance().upscaleTimes.pop_front();
-            State::Instance().frameTimeMutex.unlock();
-        }
-    }
-
-    _vkUpscaleTrig = false;
-}
+void UpscalerTimeVk::UpscaleStart(VkCommandBuffer) {}
+void UpscalerTimeVk::UpscaleEnd(VkCommandBuffer) {}
+void UpscalerTimeVk::ReadUpscalingTime(VkDevice) {}

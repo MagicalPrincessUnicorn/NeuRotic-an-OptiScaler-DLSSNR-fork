@@ -1,6 +1,7 @@
 #pragma once
 #include "FgLifecycleContract.h"
 #include "FrameTrace.h"
+#include "DiagnosticJournalFile.h"
 #include <mutex>
 
 namespace DlssNr::FgLifecycle
@@ -26,9 +27,7 @@ struct Journal
         wchar_t directory[2048] {};
         const auto length = GetEnvironmentVariableW(L"NEUROTIC_DIAGNOSTIC_DIRECTORY", directory, 2048);
         if (!length || length >= 2048 || !FrameTrace::Current().armed) return;
-        const auto path = std::wstring(directory) + L"\\" + filename;
-        file = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                           CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        file = OpenDiagnosticJournal(directory, filename);
     }
     // File ownership ends with the process; no teardown order dependency on logger/COM.
     template<typename... Args>

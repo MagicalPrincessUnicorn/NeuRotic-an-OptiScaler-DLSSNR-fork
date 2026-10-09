@@ -1,4 +1,7 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/FsrObservationAdapter.h>
+// NR-FEED-001 END
 #include "FSR3_Dx12.h"
 
 #include "Config.h"
@@ -211,6 +214,9 @@ struct dummyDevice
 static Fsr3::FfxErrorCode ffxFsr3ContextCreate_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
                                                     Fsr3::FfxFsr3UpscalerContextDescription* pContextDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(pContextDescription);
+    // NR-FEED-001 END
     if (pContext == nullptr || pContextDescription->backendInterface.device == nullptr)
         return Fsr3::FFX_ERROR_INVALID_ARGUMENT;
 
@@ -232,6 +238,9 @@ static Fsr3::FfxErrorCode ffxFsr3ContextCreate_Dx12(Fsr3::FfxFsr3UpscalerContext
     }
 
     // check for d3d12 device
+    // NR-FEED-001 BEGIN
+    feedCreation.Publish({"FSR3", Neurotic::Contracts::GraphicsApi::D3D12, "create"}, pContext);
+    // NR-FEED-001 END
     // to prevent crashes when game is using custom interface and
     if (_d3d12Device == nullptr)
     {
@@ -298,6 +307,10 @@ static Fsr3::FfxErrorCode ffxFsr3ContextCreate_Dx12(Fsr3::FfxFsr3UpscalerContext
 static Fsr3::FfxErrorCode ffxFsr3ContextDispatch_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
                                                       Fsr3::FfxFsr3UpscalerDispatchDescription* pDispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR3", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch"}, pContext);
+    Neurotic::Feed::ObserveFsrDispatch(feedObservation, pDispatchDescription);
+    // NR-FEED-001 END
     // Skip OptiScaler stuff
     if (!Config::Instance()->UseFsr3Inputs.value_or_default())
     {
@@ -319,6 +332,9 @@ static Fsr3::FfxErrorCode ffxFsr3ContextDispatch_Dx12(Fsr3::FfxFsr3UpscalerConte
         return Fsr3::FFX_ERROR_BACKEND_API_ERROR;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR3.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(pContext) && _initParams.contains(pContext) &&
         !CreateDLSSContext(pContext, pDispatchDescription))
         return Fsr3::FFX_ERROR_INVALID_ARGUMENT;
@@ -356,7 +372,7 @@ static Fsr3::FfxErrorCode ffxFsr3ContextDispatch_Dx12(Fsr3::FfxFsr3UpscalerConte
         Config::Instance()->ColorResourceBarrier.set_volatile_value(GetD3D12State(pDispatchDescription->color.state));
 
     if (pDispatchDescription->depth.resource != nullptr && pDispatchDescription->depth.state > 0)
-        Config::Instance()->DepthResourceBarrier.set_volatile_value(GetD3D12State(pDispatchDescription->depth.state));
+        Config::Instance()->DepthResourceBarrier.set_volatile_value_if_changed(GetD3D12State(pDispatchDescription->depth.state));
 
     if (pDispatchDescription->exposure.resource != nullptr && pDispatchDescription->exposure.state > 0)
         Config::Instance()->ExposureResourceBarrier.set_volatile_value(
@@ -414,6 +430,9 @@ static Fsr3::FfxErrorCode
 ffxFsr3ContextCreate_Pattern_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
                                   Fsr3::FfxFsr3UpscalerContextDescription* pContextDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(pContextDescription);
+    // NR-FEED-001 END
     if (pContext == nullptr || pContextDescription->backendInterface.device == nullptr)
         return Fsr3::FFX_ERROR_INVALID_ARGUMENT;
 
@@ -436,6 +455,9 @@ ffxFsr3ContextCreate_Pattern_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
     }
 
     // check for d3d12 device
+    // NR-FEED-001 BEGIN
+    feedCreation.Publish({"FSR3", Neurotic::Contracts::GraphicsApi::D3D12, "create-pattern"}, pContext);
+    // NR-FEED-001 END
     // to prevent crashes when game is using custom interface and
     if (_d3d12Device == nullptr)
     {
@@ -504,6 +526,10 @@ static Fsr3::FfxErrorCode
 ffxFsr3ContextDispatch_Pattern_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
                                     Fsr3::FfxFsr3UpscalerDispatchDescription* pDispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR3", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch-pattern"}, pContext);
+    if (!_skipDispatch) Neurotic::Feed::ObserveFsrDispatch(feedObservation, pDispatchDescription);
+    // NR-FEED-001 END
     // Skip OptiScaler stuff
     if (!Config::Instance()->UseFsr3Inputs.value_or_default() || _skipDispatch)
         return o_ffxFsr3UpscalerContextDispatch_Dx12(pContext, pDispatchDescription);
@@ -515,6 +541,9 @@ ffxFsr3ContextDispatch_Pattern_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
         return Fsr3::FFX_ERROR_BACKEND_API_ERROR;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR3.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(pContext) && _initParams.contains(pContext) &&
         !CreateDLSSContext(pContext, pDispatchDescription))
         return Fsr3::FFX_ERROR_INVALID_ARGUMENT;
@@ -552,7 +581,7 @@ ffxFsr3ContextDispatch_Pattern_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
         Config::Instance()->ColorResourceBarrier.set_volatile_value(GetD3D12State(pDispatchDescription->color.state));
 
     if (pDispatchDescription->depth.resource != nullptr && pDispatchDescription->depth.state > 0)
-        Config::Instance()->DepthResourceBarrier.set_volatile_value(GetD3D12State(pDispatchDescription->depth.state));
+        Config::Instance()->DepthResourceBarrier.set_volatile_value_if_changed(GetD3D12State(pDispatchDescription->depth.state));
 
     if (pDispatchDescription->exposure.resource != nullptr && pDispatchDescription->exposure.state > 0)
         Config::Instance()->ExposureResourceBarrier.set_volatile_value(

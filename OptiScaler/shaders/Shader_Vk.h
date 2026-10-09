@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef NR_VK_GPU_FIXTURE
 #include "SysUtils.h"
+#endif
 #include <vulkan/vulkan.h>
 #include <string>
 #include <vector>
@@ -90,4 +92,6 @@ class Shader_Vk
 
     Shader_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InPhysicalDevice);
     virtual ~Shader_Vk();
+    // CPU cleanup after device destruction; no Vulkan calls are legal here.
+    virtual void AbandonDevice();
 };

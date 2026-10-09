@@ -13,12 +13,12 @@ class GpuTime_Dx12
 
     int _currentFrameIndex = 0;
     bool _init = false;
-    bool _completionTracked = false;
+    bool _completionTracked = true;
     bool _recording = false;
     DlssNr::GpuSafety::Ticket _use[QUERY_BUFFER_COUNT];
 
   public:
-    GpuTime_Dx12(ID3D12Device* device, bool completionTracked = false);
+    GpuTime_Dx12(ID3D12Device* device, bool completionTracked = true);
     ~GpuTime_Dx12();
 
     void Start(ID3D12GraphicsCommandList* cmdList);

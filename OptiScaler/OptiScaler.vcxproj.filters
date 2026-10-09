@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Header Files">
@@ -29,6 +29,112 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="nr\contracts\C01_Acquisition.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C02_Context.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C03_Consumption.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C04_Capability.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C05_Routing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C06_ProtocolInput.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C07_ProtocolOutput.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C08_Reset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C09_Multipass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C10_Gap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C11_Diagnostics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C12_Representation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C13_FinalFrame.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C14_Identity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C15_Validation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\C16_Execution.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\ContractCommon.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\ContractManifest.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\Evidence.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\FixtureCodec.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\Identity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\NativeDelivery.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\contracts\NativeStageDelivery.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\NativeSampleQualification.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\NativeStageQualification.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\contracts\Reasons.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\contracts\SemanticDescriptions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\lifecycle\IdentityAssociations.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\lifecycle\ConsumptionLeaseAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="inputs\universal_feeder\providers\ObservationPublisher.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="inputs\universal_feeder\providers\NgxObservationAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="inputs\universal_feeder\providers\FsrObservationAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="inputs\universal_feeder\providers\XessObservationAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="inputs\universal_feeder\providers\StreamlineObservationAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="inputs\universal_feeder\providers\PresentGuideObservationAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\GpuSafetyLeaseAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\NativeLeaseBinding.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\LifecycleEvidence.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\ProviderLeaseBinding.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\IdentityDependencies.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\lifecycle\IdentityIssuers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\lifecycle\FinalRealFrameTypes.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\FinalRealFrameRuntime.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\FinalRealFrameReset.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\FinalRealFramePreFgAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\lifecycle\FinalRealFrameFinalizer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\lifecycle\IdentityPrimitives.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nr\lifecycle\IdentityTransitions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Config.h">
       <Filter>Config</Filter>
     </ClInclude>
@@ -956,6 +1062,10 @@
       <Filter>Config</Filter>
     </ClCompile>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="nr\lifecycle\ConsumptionLeaseAdapter.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="nr\orchestration\StreamCoordinatorKernel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="nr\lifecycle\NativeSessionLifetime.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="nr\protocol\NativeRouteAdmission.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="Util.cpp">
       <Filter>Util</Filter>
     </ClCompile>
@@ -1115,6 +1225,7 @@
     <ClCompile Include="include\imgui\imgui_draw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="menu\BrandImage.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="menu\menu_common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -1215,6 +1326,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="hooks\Streamline_Hooks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mfg\MfgAdaUnlock.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="include\sl.param\parameters.cpp">
@@ -1537,9 +1651,194 @@
     <ResourceCompile Include="OptiScaler.rc" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\tests\Run-NrContracts.cmd">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\CommandEvidence.ps1">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\ContractLiteralFixtures.h">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\ContractTestSupport.h">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\NativeProcessGroup.ps1">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\Run-NrContracts.ps1">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\Test-NrContractsInfrastructure.ps1">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\nr_contract_codec_budgets.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\nr_contract_corrections.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\nr_contract_evidence.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\nr_contract_known_unknown.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\nr_contract_roots.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\contracts\nr_contract_schema_identity.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\IdentityTestSupport.h">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\Run-NrIdentity.ps1">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\nr_identity_mutations.json">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\nr_identity_t07.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\nr_identity_t08.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\nr_identity_t09.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\identity\nr_identity_final_seal.cpp">
+      <Filter>Other</Filter>
+    </None>
+    <None Include="..\tests\nr\finalizer\finalizer_fixture.h"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\t27_exactly_once.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\t28_no_present_cycle.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\t29_post_submit_failure.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\pre_fg_adapter.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\concurrent_finalization.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\Run-NrFinalizer.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\verify_finalizer.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\finalizer\finalizer_inventory.json">
+      <Filter>Other</Filter>
+    </None>
     <None Include="Source.def">
       <Filter>Source Files</Filter>
     </None>
     <None Include="shaders\magnifier\precompile\Magnifier_Shader_Vk.spv" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="nr\context\CapabilityQualification.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\ContextBuilder.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\ContextMetadata.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\RepresentationLineage.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\RepresentationCacheKeys.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\PreparedViewValidation.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\RepresentationPlanner.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\EvidenceQualification.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\context\SemanticMath.h"><Filter>Header Files</Filter></ClInclude>
+    <None Include="..\tests\nr\context\ContextFixtureStore.h"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\ctx_analytic_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\ctx_evidence_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\ctx_metadata_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\ctx_context_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\ctx_capability_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\ctx_stack_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\Run-NrContext.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\RepresentationFixture.h"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\lineage_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\cache_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\prepared_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\planner_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\Run-NrRepresentations.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\representation_inventory.json"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\representations\verify_representations.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\consumption_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\feed\nr_feed_observation_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\feed\nr_feed_shadow_contract.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\feed\Run-NrFeed.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\feed\verify_feed.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\feed\feed_inventory.json"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\gpu_lease_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\guide_lease_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\provider_lease_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\Run-NrConsumption.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\consumption_inventory.json"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\lifecycle\verify_consumption.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\context_inventory.json"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\context\verify_context.py"><Filter>Other</Filter></None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="nr\orchestration\RoutingTypes.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\orchestration\RoutingRules.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\orchestration\RoutingSelector.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\orchestration\RoutingSerialization.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\orchestration\RoutingPublication.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\orchestration\LegacyShadowComparison.h"><Filter>Header Files</Filter></ClInclude>
+    <ClCompile Include="nr\orchestration\RoutingCore.cpp"><Filter>Source Files</Filter></ClCompile>
+    <None Include="..\tests\nr\orchestration\RoutingFixture.h"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\orchestration\routing_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\orchestration\routing_replay_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\orchestration\routing_publication_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\orchestration\Run-NrRouting.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\orchestration\verify_routing.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\orchestration\routing_inventory.json"><Filter>Other</Filter></None>
+    <ClInclude Include="nr\protocol\ProfileTypes.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\ProfileRegistry.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\ProfileQualification.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\ProfileCertificate.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\RecipeTypes.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\BindingPlan.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\NrExecutionRecipe.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\RecipeSerialization.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\RecipePublication.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\LegacyNativeProfileAdapter.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="nr\protocol\LegacySettingsProjection.h"><Filter>Header Files</Filter></ClInclude>
+    <ClCompile Include="nr\protocol\ProtocolCore.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="nr\lifecycle\FinalizationCore.cpp"><Filter>Source Files</Filter></ClCompile>
+    <None Include="..\tests\nr\protocol\profile_registry_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\profile_requirements_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\recipe_freshness_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\transform_lineage_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\profile_settings_tests.cpp"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\Run-NrProtocol.ps1"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\verify_protocol.py"><Filter>Other</Filter></None>
+    <None Include="..\tests\nr\protocol\protocol_inventory.json"><Filter>Other</Filter></None>
+  </ItemGroup>
+<ItemGroup>
+<ClInclude Include="nr\diagnostics\capability\CapabilityContract.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityInternal.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityQuery.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityRegistry.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityStaging.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityStore.h"><Filter>Header Files</Filter></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityQuery.cpp"><Filter>Source Files</Filter></ClCompile>
+<ClCompile Include="nr\diagnostics\capability\CapabilityStaging.cpp"><Filter>Source Files</Filter></ClCompile>
+<ClCompile Include="nr\diagnostics\capability\CapabilityStore.cpp"><Filter>Source Files</Filter></ClCompile>
+</ItemGroup>
+<ItemGroup>
+<ClCompile Include="nr\diagnostics\capability\CapabilityOwnerAdapters.cpp"><Filter>Source Files</Filter></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityOwnerAdapters.h"><Filter>Header Files</Filter></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityStatusCollector.cpp"><Filter>Source Files</Filter></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityStatusCollector.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityRefresh.h"><Filter>Header Files</Filter></ClInclude>
+</ItemGroup>
+<ItemGroup>
+<ClInclude Include="nr\diagnostics\capability\CapabilityNgxObservation.h"><Filter>Header Files</Filter></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityNgxObservation.cpp"><Filter>Source Files</Filter></ClCompile>
+</ItemGroup>
+<ItemGroup>
+<ClInclude Include="nr\diagnostics\capability\CapabilityConsumerView.h"></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityExport.cpp"></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityExport.h"></ClInclude>
+<ClInclude Include="nr\diagnostics\capability\CapabilityWireSchema.h"></ClInclude>
+<ClCompile Include="nr\diagnostics\capability\CapabilityWireValidation.cpp"></ClCompile>
+<ClInclude Include="nr\diagnostics\capability\CapabilityWireValidation.h"></ClInclude>
+</ItemGroup>
+<ItemGroup>
+<ClCompile Include="mfg\ExperimentalMfgRuntime.cpp"><Filter>Source Files</Filter></ClCompile>
+<ClInclude Include="mfg\ExperimentalMfgRuntime.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="mfg\ExperimentalMfgPolicy.h"><Filter>Header Files</Filter></ClInclude>
+<ClInclude Include="mfg\ExperimentalMfgSession.h"><Filter>Header Files</Filter></ClInclude>
+</ItemGroup>
 </Project>

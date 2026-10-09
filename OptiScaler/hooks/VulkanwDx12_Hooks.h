@@ -863,6 +863,10 @@ class Vulkan_wDx12
 #pragma endregion
 
   public:
+#if defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+    static LONG DiagnosticInstallStatus();
+#endif
+    static bool IsSubmitHookAddress(PFN_vkVoidFunction address);
     inline static vk_state::CommandBufferStateTracker cmdBufferStateTracker;
 
     // Queue Hooking

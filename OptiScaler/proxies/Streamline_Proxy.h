@@ -525,15 +525,15 @@ class StreamlineProxy
         switch (type)
         {
         case sl::LogType::eInfo:
-            spdlog::info("SL Log: {:.{}s}", msg, len);
+            LOG_WHILE_ACTIVE(info, "SL Log: {:.{}s}", msg, len);
             return;
 
         case sl::LogType::eWarn:
-            spdlog::warn("SL Log: {:.{}s}", msg, len);
+            LOG_WHILE_ACTIVE(warn, "SL Log: {:.{}s}", msg, len);
             return;
 
         default:
-            spdlog::error("SL Log: {:.{}s}", msg, len);
+            LOG_WHILE_ACTIVE(error, "SL Log: {:.{}s}", msg, len);
             return;
         }
     }

@@ -1,4 +1,7 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/FsrObservationAdapter.h>
+// NR-FEED-001 END
 #include "FSR2_Dx12.h"
 
 #include "Util.h"
@@ -358,6 +361,9 @@ static std::optional<float> GetQualityOverrideRatioFfx(const Fsr212::FfxFsr2Qual
 static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Dx12(Fsr212::FfxFsr2Context* context,
                                                       Fsr212::FfxFsr2ContextDescription* contextDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(contextDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     if (contextDescription == nullptr || contextDescription->device == nullptr)
@@ -382,6 +388,9 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Dx12(Fsr212::FfxFsr2Context* co
     }
 
     // check for d3d12 device
+    // NR-FEED-001 BEGIN
+    feedCreation.Publish({"FSR2", Neurotic::Contracts::GraphicsApi::D3D12, "create"}, context);
+    // NR-FEED-001 END
     // to prevent crashes when game is using custom interface and
     if (_d3d12Device == nullptr)
     {
@@ -447,6 +456,9 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Dx12(Fsr212::FfxFsr2Context* co
 static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Pattern_Dx12(Fsr212::FfxFsr2Context* context,
                                                               Fsr212::FfxFsr2ContextDescription* contextDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::FsrCreationSnapshot feedCreation(contextDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     if (contextDescription == nullptr || contextDescription->device == nullptr)
@@ -471,6 +483,9 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Pattern_Dx12(Fsr212::FfxFsr2Con
     }
 
     // check for d3d12 device
+    // NR-FEED-001 BEGIN
+    feedCreation.Publish({"FSR2", Neurotic::Contracts::GraphicsApi::D3D12, "create-pattern"}, context);
+    // NR-FEED-001 END
     // to prevent crashes when game is using custom interface and
     if (_d3d12Device == nullptr)
     {
@@ -549,6 +564,10 @@ static Fsr212::FfxErrorCode ffxFsr2ContextDispatch_Dx12(Fsr212::FfxFsr2Context* 
     {
         return ffxFsr20ContextDispatch_Dx12(context, (FfxFsr20DispatchDescription*) dispatchDescription);
     }
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR2", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch"}, context);
+    Neurotic::Feed::ObserveFsrDispatch(feedObservation, dispatchDescription);
+    // NR-FEED-001 END
 
     // Skip OptiScaler stuff
     if (!Config::Instance()->UseFsr2Inputs.value_or_default())
@@ -564,6 +583,9 @@ static Fsr212::FfxErrorCode ffxFsr2ContextDispatch_Dx12(Fsr212::FfxFsr2Context* 
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR2.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(context) && _initParams.contains(context) &&
         !CreateDLSSContext(context, dispatchDescription))
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
@@ -615,6 +637,10 @@ static Fsr212::FfxErrorCode
 ffxFsr2ContextDispatch_Pattern_Dx12(Fsr212::FfxFsr2Context* context,
                                     const Fsr212::FfxFsr2DispatchDescription* dispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR2", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch-pattern"}, context);
+    if (!_skipDispatch) Neurotic::Feed::ObserveFsrDispatch(feedObservation, dispatchDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     // Skip OptiScaler stuff
@@ -628,6 +654,9 @@ ffxFsr2ContextDispatch_Pattern_Dx12(Fsr212::FfxFsr2Context* context,
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR2.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(context) && _initParams.contains(context) &&
         !CreateDLSSContext(context, dispatchDescription))
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
@@ -679,6 +708,10 @@ ffxFsr2ContextDispatch_Pattern_Dx12(Fsr212::FfxFsr2Context* context,
 static Fsr212::FfxErrorCode ffxFsr20ContextDispatch_Dx12(Fsr212::FfxFsr2Context* context,
                                                          const FfxFsr20DispatchDescription* dispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR2.0", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch"}, context);
+    Neurotic::Feed::ObserveFsrDispatch(feedObservation, dispatchDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     // Skip OptiScaler stuff
@@ -695,6 +728,9 @@ static Fsr212::FfxErrorCode ffxFsr20ContextDispatch_Dx12(Fsr212::FfxFsr2Context*
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR2.0.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(context) && _initParams.contains(context) &&
         !CreateDLSSContext20(context, dispatchDescription))
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
@@ -750,6 +786,10 @@ static Fsr212::FfxErrorCode ffxFsr20ContextDispatch_Dx12(Fsr212::FfxFsr2Context*
 static Fsr212::FfxErrorCode ffxFsr20ContextDispatch_Pattern_Dx12(Fsr212::FfxFsr2Context* context,
                                                                  const FfxFsr20DispatchDescription* dispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR2.0", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch-pattern"}, context);
+    if (!_skipDispatch) Neurotic::Feed::ObserveFsrDispatch(feedObservation, dispatchDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     // Skip OptiScaler stuff
@@ -763,6 +803,9 @@ static Fsr212::FfxErrorCode ffxFsr20ContextDispatch_Pattern_Dx12(Fsr212::FfxFsr2
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR2.0.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(context) && _initParams.contains(context) &&
         !CreateDLSSContext20(context, dispatchDescription))
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
@@ -814,6 +857,10 @@ static Fsr212::FfxErrorCode ffxFsr20ContextDispatch_Pattern_Dx12(Fsr212::FfxFsr2
 static Fsr212::FfxErrorCode ffxFsr2TinyContextDispatch_Dx12(Fsr212::FfxFsr2Context* context,
                                                             const FfxFsr2TinyDispatchDescription* dispatchDescription)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"FSR2.Tiny", Neurotic::Contracts::GraphicsApi::D3D12, "dispatch"}, context);
+    Neurotic::Feed::ObserveFsrDispatch(feedObservation, dispatchDescription);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     // Skip OptiScaler stuff
@@ -827,6 +874,9 @@ static Fsr212::FfxErrorCode ffxFsr2TinyContextDispatch_Dx12(Fsr212::FfxFsr2Conte
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;
 
     // If not in contexts list create and add context
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "FSR2.Tiny.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(context) && _initParams.contains(context) &&
         !CreateDLSSContextTiny(context, dispatchDescription))
         return Fsr212::FFX_ERROR_INVALID_ARGUMENT;

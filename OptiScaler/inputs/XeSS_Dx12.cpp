@@ -1,4 +1,7 @@
 #include "pch.h"
+// NR-FEED-001 BEGIN
+#include <inputs/universal_feeder/providers/XessObservationAdapter.h>
+// NR-FEED-001 END
 #include "XeSS_Dx12.h"
 
 #include "NVNGX_Parameter.h"
@@ -153,6 +156,10 @@ xess_result_t hk_xessD3D12Init(xess_context_handle_t hContext, const xess_d3d12_
     ip.visibleNodeMask = pInitParams->visibleNodeMask;
 
     _d3d12InitParams[hContext] = ip;
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedInit({"XeSS", Neurotic::Contracts::GraphicsApi::D3D12, "init"}, hContext);
+    Neurotic::Feed::ObserveXessInit(feedInit, pInitParams);
+    // NR-FEED-001 END
 
     if (!_contexts.contains(hContext))
         return XESS_RESULT_SUCCESS;
@@ -166,11 +173,18 @@ xess_result_t hk_xessD3D12Init(xess_context_handle_t hContext, const xess_d3d12_
 xess_result_t hk_xessD3D12Execute(xess_context_handle_t hContext, ID3D12GraphicsCommandList* pCommandList,
                                   const xess_d3d12_execute_params_t* pExecParams)
 {
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::Callback feedObservation({"XeSS", Neurotic::Contracts::GraphicsApi::D3D12, "execute"}, hContext);
+    Neurotic::Feed::ObserveXessExecute(feedObservation, pExecParams);
+    // NR-FEED-001 END
     LOG_DEBUG("");
 
     if (pCommandList == nullptr)
         return XESS_RESULT_ERROR_INVALID_ARGUMENT;
 
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::TranslationScope feedTranslation(feedObservation, "XeSS.to.NGX");
+    // NR-FEED-001 END
     if (!_contexts.contains(hContext) && !CreateDLSSContext(hContext, pCommandList, pExecParams))
         return XESS_RESULT_ERROR_UNKNOWN;
 
@@ -212,6 +226,9 @@ xess_result_t hk_xessD3D12Execute(xess_context_handle_t hContext, ID3D12Graphics
         jitterScaleY = scales->y;
     }
 
+    // NR-FEED-001 BEGIN
+    Neurotic::Feed::ObserveXessJitterTransform(feedObservation, pExecParams, jitterScaleX, jitterScaleY);
+    // NR-FEED-001 END
     params->Set(NVSDK_NGX_Parameter_Jitter_Offset_X, pExecParams->jitterOffsetX * jitterScaleX);
     params->Set(NVSDK_NGX_Parameter_Jitter_Offset_Y, pExecParams->jitterOffsetY * jitterScaleY);
     params->Set(NVSDK_NGX_Parameter_DLSS_Exposure_Scale, pExecParams->exposureScale);

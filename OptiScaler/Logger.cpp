@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Logger.h"
 #include "Config.h"
+#include <atomic>
 #include <iostream>
 
 #include "spdlog/async.h"
@@ -67,6 +68,9 @@ void WaitForEnter()
 
 void PrepareLogger()
 {
+    if (loggerClosed.load(std::memory_order_relaxed))
+        return;
+
     try
     {
         if (spdlog::default_logger() != nullptr)
@@ -178,6 +182,17 @@ void PrepareLogger()
 
 void CloseLogger()
 {
-    spdlog::default_logger()->flush();
-    spdlog::shutdown();
+    if (loggerClosed.exchange(true))
+        return;
+
+    if (auto logger = spdlog::default_logger())
+    {
+        // Driver callbacks can still log after DLL_PROCESS_DETACH starts.
+        // spdlog's free functions use the raw default pointer, so shutdown()
+        // here would invalidate both LOG_* and direct spdlog callers. Keep the
+        // logger/registry alive until CRT teardown, and atomically stop accepting
+        // output without replacing the default pointer under concurrent callers.
+        logger->set_level(spdlog::level::off);
+        logger->flush();
+    }
 }

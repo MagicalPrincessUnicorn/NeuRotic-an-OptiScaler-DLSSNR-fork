@@ -7,10 +7,13 @@
 class DLSSDFeatureDx12 : public DLSSDFeature, public IFeature_Dx12
 {
   private:
+    Neurotic::Runtime::ProviderReleaseGate _providerRelease;
   protected:
     bool InitDLSSD(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters);
 
   public:
+    NVSDK_NGX_Result ReleaseProvider() override;
+    bool ProviderReleaseQuarantined() const override { return _providerRelease.Quarantined(); }
     bool InitInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
     bool EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
 

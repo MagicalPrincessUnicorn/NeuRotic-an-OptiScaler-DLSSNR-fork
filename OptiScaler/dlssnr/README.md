@@ -48,7 +48,7 @@ experiment.
 | `DlssNrFeature_Dx12.h` | the namespace-level API the menu and the call sites use |
 | `DlssNr_Menu.cpp` | the settings panel |
 | `DlssNr_Capture.h` | matched before/after frame dumps |
-| `DlssNr_Proxy.h/.cpp` | the experiment in reaching the model through the driver core instead of the forwarder; see `FORWARDER_INVESTIGATION.md` |
+| `DlssNr_Proxy.h/.cpp` | the experiment in reaching the model through the driver core instead of the forwarder; see `FORWARDER.md` |
 | `forwarder/` | the caller-gate shim, built by `dlssnr_forwarder.vcxproj` into the release layout |
 | `shaders/dlssnr/DlssNr_Dx12.h/.cpp` | the pass: forwarder loading, feature lifetime, the evaluate path, encode/resolve orchestration, capture |
 | `shaders/dlssnr/DlssNr_Common.h` | the constant buffer, shared by the host and the shader |

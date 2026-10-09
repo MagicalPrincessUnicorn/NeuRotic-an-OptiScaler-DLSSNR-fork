@@ -89,11 +89,13 @@ inline bool WriteMarker(bool active)
 
 inline void DisableInMemory(Config& config)
 {
+    NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
     config.DlssNrExperimentalMode = false;
     config.DlssNrOverrideMultipassGuardrails = false;
     config.DlssNrOverrideHdrGuardrails = false;
     config.DlssNrOverrideFgGuardrails = false;
     config.DlssNrPreSrSoftReset = false;
+    config.DlssNrPreparedDepth = false;
     ExperimentalPolicy::Changed();
 }
 
@@ -111,7 +113,7 @@ inline void Initialize(Config* config)
         if (unclean)
         {
             DisableInMemory(*config);
-            config->SaveExperimentalSettings(false, false, false, false, false);
+            config->SaveExperimentalSettings(false, false, false, false);
             Detail::WriteMarker(false);
             Detail::recoveredUnclean.store(true, std::memory_order_release);
         }
@@ -120,10 +122,10 @@ inline void Initialize(Config* config)
             DisableInMemory(*config);
             Detail::concurrentOwner.store(true, std::memory_order_release);
         }
-        else if (config->DlssNrExperimentalMode.value_or_default() && !Detail::WriteMarker(true))
+        else if (ExperimentalPolicy::Requested(*config) && !Detail::WriteMarker(true))
         {
             DisableInMemory(*config);
-            config->SaveExperimentalSettings(false, false, false, false, false);
+            config->SaveExperimentalSettings(false, false, false, false);
             Detail::markerUnavailable.store(true, std::memory_order_release);
         }
         ExperimentalPolicy::SessionReady.store(true, std::memory_order_release);
@@ -132,21 +134,22 @@ inline void Initialize(Config* config)
 
 inline bool Applied(Config& config)
 {
-    const bool requested = config.DlssNrExperimentalMode.value_or_default();
+    const bool requested = ExperimentalPolicy::Requested(config);
     Initialize(&config);
-    if (requested && !config.DlssNrExperimentalMode.value_or_default()) return false;
-    if (config.DlssNrExperimentalMode.value_or_default())
+    if (requested && !ExperimentalPolicy::Requested(config)) return false;
+    if (ExperimentalPolicy::Requested(config))
     {
         if (!Detail::WriteMarker(true))
         {
             DisableInMemory(config);
-            config.SaveExperimentalSettings(false, false, false, false, false);
+            config.SaveExperimentalSettings(false, false, false, false);
             Detail::markerUnavailable.store(true, std::memory_order_release);
             return false;
         }
     }
     else
         Detail::WriteMarker(false);
+    ExperimentalPolicy::SessionReady.store(true, std::memory_order_release);
     ExperimentalPolicy::Changed();
     return true;
 }

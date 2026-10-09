@@ -1,0 +1,82 @@
+{
+  "work_id": "NR-WO-0029 / NR-WO-0028",
+  "human_authority": {
+    "thread": "01a116a6-5366-79b1-981c-bc00b7982982",
+    "turn": "01a11cff-dec6-79a1-bede-ee8127b2eb96",
+    "message": "01a11cff-df64-7761-afec-31a5e2d21dba",
+    "instruction": "End-to-end adversarial latest build review, fix major issues, batch minor issues, deliver local end-user candidate; complete-language remediation explicitly included by 00."
+  },
+  "source_snapshot": "8eee9134ec23",
+  "handoff_archive_sha256": "bf6acbddaf30897a634bf7d1180ae9afb912c21c3e797be9344b667b03977d35",
+  "handoff_report_sha256": "24e636f486b50ee5214301223dca7538a6843546ac26536fed068785e62b365d",
+  "canonical_english_sha256": "04bc3168f76c3359f940c25cdaca6dc5069a58e9d19ca8397bdbf8212dc3a55f",
+  "prior_source_receipt_sha256": "3dec74dda9e819d87f290124852baec87d484bf27968ba6ae790efb5edd949e7",
+  "files": [
+    {
+      "locale": "zh-CN",
+      "file": "zh-CN.nrlang",
+      "sha256": "4d1c0d23c55bcfafe767a164754ca76e28eeba49c9282170fa9e64e9abcb80f0",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "ru",
+      "file": "ru.nrlang",
+      "sha256": "e69aee7151f0de29a6db6d12754de601cf6b7f816dcd3468ba1310147e7ef758",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "es",
+      "file": "es.nrlang",
+      "sha256": "9746073b82706542b38c956dc59f93cfe7d04f0b063ff2c6864494c1831fc688",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "pt-BR",
+      "file": "pt-BR.nrlang",
+      "sha256": "a0eedeed26801cfe8322668b9e04126898c0f03582f5781a3d3c7774c1653e06",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "de",
+      "file": "de.nrlang",
+      "sha256": "b51ce34fb32d0ca2a4b8c4dc136989b078ec1b211169c92c7a7a62f1def4c97a",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "ja",
+      "file": "ja.nrlang",
+      "sha256": "bbf75377e3e79126763cc3696144b943edfcae7fa7660396b383e15a19ae4b73",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "fr",
+      "file": "fr.nrlang",
+      "sha256": "3e948df5769a8c62423d59b002007ed5c3c573b157d9c14dbc99a28749319f84",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "pl",
+      "file": "pl.nrlang",
+      "sha256": "15fdb57adc33b25185daf6746aa25e0e913f651e835748435ca97cf6ca10fb8b",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    },
+    {
+      "locale": "ko",
+      "file": "ko.nrlang",
+      "sha256": "2dada0c140493a84d62eb88c962566ce474e85fc690758d96389e6a5e7ce469c",
+      "checkpoint_supplied": 4016,
+      "missing_from_checkpoint": 0
+    }
+  ],
+  "provenance": "Complete nonempty supplied handoff values by stable canonical IDs; prior machine-input order/unchanged metadata retained. Korean added. Unchanged real generator; browser/Word returns excluded.",
+  "quality": "Runtime packs revision0 unreviewed machine drafts. Canonical source-template revisions are metadata. Supplied English-identical rows are distinct from missing rows; native validation/fit and native-speaker quality are separate.",
+  "assembly": "Stable included IDs; no product/user files or Active selection written by staging. All nine included packs cover4016IDs."
+}

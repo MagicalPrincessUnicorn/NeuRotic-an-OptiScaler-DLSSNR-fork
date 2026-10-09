@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <vector>			// Vector for storing notifications list
 #include <string>
 #include <chrono>			// For the notifications timed dissmiss
@@ -477,6 +478,8 @@ public:
 namespace ImGui
 {
     inline std::vector<ImGuiToast> notifications;
+    inline std::mutex pendingNotificationsMutex;
+    inline std::vector<ImGuiToast> pendingNotifications;
 
     /**
      * Inserts a new notification into the notification queue.
@@ -484,7 +487,8 @@ namespace ImGui
      */
     inline void InsertNotification(const ImGuiToast& toast)
     {
-        notifications.push_back(toast);
+        std::scoped_lock lock(pendingNotificationsMutex);
+        pendingNotifications.push_back(toast);
     }
 
     /**
@@ -504,6 +508,12 @@ namespace ImGui
      */
     inline void RenderNotifications(ImGuiToastPos toastPos, float scale, bool toneMap = false)
     {
+        // Only this render owner mutates notifications or holds pointers into it.
+        {
+            std::vector<ImGuiToast> incoming;
+            { std::scoped_lock lock(pendingNotificationsMutex); incoming.swap(pendingNotifications); }
+            notifications.insert(notifications.end(), incoming.begin(), incoming.end());
+        }
         const ImVec2 mainWindowPos = GetMainViewport()->Pos;
         const ImVec2 mainWindowSize = GetMainViewport()->Size;
 

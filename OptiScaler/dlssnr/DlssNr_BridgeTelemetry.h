@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include "NrBridgeOutcome.h"
 
 namespace DlssNr
 {
@@ -35,6 +36,7 @@ struct BridgeTelemetrySnapshot
     std::uint64_t modelEvaluations = 0;
     std::uint64_t compositions = 0;
     std::uint64_t copyBacks = 0;
+    Bridge::Receipt receipt {};
 };
 
 class BridgeTelemetryTracker
@@ -43,9 +45,12 @@ class BridgeTelemetryTracker
     void Begin(bool configAvailable, bool enabled, bool nativeRoute, bool lifecycleOpen, bool hasInputs,
                const char* lifecycleReason = "")
     {
+        try
+        {
         std::lock_guard<std::mutex> lock(_mutex);
         _state.observed = true;
         ++_state.handoffs;
+        _state.receipt={};
         _state.eligible = configAvailable && enabled && nativeRoute && lifecycleOpen && hasInputs;
         if (!configAvailable)
             Set(BridgeStage::ConfigSnapshotFailed, "configuration snapshot could not be captured");
@@ -61,6 +66,9 @@ class BridgeTelemetryTracker
             Set(BridgeStage::MissingInputResource, "a required shared D3D12 input resource is missing");
         else
             Set(BridgeStage::AwaitingModel, "waiting for model creation or evaluation");
+
+        }
+        catch (...) {} // diagnostics cannot change admission/publication/retirement
     }
 
     void RecordNr(std::uint64_t buildsBefore, std::uint64_t buildsAfter,
@@ -68,6 +76,8 @@ class BridgeTelemetryTracker
                   std::uint64_t compositionsBefore, std::uint64_t compositionsAfter,
                   const char* failureReason = "")
     {
+        try
+        {
         std::lock_guard<std::mutex> lock(_mutex);
         if (!_state.eligible)
             return;
@@ -85,26 +95,75 @@ class BridgeTelemetryTracker
             Set(BridgeStage::ModelCreated, "model created; waiting for its first evaluation");
         else if (failureReason != nullptr && failureReason[0] != 0)
             Set(BridgeStage::AwaitingModel, failureReason);
+
+        }
+        catch (...) {} // diagnostics cannot change admission/publication/retirement
+    }
+
+    void ObserveOutcome(const Bridge::Receipt& receipt)
+    {
+        try
+        {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _state.receipt=receipt;
+        if (!receipt.accepted)
+        {
+            _state.eligible=false;
+            Set(BridgeStage::MissingInputResource,"current bridge attempt did not admit shared resources");
+            return;
+        }
+        if (!_state.eligible) return;
+        _state.modelCreations+=receipt.nrModelCreated;
+        _state.modelEvaluations+=receipt.nrEvaluated;
+        _state.compositions+=receipt.nrComposed;
+        _state.copyBacks+=receipt.delivered;
+        if (receipt.failed)
+        {
+            if (_state.stage!=BridgeStage::CommandListCloseFailed && _state.stage!=BridgeStage::SubmissionFailed)
+                Set(BridgeStage::CopyBackFailed, receipt.originalPreserved ?
+                    "bridge attempt refused before original output was written" :
+                    "bridge attempt failed after possible output effects; retirement remains required");
+        }
+        else if (receipt.nrComposed && receipt.delivered)
+            Set(BridgeStage::CopyBackComplete,"NR composition recorded and D3D11 delivery queued; GPU completion pending");
+        else if (receipt.nrComposed) Set(BridgeStage::Composed,"NR composition recorded on this attempt");
+        else if (receipt.nrEvaluated) Set(BridgeStage::Evaluated,"model evaluated on this attempt");
+        else if (receipt.nrModelCreated) Set(BridgeStage::ModelCreated,"model created on this attempt");
+
+        }
+        catch (...) {} // diagnostics cannot change admission/publication/retirement
     }
 
     void CommandListClosed(bool success)
     {
+        try
+        {
         if (success) return;
         std::lock_guard<std::mutex> lock(_mutex);
         if (_state.eligible)
             Set(BridgeStage::CommandListCloseFailed, "the bridge command list could not close");
+
+        }
+        catch (...) {} // diagnostics cannot change admission/publication/retirement
     }
 
     void Submitted(bool success)
     {
+        try
+        {
         if (success) return;
         std::lock_guard<std::mutex> lock(_mutex);
         if (_state.eligible)
             Set(BridgeStage::SubmissionFailed, "the bridge command list could not be submitted");
+
+        }
+        catch (...) {} // diagnostics cannot change admission/publication/retirement
     }
 
     void CopyBack(bool success)
     {
+        try
+        {
         std::lock_guard<std::mutex> lock(_mutex);
         if (!_state.eligible)
             return;
@@ -116,6 +175,9 @@ class BridgeTelemetryTracker
             if (_state.stage == BridgeStage::Composed)
                 Set(BridgeStage::CopyBackComplete, "model evaluation and composition completed before copy-back");
         }
+
+        }
+        catch (...) {} // diagnostics cannot change admission/publication/retirement
     }
 
     BridgeTelemetrySnapshot Snapshot() const

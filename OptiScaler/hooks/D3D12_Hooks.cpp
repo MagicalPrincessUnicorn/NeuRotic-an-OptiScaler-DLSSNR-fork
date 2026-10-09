@@ -1,6 +1,9 @@
 #include "pch.h"
+#include <dlssnr/NativeD3D12Guides.h>
 #include "D3D12_Hooks.h"
+#include <nr/d3d12/NativeRecordingHooks.h>
 #include <dlssnr/DredDiagnostics.h>
+#include <dlssnr/NrGpuSafety.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 
 #include <Util.h>
@@ -14,6 +17,7 @@
 #include <proxies/XeFG_Proxy.h>
 #include <proxies/XeSS_Proxy.h>
 #include <proxies/IGDExt_Proxy.h>
+#include "../nr/diagnostics/candidate/CreateValue.h"
 #include <proxies/Streamline_Proxy.h>
 #include <proxies/KernelBase_Proxy.h>
 
@@ -23,6 +27,11 @@
 #include <misc/IdentifyGpu.h>
 
 #include "Hook_Utils.h"
+
+// Retain the single owner/installation for process lifetime. Revocation keeps
+// pinned callbacks and executable original paths valid until process exit.
+static auto& s_nativeRecordingObserver = *new Neurotic::D3D12::NativeRecordingObserver;
+static auto& s_nativeRecordingHooks = *new Neurotic::D3D12::NativeRecordingHooks(s_nativeRecordingObserver);
 
 #pragma intrinsic(_ReturnAddress)
 
@@ -68,7 +77,6 @@ static LUID _lastAdapterLuid = {};
 // Common
 using PFN_SetDescriptorHeaps = rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetDescriptorHeaps)>::type;
 using PFN_SetPipelineState = rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetPipelineState)>::type;
-
 // ComputeRoot
 using PFN_SetComputeRootSignature =
     rewrite_signature<decltype(&ID3D12GraphicsCommandList::SetComputeRootSignature)>::type;
@@ -186,6 +194,11 @@ static RootRestoreHook<PFN_SetGraphicsRootConstantBufferView> s_SetGraphicsRootC
 static RootRestoreHook<PFN_SetGraphicsRootShaderResourceView> s_SetGraphicsRootShaderResourceView {};
 static RootRestoreHook<PFN_SetGraphicsRootUnorderedAccessView> s_SetGraphicsRootUnorderedAccessView {};
 
+static Neurotic::D3D12::NativeRecordingState::OriginalSetters NativeOriginalSetters()
+{
+    return s_nativeRecordingHooks.Originals();
+}
+
 static thread_local bool lateInProgressSetDescriptorHeaps = false;
 static thread_local bool lateInProgressSetPipelineState = false;
 
@@ -209,6 +222,12 @@ static std::shared_mutex rootSigParameterCountMutex;
 static ankerl::unordered_dense::map<ID3D12RootSignature*, UINT> rootSigParameterCount;
 
 static bool isUpscalerActive = false;
+static thread_local unsigned legacyCaptureSuppressionDepth = 0;
+D3D12Hooks::ScopedLegacyCaptureSuppression::ScopedLegacyCaptureSuppression() noexcept
+{ ++legacyCaptureSuppressionDepth; }
+D3D12Hooks::ScopedLegacyCaptureSuppression::~ScopedLegacyCaptureSuppression()
+{ --legacyCaptureSuppressionDepth; }
+bool D3D12Hooks::LegacyCaptureSuppressed() noexcept { return legacyCaptureSuppressionDepth != 0; }
 
 // Intel Atomic Extension
 struct UE_D3D12_RESOURCE_DESC
@@ -381,7 +400,7 @@ static void ApplySamplerOverrides(D3D12_STATIC_SAMPLER_DESC1& samplerDesc)
 VALIDATE_HOOK(hkSetPipelineState, PFN_SetPipelineState)
 static void hkSetPipelineState(ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pPipelineState)
 {
-    if (!lateInProgressSetPipelineState && !isUpscalerActive && commandList != nullptr && pPipelineState != nullptr)
+    if (!lateInProgressSetPipelineState && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pPipelineState != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(pipelineStatesMutex);
         pipelineStates.insert_or_assign(commandList, pPipelineState);
@@ -394,7 +413,7 @@ VALIDATE_HOOK(hkSetDescriptorHeaps, PFN_SetDescriptorHeaps)
 static void hkSetDescriptorHeaps(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
                                  ID3D12DescriptorHeap* const* ppDescriptorHeaps)
 {
-    if (!lateInProgressSetDescriptorHeaps && !isUpscalerActive && commandList != nullptr &&
+    if (!lateInProgressSetDescriptorHeaps && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr &&
         ppDescriptorHeaps != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
@@ -421,7 +440,7 @@ VALIDATE_HOOK(hkSetComputeRootSignature, PFN_SetComputeRootSignature)
 static void hkSetComputeRootSignature(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
     if (!lateInProgressSetComputeRootSignature && Config::Instance()->RestoreComputeSignature.value_or_default() &&
-        !isUpscalerActive && commandList != nullptr && pRootSignature != nullptr)
+        !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pRootSignature != nullptr)
     {
         {
             auto paramCount = GetRootParameterCount(pRootSignature);
@@ -441,7 +460,7 @@ VALIDATE_HOOK(hkSetComputeRootDescriptorTable, PFN_SetComputeRootDescriptorTable
 static void hkSetComputeRootDescriptorTable(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                             D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
-    if (!lateInProgressSetComputeRootDescriptorTable && !isUpscalerActive && commandList != nullptr &&
+    if (!lateInProgressSetComputeRootDescriptorTable && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr &&
         BaseDescriptor.ptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
@@ -460,7 +479,7 @@ VALIDATE_HOOK(hkSetComputeRoot32BitConstants, PFN_SetComputeRoot32BitConstants)
 static void hkSetComputeRoot32BitConstants(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                            UINT Num32BitValuesToSet, const void* pSrcData, UINT DestOffsetIn32BitValues)
 {
-    if (!lateInProgressSetComputeRoot32BitConstants && !isUpscalerActive && commandList != nullptr && pSrcData)
+    if (!lateInProgressSetComputeRoot32BitConstants && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pSrcData)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -482,7 +501,7 @@ VALIDATE_HOOK(hkSetComputeRoot32BitConstant, PFN_SetComputeRoot32BitConstant)
 static void hkSetComputeRoot32BitConstant(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex, UINT SrcData,
                                           UINT DestOffsetIn32BitValues)
 {
-    if (!lateInProgressSetComputeRoot32BitConstant && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetComputeRoot32BitConstant && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -501,7 +520,7 @@ VALIDATE_HOOK(hkSetComputeRootConstantBufferView, PFN_SetComputeRootConstantBuff
 static void hkSetComputeRootConstantBufferView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (!lateInProgressSetComputeRootConstantBufferView && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetComputeRootConstantBufferView && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -519,7 +538,7 @@ VALIDATE_HOOK(hkSetComputeRootShaderResourceView, PFN_SetComputeRootShaderResour
 static void hkSetComputeRootShaderResourceView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (!lateInProgressSetComputeRootShaderResourceView && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetComputeRootShaderResourceView && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -539,7 +558,7 @@ VALIDATE_HOOK(hkSetComputeRootUnorderedAccessView, PFN_SetComputeRootUnorderedAc
 static void hkSetComputeRootUnorderedAccessView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                 D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (lateInProgressSetComputeRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
+    if (lateInProgressSetComputeRootUnorderedAccessView && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -557,7 +576,7 @@ VALIDATE_HOOK(hkSetGraphicsRootSignature, PFN_SetGraphicsRootSignature)
 static void hkSetGraphicsRootSignature(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
     if (!lateInProgressSetGraphicsRootSignature && Config::Instance()->RestoreGraphicSignature.value_or_default() &&
-        !isUpscalerActive && commandList != nullptr && pRootSignature != nullptr)
+        !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pRootSignature != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootSignatureMutex);
         signatures.insert_or_assign(commandList, SignatureEntry { SignatureEntryType::Graphics, pRootSignature });
@@ -570,7 +589,7 @@ VALIDATE_HOOK(hkSetGraphicsRootDescriptorTable, PFN_SetGraphicsRootDescriptorTab
 static void hkSetGraphicsRootDescriptorTable(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                              D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
-    if (!lateInProgressSetGraphicsRootDescriptorTable && !isUpscalerActive && commandList != nullptr &&
+    if (!lateInProgressSetGraphicsRootDescriptorTable && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr &&
         BaseDescriptor.ptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
@@ -590,7 +609,7 @@ static void hkSetGraphicsRoot32BitConstants(ID3D12GraphicsCommandList* commandLi
                                             UINT Num32BitValuesToSet, const void* pSrcData,
                                             UINT DestOffsetIn32BitValues)
 {
-    if (!lateInProgressSetGraphicsRoot32BitConstants && !isUpscalerActive && commandList != nullptr && pSrcData)
+    if (!lateInProgressSetGraphicsRoot32BitConstants && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pSrcData)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -612,7 +631,7 @@ VALIDATE_HOOK(hkSetGraphicsRoot32BitConstant, PFN_SetGraphicsRoot32BitConstant)
 static void hkSetGraphicsRoot32BitConstant(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                            UINT SrcData, UINT DestOffsetIn32BitValues)
 {
-    if (!lateInProgressSetGraphicsRoot32BitConstant && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetGraphicsRoot32BitConstant && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -631,7 +650,7 @@ VALIDATE_HOOK(hkSetGraphicsRootConstantBufferView, PFN_SetGraphicsRootConstantBu
 static void hkSetGraphicsRootConstantBufferView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                 D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (!lateInProgressSetGraphicsRootConstantBufferView && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetGraphicsRootConstantBufferView && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -649,7 +668,7 @@ VALIDATE_HOOK(hkSetGraphicsRootShaderResourceView, PFN_SetGraphicsRootShaderReso
 static void hkSetGraphicsRootShaderResourceView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                 D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (!lateInProgressSetGraphicsRootShaderResourceView && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetGraphicsRootShaderResourceView && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -669,7 +688,7 @@ VALIDATE_HOOK(hkSetGraphicsRootUnorderedAccessView, PFN_SetGraphicsRootUnordered
 static void hkSetGraphicsRootUnorderedAccessView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                  D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (lateInProgressSetGraphicsRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
+    if (lateInProgressSetGraphicsRootUnorderedAccessView && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -689,7 +708,7 @@ static void hkSetPipelineStateLate(ID3D12GraphicsCommandList* commandList, ID3D1
 {
     lateInProgressSetPipelineState = true;
 
-    if (!isUpscalerActive && commandList != nullptr && pPipelineState != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pPipelineState != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(pipelineStatesMutex);
         pipelineStates.insert_or_assign(commandList, pPipelineState);
@@ -706,7 +725,7 @@ static void hkSetDescriptorHeapsLate(ID3D12GraphicsCommandList* commandList, UIN
 {
     lateInProgressSetDescriptorHeaps = true;
 
-    if (!isUpscalerActive && commandList != nullptr && ppDescriptorHeaps != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && ppDescriptorHeaps != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(descriptorHeapsMutex);
         DescriptorHeap temp {};
@@ -728,7 +747,7 @@ static void hkSetComputeRootSignatureLate(ID3D12GraphicsCommandList* commandList
 {
     lateInProgressSetComputeRootSignature = true;
 
-    if (Config::Instance()->RestoreComputeSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
+    if (Config::Instance()->RestoreComputeSignature.value_or_default() && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr &&
         pRootSignature != nullptr)
     {
         {
@@ -753,7 +772,7 @@ static void hkSetComputeRootDescriptorTableLate(ID3D12GraphicsCommandList* comma
 {
     lateInProgressSetComputeRootDescriptorTable = true;
 
-    if (!isUpscalerActive && commandList != nullptr && BaseDescriptor.ptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && BaseDescriptor.ptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -776,7 +795,7 @@ static void hkSetComputeRoot32BitConstantsLate(ID3D12GraphicsCommandList* comman
 {
     lateInProgressSetComputeRoot32BitConstants = true;
 
-    if (!isUpscalerActive && commandList != nullptr && pSrcData)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pSrcData)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -802,7 +821,7 @@ static void hkSetComputeRoot32BitConstantLate(ID3D12GraphicsCommandList* command
 {
     lateInProgressSetComputeRoot32BitConstant = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -825,7 +844,7 @@ static void hkSetComputeRootConstantBufferViewLate(ID3D12GraphicsCommandList* co
 {
     lateInProgressSetComputeRootConstantBufferView = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -847,7 +866,7 @@ static void hkSetComputeRootShaderResourceViewLate(ID3D12GraphicsCommandList* co
 {
     lateInProgressSetComputeRootShaderResourceView = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -869,7 +888,7 @@ static void hkSetComputeRootUnorderedAccessViewLate(ID3D12GraphicsCommandList* c
 {
     lateInProgressSetComputeRootUnorderedAccessView = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -890,7 +909,7 @@ static void hkSetGraphicsRootSignatureLate(ID3D12GraphicsCommandList* commandLis
 {
     lateInProgressSetGraphicsRootSignature = true;
 
-    if (Config::Instance()->RestoreGraphicSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
+    if (Config::Instance()->RestoreGraphicSignature.value_or_default() && !isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr &&
         pRootSignature != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootSignatureMutex);
@@ -908,7 +927,7 @@ static void hkSetGraphicsRootDescriptorTableLate(ID3D12GraphicsCommandList* comm
 {
     lateInProgressSetGraphicsRootDescriptorTable = true;
 
-    if (!isUpscalerActive && commandList != nullptr && BaseDescriptor.ptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && BaseDescriptor.ptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -931,7 +950,7 @@ static void hkSetGraphicsRoot32BitConstantsLate(ID3D12GraphicsCommandList* comma
 {
     lateInProgressSetGraphicsRoot32BitConstants = true;
 
-    if (!isUpscalerActive && commandList != nullptr && pSrcData)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr && pSrcData)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -957,7 +976,7 @@ static void hkSetGraphicsRoot32BitConstantLate(ID3D12GraphicsCommandList* comman
 {
     lateInProgressSetGraphicsRoot32BitConstant = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -980,7 +999,7 @@ static void hkSetGraphicsRootConstantBufferViewLate(ID3D12GraphicsCommandList* c
 {
     lateInProgressSetGraphicsRootConstantBufferView = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -1002,7 +1021,7 @@ static void hkSetGraphicsRootShaderResourceViewLate(ID3D12GraphicsCommandList* c
 {
     lateInProgressSetGraphicsRootShaderResourceView = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -1024,7 +1043,7 @@ static void hkSetGraphicsRootUnorderedAccessViewLate(ID3D12GraphicsCommandList* 
 {
     lateInProgressSetGraphicsRootUnorderedAccessView = true;
 
-    if (!isUpscalerActive && commandList != nullptr)
+    if (!isUpscalerActive && !D3D12Hooks::LegacyCaptureSuppressed() && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -1045,8 +1064,10 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
     if (s_SetComputeRootSignature.o_lateHook || s_SetGraphicsRootSignature.o_lateHook)
         return;
 
+
     // Get the vtable pointer
     PVOID* pVTable = *(PVOID**) commandList;
+
 
     const bool restoreComputeSignature = Config::Instance()->RestoreComputeSignature.value_or_default();
     const bool restoreGraphicSignature = Config::Instance()->RestoreGraphicSignature.value_or_default();
@@ -1071,6 +1092,7 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
     {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
+
 
         // Common
         if (extendedRestoreSignature)
@@ -1199,6 +1221,36 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
     }
 }
 
+void D3D12Hooks::InstallNativeRecordingHooks(ID3D12GraphicsCommandList* commandList)
+{
+    // Completion hooks share Close/Reset with the native recording observer.
+    // Finish their installation before native coverage pins executable routes;
+    // the first SR ticket must not replace those routes mid-recording.
+    if (!DlssNr::GpuSafety::PrepareRecordingHooks(commandList))
+    {
+        s_nativeRecordingHooks.Revoke();
+        LOG_WARN("Native recording completion hooks unavailable");
+        return;
+    }
+    // Independent of optional legacy RestoreRoot settings. Installation never
+    // authenticates this in-progress recording: a later real Reset is required.
+    if (!s_nativeRecordingHooks.Install(commandList))
+    {
+        LOG_WARN("Native recording hooks unavailable for this command-list implementation");
+        const auto d=s_nativeRecordingHooks.Diagnostic(commandList);
+        LOG_WARN("Native recording install refusal: reason={} slot={} result={:X} flags={} stage={} "
+                 "attempts={}/{} successes={}/{} list={:X} vtable={:X} installedVtable={:X} "
+                 "expected={:X} observed={:X} target={:X} resetTarget={:X} installedReset={:X} "
+                 "iid={:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+            static_cast<unsigned>(d.firstRefusal),d.failedSlot,static_cast<unsigned>(d.firstResult),d.flags,
+            d.enrollmentStage,d.installAttempts,d.globalInstallAttempts,d.installSuccesses,d.globalInstallSuccesses,
+            d.queriedList,d.queriedVtable,d.installedVtable,d.expectedIdentity,d.observedIdentity,d.patchTarget,
+            d.queriedResetTarget,d.installedResetTarget,d.failedIid.Data1,d.failedIid.Data2,d.failedIid.Data3,
+            d.failedIid.Data4[0],d.failedIid.Data4[1],d.failedIid.Data4[2],d.failedIid.Data4[3],
+            d.failedIid.Data4[4],d.failedIid.Data4[5],d.failedIid.Data4[6],d.failedIid.Data4[7]);
+    }
+}
+
 static void HookToCommandList(ID3D12Device* InDevice)
 {
     if (s_SetComputeRootSignature.o_earlyHook != nullptr || s_SetGraphicsRootSignature.o_earlyHook != nullptr)
@@ -1313,6 +1365,7 @@ static void HookToCommandList(ID3D12Device* InDevice)
 
 static void UnhookAll()
 {
+    s_nativeRecordingHooks.Revoke();
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
 
@@ -1763,6 +1816,7 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
                                          const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riidResource,
                                          void** ppvResource)
 {
+    DlssNr::CandidateObserver::CreationScope observation;
     if (!_skipCommitedResource)
     {
         D3D12_RESOURCE_DESC localDesc = {};
@@ -1780,6 +1834,11 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
             LOG_DEBUG("IGDExtProxy::hkCreateCommittedResource result: {:X}", (UINT) result);
             _skipCommitedResource = false;
 
+            if (observation.ShouldEmit())
+                (void) observation.Emit(DlssNr::CandidateObserver::CreateValue(
+                    false, false, result, device, nullptr, InitialResourceState, riidResource,
+                    nullptr, nullptr, HeapFlags, nullptr, 0));
+
             return result;
         }
     }
@@ -1793,6 +1852,11 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
     if (SUCCEEDED(created) && ppvResource != nullptr)
         DlssNr::ExposureScan::NoteResource(pDesc, (ID3D12Resource*) *ppvResource);
 
+    if (observation.ShouldEmit())
+        (void) observation.Emit(DlssNr::CandidateObserver::CreateValue(
+            false, true, created, device, pDesc, InitialResourceState, riidResource,
+            ppvResource, pHeapProperties, HeapFlags, nullptr, 0));
+
     return created;
 }
 
@@ -1803,6 +1867,7 @@ static HRESULT hkCreatePlacedResource(ID3D12Device* device, ID3D12Heap* pHeap, U
                                       const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState,
                                       const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid, void** ppvResource)
 {
+    DlssNr::CandidateObserver::CreationScope observation;
     if (!skipPlacedResource)
     {
         D3D12_RESOURCE_DESC localDesc = {};
@@ -1818,6 +1883,11 @@ static HRESULT hkCreatePlacedResource(ID3D12Device* device, ID3D12Heap* pHeap, U
             LOG_DEBUG("IGDExtProxy::hkCreatePlacedResource result: {:X}", (UINT) result);
             skipPlacedResource = false;
 
+            if (observation.ShouldEmit())
+                (void) observation.Emit(DlssNr::CandidateObserver::CreateValue(
+                    true, false, result, device, nullptr, InitialState, riid,
+                    nullptr, nullptr, D3D12_HEAP_FLAG_NONE, nullptr, 0));
+
             return result;
         }
     }
@@ -1827,6 +1897,11 @@ static HRESULT hkCreatePlacedResource(ID3D12Device* device, ID3D12Heap* pHeap, U
 
     if (SUCCEEDED(created) && ppvResource != nullptr)
         DlssNr::ExposureScan::NoteResource(pDesc, (ID3D12Resource*) *ppvResource);
+
+    if (observation.ShouldEmit())
+        (void) observation.Emit(DlssNr::CandidateObserver::CreateValue(
+            true, true, created, device, pDesc, InitialState, riid,
+            ppvResource, nullptr, D3D12_HEAP_FLAG_NONE, pHeap, HeapOffset));
 
     return created;
 }
@@ -1947,8 +2022,7 @@ static void hkCreateSampler(ID3D12Device* device, const D3D12_SAMPLER_DESC* pDes
     return o_CreateSampler(device, &newDesc, DestDescriptor);
 }
 
-VALIDATE_HOOK(hkCreateRootSignature, PFN_CreateRootSignature)
-static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const void* pBlobWithRootSignature,
+static HRESULT CreateRootSignatureWithOverrides(ID3D12Device* device, UINT nodeMask, const void* pBlobWithRootSignature,
                                      SIZE_T blobLengthInBytes, REFIID riid, void** ppvRootSignature)
 {
     if (!Config::Instance()->MipmapBiasOverride.has_value() && !Config::Instance()->AnisotropyOverride.has_value() &&
@@ -2103,6 +2177,23 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
     return result;
 }
 
+VALIDATE_HOOK(hkCreateRootSignature, PFN_CreateRootSignature)
+static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const void* blob,
+                                     SIZE_T bytes, REFIID iid, void** output)
+{
+    const auto result = CreateRootSignatureWithOverrides(device, nodeMask, blob, bytes, iid, output);
+    // Inspector can start after the game's root signatures were created, with
+    // NR disabled. Preserve their immutable layouts without scheduling GPU work.
+    if (SUCCEEDED(result) && output && *output)
+    {
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> signature;
+        if (SUCCEEDED(static_cast<IUnknown*>(*output)->QueryInterface(IID_PPV_ARGS(&signature))))
+            s_nativeRecordingHooks.RegisterRootSignature(signature.Get(), blob, bytes,
+                D3d12Proxy::D3D12CreateVersionedRootSignatureDeserializer_());
+    }
+    return result;
+}
+
 VALIDATE_HOOK(hkD3D12GetInterface, PFN_D3D12GetInterface)
 static HRESULT hkD3D12GetInterface(REFCLSID rclsid, REFIID riid, void** ppvDebug)
 {
@@ -2215,19 +2306,26 @@ static void HookToDevice(ID3D12Device* InDevice)
                 DetourAttach(&(PVOID&) o_GetResourceAllocationInfo, hkGetResourceAllocationInfo);
         }
 
+        LONG observedCommittedAttach = ERROR_NOT_SUPPORTED;
+        LONG observedPlacedAttach = ERROR_NOT_SUPPORTED;
         if (wantSpoof || wantScan)
         {
             if (!wantSpoof)
                 LOG_DEBUG("DLSS-NR wants the resource creation hooks, applying detours");
 
             if (o_CreateCommittedResource != nullptr)
-                DetourAttach(&(PVOID&) o_CreateCommittedResource, hkCreateCommittedResource);
+                observedCommittedAttach = DetourAttach(&(PVOID&) o_CreateCommittedResource, hkCreateCommittedResource);
 
             if (o_CreatePlacedResource != nullptr)
-                DetourAttach(&(PVOID&) o_CreatePlacedResource, hkCreatePlacedResource);
+                observedPlacedAttach = DetourAttach(&(PVOID&) o_CreatePlacedResource, hkCreatePlacedResource);
         }
 
         auto detourResult = DetourTransactionCommit();
+        const auto committedObservation = !(wantSpoof || wantScan) ? 1u :
+            (detourResult == NO_ERROR && observedCommittedAttach == NO_ERROR ? 2u : 3u);
+        const auto placedObservation = !(wantSpoof || wantScan) ? 1u :
+            (detourResult == NO_ERROR && observedPlacedAttach == NO_ERROR ? 2u : 3u);
+        DlssNr::CandidateObserver::ObserveCoverage(committedObservation | (placedObservation << 4));
         if (detourResult != NO_ERROR)
         {
             LOG_ERROR("Failed to detour ID3D12Device methods, error: {:X}", detourResult);
@@ -2241,6 +2339,7 @@ static void HookToDevice(ID3D12Device* InDevice)
         }
     }
 
+    DlssNr::NativeD3D12Guides::Install(InDevice);
     HookToCommandList(InDevice);
 
     if (State::Instance().activeFgInput == FGInput::Upscaler &&
@@ -2258,6 +2357,7 @@ static void HookToDevice(ID3D12Device* InDevice)
 
 static void UnhookDevice()
 {
+    s_nativeRecordingHooks.Revoke();
     LOG_FUNC();
 
     DetourTransactionBegin();
@@ -2285,6 +2385,7 @@ static void UnhookDevice()
         DetourDetach(&(PVOID&) o_GetResourceAllocationInfo, hkGetResourceAllocationInfo);
 
     auto detourResult = DetourTransactionCommit();
+    DlssNr::CandidateObserver::ObserveCoverage(detourResult == NO_ERROR ? 0x11u : 0u);
     if (detourResult != NO_ERROR)
     {
         LOG_ERROR("Failed to unhook ID3D12Device methods, error: {:X}", detourResult);
@@ -2346,6 +2447,7 @@ void D3D12Hooks::HookAgility(HMODULE module)
 
 void D3D12Hooks::Unhook()
 {
+    s_nativeRecordingHooks.Revoke();
     if (o_D3D12CreateDevice == nullptr)
         return;
 
@@ -2371,6 +2473,7 @@ void D3D12Hooks::Unhook()
         DetourDetach(&(PVOID&) o_D3D12DeviceRelease, hkD3D12DeviceRelease);
 
     auto detourResult = DetourTransactionCommit();
+    DlssNr::CandidateObserver::ObserveCoverage(detourResult == NO_ERROR ? 0x11u : 0u);
     if (detourResult != NO_ERROR)
     {
         LOG_ERROR("Failed to unhook ID3D12Device methods, error: {:X}", detourResult);
@@ -2387,6 +2490,85 @@ void D3D12Hooks::Unhook()
 }
 
 void D3D12Hooks::SetRootSignatureTracking(bool enable) { isUpscalerActive = !enable; }
+
+D3D12Hooks::NativeRecordingObservation D3D12Hooks::ObserveNativeRecording(ID3D12GraphicsCommandList* commandList)
+{
+    return s_nativeRecordingObserver.Observe(commandList);
+}
+
+DlssNr::NativeRecordingDiagnosticV1 D3D12Hooks::DiagnoseNativeRecording(ID3D12GraphicsCommandList* commandList)
+{
+    const auto d=s_nativeRecordingHooks.Diagnostic(commandList);
+    DlssNr::NativeRecordingDiagnosticV1 result;
+#define COPY_DIAGNOSTIC(field) result.field=d.field
+    COPY_DIAGNOSTIC(queriedList); COPY_DIAGNOSTIC(queriedVtable); COPY_DIAGNOSTIC(installedVtable);
+    COPY_DIAGNOSTIC(installAttempts); COPY_DIAGNOSTIC(installSuccesses); COPY_DIAGNOSTIC(closeCalls);
+    COPY_DIAGNOSTIC(resetCalls); COPY_DIAGNOSTIC(resetSuccesses); COPY_DIAGNOSTIC(enrollmentSuccesses);
+    COPY_DIAGNOSTIC(queryInterfaceCalls); COPY_DIAGNOSTIC(firstRefusalSequence); COPY_DIAGNOSTIC(droppedEvents);
+    COPY_DIAGNOSTIC(globalInstallAttempts); COPY_DIAGNOSTIC(globalInstallSuccesses); COPY_DIAGNOSTIC(lastInstallList);
+    COPY_DIAGNOSTIC(queriedResetTarget); COPY_DIAGNOSTIC(installedResetTarget); COPY_DIAGNOSTIC(resetPatchTarget);
+    COPY_DIAGNOSTIC(flags); COPY_DIAGNOSTIC(failedSlot); COPY_DIAGNOSTIC(enrollmentStage);
+    COPY_DIAGNOSTIC(firstResult); COPY_DIAGNOSTIC(lastResetResult);
+    COPY_DIAGNOSTIC(expectedIdentity); COPY_DIAGNOSTIC(observedIdentity); COPY_DIAGNOSTIC(patchTarget);
+#undef COPY_DIAGNOSTIC
+    result.firstRefusal=static_cast<std::uint32_t>(d.firstRefusal);
+    static_assert(sizeof(result.failedIid)==sizeof(d.failedIid));
+    std::memcpy(result.failedIid,&d.failedIid,sizeof(result.failedIid));
+    std::memcpy(result.expectedBytes,d.expectedBytes.data(),sizeof(result.expectedBytes));
+    std::memcpy(result.observedBytes,d.observedBytes.data(),sizeof(result.observedBytes));
+    return result;
+}
+
+std::optional<NativeStateRestorePoint> D3D12Hooks::CapturePostSrState(
+    ID3D12GraphicsCommandList* commandList, Neurotic::D3D12::RestoreMask mask,
+    Neurotic::D3D12::NativeStateCaptureDiagnostic* diagnostic)
+{
+    auto observed = s_nativeRecordingObserver.Observe(commandList);
+    if (!observed.active || !observed.completeCoverage)
+    {
+        if (diagnostic) {
+            *diagnostic = {};
+            diagnostic->reason = !observed.active ? "Native.State.InactiveOrTainted" : "Native.State.CoverageIncomplete";
+        }
+        return {};
+    }
+    auto state = s_nativeRecordingObserver.CaptureRestorable(commandList, mask, NativeOriginalSetters(), diagnostic);
+    if (!state) return {};
+    return NativeStateRestorePoint{observed.nativeList, observed.incarnation, std::move(*state)};
+}
+
+bool D3D12Hooks::RestorePostSrState(const NativeStateRestorePoint& snapshot)
+{
+    auto observed = s_nativeRecordingObserver.Observe(snapshot.nativeList);
+    if (!observed.active || !observed.completeCoverage || observed.incarnation != snapshot.incarnation) return false;
+    return s_nativeRecordingObserver.Restore(snapshot.nativeList, snapshot.incarnation, snapshot.state,
+                                             NativeOriginalSetters());
+}
+
+bool D3D12Hooks::RegisterNativeRootLayout(
+    ID3D12RootSignature* signature, std::vector<Neurotic::D3D12::RootParameter> layout)
+{
+    return s_nativeRecordingObserver.RegisterLayout(signature, std::move(layout));
+}
+
+std::optional<D3D12_RESOURCE_STATES> D3D12Hooks::KnownHudResourceState(ID3D12GraphicsCommandList* list,ID3D12Resource* resource)
+{
+    const auto observed=s_nativeRecordingObserver.Observe(list);
+    if(!observed.active || !observed.completeCoverage) return {};
+    std::optional<D3D12_RESOURCE_STATES> result;
+    s_nativeRecordingObserver.WithCurrent(list,[&](auto& state,auto incarnation) {
+        result=state.KnownSingleSubresourceState(incarnation,resource); return result.has_value();
+    });
+    return result;
+}
+
+bool D3D12Hooks::WatchNativeResource(ID3D12GraphicsCommandList* commandList, ID3D12Resource* resource,
+                                     std::uint64_t generation, UINT subresource, D3D12_RESOURCE_STATES knownState)
+{
+    return s_nativeRecordingObserver.WithCurrent(commandList, [&](auto& state, auto incarnation) {
+        return state.WatchResource(incarnation, resource, generation, subresource, knownState);
+    });
+}
 
 bool D3D12Hooks::CanRestoreRootSignature(ID3D12GraphicsCommandList* cmdList)
 {

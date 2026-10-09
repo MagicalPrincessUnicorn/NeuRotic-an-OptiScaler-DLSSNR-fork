@@ -44,7 +44,7 @@ bool DLSSFeatureDx12::InitDLSS(ID3D12GraphicsCommandList* InCommandList, NVSDK_N
     {
         ProcessInitParams(InParameters);
 
-        _p_dlssHandle = &_dlssHandle;
+        _p_dlssHandle = nullptr;
 
         NVSDK_NGX_Result nvResult;
         {
@@ -113,14 +113,11 @@ bool DLSSFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
 
 void DLSSFeatureDx12::Shutdown(ID3D12Device* InDevice)
 {
-    if (_dlssInitedDx12)
-    {
-        if (NVNGXProxy::D3D12_Shutdown() != nullptr)
-            NVNGXProxy::D3D12_Shutdown()();
-        else if (NVNGXProxy::D3D12_Shutdown1() != nullptr)
-            NVNGXProxy::D3D12_Shutdown1()(InDevice);
-    }
-
+    // Owned DLSS shares NVNGXProxy's core with native passthrough. The input
+    // shutdown owner makes the one opaque call; this cache only skips Init's
+    // feature-creation delay and must retire before a new core initialization.
+    (void)InDevice;
+    _dlssInitedDx12 = false;
     DLSSFeature::Shutdown();
 }
 
@@ -136,11 +133,22 @@ DLSSFeatureDx12::DLSSFeatureDx12(unsigned int InHandleId, NVSDK_NGX_Parameter* I
     LOG_INFO("binding complete!");
 }
 
+NVSDK_NGX_Result DLSSFeatureDx12::ReleaseProvider()
+{
+    if (!_p_dlssHandle) return NVSDK_NGX_Result_Success;
+    auto release = NVNGXProxy::D3D12_ReleaseFeature();
+    if (!release) return NVSDK_NGX_Result_FAIL_PlatformError;
+    return _providerRelease.CallOnce(NVSDK_NGX_Result_Success,NVSDK_NGX_Result_FAIL_PlatformError,[&] {
+        const auto result=release(_p_dlssHandle);
+        if(result==NVSDK_NGX_Result_Success){_p_dlssHandle=nullptr;SetInit(false);}
+        return result;
+    });
+}
+
 DLSSFeatureDx12::~DLSSFeatureDx12()
 {
     if (State::Instance().isShuttingDown)
         return;
 
-    if (NVNGXProxy::D3D12_ReleaseFeature() != nullptr && _p_dlssHandle != nullptr)
-        NVNGXProxy::D3D12_ReleaseFeature()(_p_dlssHandle);
+    ReleaseProvider();
 }

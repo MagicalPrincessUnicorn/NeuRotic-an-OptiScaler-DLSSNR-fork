@@ -1,8 +1,12 @@
 #include "pch.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include <runtime/RuntimeLifetime.h>
 #include "dlssnr/NrExperimentalSession.h"
 #include "dlssnr/NrExperimentalSession.h"
 #include "dllmain.h"
 #include "dlssnr/FgLifecycle.h"
+#include "nr/diagnostics/candidate/Observer.h"
+#include "nr/diagnostics/capability/ObservationRefresh.h"
 
 #include "Util.h"
 #include "Config.h"
@@ -34,6 +38,9 @@
 #include <hooks/D3D11_Hooks.h>
 #include <hooks/D3D12_Hooks.h>
 #include <hooks/Vulkan_Hooks.h>
+#if defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+#include <hooks/VulkanwDx12_Hooks.h>
+#endif
 #include <hooks/Ntdll_Hooks.h>
 #include <hooks/Kernel_Hooks.h>
 #include <hooks/Gdi32_Hooks.h>
@@ -55,6 +62,7 @@
 static std::vector<HMODULE> _asiHandles;
 static std::vector<std::filesystem::directory_entry> _lateLoadingEntries;
 static bool _passThruMode = false;
+static State* runtimeState = nullptr;
 
 typedef const char*(CDECL* PFN_wine_get_version)(void);
 typedef void (*PFN_InitializeASI)(void);
@@ -1319,6 +1327,18 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
     if (quirks & GameQuirk::CreateSLOnThe2ndDevice)
         stringQuirks.push_back("Create SL on the 2nd device");
 
+    if (quirks & GameQuirk::EnableVulkanSpoofing)
+        stringQuirks.push_back("Enable Vulkan spoofing");
+
+    if (quirks & GameQuirk::EnableVulkanExtensionSpoofing)
+        stringQuirks.push_back("Enable Vulkan extension spoofing");
+
+    if (quirks & GameQuirk::DoNotLoadAmdxc64)
+        stringQuirks.push_back("Do not load amdxc64.dll");
+
+    if (quirks & GameQuirk::FastFeatureReset)
+        stringQuirks.push_back("Use fast feature reset");
+
     state->detectedQuirks.append_range(stringQuirks);
     for (auto& stringQuirk : stringQuirks)
         spdlog::info("Quirk: {}", stringQuirk);
@@ -1368,7 +1388,7 @@ static void CheckQuirks(bool isNvidia)
     if (quirks & GameQuirk::DisableFSR2Inputs && !Config::Instance()->EnableFsr2Inputs.has_value())
         Config::Instance()->EnableFsr2Inputs.set_volatile_value(false);
     else
-        quirks.reset(GameQuirk::DisableFSR3Inputs);
+        quirks.reset(GameQuirk::DisableFSR2Inputs);
 
     if (quirks & GameQuirk::DisableFFXInputs && !Config::Instance()->EnableFfxInputs.has_value())
         Config::Instance()->EnableFfxInputs.set_volatile_value(false);
@@ -1733,6 +1753,7 @@ void CheckMemoryForProxies()
 
 DWORD WINAPI getGpuInfo(LPVOID hModuleVoid)
 {
+    DlssNr::CandidateObserver::StartCold(_passThruMode);
     auto primaryGpu = IdentifyGpu::getPrimaryGpu();
 
     // We don't yet know if the GPU supports FSR 4 so hook any AMD
@@ -1760,8 +1781,141 @@ DWORD WINAPI getGpuInfo(LPVOID hModuleVoid)
     return 0;
 }
 
+#if defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+// Code-isolation experiment: restore the existing Vulkan hook family only.
+// No normal startup, loader interception, provider substitution or overlay.
+static bool StartVulkanHookDiagnostic(HMODULE hModule)
+{
+    dllModule = hModule;
+    exeModule = GetModuleHandleW(nullptr);
+    processId = GetCurrentProcessId();
+    spdlog::set_level(spdlog::level::off);
+    NtdllProxy::Init();
+    Kernel32Proxy::Init();
+
+    auto* config = Config::Instance();
+    config->SetDlssNrEnabled(false);
+    config->DlssNrVulkanPrepare.set_volatile_value(false);
+    config->OverlayMenu.set_volatile_value(false);
+    config->DLSSEnabled.set_volatile_value(false);
+    config->VulkanSpoofing.set_volatile_value(false);
+    config->VulkanExtensionSpoofing.set_volatile_value(false);
+    config->VulkanVRAM.reset();
+    config->FramerateLimit.set_volatile_value(0.0f);
+    config->FGInput.set_volatile_value(FGInput::NoFG);
+    config->FGOutput.set_volatile_value(FGOutput::NoFG);
+    config->FGNvngxReplacement.set_volatile_value(FGNvngxReplacement::None);
+    State::Instance().activeFgInput = FGInput::NoFG;
+    State::Instance().activeFgOutput = FGOutput::NoFG;
+    State::Instance().activeFgNvngx = FGNvngxReplacement::None;
+
+    // Vulkan is delay-loaded: the diagnostic proxy may load before the game
+    // loads its Vulkan runtime. Use the existing loader or its absolute system
+    // path, then pin both ends before installing process-lifetime detours.
+    HMODULE loader = GetModuleHandleW(L"vulkan-1.dll"), pinnedSelf = nullptr;
+    if (loader == nullptr)
+    {
+        wchar_t systemDirectory[MAX_PATH] {};
+        const auto length = GetSystemDirectoryW(systemDirectory, MAX_PATH);
+        if (length == 0 || length >= MAX_PATH)
+            return false;
+        const auto loaderPath = std::filesystem::path(systemDirectory) / L"vulkan-1.dll";
+        loader = LoadLibraryExW(loaderPath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if (loader == nullptr)
+            return false;
+    }
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                            reinterpret_cast<LPCWSTR>(loader), &loader) ||
+        !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                            reinterpret_cast<LPCWSTR>(hModule), &pinnedSelf))
+        return false;
+    VulkanHooks::Hook(loader);
+    // One startup-only receipt, even when the user's regular logging is off.
+    // Failure remains visible without introducing any per-frame diagnostic work.
+    const auto receiptPath = Util::DllPath().parent_path() / L"OptiScaler.log";
+    FILE* receipt = nullptr;
+    if (_wfopen_s(&receipt, receiptPath.c_str(), L"w") == 0)
+    {
+        std::fprintf(receipt, "NR_DIAGNOSTIC_VULKAN_ONLY version=%s\n"
+                     "loader_hook_commit=%ld recording_hook_commit=%ld\n"
+                     "NR=off overlay=off provider_replacement=off\n"
+#if defined(NR_DIAG_VULKAN_NO_AUGMENT) && NR_DIAG_VULKAN_NO_AUGMENT
+                     "generic_startup_augmentation=disabled\n",
+#else
+                     "Generic Vulkan extension augmentation is included in this test.\n",
+#endif
+                     VER_PRODUCT_VERSION_STR, VulkanHooks::DiagnosticInstallStatus(),
+                     Vulkan_wDx12::DiagnosticInstallStatus());
+#if defined(NR_DIAG_VULKAN_NO_LEGACY) && NR_DIAG_VULKAN_NO_LEGACY
+        std::fputs("legacy_command_interceptor=disabled\n", receipt);
+#endif
+#if defined(NR_DIAG_VULKAN_NO_SUBMIT) && NR_DIAG_VULKAN_NO_SUBMIT
+        std::fputs("command_resource_observers=enabled device_submit_observers=disabled\n", receipt);
+        std::fputs("image_view_cleanup=indexed\n", receipt);
+#elif defined(NR_DIAG_VULKAN_COMMAND_ONLY) && NR_DIAG_VULKAN_COMMAND_ONLY
+        std::fputs("command_observers=enabled resource_submit_observers=disabled\n", receipt);
+#elif defined(NR_DIAG_VULKAN_NO_OBSERVERS) && NR_DIAG_VULKAN_NO_OBSERVERS
+        std::fputs("command_resource_submit_observers=disabled\n", receipt);
+#endif
+        std::fclose(receipt);
+    }
+    return true;
+}
+#endif
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
+    // Installed detours and detached callbacks require process lifetime.
+    if (ul_reason_for_call == DLL_PROCESS_ATTACH && !Neurotic::Runtime::PinRuntime(hModule)) return FALSE;
+    if (ul_reason_for_call == DLL_PROCESS_DETACH)
+    {
+        Neurotic::Runtime::RequestProcessExit();
+        DlssNr::FinalFallback::shutdownRequested.store(true);
+        if (runtimeState) runtimeState->isShuttingDown = true;
+        return TRUE;
+    }
+#if (defined(NR_DIAG_FORWARD_ONLY) && NR_DIAG_FORWARD_ONLY) || \
+    (defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY)
+    // Diagnostic entry: WinMM forwarding, with the selected diagnostic bootstrap
+    // only. Normal OptiScaler startup and teardown remain excluded.
+    // This binary must be installed as winmm.dll, never as a different proxy.
+    if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+    {
+        wchar_t path[MAX_PATH] {};
+        const auto length = GetModuleFileNameW(hModule, path, MAX_PATH);
+        if (length == 0 || length >= MAX_PATH)
+            return FALSE;
+        const wchar_t* file = path;
+        for (const wchar_t* p = path; *p; ++p)
+            if (*p == L'\\' || *p == L'/') file = p + 1;
+        if (_wcsicmp(file, L"winmm.dll") != 0)
+            return FALSE;
+
+        DisableThreadLibraryCalls(hModule);
+        KernelBaseProxy::Init();
+        if (KernelBaseProxy::GetProcAddress_() == nullptr)
+            return FALSE;
+        wchar_t systemPath[MAX_PATH] {};
+        const auto systemLength = GetSystemDirectoryW(systemPath, MAX_PATH);
+        constexpr wchar_t suffix[] = L"\\winmm.dll";
+        constexpr auto suffixLength = sizeof(suffix) / sizeof(wchar_t);
+        if (systemLength == 0 || systemLength >= MAX_PATH || systemLength + suffixLength > MAX_PATH)
+            return FALSE;
+        for (size_t i = 0; i < suffixLength; ++i)
+            systemPath[systemLength + i] = suffix[i];
+        originalModule = LoadLibraryExW(systemPath, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if (originalModule == nullptr || originalModule == hModule)
+            return FALSE;
+        winmm.LoadOriginalLibrary(originalModule);
+#if defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY
+        if (!StartVulkanHookDiagnostic(hModule))
+            return FALSE;
+#endif
+    }
+    // No OptiScaler shutdown work was initialized. Retain the system module
+    // reference for process lifetime, as in the existing forwarding path.
+    return TRUE;
+#else
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
@@ -1807,6 +1961,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         }
 
         CheckForExcludedProcess();
+        runtimeState = &State::Instance();
 
         if (_passThruMode)
         {
@@ -2080,7 +2235,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         if (Config::Instance()->LoadAsiPlugins.value_or_default())
         {
             spdlog::info("");
-            LoadAsiPlugins();
+            // Loader notifications complete before this worker invokes arbitrary ASI callbacks.
+            auto pluginWorker = CreateThread(nullptr, 0, [](LPVOID) -> DWORD {
+                if (!Neurotic::Runtime::IsProcessExiting()) LoadAsiPlugins();
+                return 0;
+            }, nullptr, 0, nullptr);
+            if (pluginWorker) CloseHandle(pluginWorker);
         }
 
         if (!Config::Instance()->DxgiSpoofing.has_value() && !State::Instance().nvngxReplacement.has_value())
@@ -2154,7 +2314,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         spdlog::info("---------------------------------------------");
         spdlog::info("");
 
-        CreateThread(nullptr, 0, getGpuInfo, GetDllNameWModule(&dx12NamesW), 0, nullptr);
+        auto gpuWorker = CreateThread(nullptr, 0, getGpuInfo, GetDllNameWModule(&dx12NamesW), 0, nullptr);
+        if (gpuWorker) CloseHandle(gpuWorker);
 
 #ifndef _DEBUG
         if (Config::Instance()->LogLevel.value_or_default() == 0 && Config::Instance()->LogToFile.value_or_default())
@@ -2164,6 +2325,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
                 {
                     std::this_thread::sleep_for(std::chrono::minutes(10));
 
+                    if (Neurotic::Runtime::IsProcessExiting()) return;
                     // If still logging after 10 minutes, send notification
                     if (Config::Instance()->LogLevel.value_or_default() == 0 &&
                         Config::Instance()->LogToFile.value_or_default())
@@ -2184,45 +2346,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         break;
     }
 
-    case DLL_PROCESS_DETACH:
-        State::Instance().isShuttingDown = true;
-        DlssNr::ExperimentalSession::MarkCleanShutdown();
-        DlssNr::ExperimentalSession::MarkCleanShutdown();
-
-        // Unhooking and cleaning stuff causing issues during shutdown.
-        // Disabled for now to check if it cause any issues
-        // UnhookApis();
-        // unhookStreamline();
-        // unhookGdi32();
-        // unhookWintrust();
-        // unhookCrypt32();
-        // unhookAdvapi32();
-        // DetachHooks();
-
-        if (skModule != nullptr)
-            NtdllProxy::FreeLibrary_Ldr(skModule);
-
-        if (reshadeModule != nullptr)
-            NtdllProxy::FreeLibrary_Ldr(reshadeModule);
-
-        if (_asiHandles.size() > 0)
-        {
-            for (size_t i = 0; i < _asiHandles.size(); i++)
-                NtdllProxy::FreeLibrary_Ldr(_asiHandles[i]);
-        }
-
-        for (const PVOID& v : State::Instance().modulesToFree)
-        {
-            NtdllProxy::FreeLibrary_Ldr(v);
-        }
-
-        spdlog::info("");
-        spdlog::info("DLL_PROCESS_DETACH");
-        spdlog::info("Unloading OptiScaler");
-        CloseLogger();
-
-        break;
-
     case DLL_THREAD_ATTACH:
         // LOG_DEBUG_ONLY("DLL_THREAD_ATTACH from module: {0:X}, count: {1}", (UINT64)hModule, loadCount);
         break;
@@ -2237,4 +2360,5 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     }
 
     return TRUE;
+#endif
 }

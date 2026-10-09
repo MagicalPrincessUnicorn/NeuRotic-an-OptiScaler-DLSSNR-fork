@@ -69,6 +69,7 @@ struct GpuInformation
     // Nvidia
     bool dlssCapable = false;
     NV_GPU_ARCH_INFO nvidiaArchInfo {};
+    NvPhysicalGpuHandle unspoofedPhysicalGpu = nullptr; // Exact single physical GPU matched by LUID.
     bool noDisplayConnected = false;
 };
 

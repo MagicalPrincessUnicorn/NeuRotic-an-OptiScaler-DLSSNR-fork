@@ -9,6 +9,11 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <array>
+#include <wrl/client.h>
+#include <dlssnr/NrBridgeOutcome.h>
+#include <dlssnr/NrGpuSafety.h>
+#include <dlssnr/NrBridgeRetirement.h>
 
 #include <nvsdk_ngx.h>
 #include <nvsdk_ngx_defs.h>
@@ -24,7 +29,17 @@ class Dx11WithDx12
     inline static ID3D12Device* Dx12Device = nullptr;
     inline static ID3D12CommandQueue* Dx12CommandQueue = nullptr;
 
-    inline static std::unique_ptr<DepthTransfer_Dx11> DT = nullptr;
+    inline static std::shared_ptr<DepthTransfer_Dx11> DT = nullptr;
+    inline static std::recursive_mutex UpscalerResourceMutex;
+    inline static bool UpscalerCacheQuarantined=false;
+    inline static DlssNr::Bridge::CacheWriter UpscalerBridgeWriter;
+    inline static DlssNr::GpuSafety::CompletionSet UpscalerReaders;
+    struct InputCompletion
+    {
+        Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+        UINT64 value=0;
+    };
+    inline static InputCompletion UpscalerInputCompletion;
 
     inline static ID3D11Fence* Dx11FenceTextureCopy = nullptr;
     inline static ID3D12Fence* Dx12FenceTextureCopy = nullptr;
@@ -47,6 +62,21 @@ class Dx11WithDx12
     static bool EnsureSyncResourcesLocked();
 
   public:
+    static auto LockUpscalerResources() { return std::unique_lock(UpscalerResourceMutex); }
+    // Pins reachable native objects without moving representation ownership out
+    // of this cache. The bridge holds these until BOTH API consumers retire.
+    struct RetainedResources
+    {
+        std::array<Microsoft::WRL::ComPtr<IUnknown>,18> objects;
+        std::array<Microsoft::WRL::ComPtr<IUnknown>,2> synchronization;
+        std::shared_ptr<DepthTransfer_Dx11> depthTransfer;
+    };
+    static RetainedResources RetainUpscalerResources();
+    static void QuarantineUpscalerCache();
+    static bool UpscalerReadersReusable();
+    static bool BindUpscalerUse(std::shared_ptr<DlssNr::Bridge::Use>,ID3D11Fence*);
+    static std::unique_ptr<DlssNr::GpuSafety::LocalRecordingAction> RetainUpscalerReader(
+        ID3D12GraphicsCommandList*,std::span<ID3D12Resource* const>);
     enum class ResourceMask : uint32_t
     {
         None = 0,
@@ -146,9 +176,10 @@ class Dx11WithDx12
     static void ReleaseSharedResource(D3D11_TEXTURE2D_RESOURCE_C* resource);
     static void ResetUpscalerResourceCache(bool releaseSyncResources = false);
 
-    static bool SyncDx11ToDx12();
-    static bool SyncDx12ToDx11();
-    static bool CopyUpscalerOutputToDx11(UINT frameIndex);
+    static bool SyncDx11ToDx12(RetainedResources* retained = nullptr, InputCompletion* input = nullptr);
+    static bool SyncDx12ToDx11(RetainedResources* retained = nullptr);
+    static bool CopyUpscalerOutputToDx11(UINT frameIndex, DlssNr::Bridge::Outcome* outcome = nullptr,
+        DlssNr::Bridge::Identity identity = {}, RetainedResources* retained = nullptr);
 
     static bool CheckMask(ResourceMask mask, ResourceMask resource);
 
@@ -160,7 +191,8 @@ class Dx11WithDx12
 
     static PrepareResourcesResult PrepareUpscalerResources(const NVSDK_NGX_Parameter* parameters, ResourceMask mask,
                                                            UINT frameIndex, UINT64 frameId, bool dontUseNTShared,
-                                                           bool reactiveRequired, bool syncAfterPrepare);
+                                                           bool reactiveRequired, bool syncAfterPrepare,
+                                                           RetainedResources* retained = nullptr);
 
     static ID3D11Device5* GetD3D11Device();
     static ID3D11DeviceContext4* GetD3D11DeviceContext();

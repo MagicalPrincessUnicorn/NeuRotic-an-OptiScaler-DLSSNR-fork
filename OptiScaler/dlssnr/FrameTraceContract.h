@@ -11,7 +11,7 @@ inline bool AssociationEvent(std::string_view kind) noexcept
     return kind == "trace-started" || kind == "nr-ledger" || kind == "nr-api" ||
            kind == "nr-pcl" || kind == "nr-before-fg-forward" ||
            kind == "nr-startup-admission" || kind == "nr-fallback" ||
-           kind == "ngx-fg-input";
+           kind == "ngx-fg-input" || kind == "nr-alternate-frame" || kind == "nr-alternate-gpu";
 }
 // Observation identifiers are deliberately NOT real-frame tokens or admission decisions.
 inline bool ValidSession(std::string_view value) noexcept
