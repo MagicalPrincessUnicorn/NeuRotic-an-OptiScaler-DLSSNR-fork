@@ -11,6 +11,7 @@
 // so it does not belong in a shader class.
 
 #include <cstdint>
+#include <dlssnr/NativeTemporalInputFacts.h>
 #include <inputs/universal_feeder/PreparedGuideContract.h>
 #include <dlssnr/NrAlternateFrameInputs.h>
 
@@ -65,6 +66,9 @@ constexpr uint32_t kDlssNrMeterGrid = 64;
 // motion use different standard resolutions.
 struct DlssNrFrameInfo
 {
+    // Absent on non-NGX/prepared routes; defaults never claim native observation.
+    std::optional<DlssNr::NativeTemporalInputFacts::Scalars> NativeScalarFacts;
+    std::optional<DlssNr::NativeTemporalInputFacts::Flags> NativeFlagFacts;
     // Only prepared ingress sets this. A genuine NGX call does not turn
     // image-derived flow into engine-native motion.
     std::optional<Neurotic::Feed::Prepared::Descriptor> PreparedSource;

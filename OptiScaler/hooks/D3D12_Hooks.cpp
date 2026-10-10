@@ -41,6 +41,7 @@ using PFN_CreateCommittedResource = rewrite_signature<decltype(&ID3D12Device::Cr
 using PFN_CreatePlacedResource = rewrite_signature<decltype(&ID3D12Device::CreatePlacedResource)>::type;
 using PFN_SetResidencyPriority = rewrite_signature<decltype(&ID3D12Device1::SetResidencyPriority)>::type;
 using PFN_CreateRootSignature = rewrite_signature<decltype(&ID3D12Device::CreateRootSignature)>::type;
+using PFN_CreateCommandSignature = rewrite_signature<decltype(&ID3D12Device::CreateCommandSignature)>::type;
 
 // GetResourceAllocationInfo is a special case because of the struct return,
 // see comment on hkGetResourceAllocationInfo for details
@@ -62,6 +63,7 @@ static PFN_CreatePlacedResource o_CreatePlacedResource = nullptr;
 static PFN_SetResidencyPriority o_SetResidencyPriority = nullptr;
 static PFN_GetResourceAllocationInfo o_GetResourceAllocationInfo = nullptr;
 static PFN_CreateRootSignature o_CreateRootSignature = nullptr;
+static PFN_CreateCommandSignature o_CreateCommandSignature = nullptr;
 static PFN_D3D12GetInterface o_D3D12GetInterface = nullptr;
 static PFN_CreateDevice o_CreateDevice = nullptr;
 
@@ -2186,12 +2188,28 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
     // NR disabled. Preserve their immutable layouts without scheduling GPU work.
     if (SUCCEEDED(result) && output && *output)
     {
-        Microsoft::WRL::ComPtr<ID3D12RootSignature> signature;
-        if (SUCCEEDED(static_cast<IUnknown*>(*output)->QueryInterface(IID_PPV_ARGS(&signature))))
-            s_nativeRecordingHooks.RegisterRootSignature(signature.Get(), blob, bytes,
-                D3d12Proxy::D3D12CreateVersionedRootSignatureDeserializer_());
+        try
+        {
+            Microsoft::WRL::ComPtr<ID3D12RootSignature> signature;
+            if (SUCCEEDED(static_cast<IUnknown*>(*output)->QueryInterface(IID_PPV_ARGS(&signature))))
+                s_nativeRecordingHooks.RegisterRootSignature(signature.Get(), blob, bytes,
+                    D3d12Proxy::D3D12CreateVersionedRootSignatureDeserializer_());
+        }
+        catch (...)
+        {
+            // Optional observation must preserve the successful creation result
+            // and its caller-owned output even when metadata allocation fails.
+        }
     }
     return result;
+}
+
+VALIDATE_HOOK(hkCreateCommandSignature, PFN_CreateCommandSignature)
+static HRESULT hkCreateCommandSignature(ID3D12Device* device, const D3D12_COMMAND_SIGNATURE_DESC* descriptor,
+                                        ID3D12RootSignature* root, REFIID iid, void** output)
+{
+    return Neurotic::D3D12::NativeIndirectSignatures::CreateObserved(
+        o_CreateCommandSignature,device,descriptor,root,iid,output);
 }
 
 VALIDATE_HOOK(hkD3D12GetInterface, PFN_D3D12GetInterface)
@@ -2248,6 +2266,12 @@ static void HookToDevice(ID3D12Device* InDevice)
     o_CreateSampler = (PFN_CreateSampler) pVTable[22];
     o_CheckFeatureSupport = (PFN_CheckFeatureSupport) pVTable[13];
     o_CreateRootSignature = (PFN_CreateRootSignature) pVTable[16];
+    // This observation hook is process-retained. Physical DetourDetach can
+    // delete a trampoline already copied by an in-flight callback. Retirement
+    // closes metadata authority while late callbacks keep forwarding safely.
+    const bool installCommandSignature = o_CreateCommandSignature == nullptr;
+    if (installCommandSignature)
+        o_CreateCommandSignature = (PFN_CreateCommandSignature) pVTable[41];
     o_GetResourceAllocationInfo = (PFN_GetResourceAllocationInfo) pVTable[25];
     o_CreateCommittedResource = (PFN_CreateCommittedResource) pVTable[27];
     o_CreatePlacedResource = (PFN_CreatePlacedResource) pVTable[29];
@@ -2273,6 +2297,10 @@ static void HookToDevice(ID3D12Device* InDevice)
 
         if (o_CreateSampler != nullptr)
             DetourAttach(&(PVOID&) o_CreateSampler, hkCreateSampler);
+
+        LONG observedCommandSignatureAttach = installCommandSignature ? ERROR_NOT_SUPPORTED : NO_ERROR;
+        if (installCommandSignature && o_CreateCommandSignature != nullptr)
+            observedCommandSignatureAttach = DetourAttach(&(PVOID&) o_CreateCommandSignature,hkCreateCommandSignature);
 
         if (o_CreateRootSignature != nullptr)
             DetourAttach(&(PVOID&) o_CreateRootSignature, hkCreateRootSignature);
@@ -2321,6 +2349,8 @@ static void HookToDevice(ID3D12Device* InDevice)
         }
 
         auto detourResult = DetourTransactionCommit();
+        if (detourResult == NO_ERROR && observedCommandSignatureAttach != NO_ERROR)
+            o_CreateCommandSignature = nullptr;
         const auto committedObservation = !(wantSpoof || wantScan) ? 1u :
             (detourResult == NO_ERROR && observedCommittedAttach == NO_ERROR ? 2u : 3u);
         const auto placedObservation = !(wantSpoof || wantScan) ? 1u :
@@ -2332,6 +2362,7 @@ static void HookToDevice(ID3D12Device* InDevice)
             o_CreateSampler = nullptr;
             o_CheckFeatureSupport = nullptr;
             o_CreateRootSignature = nullptr;
+            if (installCommandSignature) o_CreateCommandSignature = nullptr;
             o_CreateCommittedResource = nullptr;
             o_CreatePlacedResource = nullptr;
             o_D3D12DeviceRelease = nullptr;
@@ -2358,6 +2389,7 @@ static void HookToDevice(ID3D12Device* InDevice)
 static void UnhookDevice()
 {
     s_nativeRecordingHooks.Revoke();
+    Neurotic::D3D12::NativeIndirectSignatures::Retire();
     LOG_FUNC();
 
     DetourTransactionBegin();
@@ -2368,6 +2400,8 @@ static void UnhookDevice()
 
     if (o_CreateRootSignature != nullptr)
         DetourDetach(&(PVOID&) o_CreateRootSignature, hkCreateRootSignature);
+
+    // Signature hook/trampoline remains forwarding-only after Retire.
 
     if (o_CheckFeatureSupport != nullptr)
         DetourDetach(&(PVOID&) o_CheckFeatureSupport, hkCheckFeatureSupport);
@@ -2448,7 +2482,8 @@ void D3D12Hooks::HookAgility(HMODULE module)
 void D3D12Hooks::Unhook()
 {
     s_nativeRecordingHooks.Revoke();
-    if (o_D3D12CreateDevice == nullptr)
+    Neurotic::D3D12::NativeIndirectSignatures::Retire();
+    if (o_D3D12CreateDevice == nullptr && o_CreateCommandSignature == nullptr)
         return;
 
     DetourTransactionBegin();
@@ -2456,6 +2491,8 @@ void D3D12Hooks::Unhook()
 
     if (o_CreateSampler != nullptr)
         DetourDetach(&(PVOID&) o_CreateSampler, hkCreateSampler);
+
+    // Signature hook/trampoline remains forwarding-only after Retire.
 
     if (o_CheckFeatureSupport != nullptr)
         DetourDetach(&(PVOID&) o_CheckFeatureSupport, hkCheckFeatureSupport);
@@ -2523,11 +2560,10 @@ std::optional<NativeStateRestorePoint> D3D12Hooks::CapturePostSrState(
     ID3D12GraphicsCommandList* commandList, Neurotic::D3D12::RestoreMask mask,
     Neurotic::D3D12::NativeStateCaptureDiagnostic* diagnostic)
 {
-    auto observed = s_nativeRecordingObserver.Observe(commandList);
+    auto observed = s_nativeRecordingObserver.Observe(commandList, diagnostic);
     if (!observed.active || !observed.completeCoverage)
     {
         if (diagnostic) {
-            *diagnostic = {};
             diagnostic->reason = !observed.active ? "Native.State.InactiveOrTainted" : "Native.State.CoverageIncomplete";
         }
         return {};
@@ -2537,12 +2573,23 @@ std::optional<NativeStateRestorePoint> D3D12Hooks::CapturePostSrState(
     return NativeStateRestorePoint{observed.nativeList, observed.incarnation, std::move(*state)};
 }
 
-bool D3D12Hooks::RestorePostSrState(const NativeStateRestorePoint& snapshot)
+bool D3D12Hooks::RestorePostSrState(const NativeStateRestorePoint& snapshot,
+    Neurotic::D3D12::NativeRecordingState::RestoreDiagnostic* diagnostic)
 {
     auto observed = s_nativeRecordingObserver.Observe(snapshot.nativeList);
-    if (!observed.active || !observed.completeCoverage || observed.incarnation != snapshot.incarnation) return false;
+    if (!observed.active || !observed.completeCoverage || observed.incarnation != snapshot.incarnation)
+    {
+        if (diagnostic) {
+            *diagnostic = {};
+            s_nativeRecordingObserver.DiagnoseRestore(snapshot.nativeList, snapshot.state, diagnostic);
+            diagnostic->reason = !observed.active ? "Native.Restore.ObservedInactiveOrTainted" :
+                !observed.completeCoverage ? "Native.Restore.ObservedCoverageIncomplete" :
+                "Native.Restore.ObservedIncarnationChanged";
+        }
+        return false;
+    }
     return s_nativeRecordingObserver.Restore(snapshot.nativeList, snapshot.incarnation, snapshot.state,
-                                             NativeOriginalSetters());
+                                             NativeOriginalSetters(), diagnostic);
 }
 
 bool D3D12Hooks::RegisterNativeRootLayout(

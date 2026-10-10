@@ -6,6 +6,7 @@
 #include "ObjectRuleHost.h"
 #include "SleekWidgets.h"
 #include "imgui_internal.h"
+#include "../../../OptiScaler/menu/MenuLayoutControls.h"
 #include "../../../OptiScaler/menu/SleekContentCard.h"
 #include "../../../OptiScaler/menu/SleekPilotLight.h"
 #include <string_view>
@@ -43,6 +44,7 @@ inline SavedSettingsLocation SavedSettingsPlacement(std::string_view section,std
   if(key=="ExtendedLimits")return {4,2,"Settings"};
   if(SavedKeyIn(key,{"ShortcutKey","FpsShortcutKey","FpsCycleShortcutKey","FGShortcutKey","EscapeClosesMenu"}))return {0,1,Neurotic::UiLiteral("desktop.gamesettingsview.key_binds_2fb9566d", "Key Binds")};
   if(key.starts_with("AllowGame"))return {0,2,Neurotic::UiLiteral("desktop.gamesettingsview.gameplay_input_560d4e0f", "Gameplay Input")};
+  if(key=="Corner"||key=="Scale")return {0,3,Neurotic::UiLiteral("desktop.menu-layout.heading", "Menu layout")};
   if(key=="Brightness")return {0,4,"Brightness"};
   if(key==Neurotic::UiLiteral("desktop.hubshell.language_c1ba9987", "Language"))return {0,5,Neurotic::UiLiteral("desktop.hubshell.language_c1ba9987", "Language")};
   if(key.starts_with("AccentColor"))return {0,3,Neurotic::UiLiteral("desktop.gamesettingsview.accent_colour_f6a004f9", "Accent Colour")};
@@ -171,14 +173,20 @@ inline void RenderSavedSetting(SettingsField& field,HubModel& model,KeybindCaptu
   const bool compactTheme=field.section==Neurotic::UiLiteral("desktop.gamesettingsview.menu_81f4ef5d", "Menu")&&SavedSettingsPlacement(field.section,field.key).child==3;
   ImGui::AlignTextToFramePadding();ImGui::TextWrapped("%s",Neurotic::Translate(label.c_str()).c_str());
   experimentalHelp();
-  if(compactTheme&&ImGui::GetContentRegionAvail().x>ImGui::GetFontSize()*34)ImGui::SameLine(ImGui::GetFontSize()*14);
+  const bool layoutField=field.section=="Menu"&&(field.key=="Corner"||field.key=="Scale");
+  const bool shortLabel=ImGui::CalcTextSize(Neurotic::Translate(label.c_str()).c_str()).x<=ImGui::GetFontSize()*13;
+  if(compactTheme&&(!layoutField||shortLabel)&&ImGui::GetContentRegionAvail().x>ImGui::GetFontSize()*34)ImGui::SameLine(ImGui::GetFontSize()*14);
   ImGui::SetNextItemWidth(card?ImGui::GetContentRegionAvail().x:std::min(ImGui::GetFontSize()*20,ImGui::GetContentRegionAvail().x));
   if(field.type=="keycode")RenderKeybindCapture(field,model.settings,capture,scope);
   else if(!field.choices.empty()){
    auto friendly=[&](const std::string& value){if(compatibility&&value==Neurotic::UiLiteral("desktop.gamesettingsview.auto_d1f397f2", "auto"))return std::string(Neurotic::UiLiteral("desktop.numericsettings.auto_d2dcb07c", "Auto"));auto found=field.valueLabels.find(value);return found!=field.valueLabels.end()?found->second:value==Neurotic::UiLiteral("desktop.gamesettingsview.auto_d1f397f2", "auto")?std::string(Neurotic::UiLiteral("desktop.gamesettingsview.automatic_1573651c", "Automatic")):value==Neurotic::UiLiteral("desktop.gamesettingsview.true_3cd12a50", "true")?std::string("Enabled"):value==Neurotic::UiLiteral("desktop.gamesettingsview.false_ec9d3153", "false")?std::string("Disabled"):value;};
    auto choiceId=[&](const std::string& value){auto found=field.valueLabelIds.find(value);return found!=field.valueLabelIds.end()?found->second:std::string{};};
    auto preview=friendly(field.draft.data());Neurotic::ScopedUiLiteral previewBinding(choiceId(field.draft.data()),preview.c_str());
-   if(ImGui::BeginCombo("##Value",preview.c_str())){for(auto& choice:field.choices){auto text=friendly(choice);Neurotic::ScopedUiLiteral choiceBinding(choiceId(choice),text.c_str());ImGui::PushID(choice.c_str());if(ImGui::Selectable(text.c_str(),choice==field.draft.data()))strncpy_s(field.draft.data(),field.draft.size(),choice.c_str(),_TRUNCATE);ImGui::PopID();}ImGui::EndCombo();}
+   if(field.section=="Menu"&&field.key=="Corner"&&field.choices==std::vector<std::string>{"0","1","2","3"}&&std::string_view(field.draft.data()).size()==1&&field.draft[0]>='0'&&field.draft[0]<='3'){
+    std::array<std::string,4> captions;std::array<const char*,4> names;std::vector<std::unique_ptr<Neurotic::ScopedUiLiteral>> bindings;
+    for(unsigned i=0;i<4;++i){const auto value=std::to_string(i);captions[i]=friendly(value);names[i]=captions[i].c_str();bindings.push_back(std::make_unique<Neurotic::ScopedUiLiteral>(choiceId(value),names[i]));}
+    unsigned corner=unsigned(field.draft[0]-'0');if(Neurotic::MenuLayout::CornerPicker("##Value",names.data(),corner,ImGui::GetFontSize()*20))strcpy_s(field.draft.data(),field.draft.size(),std::to_string(corner).c_str());
+   }else if(ImGui::BeginCombo("##Value",preview.c_str())){for(auto& choice:field.choices){auto text=friendly(choice);Neurotic::ScopedUiLiteral choiceBinding(choiceId(choice),text.c_str());ImGui::PushID(choice.c_str());if(ImGui::Selectable(text.c_str(),choice==field.draft.data()))strncpy_s(field.draft.data(),field.draft.size(),choice.c_str(),_TRUNCATE);ImGui::PopID();}ImGui::EndCombo();}
   }else{
    const double savedMinimum=field.minimum,savedMaximum=field.maximum;
    if((field.section=="QualityOverrides"&&field.key!="QualityRatioOverrideEnabled")||
@@ -262,8 +270,9 @@ inline void RenderSavedGameSettings(HubModel& model){
       const bool main=group==Neurotic::UiLiteral("desktop.gamesettingsview.rendering_2c41105c", "Rendering")||group=="Multipass";
       const bool initiallyOpen=main||page!=2||child!=0;
       const bool colorCard=nrMain&&group=="Colour";
+      const bool menuLayout=group==Neurotic::UiLiteral("desktop.menu-layout.heading","Menu layout");
       if(colorCard)Neurotic::Sleek::BeginContentCard("##SavedNrColor",Neurotic::UiLiteral("desktop.gamesettingsview.color_5b442d92", "Color"),true);
-      if(colorCard||group==Neurotic::UiLiteral("desktop.gamesettingsview.object_rules_bb34e3c8", "Object Rules")||group==Neurotic::UiLiteral("desktop.gamesettingsview.animations_3cd42432", "Animations")||ImGui::CollapsingHeader(group.c_str(),initiallyOpen?ImGuiTreeNodeFlags_DefaultOpen:0)){
+      if(colorCard||group==Neurotic::UiLiteral("desktop.gamesettingsview.object_rules_bb34e3c8", "Object Rules")||group==Neurotic::UiLiteral("desktop.gamesettingsview.animations_3cd42432", "Animations")||(menuLayout?Neurotic::MenuLayout::WrappedHeader(Neurotic::UiLiteral("desktop.menu-layout.heading","Menu layout"),initiallyOpen?ImGuiTreeNodeFlags_DefaultOpen:0):ImGui::CollapsingHeader(group.c_str(),initiallyOpen?ImGuiTreeNodeFlags_DefaultOpen:0))){
        if(group==Neurotic::UiLiteral("desktop.gamesettingsview.upscale_ratio_overrides_4aad47ec", "Upscale Ratio Overrides"))ImGui::TextWrapped(Neurotic::UiLiteral("desktop.gamesettingsview.ratios_normally_range_from_1_to_3_enable_extende_33866c29", "Ratios normally range from 1 to 3. Enable Extended Limits under Advanced > Settings for the 0.1 to 6 range."));
        std::vector<SettingsField*> controls;
        for(auto& field:model.settings){const auto location=SavedSettingsPlacement(field.section,field.key);if(location.page==page&&location.child==child&&group==location.section)controls.push_back(&field);}
@@ -271,6 +280,18 @@ inline void RenderSavedGameSettings(HubModel& model){
         const auto order=[](std::string_view key){return key==Neurotic::UiLiteral("desktop.gamesettingsview.advanced_0f9eefbe", "Advanced")?0:key=="MaximumPasses"?1:key=="Resolution"?2:3;};
         return order(a->key)<order(b->key);
        });
+       if(group==Neurotic::UiLiteral("desktop.menu-layout.heading", "Menu layout")) {
+        ImGui::TextWrapped(Neurotic::UiLiteral("desktop.menu-layout.restart", "In-game menu. Save, then restart game."));
+        ImGui::BeginDisabled(model.installer.busy || std::any_of(controls.begin(),controls.end(),[](const auto* field){return !field->available;}));
+        const auto* resetLabel=Neurotic::UiLiteral("desktop.menu-layout.reset","Reset layout");
+        const bool resetFits=ImGui::CalcTextSize(Neurotic::Translate(resetLabel).c_str()).x+2*ImGui::GetStyle().FramePadding.x<=ImGui::GetContentRegionAvail().x;
+        if(resetFits?ImGui::SmallButton(resetLabel):Neurotic::MenuLayout::ResetLayoutButton(resetLabel)) {
+         capture.ResetListening();
+         for(auto* field:controls)if(field->available && (field->key=="Corner"||field->key=="Scale"))
+          strcpy_s(field->draft.data(),field->draft.size(),field->key=="Corner"?"0":"auto");
+        }
+        ImGui::EndDisabled();
+       }
        for(auto* field:controls)RenderSavedSetting(*field,model,capture,scope);
       }
       if(colorCard)Neurotic::Sleek::EndContentCard();

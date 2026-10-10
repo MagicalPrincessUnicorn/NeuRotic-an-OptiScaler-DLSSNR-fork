@@ -10,6 +10,7 @@ class MenuHeightControl
     float dragHeight = 0;
     float dragMouseY = 0;
 public:
+    void Reset() { logicalHeight=dragHeight=dragMouseY=0; }
     ImVec2 Size(ImVec2 viewport, float scale) const
     {
         auto size = WindowSize(viewport, scale);

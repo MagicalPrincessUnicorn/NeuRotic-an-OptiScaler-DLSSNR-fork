@@ -45,6 +45,8 @@ public:
  // Off render/UI threads: request Stop, then end supervision and reap the child.
  // Returns true only after the child process exit was observed. Permanent shutdown.
  bool ShutdownAndWait(unsigned stopTimeoutMs=2000);
+ // Desktop Close requests the existing cooperative quit protocol. No join here.
+ void RequestShutdown();bool ShutdownReady() const;
  bool SelectModel(const std::filesystem::path& file,bool import);
  std::filesystem::path ModelFolder() const;
  bool EnsureModelFolder();

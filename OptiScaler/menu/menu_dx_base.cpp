@@ -11,12 +11,12 @@
 
 #include <imgui/imgui_impl_win32.h>
 
-bool MenuDxBase::RenderMenu()
+bool MenuDxBase::RenderMenu(float drawWidth, float drawHeight)
 {
     if (Config::Instance()->OverlayMenu.value_or_default())
         return false;
 
-    if (MenuCommon::RenderMenu())
+    if (MenuCommon::RenderMenu(drawWidth,drawHeight))
     {
         MenuCommon::FinalizeFrame();
         // This optional path bakes the menu into the upscaled image. Process its

@@ -166,8 +166,8 @@ function Invoke-NeuroticSimpleInstall([string]$Executable,$Package,[string]$Prox
     $result.errors+=,[pscustomobject]@{operation='Copy';path=$action.path;reason=$_.Exception.Message}
    }
   }
-  # Enable only after the new configuration and every selected required file
-  # have been delivered by this operation. A reused INI remains byte-preserved.
+  # Prepare fresh NR settings with NR OFF after every selected required file
+  # is delivered by this operation. A reused INI remains byte-preserved.
   if($setup.state -eq 'ReadyForRuntime'){
    $required=@($setup.requirements.requiredRuntimeFiles)+@($ProxyName,'OptiScaler.ini')
    $failed=@($required|Where-Object{$result.copied -notcontains $_ -and $result.reused -notcontains $_})
@@ -175,7 +175,7 @@ function Invoke-NeuroticSimpleInstall([string]$Executable,$Package,[string]$Prox
    $blockingSkips=@();foreach($skip in $result.skipped){$a=@($actions|Where-Object{$_.path -ieq $skip});if(-not $a.Count -or -not $a[0].optional -or $required -contains $skip){$blockingSkips+=,$skip}}
    if($blocking.Count -or $failed.Count -or $blockingSkips.Count){$setup.state='BlockedDelivery';$setup.reasonCode='desktop.automatic_setup.delivery_incomplete';$setup.reason='Automatic Neural Rendering was not enabled because installation did not complete. Retry the installation.'}
    elseif($result.copied -contains 'OptiScaler.ini'){
-    try{$destination=Resolve-NeuroticOwnedPath $root 'OptiScaler.ini';Invoke-NeuroticSimpleBoundary 'Configure' 'OptiScaler.ini';$document=Read-NeuroticSimpleIni $destination;$final=Resolve-NeuroticInstallDefaults $setup.requirements $true $InstallDefaults $profile.iniPatches $defaultsEligible;$patches=@($final.patches);if($rename){$patches+=,[pscustomobject]@{section='Plugins';key='LoadReshade';value='true';policy='routeRequired'}};$text=Update-NeuroticProfileIni $document.text $patches $true;[NeuRoticSimpleFileIo]::Write([byte[]]($document.bom+$document.encoding.GetBytes($text)),$destination)}
+    try{$destination=Resolve-NeuroticOwnedPath $root 'OptiScaler.ini';Invoke-NeuroticSimpleBoundary 'Configure' 'OptiScaler.ini';$document=Read-NeuroticSimpleIni $destination;$final=Resolve-NeuroticInstallDefaults $setup.requirements $false $InstallDefaults $profile.iniPatches $defaultsEligible;$patches=@($final.patches);if($rename){$patches+=,[pscustomobject]@{section='Plugins';key='LoadReshade';value='true';policy='routeRequired'}};$text=Update-NeuroticProfileIni $document.text $patches $true;[NeuRoticSimpleFileIo]::Write([byte[]]($document.bom+$document.encoding.GetBytes($text)),$destination)}
     catch{$setup.state='BlockedDelivery';$setup.reasonCode='desktop.automatic_setup.configuration_failed';$setup.reason='Automatic Neural Rendering configuration could not be saved. Retry the installation.';$result.errors+=,[pscustomobject]@{operation='Configure';path='OptiScaler.ini';reason=$_.Exception.Message}}
    }else{$setup.state='PreservedPreferences';$setup.reasonCode='desktop.automatic_setup.preferences_preserved';$setup.reason='Existing Neural Rendering preferences were preserved. Runtime input and output safety will be validated in the game.'}
   }

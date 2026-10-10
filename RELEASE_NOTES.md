@@ -1,8 +1,28 @@
+# NeuRotic Alpha 0.9.8 Hotfix — Patch notes
+
+**Native Temporal compatibility is still a work in progress.** This hotfix improves stability and fixes tested paths; it does not complete compatibility across games, graphics APIs, or rendering modes. More Native work remains.
+
+- **Native stability:** improved activation ordering and restoration of the game's rendering state. Unsupported or unrestorable work is rejected before custom rendering changes begin.
+- **Compatibility and portability:** improved command recording, resource ownership, input and format validation, and safe resource retirement. Automatic hook setup handles more supported paths without weakening restoration checks.
+- **Desktop shutdown:** the App stays visible while background work finishes, shows what is pending, and closes after cleanup completes.
+- **Fresh-install defaults:** neural rendering starts off. Existing users' saved choices and settings are preserved.
+- **Diagnostics:** current recording failures are distinguished from earlier refusal history, making remaining compatibility problems easier to identify. File logging is off by default in this public bundle.
+
+Monster Hunter Wilds recovery and Dragon's Dogma 2 regression tests passed on the tested candidate and settings. Wilds was tested with `RestoreComputeSignature=false`; that result does not qualify its Auto setting. Support still depends on the game, route, GPU, driver, and provider files.
+
+Known Native limitations remain in Stellar Blade, Crimson Desert, Doom Eternal, and Doom: The Dark Ages. Compatible Present/Post routes may work where Native does not. Use **NR Anything** when compatible in-game integration is unavailable.
+
+[Download the Alpha 0.9.8 full installer](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/download/alpha-0.9.8/NeuRotic-Alpha-0.9.8-Full-Installer.zip)
+
+---
+
+[Download the full installer](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/download/alpha-0.9.7/NeuRotic-Alpha-0.9.7-Full-Installer.zip)
+
 # NeuRotic Alpha 0.9.7 — Patch notes
 
 Features added and expanded since Alpha 0.9.6.
 
-[Main page](README.md) · [Credits and attribution](ATTRIBUTION.md)
+[Main page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/blob/alpha-0.9.7/README.md) · [Credits and attribution](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/blob/alpha-0.9.7/ATTRIBUTION.md)
 
 ## Desktop application
 

@@ -84,12 +84,14 @@ struct HubModel {
  void AddDirectory(const std::filesystem::path& path);void SetExecutable(int index,const std::filesystem::path& path);void MergeDiscovery(const Json& result);void CancelScan();
  void ScanDirectory(const std::string& path);void RemoveDirectory(int index);std::vector<SearchDirectory> SearchDirectories() const;void OpenSelectedGameFolder();void OpenSelectedGameScreenshots();
  void RefreshSelected();bool CanCollectGameDiagnostics() const;void CollectGameDiagnostics();
+ void PollClosing();bool DiagnosticsPending()const;bool BundlePending()const;
  bool CanStartGame() const;void StartGame();void ExportSelectedDiagnostics(const std::filesystem::path& directory);void OpenBundleFolder();
  bool DiagnosticExportRunning() const{return bundleWorker.valid();}
  void StartCandidateCapture(bool observer);
  std::vector<int> OrderedGames(const std::string& filter={}) const;void ToggleFavorite(int index);
  void ToggleHidden(int index);void SetLibraryFilter(LibraryFilter filter);void LeaveLibrarySelection();
-private:
+ private:
+ void PollImpl(bool closing);
  std::string visibilityPinnedGameId;
  LibraryFilter visibilityPinnedFilter=LibraryFilter::All;
  std::map<std::wstring,GameSessionStatus> gameSession;

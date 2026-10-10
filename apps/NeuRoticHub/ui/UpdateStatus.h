@@ -8,6 +8,7 @@ UpdateStatus EvaluateRelease(const std::string& tag);
 void StartUpdateCheck();
 UpdateStatus GetUpdateStatus();
 void StopUpdateCheck();
+void RequestUpdateStop();bool UpdateStopReady();
 inline constexpr wchar_t UpdatePage[]=L"https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases";
 inline constexpr wchar_t ProjectPage[]=L"https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork";
 inline constexpr wchar_t PatchNotesPage[]=L"https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/latest";

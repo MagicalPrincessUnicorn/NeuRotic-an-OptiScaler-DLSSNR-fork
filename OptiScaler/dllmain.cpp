@@ -1998,7 +1998,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         PrepareLogger();
         NR_FG_EVENT("capture-start", "boundary=process-attach trigger=process-launch renderingChanges=false");
 
-        spdlog::warn("{0} loaded", VER_PRODUCT_NAME);
+        spdlog::warn("NeuRotic Alpha {} loaded | Based on {}", VersionCheck::CurrentVersionString(), VER_PRODUCT_NAME);
         spdlog::warn("---------------------------------");
         spdlog::warn("OptiScaler is freely downloadable from");
         spdlog::warn("GitHub : https://github.com/optiscaler/OptiScaler/releases");

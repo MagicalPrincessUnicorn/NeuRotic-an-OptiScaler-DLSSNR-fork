@@ -206,9 +206,11 @@ function Get-NeuroticRuntimeComponents([string]$AppRoot) {
  }
  $status=if($problem){'Unavailable'}elseif($generation){'Present'}elseif($present.Count){'Partial'}else{'Missing'}
  $streamline=[ordered]@{optional=$true;status=$status;path=$stream;present=$present;missing=$missing;reason=$problem;generation=$generation;files=$verifiedFiles}
- $modelPath=Join-Path $root 'Place NVNGX DLSS NR File Here/nvngx_dlssnr.dll';$modelStatus='Missing';$reason=$null;$modelHash=$null;$modelAcceptance=$null
+ $modelPath=Join-Path $root 'Place NVNGX DLSS NR File Here/nvngx_dlssnr.dll';$modelStatus='Missing';$modelExists=$false;$reason=$null;$modelHash=$null;$modelAcceptance=$null
  try {
   $folder=Get-NeuroticModelFolder;$modelPath=Assert-NeuroticRuntimePath (Join-Path $folder 'nvngx_dlssnr.dll')
+  # Presence is independent of admission; a rejected file is not missing.
+  $modelExists=[IO.File]::Exists($modelPath)
   $preference=Assert-NeuroticRuntimePath (Join-Path $root 'anything.json');$worker=Find-NeuroticModelWorker $AppRoot
   $remembered=$null
   if([IO.File]::Exists($preference)){$remembered=[string](Get-Content -LiteralPath $preference -Raw|ConvertFrom-Json).modelPath}
@@ -235,7 +237,7 @@ function Get-NeuroticRuntimeComponents([string]$AppRoot) {
    if($checked.ready){
     if($checked.sha256 -notmatch '^[a-fA-F0-9]{64}$'){throw 'Model verifier returned no validated byte identity'}
     if(-not [string]::Equals([IO.Path]::GetFullPath($checked.path),$modelPath,[StringComparison]::OrdinalIgnoreCase)){throw 'Model verifier returned a path outside the deposit folder'}
-    $modelStatus='Present';$modelHash=[string]$checked.sha256
+    $modelStatus='Present';$modelExists=$true;$modelHash=[string]$checked.sha256
     # The verifier may import a legacy source. Bind the accepted target bytes
     # and stat under one read lease before persisting readiness.
     $input=[IO.File]::Open($modelPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
@@ -248,7 +250,7 @@ function Get-NeuroticRuntimeComponents([string]$AppRoot) {
    }else{$modelStatus='Unavailable'}
   }else{$reason='Place your compatible nvngx_dlssnr.dll directly in the model folder.'}
  }catch{$modelStatus='Unavailable';$reason=$_.Exception.Message}
- $components=[ordered]@{streamline=$streamline;neuralModel=[ordered]@{optional=$true;status=$modelStatus;path=$modelPath;sha256=$modelHash;present=$(if($modelStatus -eq 'Present'){@('nvngx_dlssnr.dll')}else{@()});missing=$(if($modelStatus -eq 'Present'){@()}else{@('nvngx_dlssnr.dll')});reason=$reason}}
+ $components=[ordered]@{streamline=$streamline;neuralModel=[ordered]@{optional=$true;status=$modelStatus;path=$modelPath;sha256=$modelHash;present=$(if($modelExists){@('nvngx_dlssnr.dll')}else{@()});missing=$(if($modelExists){@()}else{@('nvngx_dlssnr.dll')});reason=$reason}}
  if($modelAcceptance){foreach($name in @('fileIdentity','bytes','lastWriteTicks')){$components.neuralModel[$name]=$modelAcceptance.$name}}
  Save-NeuroticRuntimeAcceptance $components
  return $components

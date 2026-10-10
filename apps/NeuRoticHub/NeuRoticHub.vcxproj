@@ -7,7 +7,7 @@
  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
  <PropertyGroup><RepoRoot>$(MSBuildThisFileDirectory)..\..\</RepoRoot><OutDir>$(RepoRoot)builds\hub\bin\</OutDir><IntDir>$(RepoRoot)builds\hub\obj\</IntDir><TargetName>NeuRotic</TargetName><NhEnableCapture>false</NhEnableCapture><NhEnableNr>false</NhEnableNr><NhEnableTemporalSr>false</NhEnableTemporalSr><NhEnableFrameGeneration>false</NhEnableFrameGeneration></PropertyGroup>
  <ItemDefinitionGroup>
-  <ClCompile><LanguageStandard>stdcpp20</LanguageStandard><RuntimeLibrary>MultiThreaded</RuntimeLibrary><Optimization>MaxSpeed</Optimization><WarningLevel>Level4</WarningLevel><AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(RepoRoot)OptiScaler;$(RepoRoot)OptiScaler\include;$(RepoRoot)OptiScaler\include\imgui;$(RepoRoot)external\nlohmann;$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)library;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_USER_CONFIG="HubImConfig.h";%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions></ClCompile>
+  <ClCompile><LanguageStandard>stdcpp20</LanguageStandard><RuntimeLibrary>MultiThreaded</RuntimeLibrary><Optimization>MaxSpeed</Optimization><WarningLevel>Level4</WarningLevel><AdditionalIncludeDirectories>$(RepoRoot)OptiScaler\menu\localization;$(MSBuildThisFileDirectory);$(RepoRoot)OptiScaler;$(RepoRoot)OptiScaler\include;$(RepoRoot)OptiScaler\include\imgui;$(RepoRoot)external\nlohmann;$(MSBuildThisFileDirectory);$(MSBuildThisFileDirectory)library;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;IMGUI_USER_CONFIG="HubImConfig.h";%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions></ClCompile>
   <Link><SubSystem>Windows</SubSystem><AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;comdlg32.lib;shell32.lib;ole32.lib;windowscodecs.lib;shlwapi.lib;dwmapi.lib;advapi32.lib;winhttp.lib;%(AdditionalDependencies)</AdditionalDependencies><GenerateDebugInformation>true</GenerateDebugInformation><AdditionalOptions>/PDBALTPATH:$(TargetName).pdb %(AdditionalOptions)</AdditionalOptions></Link>
  </ItemDefinitionGroup>
  <ItemGroup>
@@ -33,8 +33,8 @@
   <ClCompile Include="$(RepoRoot)OptiScaler\menu\Localization.cpp"/>
 <ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageRuntime.cpp"></ClCompile>
 <ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguagePack.cpp"></ClCompile>
-<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageBundles.cpp"></ClCompile>
-<ClCompile Include="$(RepoRoot)OptiScaler\menu\localization\LanguageCatalog.cpp"></ClCompile>
+<ClCompile Include="$(MSBuildThisFileDirectory)shipping-localization\OptiScaler\menu\localization\LanguageBundles.cpp"></ClCompile>
+<ClCompile Include="$(MSBuildThisFileDirectory)shipping-localization\OptiScaler\menu\localization\LanguageCatalog.cpp"></ClCompile>
   <ClCompile Include="ui\HubShell.cpp"/><ClCompile Include="ui\HubViewModel.cpp"/><ClCompile Include="install\OperationController.cpp"/>
   <ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_draw.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_tables.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_widgets.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_impl_win32.cpp"/><ClCompile Include="$(RepoRoot)OptiScaler\include\imgui\imgui_impl_dx11.cpp"/>
  </ItemGroup>

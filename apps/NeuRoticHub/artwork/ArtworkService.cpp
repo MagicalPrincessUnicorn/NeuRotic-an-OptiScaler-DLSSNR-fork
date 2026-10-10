@@ -157,6 +157,8 @@ ArtworkService::~ArtworkService()=default;
 void ArtworkService::Attach(ID3D11Device* device){impl->device=device;}
 void ArtworkService::SetOnlineEnabled(bool enabled){if(impl->onlineEnabled.exchange(enabled)==enabled)return;if(!enabled){std::lock_guard lock(impl->mutex);impl->remoteJobs.clear();impl->remotePending.clear();}else for(auto& pair:impl->entries)if(!pair.second.definitive&&pair.first.ends_with("|online"))pair.second.retry=0;impl->cv.notify_all();}
 void ArtworkService::Shutdown(){if(impl)impl->Stop();}
+void ArtworkService::RequestShutdown(){if(impl){impl->stop=true;impl->cv.notify_all();}}
+bool ArtworkService::ShutdownReady()const{if(!impl)return true;for(auto& worker:impl->workers)if(worker.joinable()&&WaitForSingleObject(worker.native_handle(),0)!=WAIT_OBJECT_0)return false;return true;}
 void ArtworkService::Poll(){
  ++impl->frame;std::deque<Impl::Output> outputs;{std::lock_guard lock(impl->mutex);outputs.swap(impl->outputs);}impl->cv.notify_all();
  for(auto& output:outputs){auto it=impl->entries.find(output.key);if(it==impl->entries.end())continue;auto& entry=it->second;if(entry.revision!=output.revision||(output.remote&&entry.definitive))continue;if(!output.remote){entry.queued=false;entry.definitive=output.definitive&&(bool)output.pixels;}entry.retry=GetTickCount64()+(output.pixels?60000:30000);if(!output.pixels||!impl->device)continue;

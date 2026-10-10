@@ -145,79 +145,53 @@ constexpr NavigationStatus FrameGenerationNavigationStatus(bool requested, bool 
 inline void Navigation(int& selected, float height, bool wide,
                        const NavigationStatus* status = nullptr)
 {
-    const float f = ImGui::GetFontSize();
-    float width = 0;
-    for (auto* page : Pages) width = (std::max)(width,ImGui::CalcTextSize(page).x);
-    width += f*3.7f;
-    const float available=ImGui::GetContentRegionAvail().x;
-    const float cellWidth=(std::max)(1.0f,(available-ImGui::GetStyle().ItemSpacing.x*(PageCount-1))/PageCount);
-    const float captionRoom=(std::max)(1.0f,cellWidth-f*2.1f);
-    const auto pageCaptionRoom=[&](int){return captionRoom;};
-    float captionFont=f;
-    if(!wide) for(int page=0;page<PageCount;++page) {
-        const auto caption=Neurotic::Translate(Pages[page]);
-        const float room=pageCaptionRoom(page);
-        size_t start=0;
-        while(start<caption.size()) {
-            const size_t end=caption.find(' ',start);
-            const auto word=caption.substr(start,end==std::string::npos?end:end-start);
-            const float wordWidth=ImGui::CalcTextSize(word.c_str()).x;
-            if(wordWidth>room) captionFont=(std::min)(captionFont,f*room*.88f/wordWidth);
-            if(end==std::string::npos) break;
-            start=end+1;
-        }
-    }
-    ImGui::PushFont(nullptr,captionFont);
+    const float f=ImGui::GetFontSize();const auto& style=ImGui::GetStyle();
+    float width=0,longestWord=0;
+    for(auto* page:Pages){width=(std::max)(width,ImGui::CalcTextSize(page).x);const auto caption=Neurotic::Translate(page);size_t start=0;while(start<caption.size()){const auto end=caption.find(' ',start);const auto word=caption.substr(start,end==std::string::npos?end:end-start);longestWord=(std::max)(longestWord,ImGui::CalcTextSize(word.c_str()).x);if(end==std::string::npos)break;start=end+1;}}
+    width+=f*3.7f;const float available=(std::max)(1.f,ImGui::GetContentRegionAvail().x);
+    const float equalWidth=(std::max)(1.f,(available-style.ItemSpacing.x*(PageCount-1))/PageCount);
+    const float minimumCell=(std::min)(available,(std::max)(f*3.f,longestWord+f*2.1f));
+    const bool strip=!wide&&equalWidth<minimumCell;
+    const float cellWidth=strip?minimumCell:equalWidth;
+    const float captionRoom=(std::max)(1.f,cellWidth-f*2.1f),captionFont=f;
     float cellHeight=f*2.25f;
-    if(!wide) for(int page=0;page<PageCount;++page) {
-        const auto caption=Neurotic::Translate(Pages[page]);
-        cellHeight=(std::max)(cellHeight,ImGui::CalcTextSize(caption.c_str(),nullptr,false,pageCaptionRoom(page)).y+f*.7f);
-    }
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4(0,0,0,0));
-    if (wide) ImGui::BeginChild("##NavigationRail",{width,height},ImGuiChildFlags_None);
+    if(!wide)for(auto* page:Pages){const auto caption=Neurotic::Translate(page);cellHeight=(std::max)(cellHeight,(std::min)(2*f,ImGui::CalcTextSize(caption.c_str(),nullptr,false,captionRoom).y)+f*.7f);}
+    auto* parent=ImGui::GetCurrentWindow();const auto identity=parent->IDStack.back();
+    const auto stripId=ImGui::GetID("##NavigationStrip");
+    const auto selectedKey=ImGui::GetID("##NavigationStripSelection"),widthKey=ImGui::GetID("##NavigationStripWidth");
+    const bool reveal=parent->StateStorage.GetInt(selectedKey,-1)!=selected||std::abs(parent->StateStorage.GetFloat(widthKey,-1)-available)>.5f;
+    ImGui::PushFont(nullptr,captionFont);ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4(0,0,0,0));
+    if(wide)ImGui::BeginChild("##NavigationRail",{width,height},ImGuiChildFlags_None);
+    else if(strip){ImGui::BeginChild("##NavigationStrip",{0,cellHeight+style.ScrollbarSize+2*style.WindowPadding.y},ImGuiChildFlags_NavFlattened,ImGuiWindowFlags_HorizontalScrollbar);ImGui::PushOverrideID(identity);}
     else ImGui::BeginGroup();
-    for (int i=0;i<PageCount;++i)
-    {
-        const float rowWidth = wide ? ImGui::GetContentRegionAvail().x : cellWidth;
-        if (!wide && i) ImGui::SameLine();
-        ImGui::PushID(i);
-        const ImVec2 origin = ImGui::GetCursorScreenPos();
-        const ImVec2 size(rowWidth,wide?f*2.7f:cellHeight);
-        if (ImGui::InvisibleButton("##Page",size,ImGuiButtonFlags_EnableNav)) selected=i;
-        const ImGuiID id = ImGui::GetItemID();
-        const bool hover = ImGui::IsItemHovered(), held = ImGui::IsItemActive();
-        const float chosen = Animate(id,10,selected==i ? 1.0f : 0.0f,22);
-        ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
-        bg.w *= (std::max)(chosen,Animate(id,11,hover? .45f:0.0f));
-        auto* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(origin,{origin.x+size.x,origin.y+size.y},ImGui::GetColorU32(bg),8);
-        if(selected==i) draw->AddRect(origin,{origin.x+size.x,origin.y+size.y},ImGui::GetColorU32(ImGuiCol_CheckMark),8);
-        const ImU32 ink = ImGui::GetColorU32(selected==i ? ImGuiCol_CheckMark : ImGuiCol_Text);
-        const float iconInset=wide?.7f:.35f;
-        const ImU32 iconInk = status && (i==1 || i==2 || i==3) ?
-            ImGui::GetColorU32(PilotColor(i==2 ? (status[i].running ? PilotState::On : PilotState::Off) : status[i].pilot)) : ink;
-        Icon(draw,i==1 ? 2 : i==2 ? 1 : i,{origin.x+f*iconInset,origin.y+(size.y-f)*.5f},f,iconInk);
-        const auto caption = Neurotic::Translate(Pages[i]);
-        const float room=pageCaptionRoom(i);
-        const auto captionSize=ImGui::CalcTextSize(caption.c_str(),nullptr,false,wide?0:room);
-        const float labelLeft=origin.x+f*(wide?2.2f:1.75f);
-        draw->PushClipRect({labelLeft,origin.y},{origin.x+size.x-f*.35f,origin.y+size.y},true);
-        const float captionX=wide?labelLeft:labelLeft+(std::max)(0.0f,(room-captionSize.x)*.5f);
-        draw->AddText(ImGui::GetFont(),captionFont,{captionX,origin.y+(size.y-captionSize.y)*.5f+held*.5f},
-            ink,caption.c_str(),nullptr,wide?0:room);
-        draw->PopClipRect();
-        if (wide && chosen>.001f) {
-            ImVec4 mark = ImGui::GetStyleColorVec4(ImGuiCol_CheckMark); mark.w*=chosen;
-            draw->AddRectFilled({origin.x,origin.y+f*.8f},{origin.x+3,origin.y+size.y-f*.8f},ImGui::GetColorU32(mark),2);
-        }
-        ImGui::RenderNavCursor(ImRect(origin,{origin.x+size.x,origin.y+size.y}),id);
-        ImGui::PopID();
+    for(int i=0;i<PageCount;++i){
+        const float rowWidth=wide?ImGui::GetContentRegionAvail().x:cellWidth;if(!wide&&i)ImGui::SameLine();ImGui::PushID(i);
+        const auto origin=ImGui::GetCursorScreenPos();const ImVec2 size{rowWidth,wide?f*2.7f:cellHeight};
+        const bool pressed=ImGui::InvisibleButton("##Page",size,ImGuiButtonFlags_EnableNav);if(pressed)selected=i;
+        const auto id=ImGui::GetItemID();const bool hover=ImGui::IsItemHovered(),held=ImGui::IsItemActive();
+        // The same native item can move between the row and scroll strip on resize.
+        auto* previous=GImGui->NavWindow;auto* current=ImGui::GetCurrentWindow();
+        if(!wide&&id==GImGui->NavId&&previous&&previous!=current&&
+           (previous==parent||(previous->ParentWindow==parent&&previous->ChildId==stripId)))
+            ImGui::SetFocusID(id,current);
+        if(strip&&selected==i&&(reveal||pressed))ImGui::SetScrollHereX(.5f);
+        const float chosen=Animate(id,10,selected==i?1.f:0.f,22);auto bg=ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);bg.w*=(std::max)(chosen,Animate(id,11,hover?.45f:0.f));auto* draw=ImGui::GetWindowDrawList();
+        draw->AddRectFilled(origin,origin+size,ImGui::GetColorU32(bg),8);if(selected==i)draw->AddRect(origin,origin+size,ImGui::GetColorU32(ImGuiCol_CheckMark),8);
+        const auto ink=ImGui::GetColorU32(selected==i?ImGuiCol_CheckMark:ImGuiCol_Text);
+        const auto iconInk=status&&(i==1||i==2||i==3)?ImGui::GetColorU32(PilotColor(i==2?(status[i].running?PilotState::On:PilotState::Off):status[i].pilot)):ink;
+        Icon(draw,i==1?2:i==2?1:i,{origin.x+f*(wide?.7f:.35f),origin.y+(size.y-f)*.5f},f,iconInk);
+        const auto caption=Neurotic::Translate(Pages[i]);const auto captionSize=ImGui::CalcTextSize(caption.c_str(),nullptr,false,wide?0:captionRoom);const float left=origin.x+f*(wide?2.2f:1.75f),right=origin.x+size.x-f*.35f;const bool abbreviated=!wide&&captionSize.y>2*f+.1f;
+        draw->PushClipRect({left,origin.y},{right,origin.y+size.y},true);
+        if(abbreviated){const auto at=ImVec2{left,origin.y+(size.y-f)*.5f};ImGui::RenderTextEllipsis(draw,at,{right,at.y+f},right,caption.c_str(),nullptr,nullptr);}
+        else{const float x=wide?left:left+(std::max)(0.f,(captionRoom-captionSize.x)*.5f);draw->AddText(ImGui::GetFont(),captionFont,{x,origin.y+(size.y-captionSize.y)*.5f+held*.5f},ink,caption.c_str(),nullptr,wide?0:captionRoom);}
+        draw->PopClipRect();if(abbreviated&&(hover||ImGui::IsItemFocused())){ImGui::BeginTooltip();ImGui::PushTextWrapPos((std::min)(400.f,(std::max)(1.f,ImGui::GetMainViewport()->WorkSize.x-48)));ImGui::TextUnformatted(caption.c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();}
+        if(wide&&chosen>.001f){auto mark=ImGui::GetStyleColorVec4(ImGuiCol_CheckMark);mark.w*=chosen;draw->AddRectFilled({origin.x,origin.y+f*.8f},{origin.x+3,origin.y+size.y-f*.8f},ImGui::GetColorU32(mark),2);}
+        ImGui::RenderNavCursor(ImRect(origin,origin+size),id);ImGui::PopID();
     }
-    ImGui::PopFont();
-    if (wide) { ImGui::EndChild(); ImGui::SameLine(); }
-    else { ImGui::EndGroup(); ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing(); }
-    ImGui::PopStyleColor();
+    if(wide){ImGui::EndChild();ImGui::SameLine();}else if(strip){ImGui::PopID();ImGui::EndChild();ImGui::Spacing();ImGui::Separator();ImGui::Spacing();}else{ImGui::EndGroup();ImGui::Spacing();ImGui::Separator();ImGui::Spacing();}
+    parent->StateStorage.SetInt(selectedKey,selected);parent->StateStorage.SetFloat(widthKey,available);ImGui::PopStyleColor();ImGui::PopFont();
 }
+
 struct PageReveal
 {
     explicit PageReveal(int selected)
@@ -485,21 +459,24 @@ inline FooterActionResult FooterActions(int* language=nullptr,float reservedWidt
     return result;
 }
 // One footer row: support stays left; language and scale share the right-hand baseline.
-inline FooterActionResult FooterControls(int& language,int& scale,const char* autoText=Neurotic::UiLiteral("ingame.menu-common.auto_b980aecf", "Auto"))
+inline FooterActionResult FooterControls(int& language,int& scale,const char* autoText=Neurotic::UiLiteral("ingame.menu-common.auto_b980aecf", "Auto"),const char* scalePreview=nullptr)
 {
     const auto origin=ImGui::GetCursorScreenPos();
     const float available=ImGui::GetContentRegionAvail().x;
     const float gap=ImGui::GetStyle().ItemSpacing.x;
     const float height=ImGui::GetFrameHeight();
     float languageWidth=LanguageControlWidth(),scaleWidth=ScaleControlWidth();
+    if(scalePreview)scaleWidth=(std::max)(scaleWidth,ImGui::CalcTextSize(scalePreview).x+height+ImGui::GetStyle().FramePadding.x*2);
     float languageLabel=FieldLabelReserve(Neurotic::UiLiteral("ingame.sleekshell.language_990617e3", "Language")),scaleLabel=FieldLabelReserve(Neurotic::UiLiteral("ingame.menu-common.scale_92419c71", "Scale"));
     const float budget=(std::max)(height*2,available-ButtonWidth(Neurotic::UiLiteral("ingame.sleekshell.send_ko_fi_183e38d3", "Send Ko-fi"))-gap*3);
     if(languageWidth+scaleWidth+languageLabel+scaleLabel+gap*2>budget)
         languageLabel=scaleLabel=0;
     if(languageWidth+scaleWidth+gap*2>budget) {
         const float controlRoom=(std::max)(height*2,budget-gap*2);
-        languageWidth=(std::min)(languageWidth,controlRoom*.5f);
-        scaleWidth=(std::min)(scaleWidth,controlRoom-languageWidth);
+        // Keep the requested/displayed numeric scale readable; language names
+        // already have the picker's full-label hover presentation when compact.
+        scaleWidth=(std::min)(scaleWidth,controlRoom-height);
+        languageWidth=(std::min)(languageWidth,controlRoom-scaleWidth);
     }
     const float total=languageWidth+scaleWidth+languageLabel+scaleLabel+gap*2;
     const float languageX=origin.x+available-total;
@@ -525,7 +502,7 @@ inline FooterActionResult FooterControls(int& language,int& scale,const char* au
     ImGui::SetCursorScreenPos({scaleX+scaleLabel,origin.y});
     ImGui::SetNextItemWidth(scaleWidth);
     const char* choices[]={autoText,"0.5","0.6","0.7","0.8","0.9","1.0","1.1","1.2","1.3","1.4","1.5","1.6","1.7","1.8","1.9","2.0"};
-    if(ImGui::BeginCombo("##MenuScale",choices[ImClamp(scale,0,16)])) {
+    if(ImGui::BeginCombo("##MenuScale",scalePreview?scalePreview:choices[ImClamp(scale,0,16)])) {
         for(int i=0;i<17;++i) {
             if(ImGui::Selectable(choices[i],scale==i)) { scale=i;result.scaleChanged=true; }
             if(scale==i) ImGui::SetItemDefaultFocus();

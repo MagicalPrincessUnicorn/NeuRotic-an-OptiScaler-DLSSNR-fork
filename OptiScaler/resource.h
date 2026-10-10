@@ -35,7 +35,7 @@
 // published GitHub release tags and deliberately does not follow upstream's DLL version.
 #define NEUROTIC_VERSION_MAJOR 0
 #define NEUROTIC_VERSION_MINOR 9
-#define NEUROTIC_VERSION_PATCH 7
+#define NEUROTIC_VERSION_PATCH 8
 
 #define VER_DEV_RELEASE
 // #define VER_PRE_RELEASE
@@ -73,3 +73,7 @@
 #endif // VER_PRE_RELEASE
 
 #define VER_PRODUCT_NAME "OptiScaler v" VER_PRODUCT_VERSION_STR
+
+// NeuRotic public PE identity; genuine upstream VER_* identity remains separate.
+#define NEUROTIC_FILE_VERSION NEUROTIC_VERSION_MAJOR, NEUROTIC_VERSION_MINOR, NEUROTIC_VERSION_PATCH, 0
+#define NEUROTIC_FILE_VERSION_STR STRINGIZE(NEUROTIC_VERSION_MAJOR) "." STRINGIZE(NEUROTIC_VERSION_MINOR) "." STRINGIZE(NEUROTIC_VERSION_PATCH)

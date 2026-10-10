@@ -14,7 +14,7 @@ class MenuDxBase
 
   protected:
     long frameCounter = 0;
-    static bool RenderMenu();
+    static bool RenderMenu(float drawWidth=0, float drawHeight=0);
 
     static DXGI_FORMAT TranslateTypelessFormats(DXGI_FORMAT format)
     {

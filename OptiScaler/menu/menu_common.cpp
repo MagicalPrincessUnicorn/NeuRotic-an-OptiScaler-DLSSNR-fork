@@ -5,6 +5,12 @@
 #include <dlssnr/NrStatusPanel.h>
 #include "SleekPilotLight.h"
 #include "MenuHeightControl.h"
+#include "MenuLayoutControls.h"
+#include "MenuInputProjection.h"
+#include "MenuContextOwner.h"
+static Neurotic::MenuLayout::Placement menuPlacement;
+static Neurotic::MenuLayout::InputProjection menuInputProjection;
+static Neurotic::MenuLayout::ContextOwner menuContextOwner;
 #include "SleekContentCard.h"
 #include <mfg/ExperimentalMfgRuntime.h>
 #include "ExperimentalMfgControls.h"
@@ -1093,8 +1099,9 @@ static void MenuHdrCheck(ImGuiIO io)
 
 static float MenuResolutionScale(ImGuiIO io)
 {
-    if (Config::Instance()->MenuScale.has_value())
-        return Config::Instance()->MenuScale.value();
+    if (const auto manual=Neurotic::MenuLayout::ManualScale(Config::Instance()->MenuScale.has_value()?
+            std::optional<float>{Config::Instance()->MenuScale.value()}:std::nullopt))
+        return *manual;
 
     // Calculate menu scale according to display resolution
     float y = State::Instance().screenHeight;
@@ -1165,8 +1172,11 @@ static double lastTime = 0.0;
 static double lastFrameTime = 0.0;
 static UINT64 uwpTargetFrame = 0;
 
+Neurotic::MenuLayout::ContextOwner& MenuCommon::OwnedContext() {return menuContextOwner;}
+
 void MenuCommon::Present()
 {
+    auto contextScope=BindContext();
     _frameCount++;
 
     auto now = Util::MillisecondsNow();
@@ -1194,6 +1204,7 @@ struct MenuCommon::RenderMenuContext
     State& state;
     decltype(Config::Instance()) config;
     ImGuiIO& io;
+    ImVec2 drawSize{};
     IFeature* currentFeature = nullptr;
 
     double now = 0.0;
@@ -1507,6 +1518,16 @@ void MenuCommon::BeginMenuFrameIfNeeded(RenderMenuContext& ctx)
         }
 
         OptiInput::FeedImGui(_isVisible);
+
+        // Platform/input positions are client pixels; renderer-owned UI pixels
+        // follow this frame's real target. Never change another ImGui context.
+        const ImVec2 clientSize=io.DisplaySize;
+        if(Neurotic::MenuLayout::ValidExtent(ctx.drawSize)) {
+            menuInputProjection.Apply(*ImGui::GetCurrentContext(),clientSize,
+                {ImGui::GetMainViewport()->Pos,ctx.drawSize});
+            io.DisplaySize=ctx.drawSize;
+            io.DisplayFramebufferScale={1.f,1.f};
+        }
 
         MenuHdrCheck(io);
         ImGui::NewFrame();
@@ -7295,7 +7316,10 @@ void MenuCommon::RenderGeneralPage(RenderMenuContext& ctx)
         }
 
     }
-    if (ctx.childPage == 3) RenderThemeSettings(ctx);
+    if (ctx.childPage == 3) {
+        if(Neurotic::MenuLayout::Controls(*ctx.config)) { menuPlacement.Reset();menuHeight.Reset(); }
+        RenderThemeSettings(ctx);
+    }
     if (ctx.childPage == 4)
     {
         const float brightnessTail = ImGui::CalcTextSize(Neurotic::UiLiteral("ingame.menu-common.ui_brightness_027627c2", "UI Brightness")).x +
@@ -7768,13 +7792,18 @@ void MenuCommon::RenderMainMenuSupportLink(RenderMenuContext& ctx)
     const auto feature=ctx.currentFeature;
     const bool readout=feature != nullptr && !feature->IsFrozen();
     const float height=Neurotic::Sleek::FooterHeight(readout);
-    menuHeight.Draw(ImGui::GetMainViewport()->Size, ctx.menuResScale, height);
+    menuHeight.Draw(ImGui::GetMainViewport()->WorkSize, ctx.menuResScale, height);
     ImGui::SetCursorScreenPos({ImGui::GetWindowPos().x+ImGui::GetStyle().WindowPadding.x,
         ImGui::GetWindowPos().y+ImGui::GetWindowSize().y-Neurotic::Sleek::FooterBottomInset()-height});
     int language=Neurotic::LanguageIndex(ctx.config->MenuLanguage.value_or_default());
-    _selectedScale=ctx.config->MenuScale.has_value()?((int)(ctx.menuResScale*10.0f))-4:0;
-    const auto autoText=ctx.config->MenuScale.has_value()?std::string(Neurotic::UiLiteral("ingame.menu-common.auto_b980aecf", "Auto")):StrFmt("Auto (%3.1f)",ctx.menuResScale);
-    const auto actions=Neurotic::Sleek::FooterControls(language,_selectedScale,autoText.c_str());
+    const auto manual=Neurotic::MenuLayout::ManualScale(ctx.config->MenuScale.has_value()?
+        std::optional<float>{ctx.config->MenuScale.value()}:std::nullopt);
+    _selectedScale=manual?((int)(*manual*10.0f))-4:0;
+    const auto autoText=manual?std::string(Neurotic::UiLiteral("ingame.menu-common.auto_b980aecf", "Auto")):StrFmt("Auto (%3.1f)",ctx.menuResScale);
+    // Numeric requested -> displayed indication needs no new translation row.
+    const auto scalePreview=manual?(std::abs(*manual-ctx.menuResScale)>.005f?
+        StrFmt("%g→%.2f",*manual,ctx.menuResScale):StrFmt("%g",*manual)):autoText;
+    const auto actions=Neurotic::Sleek::FooterControls(language,_selectedScale,autoText.c_str(),scalePreview.c_str());
     if(actions.scaleChanged) {
         if (_selectedScale==0) ctx.config->MenuScale.reset();
         else ctx.config->MenuScale=.4f+(float)_selectedScale/10;
@@ -8050,6 +8079,10 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
     if (!_isVisible)
         return;
 
+    const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    const Neurotic::MenuLayout::Area drawArea{mainViewport->WorkPos,mainViewport->WorkSize};
+    menuResScale=Neurotic::MenuLayout::DisplayScale(menuResScale,drawArea);
+
     // Check for GPU support once and reuse the result in all menu sections.
     // DXVK might call Vulkan device creation, which would destroy our objects.
     State::Instance().vulkanSkipHooks = true;
@@ -8108,13 +8141,12 @@ void MenuCommon::RenderMainMenuWindow(RenderMenuContext& ctx)
                          state.gameName.empty() ? "" : StrFmt("- %s", state.gameName.c_str()).c_str(),
                          state.detectedQuirks.empty() ? "" : "(Q)", state.isOptiPatcherSucceed ? "(OP)" : "");
 
-    // Preserve a user's position while it fits; scale and viewport changes keep the full menu reachable.
-    const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
-    const auto fittedSize = menuHeight.Size(mainViewport->Size,menuResScale);
-    const auto* existingWindow = ImGui::FindWindowByName(windowTitle.c_str());
-    const ImVec2 position = existingWindow ? existingWindow->Pos :
-        ImVec2(mainViewport->Pos.x+mainViewport->Size.x-fittedSize.x-12,mainViewport->Pos.y+12);
-    ImGui::SetNextWindowPos(Neurotic::Sleek::WindowPosition(position,mainViewport->Pos,mainViewport->Size,fittedSize));
+    const auto fittedSize=Neurotic::MenuLayout::FitSize(menuHeight.Size(drawArea.size,menuResScale),drawArea);
+    const auto* existingWindow=ImGui::FindWindowByName(windowTitle.c_str());
+    const auto position=menuPlacement.Resolve(config->MenuCorner.value_or_default(),drawArea,fittedSize,
+                                              existingWindow?&existingWindow->Pos:nullptr);
+    if(!existingWindow || !Neurotic::MenuLayout::Same(position,existingWindow->Pos))
+        ImGui::SetNextWindowPos(position);
     ImGui::SetNextWindowSize(fittedSize);
 
     // Build one live UI frame. Only its menu triangles are recolored/refracted
@@ -8294,12 +8326,18 @@ void RenderExposureScanIndicator(float alpha)
     ImGui::End();
 }
 
-bool MenuCommon::RenderMenu()
+bool MenuCommon::RenderMenu(float drawWidth, float drawHeight)
 {
-    if (!_isInited)
+    auto contextScope=BindContext();
+    if (!_isInited || !HasOwnedContext())
         return false;
 
     RenderMenuContext ctx { State::Instance(), Config::Instance(), ImGui::GetIO() };
+    ctx.drawSize={drawWidth,drawHeight};
+    if((drawWidth!=0 || drawHeight!=0) && !Neurotic::MenuLayout::ValidExtent(ctx.drawSize)) {
+        LOG_WARN("Menu drawing skipped: invalid target extent {}x{}",drawWidth,drawHeight);
+        return false;
+    }
     DlssNr::ExperimentalSession::Initialize(ctx.config);
     if (!_isVisible)
     {
@@ -8374,6 +8412,7 @@ bool MenuCommon::RenderMenu()
 
 void MenuCommon::SetVisibility(bool visible)
 {
+    auto contextScope=BindContext();
     if (_isVisible != visible)
     {
         _isVisible = visible;
@@ -8393,6 +8432,7 @@ void MenuCommon::DeferInputCapture() { _rendererOwnsCapture = true; }
 
 void MenuCommon::SetRendererCaptureAvailable(bool available)
 {
+    auto contextScope=BindContext();
     // A notification/FPS-only Present does not grant capture to a menu that
     // might be requested on a later frame whose drawing then fails.
     _rendererCaptureAvailable = available && _isVisible;
@@ -8413,6 +8453,7 @@ bool MenuCommon::CanRetainRendererCaptureOnBusyFrame()
 
 void MenuCommon::ProcessUnavailableInput()
 {
+    auto contextScope=BindContext();
     DeferInputCapture();
     SetRendererCaptureAvailable(false);
     if (!_isInited || ImGui::GetCurrentContext() == nullptr)
@@ -8429,7 +8470,10 @@ void MenuCommon::ProcessUnavailableInput()
 
 void MenuCommon::FinalizeFrame()
 {
+    auto contextScope=BindContext();
+    if (!HasOwnedContext())return;
     ImGui::Render();
+    menuInputProjection.RestoreProducerSpace(*menuContextOwner.Get());
     Neurotic::Sleek::waterColorCapture = nullptr;
     if (_isVisible && waterMenuFrame == ImGui::GetFrameCount())
     {
@@ -8452,6 +8496,7 @@ void MenuCommon::FinalizeFrame()
 
 void MenuCommon::Init(HWND InHwnd, bool isUWP)
 {
+    auto contextScope=BindContext();
     Neurotic::Localization::LoadSharedCatalogOnce();
     // Reset shutdown flag in case of re-init
     State::Instance().isShuttingDown = false;
@@ -8459,7 +8504,7 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
 
     HWND oldHandle = nullptr;
 
-    if (_handle != nullptr)
+    if (_handle != nullptr && HasOwnedContext())
     {
         oldHandle = _handle;
         LOG_DEBUG("Old Handle: {:X}, ImGui Handle: {:X}", (size_t) oldHandle,
@@ -8477,7 +8522,8 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    menuContextOwner.Create();
+    menuPlacement={};menuInputProjection.Reset();
     ImGui::StyleColorsDark();
     Neurotic::Sleek::ApplyMetrics(ImGui::GetStyle());
     lastMenuScale = -1;
@@ -8563,6 +8609,7 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
 
 void MenuCommon::Shutdown()
 {
+    auto contextScope=BindContext();
     Neurotic::Semantic::Character::StopCharacterWorker();
     Neurotic::Semantic::Character::ResetInspectorPreviewSession();
     SetVisibility(false);
@@ -8597,7 +8644,8 @@ void MenuCommon::Shutdown()
     menuWater.Reset();
     waterMenuRoot = nullptr;
     waterMenuFrame = -1;
-    ImGui::DestroyContext();
+    menuContextOwner.Destroy();
+    menuInputProjection.Reset();
 
     _handle = nullptr;
     _isInited = false;
@@ -8606,8 +8654,9 @@ void MenuCommon::Shutdown()
 
 void MenuCommon::HideMenu()
 {
+    auto contextScope=BindContext();
     OptiInput::SetMenuVisible(false);
-    if (!_isVisible)
+    if (!_isVisible || !HasOwnedContext())
         return;
 
     DlssNr::CancelAdvisorAnalysis(Config::Instance());

@@ -177,6 +177,7 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
                                 const VkSwapchainCreateInfoKHR* pCreateInfo, VkSwapchainKHR* pSwapchain,
                                 VkQueue queue, uint32_t queueFamily, MenuOverlayVk::BoundaryContext boundary)
 {
+    auto contextScope=MenuCommon::BindContext();
     LOG_FUNC();
 
     if (_vkRestartRequired)
@@ -207,6 +208,8 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
         MenuOverlayBase::Init(hwnd, false);
     }
 
+    contextScope.Refresh();
+    if (!MenuCommon::HasOwnedContext())return;
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize.x = static_cast<float>(pCreateInfo->imageExtent.width);
     io.DisplaySize.y = static_cast<float>(pCreateInfo->imageExtent.height);
@@ -556,6 +559,7 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
 
 static bool DestroyVulkanObjectsLocked(bool shutdown)
 {
+    auto contextScope=MenuCommon::BindContext();
     MenuCommon::SetRendererCaptureAvailable(false);
     _vulkanObjectsCreated = false;
     _isInited = false;
@@ -811,6 +815,7 @@ MenuOverlayVk::QueuePresentStatus MenuOverlayVk::QueuePresent(VkQueue queue, VkP
                                                             const DlssNr::VkObservedPresent* observed,
                                                             BoundaryContext boundary)
 {
+    auto contextScope=MenuCommon::BindContext();
     LOG_FUNC();
     if (!lock.owns_lock() || lock.mutex() != &_vkOperationMutex)
         return QueuePresentStatus::Bypassed;
@@ -912,7 +917,10 @@ MenuOverlayVk::QueuePresentStatus MenuOverlayVk::QueuePresent(VkQueue queue, VkP
         observed->request.swapchainGeneration != _vkSwapchainGeneration)
         return bypass(14, Neurotic::UiLiteral("ingame.menu-overlay-vk.renderer_ownership_or_generation_unavailable_b0d3ef56", "renderer ownership or generation unavailable"));
 
-    if (!MenuOverlayBase::IsInited() || _ImVulkan_Info.Device == VK_NULL_HANDLE)
+    // Deferred creation above may replace the owner while this Present scope
+    // is alive. Bind the current owner before the backend/frame reads its IO.
+    contextScope.Refresh();
+    if (!MenuCommon::HasOwnedContext() || !MenuOverlayBase::IsInited() || _ImVulkan_Info.Device == VK_NULL_HANDLE)
         return bypass(15, Neurotic::UiLiteral("ingame.menu-overlay-vk.ui_backend_unavailable_59ca1d45", "UI backend unavailable"));
 
     // The overlay command pool was created for its own queue family. A different Present queue
@@ -965,7 +973,7 @@ MenuOverlayVk::QueuePresentStatus MenuOverlayVk::QueuePresent(VkQueue queue, VkP
 
         MenuCommon::DeferInputCapture();
         outcome.cpuProcessed = true;
-        if (MenuOverlayBase::RenderMenu())
+        if (MenuOverlayBase::RenderMenu(float(request.extent.width),float(request.extent.height)))
         {
             // Finish the CPU frame even when a busy slot or missing proof skips
             // GPU drawing. Every successful RenderMenu starts an ImGui frame.
@@ -1116,7 +1124,8 @@ void MenuOverlayVk::GeneratedPresentationFinished(const PresentLock& lock, VkRes
 VkResult MenuOverlayVk::CompositeGenerated(const PresentLock& lock, VkSwapchainKHR swapchain,
                                            VkCommandBuffer command, VkImage image, unsigned width, unsigned height)
 {
-    if (!lock.owns_lock() || swapchain != _vkSwapchain || !_ImVulkan_Frames || !_vkRenderPass ||
+    auto contextScope=MenuCommon::BindContext();
+    if (!MenuCommon::HasOwnedContext() || !lock.owns_lock() || swapchain != _vkSwapchain || !_ImVulkan_Frames || !_vkRenderPass ||
         !command || !image || width != static_cast<unsigned>(ImGui::GetIO().DisplaySize.x) ||
         height != static_cast<unsigned>(ImGui::GetIO().DisplaySize.y))
         return VK_ERROR_FEATURE_NOT_PRESENT;

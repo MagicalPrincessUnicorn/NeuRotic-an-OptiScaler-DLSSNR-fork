@@ -19,6 +19,7 @@
 
 #include "DlssNr_Common.h"
 #include "NrCompositionPool.h"
+#include <dlssnr/NativeTextureContract.h>
 #include <dlssnr/NrGpuSafety.h>
 #include <dlssnr/NativeDispatchOutcome.h>
 
@@ -36,6 +37,7 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
 {
   private:
     DlssNr::CompositionPool _pool;
+    DlssNr::NativeTextureContract::FormatCache _formatSupport;
     unsigned long long _lastPoolReportMs = 0;
     unsigned long long _reportedGrowthEvents = 0;
     bool _lastPoolPreSr = false;

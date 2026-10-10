@@ -227,5 +227,11 @@
     "sdk",
     "tools"
   ],
-  "notes": []
+  "notes": [
+    "Rules are developer-controlled data, never loaded from games or Community Profiles.",
+    "EA game-local installer matching is an explicit weak heuristic; its documented location is shared.",
+    "Corroborated layout is not cryptographic identity verification, running protection, or a permission verdict.",
+    "VAC has no local filename rule in this release. Use curated storefront-ID evidence only.",
+    "No certificate subject strings or thumbprints have been invented or seeded."
+  ]
 }

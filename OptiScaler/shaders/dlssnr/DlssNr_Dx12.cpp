@@ -1876,6 +1876,8 @@ float ResolveWhitePoint(const NrConfigSnapshot<Config>& cfg, bool isHdrBuffer)
     return slider;
 }
 
+bool ReportSkipOnce(const char* reason);
+
 ID3D12Resource* CreateScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned int width,
                               unsigned int height)
 {
@@ -1895,8 +1897,21 @@ ID3D12Resource* CreateScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
     ID3D12Resource* res = nullptr;
-    device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+    const HRESULT result = device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
                                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&res));
+    if (FAILED(result))
+    {
+        // Preserve the API result. Invalid arguments, allocation pressure and
+        // device loss are distinct failures, not an unsupported-GPU verdict.
+        const char* allocationReason = result == E_OUTOFMEMORY ? "out-of-memory" :
+            result == E_INVALIDARG ? "invalid-request" :
+            result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET ||
+            result == DXGI_ERROR_DEVICE_HUNG ? "device-lost" : "allocation-failed";
+        if (ReportSkipOnce("private model texture allocation failed"))
+            LOG_ERROR("NR texture allocation HRESULT=0x{:08X} width={} height={} format={} reason={}",
+                static_cast<unsigned long>(result), width, height, static_cast<unsigned>(format), allocationReason);
+        return nullptr;
+    }
     DlssNr::DredDiagnostics::Name(res, L"NR private model texture");
     return res;
 }
@@ -2227,7 +2242,7 @@ auto& SkipReasons()
 thread_local bool preparedReasonActive=false;
 thread_local std::string preparedRecordReason;
 struct PreparedReasonScope {bool previous=preparedReasonActive;PreparedReasonScope(){preparedReasonActive=true;preparedRecordReason.clear();}~PreparedReasonScope(){preparedReasonActive=previous;}};
-void ReportSkipOnce(const char* reason)
+bool ReportSkipOnce(const char* reason)
 {
     if(preparedReasonActive&&reason)preparedRecordReason.assign(reason,(std::min)(size_t(767),std::strlen(reason)));
     auto& entry = SkipReasons()[reason];
@@ -2237,7 +2252,9 @@ void ReportSkipOnce(const char* reason)
     {
         entry.lastReportMs = now;
         LOG_INFO("DLSS-NR did not run: {} (reason_count={})", reason, entry.count);
+        return true;
     }
+    return false;
 }
 
 // Lifecycle-serialized entry counters include rejections before a composition pool exists.
@@ -2360,12 +2377,6 @@ bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssN
     if (!_init || InCmdList == nullptr || _device == nullptr || InSource == nullptr || OutTarget == nullptr)
         return false;
 
-    auto use = DlssNr::GpuSafety::Record(InCmdList);
-    if (!use) return false;
-    auto* slot = _pool.Consume(use);
-    if (!slot) return false;
-    FrameDescriptorHeap& currentHeap = slot->heap;
-
     // Every slot in the table gets a view, whether the mode reads it or not. An unbound descriptor is
     // not an empty read; it is a read from nothing, and the source stands in wherever a mode has
     // nothing of its own to put there.
@@ -2377,14 +2388,54 @@ bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssN
         InPrevEdit != nullptr ? InPrevEdit : InSource,
     };
 
-    for (uint32_t i = 0; i < kSrvCount; ++i)
-        CreateShaderResourceView(_device, srvs[i], currentHeap.GetSrvCPU(i));
-
     ID3D12Resource* const uavs[kUavCount] = {
         OutTarget,
         OutKeep != nullptr ? OutKeep : OutTarget,
     };
 
+    // Validate the exact view/operations before consuming a descriptor slot or
+    // changing command-list state. The opaque provider has a separate contract.
+    const auto supportsView = [&](ID3D12Resource* resource, bool unordered, UINT index,
+                                  DlssNr::NativeTextureContract::FormatUse required) {
+        const auto desc = resource->GetDesc();
+        if (const auto* reason = DlssNr::NativeTextureContract::ViewRefusal(desc, unordered))
+        {
+            if (ReportSkipOnce(reason))
+                LOG_WARN("NR composition view refused: uav={} slot={} format={} dimension={} slices={} samples={} flags={:X}",
+                    unordered, index, static_cast<unsigned>(desc.Format), static_cast<unsigned>(desc.Dimension),
+                    desc.DepthOrArraySize, desc.SampleDesc.Count, static_cast<unsigned>(desc.Flags));
+            return false;
+        }
+        const auto format = TranslateTypelessFormats(desc.Format);
+        const auto observed = _formatSupport.Observe(format, [&](D3D12_FEATURE_DATA_FORMAT_SUPPORT& support) {
+            return _device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support));
+        });
+        if (observed.Supports(required)) return true;
+        const auto* reason = FAILED(observed.result) ? "NR composition format query failed" :
+                                                     "NR composition format lacks a required operation";
+        if (ReportSkipOnce(reason))
+            LOG_WARN("NR composition format refused: uav={} slot={} resourceFormat={} viewFormat={} result={:08X} support1={:X} required1={:X} support2={:X} required2={:X}",
+                unordered, index, static_cast<unsigned>(desc.Format), static_cast<unsigned>(format),
+                static_cast<unsigned>(observed.result), observed.support1, required.support1,
+                observed.support2, required.support2);
+        return false;
+    };
+    for (UINT i = 0; i < kSrvCount; ++i)
+        if (!supportsView(srvs[i], false, i, DlssNr::NativeTextureContract::ComposeSrvUse(
+            InConstants.Mode, i, InConstants.UseGameExposure != 0, InConstants.Passthrough != 0,
+            InConstants.CompareMode, InConstants.Width, InConstants.Height)))
+            return false;
+    for (UINT i = 0; i < kUavCount; ++i)
+        if (!supportsView(uavs[i], true, i, DlssNr::NativeTextureContract::ComposeUavUse(InConstants.Mode, i)))
+            return false;
+
+    auto use = DlssNr::GpuSafety::Record(InCmdList);
+    if (!use) return false;
+    auto* slot = _pool.Consume(use);
+    if (!slot) return false;
+    FrameDescriptorHeap& currentHeap = slot->heap;
+    for (uint32_t i = 0; i < kSrvCount; ++i)
+        CreateShaderResourceView(_device, srvs[i], currentHeap.GetSrvCPU(i));
     for (uint32_t i = 0; i < kUavCount; ++i)
         CreateUnorderedAccessView(_device, uavs[i], currentHeap.GetUavCPU(i), 0);
 
@@ -2495,6 +2546,13 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if(!observer&&g_nr.providerUses&&g_nr.providerUses->RecordingHeld())return;
     if(observer&&(!rendererBorrow||!rendererBorrow->Current()))
     {observer->Fail("Native.RendererBorrowRevoked");return;}
+    if (!DlssNr::NativeTemporalInputFacts::Finite(frame.MvScaleX, frame.MvScaleY, frame.JitterX, frame.JitterY) ||
+        (frame.NativeScalarFacts && !frame.NativeScalarFacts->Finite()))
+    {
+        if (observer) observer->Fail("Native.TemporalScalarsNotFinite");
+        ReportSkipOnce("native temporal motion scale or jitter is not finite");
+        return;
+    }
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
     const unsigned int requestedPassCount = RequestedPassCount(cfg);
     const auto recordCompletedPipeline = [&] {
@@ -3114,6 +3172,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         g_resolutionRefusal = "Requested model dimensions are outside the 8-to-8192-pixel NR resource limit";
         g_nr.reset = true;
         ReportSkipOnce(g_resolutionRefusal);
+        device->Release();
         return;
     }
 
@@ -5455,26 +5514,71 @@ static ID3D12Resource* EvaluateBeforeUpscaleCore(ID3D12GraphicsCommandList* cmdL
                                       const Neurotic::Protocol::NativeTypedEvaluation* typed,
                                       Neurotic::Protocol::NativeInvocationAdmission* admission = nullptr)
 {
+    const auto requestedBefore = [](const NrConfigSnapshot<Config>* cfg) {
+        return cfg && cfg->DlssNrRoute.value_or_default() == 0 && cfg->GetDlssNrRuntimeSnapshot().enabled &&
+            cfg->DlssNrRunBeforeSr.value_or_default() &&
+            !(BasicMultipass::Active(*cfg) && Multipass::RequestedCount(*cfg) == 0);
+    };
     FinalFallback::RenderScope renderAdmission;
-    if (!renderAdmission.Admitted()) return nullptr;
+    if (!renderAdmission.Admitted())
+    {
+        // Admission failed before lifecycle serialization. Use only the supplied
+        // immutable snapshot and an independent, admitted-only timestamp.
+        try
+        {
+            if (requestedBefore(settings))
+            {
+                static std::atomic<ULONGLONG> lastReportMs {0};
+                const auto now = GetTickCount64(); auto prior = lastReportMs.load();
+                if ((prior == 0 || now - prior >= 1000) && lastReportMs.compare_exchange_strong(prior,now))
+                    LOG_INFO("DLSS-NR did not run: Pre-SR render admission closed");
+            }
+        }
+        catch (...) {}
+        return nullptr;
+    }
     std::lock_guard<std::recursive_mutex> lifecycleLock(g_lifecycleMutex);
+    const auto* diagnosticSettings = settings;
+    const auto reportEarly = [&](const char* reason) {
+        try { return requestedBefore(diagnosticSettings) && ReportSkipOnce(reason); }
+        catch (...) { return false; }
+    };
     g_screenshotPreSrFrame.reset();
     g_screenshotPreSrParams = nullptr;
     if (g_sessionClosed || g_shutdownFailed)
-        return nullptr;
-    if(!typed&&g_nr.providerUses&&g_nr.providerUses->RecordingHeld())return nullptr;
+    { reportEarly("Pre-SR session closed or shutdown failed"); return nullptr; }
+    if(!typed&&g_nr.providerUses&&g_nr.providerUses->RecordingHeld())
+    { reportEarly("Pre-SR provider recording held"); return nullptr; }
     const auto localSettings = settings == nullptr ? TryNrConfigSnapshot(*Config::Instance())
                                                    : std::optional<NrConfigSnapshot<Config>>{};
-    if (settings == nullptr && !localSettings) return nullptr;
+    if (settings == nullptr && !localSettings)
+    { reportEarly("Pre-SR configuration snapshot unavailable"); return nullptr; }
     const auto& cfg = settings != nullptr ? *settings : *localSettings;
+    diagnosticSettings = &cfg;
 
     if (typed && (!typed->observer || cfg.DlssNrPreDlaa.value_or_default()))
-    { if (typed->observer) typed->observer->Fail("Native.PrivateDlaaNotInInitialSlice"); return nullptr; }
+    { if (typed->observer) typed->observer->Fail("Native.PrivateDlaaNotInInitialSlice");
+      reportEarly("Pre-SR typed observer or private DLAA unavailable"); return nullptr; }
     if (BypassZeroBasic(cfg)) return nullptr;
     if (cfg.DlssNrRoute.value_or_default() != 0 || !cfg.GetDlssNrRuntimeSnapshot().enabled ||
         !cfg.DlssNrRunBeforeSr.value_or_default() ||
         params == nullptr)
+    { reportEarly("Pre-SR parameters unavailable"); return nullptr; }
+
+    const auto preSrScalarFacts = NativeTemporalInputFacts::Resolve(
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_MV_Scale_X, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_MV_Scale_Y, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_Jitter_Offset_X, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_Jitter_Offset_Y, NVSDK_NGX_Result_Success));
+    const bool temporalScalarsFinite = typed ? NativeTemporalInputFacts::Finite(
+        typed->frame.MvScaleX, typed->frame.MvScaleY, typed->frame.JitterX, typed->frame.JitterY) &&
+        (!typed->frame.NativeScalarFacts || typed->frame.NativeScalarFacts->Finite()) : preSrScalarFacts.Finite();
+    if (!temporalScalarsFinite)
+    {
+        if (typed && typed->observer) typed->observer->Fail("Native.TemporalScalarsNotFinite");
+        reportEarly("Pre-SR temporal motion scale or jitter is not finite");
         return nullptr;
+    }
 
     // CPU-only observation precedes every resource/tracking-dependent exit. Non-native adapters
     // and default-off calls keep the original late-observation path below.
@@ -5509,7 +5613,7 @@ static ID3D12Resource* EvaluateBeforeUpscaleCore(ID3D12GraphicsCommandList* cmdL
             g_nr.preSrStructuralResetHeld = false;
     }
     if (cmdList == nullptr)
-        return nullptr;
+    { reportEarly("Pre-SR command list unavailable"); return nullptr; }
 
     if (!GpuSafety::Record(cmdList))
     {
@@ -5517,33 +5621,48 @@ static ID3D12Resource* EvaluateBeforeUpscaleCore(ID3D12GraphicsCommandList* cmdL
         return nullptr;
     }
     TickNrRetired();
-    if(g_shutdownFailed)return nullptr;
-    if (g_nrRetired.size() >= 128) return nullptr;
+    if(g_shutdownFailed)
+    { reportEarly("Pre-SR shutdown failed after retirement poll"); return nullptr; }
+    if (g_nrRetired.size() >= 128)
+    { reportEarly("Pre-SR retired session capacity reached"); return nullptr; }
 
     if (Config::Instance()->OutputResourceBarrier.has_value())
-        return nullptr;
+    { reportEarly("Pre-SR explicit output barrier configured"); return nullptr; }
 
     ID3D12Resource* color = typed ? typed->colour : GetResource(params, NVSDK_NGX_Parameter_Color, "DLSS.Color");
     if (color == nullptr)
-        return nullptr;
+    { reportEarly("Pre-SR color resource unavailable"); return nullptr; }
 
     void* originalOutputVoid = nullptr;
     if (params->Get(NVSDK_NGX_Parameter_Output, &originalOutputVoid) != NVSDK_NGX_Result_Success ||
         originalOutputVoid == nullptr)
-        return nullptr;
+    { reportEarly("Pre-SR output binding unavailable"); return nullptr; }
 
     const D3D12_RESOURCE_DESC colorDesc = color->GetDesc();
     if (colorDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
         colorDesc.DepthOrArraySize != 1 || colorDesc.MipLevels != 1 ||
         colorDesc.SampleDesc.Count != 1 || colorDesc.Width == 0 || colorDesc.Height == 0)
+    {
+        if (reportEarly("Pre-SR unsupported color descriptor"))
+        {
+            try
+            {
+                LOG_INFO("NR Pre-SR rejected color descriptor: dimension={} width={} height={} depthOrArray={} mips={} samples={} format={}",
+                    static_cast<unsigned>(colorDesc.Dimension),colorDesc.Width,colorDesc.Height,colorDesc.DepthOrArraySize,
+                    colorDesc.MipLevels,colorDesc.SampleDesc.Count,static_cast<unsigned>(colorDesc.Format));
+            }
+            catch (...) {}
+        }
         return nullptr;
+    }
 
     ID3D12Device* device = nullptr;
     if (FAILED(color->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
-        return nullptr;
+    { reportEarly("Pre-SR color device unavailable"); return nullptr; }
 
     if (!AcceptGenerationDevice(device))
     {
+        reportEarly("Pre-SR generation device rejected");
         device->Release();
         return nullptr;
     }
@@ -5795,6 +5914,7 @@ static ID3D12Resource* EvaluateBeforeUpscaleCore(ID3D12GraphicsCommandList* cmdL
         g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering", device);
     if (!g_compose->Prepare(cmdList, true, RequestedPassCount(cfg)))
     {
+        reportEarly("Pre-SR composition preparation unavailable");
         g_nr.preSrScratchPrimed = false;
         g_nr.preSrAwaitingEvaluation = true;
         device->Release();
@@ -6483,10 +6603,13 @@ static void EvaluateAfterUpscaleWithConfig(ID3D12GraphicsCommandList* cmdList, N
     unsigned int createFlags = 0;
     const bool haveEvalFlags = params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &createFlags) == NVSDK_NGX_Result_Success;
     const auto evalFlags = createFlags;
-    createFlags = NativeTemporalInputs::ResolveFlags(nativeInputs ? std::optional<unsigned>(nativeInputs->flags) : std::nullopt,
+    const auto flagFacts = NativeTemporalInputFacts::ResolveFlags(
+        nativeInputs ? std::optional<unsigned>(nativeInputs->flags) : std::nullopt,
         haveEvalFlags ? std::optional<unsigned>(evalFlags) : std::nullopt);
+    createFlags = flagFacts.value;
 
     DlssNrFrameInfo frame {};
+    frame.NativeFlagFacts = flagFacts;
     if(cfg.DlssNrAlternateFrame.value_or_default()) {
         frame.AlternateFrameSource = AlternateFrame::ObserveNative(nativeInputs, cmdList, target, depth, motion);
         frame.AlternateFrameDuplicate = nativeInputs && nativeInputs->alternateSource.duplicate;
@@ -6559,20 +6682,33 @@ static void EvaluateAfterUpscaleWithConfig(ID3D12GraphicsCommandList* cmdList, N
         }
     }
 
-    if (params->Get(NVSDK_NGX_Parameter_MV_Scale_X, &frame.MvScaleX) != NVSDK_NGX_Result_Success)
-        frame.MvScaleX = 1.0f;
-
-    if (params->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &frame.MvScaleY) != NVSDK_NGX_Result_Success)
-        frame.MvScaleY = 1.0f;
-
-    const bool haveNrJitter =
-        params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &frame.JitterX) == NVSDK_NGX_Result_Success &&
-        params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &frame.JitterY) == NVSDK_NGX_Result_Success;
-
-    if (!haveNrJitter)
+    const auto scalarFacts = NativeTemporalInputFacts::Resolve(
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_MV_Scale_X, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_MV_Scale_Y, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_Jitter_Offset_X, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(params, NVSDK_NGX_Parameter_Jitter_Offset_Y, NVSDK_NGX_Result_Success));
+    if (!scalarFacts.Finite())
     {
-        frame.JitterX = 0.0f;
-        frame.JitterY = 0.0f;
+        ReportSkipOnce("native temporal motion scale or jitter is not finite");
+        return;
+    }
+    frame.NativeScalarFacts = scalarFacts;
+    frame.MvScaleX = scalarFacts.MvX();
+    frame.MvScaleY = scalarFacts.MvY();
+    frame.JitterX = scalarFacts.JitterX();
+    frame.JitterY = scalarFacts.JitterY();
+    const bool haveNrJitter = scalarFacts.JitterComplete();
+
+    auto inputProvenance = std::make_tuple(nativeInputs ? nativeInputs->handle : 0u,
+        nativeInputs ? nativeInputs->generation : 0ull, static_cast<unsigned>(flagFacts.source),
+        scalarFacts.ObservedMask());
+    static std::optional<decltype(inputProvenance)> previousInputProvenance;
+    if (!previousInputProvenance || *previousInputProvenance != inputProvenance)
+    {
+        previousInputProvenance = inputProvenance;
+        LOG_INFO("NR temporal provenance: flagsSource={} flagsKnown={} scalarObservedMask={:X} mvXDefaulted={} mvYDefaulted={} jitterPairDefaulted={}",
+            static_cast<unsigned>(flagFacts.source), flagFacts.Known(), scalarFacts.ObservedMask(),
+            !scalarFacts.mvX.has_value(), !scalarFacts.mvY.has_value(), !scalarFacts.JitterComplete());
     }
 
     if (forceAfterUpscale && target == g_nr.preSrScratch)

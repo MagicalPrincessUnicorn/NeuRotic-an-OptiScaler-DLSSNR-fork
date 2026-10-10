@@ -5,6 +5,7 @@
 
 #include <imgui/imgui.h>
 #include "Localization.h"
+#include "MenuContextOwner.h"
 #include "localization/LanguageRuntime.h"
 #include "SleekSections.h"
 #include <atomic>
@@ -184,6 +185,9 @@ class MenuCommon
     static void UpdateManualInput(HWND targetHwnd);
 
   public:
+    static Neurotic::MenuLayout::ContextOwner& OwnedContext();
+    static Neurotic::MenuLayout::ContextOwner::Scope BindContext() {return Neurotic::MenuLayout::ContextOwner::Scope(OwnedContext());}
+    static bool HasOwnedContext() {return OwnedContext().Get()!=nullptr;}
     static void Dx11Inited() { _dx11Ready = true; }
     static void RenderScreenshotKeybind(Config* config);
     static void Dx12Inited() { _dx12Ready = true; }
@@ -193,7 +197,7 @@ class MenuCommon
     static uint64_t VisibilityGeneration() { return _visibilityGeneration.load(); }
     static HWND Handle() { return _handle; }
 
-    static bool RenderMenu();
+    static bool RenderMenu(float drawWidth=0, float drawHeight=0);
     static void FinalizeFrame();
     // Vulkan commits capture only after an actual overlay Present succeeds.
     static void DeferInputCapture();

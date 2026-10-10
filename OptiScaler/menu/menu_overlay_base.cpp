@@ -30,12 +30,12 @@ void MenuOverlayBase::Init(HWND InHandle, bool isUWP)
     MenuCommon::Init(InHandle, isUWP);
 }
 
-bool MenuOverlayBase::RenderMenu()
+bool MenuOverlayBase::RenderMenu(float drawWidth, float drawHeight)
 {
     if (!Config::Instance()->OverlayMenu.value_or_default())
         return false;
 
-    return MenuCommon::RenderMenu();
+    return MenuCommon::RenderMenu(drawWidth,drawHeight);
 }
 
 void MenuOverlayBase::Present() { MenuCommon::Present(); }

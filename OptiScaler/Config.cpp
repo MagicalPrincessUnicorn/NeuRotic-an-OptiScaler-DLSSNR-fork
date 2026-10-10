@@ -5,6 +5,7 @@
 #include "dlssnr/FinalFallbackControl.h"
 #include "mfg/ExperimentalMfgRuntime.h"
 #include "menu/UiBrightness.h"
+#include "menu/MenuLayout.h"
 #include "menu/LegacyMenuSettings.h"
 #include "dlssnr/DlssNr_PresentResolution.h"
 #include "dlssnr/DlssNr_PresentInputPolicy.h"
@@ -789,8 +790,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             AllowGameMouse.set_from_config(readBool("Menu", "AllowGameMouse"));
             AllowGameKeyboard.set_from_config(readBool("Menu", "AllowGameKeyboard"));
             AllowGameController.set_from_config(readBool("Menu", "AllowGameController"));
-            if (auto setting = readFloat("Menu", "Scale"); setting.has_value())
-                MenuScale.set_from_config(std::clamp(setting.value(), 0.5f, 2.0f));
+            MenuScale.set_from_config(Neurotic::MenuLayout::ManualScale(readFloat("Menu", "Scale")));
+            const auto corner=readUInt("Menu", "Corner");
+            MenuCorner.set_from_config(corner ? std::optional<uint32_t>{Neurotic::MenuLayout::Corner(*corner)} : std::nullopt);
 
             // Don't enable again if set false because of Linux issue
             OverlayMenu.set_from_config(readBool("Menu", "OverlayMenu"));
@@ -1765,6 +1767,7 @@ bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraf
     // Menu
     {
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
+        ini.SetValue("Menu", "Corner", std::to_string(Neurotic::MenuLayout::Corner(Instance()->MenuCorner.value_or_default())).c_str());
         ini.SetValue("Menu", "Language", Instance()->MenuLanguage.value_or_default().c_str());
         ini.SetBoolValue("Menu", "PreflightExpanded", Instance()->MenuPreflightExpanded.value_or_default());
         Neurotic::MenuConfig::DiscardRetiredKeys(ini);

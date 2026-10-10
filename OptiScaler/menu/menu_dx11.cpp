@@ -72,6 +72,8 @@ void Menu_Dx11::CreateRenderTarget(ID3D11Resource* out)
 
 bool Menu_Dx11::Render(ID3D11DeviceContext* pCmdList, ID3D11Resource* outTexture)
 {
+    auto contextScope=MenuCommon::BindContext();
+    if (!MenuCommon::HasOwnedContext())return false;
     if (Config::Instance()->OverlayMenu.value_or_default())
         return false;
 
@@ -100,7 +102,10 @@ bool Menu_Dx11::Render(ID3D11DeviceContext* pCmdList, ID3D11Resource* outTexture
     ImGui_ImplDX11_NewFrame();
     // ImGui_ImplWin32_NewFrame();
 
-    if (MenuDxBase::RenderMenu())
+    ID3D11Texture2D* drawTexture=nullptr;
+    if(FAILED(outTexture->QueryInterface(IID_PPV_ARGS(&drawTexture))))return false;
+    D3D11_TEXTURE2D_DESC drawDesc{};drawTexture->GetDesc(&drawDesc);drawTexture->Release();
+    if (MenuDxBase::RenderMenu(float(drawDesc.Width),float(drawDesc.Height)))
     {
         // Create RTV for out
         pCmdList->OMSetRenderTargets(1, &_renderTargetView, nullptr);
@@ -129,6 +134,7 @@ Menu_Dx11::Menu_Dx11(HWND handle, ID3D11Device* pDevice) : MenuDxBase(handle), _
 
 Menu_Dx11::~Menu_Dx11()
 {
+    auto contextScope=MenuCommon::BindContext();
     if (!_dx11Init)
         return;
 

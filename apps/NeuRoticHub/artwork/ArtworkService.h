@@ -8,5 +8,7 @@ class ArtworkService {
  struct Impl;std::unique_ptr<Impl> impl;
 public:
  ArtworkService();~ArtworkService();void Attach(ID3D11Device* device);void SetOnlineEnabled(bool enabled);ArtworkView Get(const Game& game,const char* role,bool online);void Poll();void Shutdown();
+ // Request on the UI thread, poll without joining, then Shutdown on the UI thread.
+ void RequestShutdown();bool ShutdownReady() const;
 };
 }

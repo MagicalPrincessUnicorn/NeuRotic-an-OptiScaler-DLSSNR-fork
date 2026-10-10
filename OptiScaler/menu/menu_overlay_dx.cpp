@@ -125,6 +125,7 @@ static void CreateRenderTargetDx12(ID3D12Device* device, IDXGISwapChain* pSwapCh
 
 static void CleanupRenderTargetDx12(bool clearQueue)
 {
+    auto contextScope=MenuCommon::BindContext();
     Neurotic::Semantic::Character::CharacterSourceInvalidated();
     if (!_isInited || !_dx12Device || State::Instance().isShuttingDown)
         return;
@@ -139,7 +140,7 @@ static void CleanupRenderTargetDx12(bool clearQueue)
 
     if (clearQueue)
     {
-        if (MenuOverlayBase::IsInited() && g_pd3dDeviceParam != nullptr && g_pd3dSrvDescHeap != nullptr &&
+        if (MenuCommon::HasOwnedContext() && MenuOverlayBase::IsInited() && g_pd3dDeviceParam != nullptr && g_pd3dSrvDescHeap != nullptr &&
             ImGui::GetIO().BackendRendererUserData)
         {
             // std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -206,11 +207,12 @@ static void CleanupRenderTargetDx11(bool shutDown)
 
 static void RenderImGui_DX11(IDXGISwapChain* pSwapChain,bool physicalOutputQualified)
 {
+    auto contextScope=MenuCommon::BindContext();
     bool drawMenu = false;
 
     do
     {
-        if (!MenuOverlayBase::IsInited())
+        if (!MenuOverlayBase::IsInited() || !MenuCommon::HasOwnedContext())
             break;
 
         // Draw only when menu activated
@@ -264,7 +266,14 @@ static void RenderImGui_DX11(IDXGISwapChain* pSwapChain,bool physicalOutputQuali
             // Polling here too overwrites the frame interval with the tiny gap
             // before that shared call, slowing all elapsed-time UI animations.
 
-            if (MenuOverlayBase::RenderMenu())
+            ID3D11Resource* drawResource=nullptr;g_pd3dRenderTarget->GetResource(&drawResource);
+            ID3D11Texture2D* drawTexture=nullptr;D3D11_TEXTURE2D_DESC drawDesc{};
+            if(drawResource && SUCCEEDED(drawResource->QueryInterface(IID_PPV_ARGS(&drawTexture)))) {
+                drawTexture->GetDesc(&drawDesc);drawTexture->Release();
+            }
+            if(drawResource)drawResource->Release();
+            if(!drawDesc.Width || !drawDesc.Height) {LOG_WARN("Menu drawing skipped: missing DX11 target extent");return;}
+            if (MenuOverlayBase::RenderMenu(float(drawDesc.Width),float(drawDesc.Height)))
             {
                 MenuCommon::FinalizeFrame();
 
@@ -277,6 +286,7 @@ static void RenderImGui_DX11(IDXGISwapChain* pSwapChain,bool physicalOutputQuali
 
 static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain,bool physicalOutputQualified)
 {
+    auto contextScope=MenuCommon::BindContext();
     bool drawMenu = false;
     IDXGISwapChain3* pSwapChain = nullptr;
 
@@ -285,7 +295,7 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain,bool physicalOutput
         if (pSwapChainPlain->QueryInterface(IID_PPV_ARGS(&pSwapChain)) != S_OK || pSwapChain == nullptr)
             return;
 
-        if (!MenuOverlayBase::IsInited())
+        if (!MenuOverlayBase::IsInited() || !MenuCommon::HasOwnedContext())
             break;
 
         // Draw only when menu activated
@@ -463,7 +473,8 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain,bool physicalOutput
             else Neurotic::Semantic::Character::CharacterSourceInvalidated();
             ImGui_ImplDX12_NewFrame();
 
-            if (MenuOverlayBase::RenderMenu())
+            const auto drawDesc=g_mainRenderTargetResource[0]->GetDesc();
+            if (MenuOverlayBase::RenderMenu(float(drawDesc.Width),float(drawDesc.Height)))
             {
                 MenuCommon::FinalizeFrame();
 

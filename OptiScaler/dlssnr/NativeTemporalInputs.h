@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <optional>
+#include "NativeTemporalInputFacts.h"
 #include "NativeNgxCreationParameters.h"
 #include "NativeTemporalSource.h"
 #include <memory>
@@ -50,7 +51,7 @@ struct Rect
 };
 constexpr unsigned ResolveFlags(std::optional<unsigned> creation, std::optional<unsigned> evaluation)
 {
-    return creation.value_or(evaluation.value_or(0));
+    return NativeTemporalInputFacts::ResolveFlags(creation, evaluation).value;
 }
 constexpr bool Fits(Rect region, uint64_t width, uint64_t height)
 {

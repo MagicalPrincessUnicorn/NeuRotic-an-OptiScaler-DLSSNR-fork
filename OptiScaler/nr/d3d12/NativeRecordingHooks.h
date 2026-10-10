@@ -334,7 +334,7 @@ class NativeRecordingHooks
     {
         { std::lock_guard lock(deniedMutex_); denied_.insert(list); }
         if (replayDepth_) { replayInvalid_ = true; return; }
-        observer_.WithCurrent(list, [](auto& state, auto incarnation) { state.Taint(incarnation); return false; });
+        observer_.WithCurrent(list, [](auto& state, auto incarnation) { state.Taint(incarnation, "HookRouteDenied"); return false; });
     }
     template<unsigned Slot, class... A> void Before(ID3D12GraphicsCommandList* list, A... args)
     {
@@ -360,10 +360,14 @@ class NativeRecordingHooks
             return;
         }
         auto values = std::forward_as_tuple(args...);
+        std::shared_ptr<const NativeIndirectEffects> indirectEffects;
+        if constexpr (Slot == 59)
+            indirectEffects = NativeIndirectSignatures::Read(std::get<0>(values),list);
         bool wasActive = false, unsupported = false;
         const bool accepted = observer_.WithCurrent(list, [&]([[maybe_unused]] auto& state, [[maybe_unused]] auto incarnation) {
             wasActive = state.Activity(list, incarnation).has_value();
             if constexpr (Slot == 25) return state.ObservePipeline(incarnation, std::get<0>(values));
+            else if constexpr (Slot == 23) return state.ObserveBlendFactor(incarnation, std::get<0>(values));
             else if constexpr (Slot == 26) return state.ObserveBarriers(incarnation, std::get<0>(values), std::get<1>(values));
             else if constexpr (Slot == 28) return state.ObserveDescriptorHeaps(incarnation, std::get<0>(values), std::get<1>(values));
             else if constexpr (Slot == 29) return state.ObserveComputeRootSignature(incarnation, std::get<0>(values));
@@ -380,18 +384,37 @@ class NativeRecordingHooks
                 return state.ObserveGraphicsDescriptor(incarnation, std::get<0>(values), Slot == 38 ? RootKind::CBV : Slot == 40 ? RootKind::SRV : RootKind::UAV, std::get<1>(values));
             else if constexpr ((Slot >= 12 && Slot <= 19) || (Slot >= 47 && Slot <= 50))
                 return state.ObserveWork(incarnation);
+            else if constexpr (Slot == 51)
+                return state.ObserveDiscard(incarnation, std::get<0>(values), std::get<1>(values) != nullptr);
             else if constexpr (Slot == 52 || Slot == 53)
             {
                 return state.ObserveQuery(incarnation,std::get<0>(values),std::get<1>(values),std::get<2>(values),Slot == 52);
             }
             else if constexpr (Slot == 54)
                 return state.ObserveQueryResolve(incarnation,std::get<0>(values),std::get<1>(values),std::get<2>(values),std::get<3>(values));
-            else if constexpr ((Slot >= 20 && Slot <= 24) || (Slot >= 43 && Slot <= 46))
-                return state.ObserveUnrestorableGraphics(incarnation);
+            else if constexpr (Slot == 59) return state.ObserveIndirect(incarnation,indirectEffects.get(),
+                reinterpret_cast<std::uint64_t>(std::get<0>(values)));
+            else if constexpr ((Slot >= 20 && Slot <= 24) || (Slot >= 43 && Slot <= 46) || Slot == 77 || Slot == 78)
+            {
+                // Diagnostic scalars only: never dereference view/descriptor arrays
+                // or query a resource. These facts grant no restoration authority.
+                std::uint64_t a = 0, b = 0, c = 0;
+                if constexpr (Slot == 20 || Slot == 24) a = std::get<0>(values);
+                else if constexpr (Slot == 21 || Slot == 22 || Slot == 77)
+                { a = std::get<0>(values); b = std::get<1>(values) ? 1 : 0; }
+                else if constexpr (Slot == 23 || Slot == 43) a = std::get<0>(values) ? 1 : 0;
+                else if constexpr (Slot == 44 || Slot == 45)
+                { a = std::get<0>(values); b = std::get<1>(values); c = std::get<2>(values) ? 1 : 0; }
+                else if constexpr (Slot == 46)
+                { a = std::get<0>(values); b = std::get<2>(values) ? 1 : 0;
+                  c = (std::get<1>(values) ? 1u : 0u) | (std::get<3>(values) ? 2u : 0u); }
+                else if constexpr (Slot == 78) a = reinterpret_cast<std::uint64_t>(std::get<0>(values));
+                return state.ObserveUnrestorableGraphics(incarnation, Slot, a, b, c);
+            }
             else if constexpr (Slot >= 56 && Slot <= 58) return true; // Diagnostic markers only.
             else
-            { unsupported = true; state.Taint(incarnation); return false; } // Bundles, indirect, discard, predication, versioned effects.
-        });
+            { unsupported = true; state.Taint(incarnation, "UnsupportedEffect", Slot); return false; } // Bundles, predication, other versioned effects.
+        }, Slot);
         // WithCurrent also returns false without an entry. Record only an
         // action on a previously active, untainted recording, after the
         // observer/state locks retire. Existing loss cannot identify this slot.
@@ -734,6 +757,7 @@ class NativeRecordingHooks
         result.computeUav = [this](auto... args) { CallbackLease lease(*const_cast<NativeRecordingHooks*>(this)); if (!installed_ || !coverage_.load()) throw std::runtime_error("retired original setter"); Replay<41>(Hook<41, decltype(&ID3D12GraphicsCommandList10::SetComputeRootUnorderedAccessView)>::original, args...); };
         result.graphicsUav = [this](auto... args) { CallbackLease lease(*const_cast<NativeRecordingHooks*>(this)); if (!installed_ || !coverage_.load()) throw std::runtime_error("retired original setter"); Replay<42>(Hook<42, decltype(&ID3D12GraphicsCommandList10::SetGraphicsRootUnorderedAccessView)>::original, args...); };
         result.barriers = [this](auto... args) { CallbackLease lease(*const_cast<NativeRecordingHooks*>(this)); if (!installed_ || !coverage_.load()) throw std::runtime_error("retired original setter"); Replay<26>(Hook<26, decltype(&ID3D12GraphicsCommandList10::ResourceBarrier)>::original, args...); };
+        result.blendFactor = [this](auto... args) { CallbackLease lease(*const_cast<NativeRecordingHooks*>(this)); if (!installed_ || !coverage_.load()) throw std::runtime_error("retired original setter"); Replay<23>(Hook<23, decltype(&ID3D12GraphicsCommandList10::OMSetBlendFactor)>::original, args...); };
         return result;
     }
 };

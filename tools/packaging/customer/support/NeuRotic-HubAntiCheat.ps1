@@ -71,7 +71,7 @@ function Get-HubAntiCheatIdentity($Request,$Target){
 function Read-HubProviderRules {
  try{
   $bytes=Read-HubAntiCheatBytes (Join-Path $PSScriptRoot 'NeuRotic-AntiCheatProviders.json') 131072
-  if((HashBytes $bytes).ToLowerInvariant() -cne '8f66be037644936b2ee51258bdccdc032c8b4a3a2358d8655f6d0b3018c5261c'){throw 'Bundled provider rules digest mismatch'}
+  if((HashBytes $bytes).ToLowerInvariant() -cne '93fa19ca7de624e4e7611ed82d67d59d30557f7a0385da16ffb088a07ce55e5b'){throw 'Bundled provider rules digest mismatch'}
   if(-not ('NeuRoticHubJson' -as [type])){Add-Type -Path (Join-Path $PSScriptRoot 'NeuRotic-HubJson.cs')}
   $text=(New-Object Text.UTF8Encoding($false,$true)).GetString($bytes);[NeuRoticHubJson]::Validate($text);$rules=$text|ConvertFrom-Json;Assert-AcRules $rules;return $rules
  }catch{return $null}

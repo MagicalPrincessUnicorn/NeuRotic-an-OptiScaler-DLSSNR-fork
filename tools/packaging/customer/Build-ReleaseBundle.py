@@ -362,7 +362,7 @@ def assemble(build, components, product, version, current, commit, reshade_setup
                     game_runtime_verified=False, prior_acceptance_transfers_to_this_binary=False, base_archive_sha256=BASE_SHA)
     files[PACKAGE + 'support/BUILD-MANIFEST.json'] = encode(metadata)
     files[PACKAGE + 'support/PACKAGE-MANIFEST.json'] = encode({
-        'kind': 'neurotic-customer-candidate', 'name': 'NeuRotic Internal Test' if internal_testing else 'NeuRotic Release Candidate', 'version': '0.9.7', 'loggingProfile': logging_profile,
+        'kind': 'neurotic-customer-candidate', 'name': 'NeuRotic Internal Test' if internal_testing else 'NeuRotic Release Candidate', 'version': '0.9.8', 'loggingProfile': logging_profile,
         'commit': commit, 'product_source_commit': build['source_commit'], 'component_provenance': {'inspector': provenance['inspector']},
         'components': {'characterInspector': verify.inspector_component()},
         'files': rows({n[len(PACKAGE):]: raw for n, raw in files.items() if n.startswith(PACKAGE)}, windows=True)})

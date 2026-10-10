@@ -221,20 +221,30 @@ static bool FavoriteStar(bool favorite,float dpi){
   ImGui::EndDisabled();ImGui::End();
  }if(!shortViewport)ImGui::Spacing();
 }
+// Keep the existing card dimensions; the full backend reason is available on
+// both the status and folder action without adding controls or moving them.
+static void ModelReasonTooltip(const HubModel& model,float dpi){
+ if(!ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)||!model.preflight.is_object()||!model.preflight.contains("components"))return;
+ const auto& components=model.preflight["components"];if(!components.is_object()||!components.contains("neuralModel"))return;
+ const auto& nr=components["neuralModel"];if(!nr.is_object()||!nr.contains("reason")||!nr["reason"].is_string())return;
+ auto reason=nr["reason"].get<std::string>();if(reason.empty())return;
+ ImGui::BeginTooltip();ImGui::PushTextWrapPos(480*dpi);ImGui::TextUnformatted(Neurotic::Translate(reason.c_str()).c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();
+}
 static void ComponentCard(HubModel& model,int component,float width,float dpi,bool compact){
  const char* titles[]={Neurotic::UiLiteral("desktop.hubshell.microsoft_visual_c_9cd58c37", "Microsoft Visual C++"),Neurotic::UiLiteral("desktop.hubshell.streamline_8743a2fe", "Streamline"),Neurotic::UiLiteral("desktop.hubshell.nr_model_3814a794", "NR Model")};
  auto state=component==0?ui::RuntimeState(model):ui::ComponentState(model,component==1?Neurotic::UiLiteral("desktop.hubshell.streamline_3a9087b1", "streamline"):Neurotic::UiLiteral("desktop.hubshell.neuralmodel_47a6b821", "neuralModel"));
  ImGui::PushID(component);if(compact)ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{8*dpi,8*dpi});ImGui::BeginChild("ComponentCard",{width,(compact?74.f:114.f)*dpi},ImGuiChildFlags_Borders,FixedPane);if(compact)ImGui::PopStyleVar();
  ImGui::PushFont(nullptr,compact?13:16);ui::StatusDot(state,model.light,dpi);ImGui::TextUnformatted(titles[component]);
  const char* status=component==0?(state==ui::ReadyState::Ready?"Ready":state==ui::ReadyState::Checking?Neurotic::UiLiteral("desktop.hubshell.checking_84a79aaf", "Checking..."):Neurotic::UiLiteral("desktop.hubshell.install_or_repair_needed_c7ac96f0", "Install or repair needed")):ui::FileStatus(state);
- ImGui::TextColored(ui::StatusColor(state,model.light),"%s",Neurotic::Translate(status).c_str());ImGui::PopFont();
+ ImGui::TextColored(ui::StatusColor(state,model.light),"%s",Neurotic::Translate(status).c_str());if(component==2&&state==ui::ReadyState::Error)ModelReasonTooltip(model,dpi);ImGui::PopFont();
  ImGui::SetCursorPosY((compact?40.f:76.f)*dpi);ImGui::PushFont(nullptr,compact?13:16);
  ImGui::BeginDisabled(component==0&&!model.CanDownloadRuntime());
  if(ui::IconButton(component==0?Neurotic::UiLiteral("desktop.hubshell.download_visual_c_a56ac7e0", "    Download Visual C++"):Neurotic::UiLiteral("desktop.hubshell.open_folder_c24fe9c0", "    Open Folder"),7,component==0?0.f:ui::IconButtonWidth(Neurotic::UiLiteral("desktop.hubshell.open_folder_c24fe9c0", "Open Folder"),dpi),dpi)){
   if(component==0)model.OpenRuntimeDownload();else model.OpenComponentFolder(component==1);
  }
  ImGui::EndDisabled();
- if(component>0&&state!=ui::ReadyState::Ready&&ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("%s",Neurotic::Translate(component==1?Neurotic::UiLiteral("desktop.hubshell.add_streamline_files_here_for_neurotic_to_instal_416d8777", "Add Streamline files here for NeuRotic to install them to your games automatically."):Neurotic::UiLiteral("desktop.hubshell.add_nvngx_dlssnr_dll_file_here_for_neurotic_to_i_6811393c", "Add nvngx_dlssnr.dll file here for NeuRotic to install it to your games automatically.")).c_str());
+ if(component==2&&state==ui::ReadyState::Error)ModelReasonTooltip(model,dpi);
+ else if(component>0&&state!=ui::ReadyState::Ready&&ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("%s",Neurotic::Translate(component==1?Neurotic::UiLiteral("desktop.hubshell.add_streamline_files_here_for_neurotic_to_instal_416d8777", "Add Streamline files here for NeuRotic to install them to your games automatically."):Neurotic::UiLiteral("desktop.hubshell.add_nvngx_dlssnr_dll_file_here_for_neurotic_to_i_6811393c", "Add nvngx_dlssnr.dll file here for NeuRotic to install it to your games automatically.")).c_str());
  ImGui::PopFont();
  ImGui::EndChild();ImGui::PopID();
 }
@@ -291,8 +301,8 @@ static void PreflightPanel(HubModel& model){
  auto streamline=ui::ComponentState(model,Neurotic::UiLiteral("desktop.hubshell.streamline_3a9087b1", "streamline"));ComponentHeading(Neurotic::UiLiteral("desktop.hubshell.streamline_8743a2fe", "Streamline"),streamline,model.light,dpi);ImGui::TextColored(ui::StatusColor(streamline,model.light),"%s",Neurotic::Translate(streamline==ui::ReadyState::Ready?Neurotic::UiLiteral("desktop.hubshell.supplied_matching_files_preserved_across_updates_fe6591d4", "Supplied · matching files preserved across updates"):streamline==ui::ReadyState::Checking?Neurotic::UiLiteral("desktop.hubshell.checking_84a79aaf", "Checking..."):Neurotic::UiLiteral("desktop.hubshell.optional_matching_provider_files_not_supplied_6a924065", "Optional · matching provider files not supplied")).c_str());
  ImGui::TextWrapped(Neurotic::UiLiteral("desktop.hubshell.used_by_compatible_frame_generation_paths_keep_m_4f08beb8", "Used by compatible frame-generation paths. Keep matching files together in the persistent component folder."));if(ui::IconButton(Neurotic::UiLiteral("desktop.hubshell.open_streamline_folder_7efeb999", "    Open Streamline folder"),7,0,dpi))model.OpenComponentFolder(true);ImGui::EndChild();ImGui::Spacing();
  ImGui::BeginChild("ModelChecklist",{0,0},ImGuiChildFlags_Borders|ImGuiChildFlags_AutoResizeY,ImGuiWindowFlags_NoScrollWithMouse);
- auto neural=ui::ComponentState(model,Neurotic::UiLiteral("desktop.hubshell.neuralmodel_47a6b821", "neuralModel"));if(neural==ui::ReadyState::Attention)neural=ui::ReadyState::Error;ComponentHeading(Neurotic::UiLiteral("desktop.hubshell.nr_model_3814a794", "NR Model"),neural,model.light,dpi);
- ImGui::TextColored(ui::StatusColor(neural,model.light),"%s",Neurotic::Translate(neural==ui::ReadyState::Ready?Neurotic::UiLiteral("desktop.hubshell.supplied_model_validation_passed_65f6caf4", "Supplied · model validation passed"):neural==ui::ReadyState::Checking?Neurotic::UiLiteral("desktop.hubshell.checking_84a79aaf", "Checking..."):Neurotic::UiLiteral("desktop.hubshell.required_for_neural_rendering_model_not_supplied_1b0a91a5", "Required for neural rendering · model not supplied")).c_str());if(ui::IconButton(Neurotic::UiLiteral("desktop.hubshell.open_nr_model_folder_472c391f", "Open NR model folder"),0,0,dpi))model.OpenComponentFolder(false);ImGui::EndChild();
+ auto neural=ui::ComponentState(model,Neurotic::UiLiteral("desktop.hubshell.neuralmodel_47a6b821", "neuralModel"));ComponentHeading(Neurotic::UiLiteral("desktop.hubshell.nr_model_3814a794", "NR Model"),neural,model.light,dpi);
+ ImGui::TextColored(ui::StatusColor(neural,model.light),"%s",Neurotic::Translate(neural==ui::ReadyState::Ready?Neurotic::UiLiteral("desktop.hubshell.supplied_model_validation_passed_65f6caf4", "Supplied · model validation passed"):neural==ui::ReadyState::Checking?Neurotic::UiLiteral("desktop.hubshell.checking_84a79aaf", "Checking..."):neural==ui::ReadyState::Error?ui::FileStatus(neural):Neurotic::UiLiteral("desktop.hubshell.required_for_neural_rendering_model_not_supplied_1b0a91a5", "Required for neural rendering · model not supplied")).c_str());if(neural==ui::ReadyState::Error)ModelReasonTooltip(model,dpi);if(ui::IconButton(Neurotic::UiLiteral("desktop.hubshell.open_nr_model_folder_472c391f", "Open NR model folder"),0,0,dpi))model.OpenComponentFolder(false);if(neural==ui::ReadyState::Error)ModelReasonTooltip(model,dpi);ImGui::EndChild();
 }
 static void LogPanel(const std::string& report){
  float right=ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x-ImGui::GetFrameHeight();ImGui::TextDisabled(Neurotic::UiLiteral("desktop.hubshell.select_text_or_press_ctrl_a_ctrl_c_3d1f8a71", "Select text, or press Ctrl+A / Ctrl+C"));ImGui::SameLine(std::max(0.f,right));if(ui::CopyButton())ImGui::SetClipboardText(report.c_str());
@@ -396,7 +406,7 @@ void RenderHub(HubModel& model,void* brand,float dpi){
  auto headerDraw=ImGui::GetWindowDrawList();if(brand){float scale=226*dpi/1805.f,h=318*scale,split=277*scale;auto id=(ImTextureID)(intptr_t)brand;
   headerDraw->AddImage(id,logoPos,{logoPos.x+split,logoPos.y+h},{176.f/2155,198.f/730},{453.f/2155,516.f/730});headerDraw->AddImage(id,{logoPos.x+split,logoPos.y},{logoPos.x+226*dpi,logoPos.y+h},{453.f/2155,198.f/730},{1981.f/2155,516.f/730},ImGui::GetColorU32(ImGuiCol_Text));
  }else headerDraw->AddText(logoPos,ImGui::GetColorU32(ImGuiCol_Text),"NeuRotic");
- ImGui::PushFont(nullptr,13);headerDraw->AddText({logoPos.x+226*dpi-ImGui::CalcTextSize("Alpha 0.9.7").x,logoPos.y+42*dpi},ImGui::GetColorU32(ImGuiCol_TextDisabled),"Alpha 0.9.7");ImGui::PopFont();
+ ImGui::PushFont(nullptr,13);headerDraw->AddText({logoPos.x+226*dpi-ImGui::CalcTextSize("Alpha 0.9.8").x,logoPos.y+42*dpi},ImGui::GetColorU32(ImGuiCol_TextDisabled),"Alpha 0.9.8");ImGui::PopFont();
  ImGui::SameLine(0,12*dpi);auto separator=ImGui::GetCursorScreenPos();ImGui::Dummy({1*dpi,58*dpi});headerDraw->AddLine({separator.x,separator.y+5*dpi},{separator.x,separator.y+53*dpi},ImGui::GetColorU32(ImGuiCol_Border),dpi);ImGui::SameLine(0,12*dpi);
  auto update=GetUpdateStatus();auto color=update.state==UpdateState::Current?ui::StatusColor(ui::ReadyState::Ready,model.light):update.state==UpdateState::Available?ui::StatusColor(ui::ReadyState::Attention,model.light):ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
  ImGui::PushFont(nullptr,14);

@@ -11,7 +11,7 @@ NeuRotic is a Windows application and rendering middleware built on [OptiScaler]
 ## Table of Contents
 
 - [What NeuRotic Does](#what-neurotic-does)
-- [Latest Release: Alpha 0.9.7](#latest-release-alpha-097)
+- [Latest Release: Alpha 0.9.8 Hotfix](#latest-release-alpha-098-hotfix)
 - [An Interface Designed for Easy Access](#an-interface-designed-for-easy-access)
 - [Workflows](#workflows)
 - [Compatibility](#compatibility)
@@ -34,19 +34,13 @@ NeuRotic is a Windows application and rendering middleware built on [OptiScaler]
 - **Desktop processing:** NR Anything applies neural rendering to a selected window, with visual controls, comparison views, and PNG capture.
 - **Comparison and diagnostics:** view Original, processed, Split, and Stripes comparisons where supported, and inspect rendering inputs, timing, connections, and output status.
 
-## Latest Release: Alpha 0.9.7
+## Latest Release: Alpha 0.9.8 Hotfix
 
-Alpha 0.9.7 adds the desktop application and expands the existing rendering pipeline, game compatibility, interface, and language tools.
+Alpha 0.9.8 improves Native stability, rendering-state restoration, compatibility checks, resource handling, and desktop shutdown. Fresh installs leave neural rendering off; updates preserve saved choices. This is a customer full-installer bundle with file logging off by default.
 
-- **Desktop application:** game discovery, installation, component management, per-game settings, and diagnostic exports.
-- **Expanded rendering routes:** DirectX 11, DirectX 12, and Vulkan Present processing, including supported games without native DLSS integration.
-- **Multipass and rendering combinations:** Present Multipass and improved integration with HDR, Ray Reconstruction, and frame generation on supported paths.
-- **Multi Frame Generation:** RTX 40 series support on compatible paths, with opt-in experimental RTX 20/30 compatibility.
-- **Renewed in-game menu:** light and dark themes, rendering controls, comparison tools, and diagnostics.
-- **Translations:** completed interface translations, shared community language packs, and an import/export editor.
-- **Desktop NR Anything:** early-alpha neural rendering for selected windows, with visual controls, comparisons, and PNG capture.
+**Native Temporal compatibility remains a work in progress.** The hotfix fixes tested paths; it does not complete support across games, graphics APIs, or rendering modes.
 
-Read the [complete Alpha 0.9.7 patch notes](RELEASE_NOTES.md) for feature details and the reported game-test list. Downloads are available on the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.7).
+Read the [Alpha 0.9.8 hotfix notes and preserved Alpha 0.9.7 patch notes](RELEASE_NOTES.md) for the changes and remaining limitations. Download the [Alpha 0.9.8 full installer](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.8).
 
 ## An Interface Designed for Easy Access
 
@@ -176,7 +170,7 @@ Supported in-game NR routes can work without a native DLSS integration. Reported
 
 | Area | Current status |
 | --- | --- |
-| DirectX 12 Native Temporal | Available on compatible game paths |
+| DirectX 12 Native Temporal | Available on compatible game paths; compatibility work remains incomplete |
 | DirectX 11 through the DirectX 12 bridge | Available on supported paths; game-dependent |
 | Vulkan Native and Present | Available on supported paths |
 | HDR and Ray Reconstruction combinations | Supported combinations depend on the route |
@@ -201,7 +195,7 @@ See the [feature report](RELEASE_NOTES.md#planned-improvements) for more detail.
 
 ## Installation
 
-Download the complete installer bundle from the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.7). GitHub's automatic source archives are not installation packages.
+Download the complete installer bundle from the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.8). GitHub's automatic source archives are not installation packages.
 
 ### Desktop App
 
@@ -267,7 +261,7 @@ Contributor, community-supporter, and upstream-project acknowledgments are colle
 
 ## Source, Credits, and Licensing
 
-- [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.7)
+- [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.8)
 - [Official OptiScaler](https://github.com/optiscaler/OptiScaler)
 - [Parent OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR)
 

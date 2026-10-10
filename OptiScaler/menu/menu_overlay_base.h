@@ -18,7 +18,7 @@ class MenuOverlayBase
     static bool IsVisible();
 
     static void Init(HWND InHandle, bool isUWP);
-    static bool RenderMenu();
+    static bool RenderMenu(float drawWidth=0, float drawHeight=0);
     static void Shutdown();
     static void HideMenu();
     static void Present();

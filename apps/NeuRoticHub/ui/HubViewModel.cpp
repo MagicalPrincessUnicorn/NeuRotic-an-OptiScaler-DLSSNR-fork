@@ -340,38 +340,47 @@ void HubModel::ReadInspectionFields(){settings.clear();proxy=0;if(inspection.con
    const auto proxyName=SelectedProxyName();for(int i=0;i<9;i++)if(proxyName==Proxies[i])proxy=i;
 
 }
-void HubModel::Poll() try{
- if(showDataMaintenance||restartForMaintenance)return;
- const auto targetState=anything?anything->Snapshot():AnythingSnapshot{};
- PollAnythingTargetLifecycle(anythingUi,targetState,[&]{if(anything)anything->Stop();});
+void HubModel::Poll(){PollImpl(false);}
+void HubModel::PollClosing(){PollImpl(true);}
+bool HubModel::DiagnosticsPending()const{return diagnosticsWorker.valid()&&diagnosticsWorker.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready;}
+bool HubModel::BundlePending()const{return bundleWorker.valid()&&bundleWorker.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready;}
+void HubModel::PollImpl(bool closing) try{
+ if(!closing&&(showDataMaintenance||restartForMaintenance))return;
+ if(closing)pendingSelection=-2;
+ if(!closing){const auto targetState=anything?anything->Snapshot():AnythingSnapshot{};
+ PollAnythingTargetLifecycle(anythingUi,targetState,[&]{if(anything)anything->Stop();});}
  if(launchAdmission&&launchAdmission->Finished())launchAdmission.reset();
  PollGameDiagnostics();PollDiagnosticBundle();
- if(bulkUninstall.Active()&&!bulkOwnsInstaller&&!installer.busy)AdvanceBulkUninstall();
+ if(!closing&&bulkUninstall.Active()&&!bulkOwnsInstaller&&!installer.busy)AdvanceBulkUninstall();
  Json result;
- if(readiness.Poll(result)){
+ if(readiness.Poll(result)&&!closing){
   if(result.value("status","")=="PreflightChecked"){preflight=result;preflightError.clear();
    if(!anything){anything=std::make_shared<AnythingController>(AnythingController::FindWorker(AppRoot()),SharedRuntimeRoot());anything->Connect();}
   }
   else preflightError=ResultMessage(result,Neurotic::UiLiteral("desktop.hubviewmodel.pre_flight_could_not_be_checked_try_checking_aga_d6f40d19", "Pre-flight could not be checked. Try checking again."));
  }
- if(anything){auto state=anything->Snapshot();if(state.modelRevision!=modelRevision){modelRevision=state.modelRevision;
+ if(!closing&&anything){auto state=anything->Snapshot();if(state.modelRevision!=modelRevision){modelRevision=state.modelRevision;
    if(state.modelVerified){preflight["components"][Neurotic::UiLiteral("desktop.hubshell.neuralmodel_47a6b821", "neuralModel")]={{"optional",true},{"status",Neurotic::UiLiteral("desktop.settings.dlssnr/route/value.43f9b89c0b", "Present")},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),state.modelPath},{"present",Json::array({"nvngx_dlssnr.dll"})},{"missing",Json::array()},{Neurotic::UiLiteral("desktop.anythingview.reason_adbde5fa", "reason"),nullptr}};}
   }
   if(state.connected&&!state.busy&&!state.modelVerified&&!state.modelPath.empty()&&!state.lastError.empty()&&(state.phase=="Locked"||state.phase==Neurotic::UiLiteral("desktop.anythingview.error_eab1d8bf", "Error"))){
-   preflight["components"][Neurotic::UiLiteral("desktop.hubshell.neuralmodel_47a6b821", "neuralModel")]={{"optional",true},{"status",Neurotic::UiLiteral("desktop.anythingview.unavailable_48a4b800", "Unavailable")},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),state.modelPath},{"present",Json::array()},{"missing",Json::array({"nvngx_dlssnr.dll"})},{Neurotic::UiLiteral("desktop.anythingview.reason_adbde5fa", "reason"),state.lastError}};
+   // Failed verification does not imply the selected file disappeared.
+   std::error_code modelFileError;bool modelFilePresent=false;
+   try{modelFilePresent=std::filesystem::is_regular_file(Wide(state.modelPath),modelFileError);}catch(...){modelFileError=std::make_error_code(std::errc::invalid_argument);}
+   const bool modelFileMissing=!modelFilePresent&&(!modelFileError||modelFileError==std::errc::no_such_file_or_directory||modelFileError==std::errc::not_a_directory);
+   preflight["components"][Neurotic::UiLiteral("desktop.hubshell.neuralmodel_47a6b821", "neuralModel")]={{"optional",true},{"status",Neurotic::UiLiteral("desktop.anythingview.unavailable_48a4b800", "Unavailable")},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),state.modelPath},{"present",modelFilePresent?Json::array({"nvngx_dlssnr.dll"}):Json::array()},{"missing",modelFileMissing?Json::array({"nvngx_dlssnr.dll"}):Json::array()},{Neurotic::UiLiteral("desktop.anythingview.reason_adbde5fa", "reason"),state.lastError}};
   }}
- if(discovery.Poll(result)){
+ if(discovery.Poll(result)&&!closing){
   if(result.contains("games")){
    MergeDiscovery(result);message=Neurotic::Localization::FormatSharedText("desktop.provider.765dcc67d919", {{"count",std::to_string(result["games"].size())}});if(!result[Neurotic::UiLiteral("desktop.hubshell.errors_5a41a7c1", "errors")].empty())message+=Neurotic::UiMessage("desktop.hubviewmodel.some_locations_were_skipped_accessible_games_rem_075fc419", " Some locations were skipped; accessible games remain listed.");if(result.contains("diagnosticWarning"))message+=" "+result["diagnosticWarning"].get<std::string>();lastResult=result;Save();
   }else message=ResultMessage(result,Neurotic::UiMessage("desktop.hubviewmodel.game_discovery_failed_770cdce5", "Game discovery failed"));
  }
  if(installer.Poll(result)){
-  if(installer.action=="LaunchPreflight"){if(pendingSelection!=-2){launchAdmission.reset();auto next=pendingSelection;pendingSelection=-2;Select(next);return;}try{CompleteLaunch(result);}catch(const std::exception& e){launchAdmission.reset();message=e.what();}return;}
+  if(installer.action=="LaunchPreflight"){if(closing){launchAdmission.reset();return;}if(pendingSelection!=-2){launchAdmission.reset();auto next=pendingSelection;pendingSelection=-2;Select(next);return;}try{CompleteLaunch(result);}catch(const std::exception& e){launchAdmission.reset();message=e.what();}return;}
   if(bulkOwnsInstaller){
    auto target=bulkUninstall.CurrentExecutable();auto kind=bulkRequestKind;bulkOwnsInstaller=false;bulkRequestKind.clear();
    bulkUninstall.AcceptReceipt(result);lastResult=result;
    if(kind=="Execute")InvalidateTarget(target);
-   AdvanceBulkUninstall();return;
+   if(!closing)AdvanceBulkUninstall();return;
   }
   // Drain the old child before reusing its single process owner. Its receipt has no authority over the next game.
   if(pendingSelection!=-2){int next=pendingSelection;pendingSelection=-2;Select(next);return;}
@@ -432,7 +441,7 @@ void HubModel::Poll() try{
     const auto& previous=operationIssue[Neurotic::UiLiteral("desktop.hubshell.anticheat_1eec58ab", "antiCheat")];Json retained=previous.value(Neurotic::UiLiteral("desktop.hubshell.stale_findings_ead79e28", "stale_findings"),Json::array());if(!retained.is_array())retained=Json::array();auto findings=previous.value("findings",Json::array());if(findings.is_array())for(auto& finding:findings)if(std::find(retained.begin(),retained.end(),finding)==retained.end())retained.push_back(finding);if(!retained.empty())report[Neurotic::UiLiteral("desktop.hubshell.stale_findings_ead79e28", "stale_findings")]=std::move(retained);
    }
    if(report.is_object()&&report.value("acknowledgementRequired",false)){operationIssue={{"decisionKind",Neurotic::UiLiteral("desktop.hubshell.anticheatrisk_879cbe91", "AntiCheatRisk")},{"target",games[selected].target.path},{Neurotic::UiLiteral("desktop.hubshell.anticheat_1eec58ab", "antiCheat"),report}};showIssue=true;showReview=false;message=Neurotic::UiMessage("desktop.hubviewmodel.review_the_local_anti_cheat_findings_before_cont_90ea2d84", "Review the local anti-cheat findings before continuing.");}
-   else{showIssue=false;Execute();}
+   else{showIssue=false;if(!closing)Execute();}
   }
   if(status=="Succeeded"||status=="SucceededWithNotes"||status=="Partial"){
    showReview=false;plan=Json();operationIssue=Json();showIssue=false;

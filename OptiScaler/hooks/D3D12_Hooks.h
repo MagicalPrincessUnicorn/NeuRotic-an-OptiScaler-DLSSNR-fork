@@ -40,7 +40,8 @@ class D3D12Hooks
     static std::optional<NativeStateRestorePoint> CapturePostSrState(
         ID3D12GraphicsCommandList* commandList, Neurotic::D3D12::RestoreMask mask,
         Neurotic::D3D12::NativeStateCaptureDiagnostic* diagnostic = nullptr);
-    static bool RestorePostSrState(const NativeStateRestorePoint& snapshot);
+    static bool RestorePostSrState(const NativeStateRestorePoint& snapshot,
+        Neurotic::D3D12::NativeRecordingState::RestoreDiagnostic* diagnostic = nullptr);
     static bool RegisterNativeRootLayout(ID3D12RootSignature* signature,
                                          std::vector<Neurotic::D3D12::RootParameter> layout);
     static std::optional<D3D12_RESOURCE_STATES> KnownHudResourceState(ID3D12GraphicsCommandList*, ID3D12Resource*);

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="dlssnr\RenderingOutput.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><AdditionalIncludeDirectories>$(ProjectDir)..\apps\NeuRoticHub;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
-    <ClCompile Include="..\apps\NeuRoticHub\anything\AnythingController.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><PreprocessorDefinitions>NOMINMAX;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalIncludeDirectories>$(ProjectDir)..\apps\NeuRoticHub;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+    <ClCompile Include="dlssnr\RenderingOutput.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><AdditionalIncludeDirectories>$(ProjectDir)shipping-native-hub\apps\NeuRoticHub;$(ProjectDir)..\apps\NeuRoticHub\anything;$(ProjectDir)..\apps\NeuRoticHub;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+    <ClCompile Include="shipping-native-hub\apps\NeuRoticHub\anything\AnythingController.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><PreprocessorDefinitions>NOMINMAX;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalIncludeDirectories>$(ProjectDir)shipping-native-hub\apps\NeuRoticHub;$(ProjectDir)..\apps\NeuRoticHub\anything;$(ProjectDir)..\apps\NeuRoticHub;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
     <ClCompile Include="dlssnr\NativeD3D11Guides.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="dlssnr\NativeD3D12Guides.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="dlssnr\connections\D3D11Connection.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>

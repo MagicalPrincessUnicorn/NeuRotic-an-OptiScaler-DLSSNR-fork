@@ -3,9 +3,12 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <dlssnr/NativeIdentity.h>
+#include "NativeIndirectSignatures.h"
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <mutex>
 #include <memory>
@@ -36,9 +39,15 @@ enum class RestoreMask : unsigned
 {
     None = 0, Compute = 1, Graphics = 2, Pipeline = 4, Heaps = 8,
     All = Compute | Graphics | Pipeline | Heaps,
-    // Opt-in only with Heaps: reproduce observed heap-invalidated tables by
-    // an actual unbind/rebind, never by replaying their stale handles.
-    HeapInvalidatedTables = 16
+    // Opt-in only with Heaps: reproduce observed undefined tables by
+    // an actual heap unbind/rebind, never by replaying their stale handles.
+    // Admission requires an observed heap change after the table was created.
+    HeapInvalidatedTables = 16,
+    // Separate opt-in: an observed nonredundant root set makes its tables
+    // undefined. Recreate that state via heap invalidation, never stale handles.
+    RootInvalidatedTables = 32,
+    // Ordinary dynamic blend state only; deliberately excluded from All.
+    BlendFactor = 64
 };
 inline RestoreMask operator|(RestoreMask a, RestoreMask b)
 {
@@ -48,10 +57,21 @@ inline bool Has(RestoreMask value, RestoreMask part)
 {
     return (static_cast<unsigned>(value) & static_cast<unsigned>(part)) != 0;
 }
+struct NativeRecordingInvalidation
+{
+    const char* reason = "none";
+    UINT slot = UINT_MAX;
+    std::uint64_t sequence = 0, workOrdinal = 0;
+};
 struct NativeStateCaptureDiagnostic
 {
     const char* reason = "Native.CommandStateUnavailable";
     UINT parameter = UINT_MAX, known = 0, required = 0;
+    // Read-only snapshot of this recording; never an admission certificate.
+    bool recordingPresent = false, rawActive = false, tainted = false;
+    bool historyKnown = false, historyComplete = false;
+    std::uint64_t incarnation = 0, hookGeneration = 0;
+    NativeRecordingInvalidation firstInvalidation;
     // Diagnostic tail only: never used for admission or restoration. The total
     // exposes overwritten entries; sequence and work ordinal have distinct roles.
     struct TraceEntry {
@@ -66,6 +86,22 @@ struct NativeStateCaptureDiagnostic
 class NativeRecordingState
 {
   public:
+    // Evidence only. No diagnostic field participates in an admission decision.
+    struct RestoreDiagnostic
+    {
+        const char* reason = "Native.Restore.NotAttempted";
+        std::uint64_t savedComputeMutation = 0, currentComputeMutation = 0;
+        std::uint64_t savedGraphicsMutation = 0, currentGraphicsMutation = 0;
+        std::uint64_t savedBlendMutation = 0, currentBlendMutation = 0;
+        std::uint64_t savedUnrestorableOrdinal = 0, currentUnrestorableOrdinal = 0;
+        std::uint64_t savedWorkOrdinal = 0, currentWorkOrdinal = 0;
+        std::uint64_t savedIncarnation = 0, currentIncarnation = 0;
+        bool active = false, tainted = false;
+        UINT lastUnrestorableSlot = UINT_MAX;
+        std::uint64_t lastUnrestorableSequence = 0, lastUnrestorableOrdinal = 0, lastUnrestorableWorkOrdinal = 0;
+        std::uint64_t lastUnrestorableA = 0, lastUnrestorableB = 0, lastUnrestorableC = 0;
+        NativeStateCaptureDiagnostic tail;
+    };
     struct OriginalSetters
     {
         std::function<void(ID3D12GraphicsCommandList*, UINT, ID3D12DescriptorHeap* const*)> heaps;
@@ -76,6 +112,7 @@ class NativeRecordingState
         std::function<void(ID3D12GraphicsCommandList*, UINT, D3D12_GPU_VIRTUAL_ADDRESS)> computeCbv, computeSrv, computeUav;
         std::function<void(ID3D12GraphicsCommandList*, UINT, D3D12_GPU_VIRTUAL_ADDRESS)> graphicsCbv, graphicsSrv, graphicsUav;
         std::function<void(ID3D12GraphicsCommandList*, UINT, const D3D12_RESOURCE_BARRIER*)> barriers;
+        std::function<void(ID3D12GraphicsCommandList*, const float*)> blendFactor;
     };
 
   private:
@@ -83,7 +120,8 @@ class NativeRecordingState
     {
         RootKind kind = RootKind::Table;
         bool known = false;
-        bool heapInvalidated = false;
+        bool tableInvalidated = false;
+        bool tableRootInvalidated = false;
         D3D12_GPU_DESCRIPTOR_HANDLE table{};
         D3D12_GPU_VIRTUAL_ADDRESS address = 0;
         std::vector<UINT> constants;
@@ -118,14 +156,25 @@ class NativeRecordingState
         ID3D12GraphicsCommandList* list = nullptr;
         std::uint64_t incarnation = 0;
         std::uint64_t workOrdinal = 0;
+        // Recording order only. Discard changes contents, not saved bindings;
+        // restoration cannot undo a discard recorded after its snapshot.
+        std::uint64_t discardOrdinal = 0;
         std::uint64_t unrestorableGraphicsOrdinal = 0;
+        // Diagnostic witness only; survives overwriting the general trace tail.
+        UINT lastUnrestorableSlot = UINT_MAX;
+        std::uint64_t lastUnrestorableSequence = 0, lastUnrestorableOrdinal = 0, lastUnrestorableWorkOrdinal = 0;
+        std::uint64_t lastUnrestorableA = 0, lastUnrestorableB = 0, lastUnrestorableC = 0;
         bool active = false;
         bool tainted = false;
+        NativeRecordingInvalidation firstInvalidation;
         ID3D12PipelineState* pipeline = nullptr;
         bool pipelineKnown = false;
         std::array<ID3D12DescriptorHeap*, 2> heaps{};
         UINT heapCount = 0;
         bool heapsKnown = false;
+        std::array<float,4> blendFactor{};
+        bool blendKnown = false, blendOrdinary = false;
+        std::uint64_t blendMutation = 0;
         Stage compute, graphics;
         struct QueryScope { ID3D12QueryHeap* heap; D3D12_QUERY_TYPE type; UINT index; };
         std::vector<QueryScope> queries;
@@ -155,8 +204,14 @@ class NativeRecordingState
         for (auto p : layout)
             if ((p.kind == RootKind::Constants && (!p.constants || p.constants > 64)) ||
                 (p.kind != RootKind::Constants && p.constants)) return false;
-        if (!layouts_.emplace(signature, std::move(layout)).second) return false;
-        layoutOwners_.try_emplace(signature, signature);
+        if (layouts_.contains(signature)) return false;
+        // Allocate/rehash both nodes while the owner is empty. A failed map
+        // insertion must not unwind a COM-owning temporary under this lock.
+        auto [owner, inserted] = layoutOwners_.try_emplace(signature);
+        if (!inserted) return false;
+        try { layouts_.emplace(signature, std::move(layout)); }
+        catch (...) { layoutOwners_.erase(owner); throw; }
+        owner->second = signature;
         return true;
     }
 
@@ -183,17 +238,133 @@ class NativeRecordingState
         std::lock_guard lock(mutex_);
         if (Matches(incarnation)) state_.active = false;
     }
-    void Taint(std::uint64_t incarnation)
+    void Taint(std::uint64_t incarnation, const char* reason = "Unclassified", UINT slot = UINT_MAX)
     {
         std::lock_guard lock(mutex_);
-        if (Matches(incarnation)) state_.tainted = true;
+        if (Matches(incarnation)) Invalidate(reason, slot);
     }
-    bool ObserveUnrestorableGraphics(std::uint64_t incarnation)
+    void AttributeInvalidation(std::uint64_t incarnation, UINT slot)
+    {
+        std::lock_guard lock(mutex_);
+        if (Matches(incarnation) && state_.tainted && state_.firstInvalidation.slot == UINT_MAX)
+            state_.firstInvalidation.slot = slot;
+    }
+    void Diagnose(NativeStateCaptureDiagnostic* diagnostic) const
+    {
+        if (!diagnostic) return;
+        std::lock_guard lock(mutex_);
+        FillCaptureDiagnostic(diagnostic);
+    }
+    bool ObserveUnrestorableGraphics(std::uint64_t incarnation, UINT slot = UINT_MAX,
+                                    std::uint64_t a = 0, std::uint64_t b = 0, std::uint64_t c = 0)
     {
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation)) return false;
-        if (state_.unrestorableGraphicsOrdinal == UINT64_MAX) { state_.tainted = true; return false; }
+        if (state_.unrestorableGraphicsOrdinal == UINT64_MAX) { Invalidate(__func__); return false; }
         ++state_.unrestorableGraphicsOrdinal;
+        Trace("graphics-unrestorable", slot, state_.unrestorableGraphicsOrdinal, a);
+        state_.lastUnrestorableSlot = slot;
+        state_.lastUnrestorableSequence = traceTotal_;
+        state_.lastUnrestorableOrdinal = state_.unrestorableGraphicsOrdinal;
+        state_.lastUnrestorableWorkOrdinal = state_.workOrdinal;
+        state_.lastUnrestorableA = a; state_.lastUnrestorableB = b; state_.lastUnrestorableC = c;
+        return true;
+    }
+    bool ObserveBlendFactor(std::uint64_t incarnation, const float* values)
+    {
+        std::lock_guard lock(mutex_);
+        if (!Matches(incarnation)) return false;
+        if (state_.blendMutation == UINT64_MAX || !CopyBlend(values, state_.blendFactor))
+        { Invalidate(__func__); return false; }
+        ++state_.blendMutation;
+        state_.blendKnown = true;
+        // Conservative replay policy, not an API-validity judgment. In
+        // particular -0 and the provider's negative tuple are never replayed.
+        state_.blendOrdinary = std::all_of(state_.blendFactor.begin(),state_.blendFactor.end(),
+            [](float value) { return std::bit_cast<std::uint32_t>(value) <= 0x3f800000u; });
+        Trace("blend-factor",state_.blendMutation,state_.blendOrdinary,values ? 1 : 0);
+        return true; // The original call still passes through exactly once.
+    }
+    // The optional immutable effects come only from observed successful native
+    // signature creation. Missing/unsupported/mismatched metadata retains the
+    // original conservative fallback. No GPU argument/count contents are read.
+    bool ObserveIndirect(std::uint64_t incarnation, const NativeIndirectEffects* effects = nullptr,
+                         std::uint64_t signatureIdentity = 0)
+    {
+        std::lock_guard lock(mutex_);
+        if (!Matches(incarnation) || state_.tainted) return false;
+        if (state_.workOrdinal == UINT64_MAX || state_.unrestorableGraphicsOrdinal == UINT64_MAX ||
+            state_.compute.mutationOrdinal == UINT64_MAX || state_.graphics.mutationOrdinal == UINT64_MAX)
+        { Invalidate(__func__); return false; }
+        ++state_.workOrdinal;
+        // Every restore mask rejects a snapshot spanning indirect work, even
+        // if subsequent explicit setters restore the same apparent values.
+        ++state_.unrestorableGraphicsOrdinal;
+        // Validate the entire effect set before granting any knowledge. A root
+        // mismatch cannot be repaired by assuming the current layout is similar.
+        Stage* selected = effects ? (effects->compute ? &state_.compute : &state_.graphics) : nullptr;
+        bool authenticated = effects && (effects->resets.empty() ? !effects->root :
+            selected->signatureKnown && effects->root.Get() == selected->signature);
+        if (authenticated)
+            for (const auto& reset : effects->resets)
+            {
+                if (reset.parameter >= selected->bindings.size()) { authenticated = false; break; }
+                const auto& binding = selected->bindings[reset.parameter];
+                const auto kind = reset.kind == NativeIndirectRootKind::Constants ? RootKind::Constants :
+                    reset.kind == NativeIndirectRootKind::CBV ? RootKind::CBV :
+                    reset.kind == NativeIndirectRootKind::SRV ? RootKind::SRV : RootKind::UAV;
+                if (static_cast<unsigned>(reset.kind) > static_cast<unsigned>(NativeIndirectRootKind::UAV) || binding.kind != kind ||
+                    (kind == RootKind::Constants && (!reset.count || reset.offset > binding.constants.size() ||
+                     reset.count > binding.constants.size() - reset.offset)) ||
+                    (kind != RootKind::Constants && (reset.offset || reset.count)))
+                { authenticated = false; break; }
+            }
+        if (authenticated)
+        {
+            if (!effects->resets.empty()) ++selected->mutationOrdinal;
+            for (const auto& reset : effects->resets)
+            {
+                auto& binding = selected->bindings[reset.parameter];
+                if (binding.kind == RootKind::Constants)
+                {
+                    std::fill_n(binding.constants.begin() + reset.offset, reset.count, 0u);
+                    std::fill_n(binding.written.begin() + reset.offset, reset.count, true);
+                    binding.known = std::all_of(binding.written.begin(),binding.written.end(),[](bool x) { return x; });
+                }
+                else { binding.address = 0; binding.known = true; }
+            }
+            Trace(effects->compute ? "indirect-compute-reset" : "indirect-graphics-reset",
+                signatureIdentity,effects->resets.size(),reinterpret_cast<std::uint64_t>(effects->root.Get()));
+            return true;
+        }
+        const auto invalidate = [](Stage& stage) {
+            ++stage.mutationOrdinal;
+            for (auto& binding : stage.bindings)
+            {
+                // Preserve authentic table knowledge, including genuine heap
+                // invalidation. Skipping a table never promotes unknown state.
+                if (binding.kind == RootKind::Table) continue;
+                binding.known = false;
+                binding.tableInvalidated = false;
+                std::fill(binding.written.begin(), binding.written.end(), false);
+            }
+        };
+        invalidate(state_.compute);
+        invalidate(state_.graphics);
+        Trace("indirect-arguments-unknown",signatureIdentity);
+        return true;
+    }
+    bool ObserveDiscard(std::uint64_t incarnation, ID3D12Resource* resource, bool regionSpecified)
+    {
+        std::lock_guard lock(mutex_);
+        if (!Matches(incarnation) || state_.tainted) return false;
+        if (!resource || state_.discardOrdinal == UINT64_MAX || state_.workOrdinal == UINT64_MAX)
+        { Invalidate("ObserveDiscard", 51); return false; }
+        ++state_.discardOrdinal;
+        ++state_.workOrdinal;
+        // Do not dereference resource/region or certify image initialization,
+        // barrier validity, execution or completion. Those owners are unchanged.
+        Trace("discard-resource", reinterpret_cast<std::uint64_t>(resource), regionSpecified, state_.discardOrdinal);
         return true;
     }
     bool ObserveWork(std::uint64_t incarnation)
@@ -201,7 +372,7 @@ class NativeRecordingState
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation) || state_.tainted || state_.workOrdinal == UINT64_MAX)
         {
-            if (Matches(incarnation)) state_.tainted = true;
+            if (Matches(incarnation)) Invalidate(__func__);
             return false;
         }
         ++state_.workOrdinal;
@@ -228,7 +399,7 @@ class NativeRecordingState
     {
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation) || state_.tainted) return false;
-        const auto refuse = [&] { state_.tainted = true; return false; };
+        const auto refuse = [&] { Invalidate("ObserveQuery"); return false; };
         if (!heap || !SupportedQuery(type) || state_.workOrdinal == UINT64_MAX) return refuse();
         const auto found = std::find_if(state_.queries.begin(),state_.queries.end(),[&](const auto& query) {
             return query.heap == heap && query.index == index;
@@ -254,7 +425,7 @@ class NativeRecordingState
         if (!heap || !SupportedQuery(type) || end > static_cast<std::uint64_t>(UINT_MAX) + 1 ||
             state_.workOrdinal == UINT64_MAX || std::any_of(state_.queries.begin(),state_.queries.end(),[&](const auto& query) {
                 return query.heap == heap && query.index >= first && query.index < end;
-            })) { state_.tainted = true; return false; }
+            })) { Invalidate(__func__); return false; }
         // Completed queries may come from an earlier command list. Observing
         // this effect does not certify heap bounds, argument validity or results.
         ++state_.workOrdinal;
@@ -264,7 +435,7 @@ class NativeRecordingState
     {
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation)) return false;
-        if (!pipeline) { state_.tainted = true; return false; }
+        if (!pipeline) { Invalidate(__func__); return false; }
         state_.pipeline = pipeline;
         state_.Retain(pipeline);
         state_.pipelineKnown = true;
@@ -275,13 +446,14 @@ class NativeRecordingState
     {
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation)) return false;
-        if (count > 2 || (count && !heaps)) { state_.tainted = true; return false; }
+        if (count > 2 || (count && !heaps)) { Invalidate(__func__); return false; }
         for (UINT i = 0; i < count; ++i)
-            if (!heaps[i]) { state_.tainted = true; return false; }
-        // Redundantly binding the same heaps does not invalidate D3D12 tables.
-        // This does not fill any table that was already unknown.
+            if (!heaps[i]) { Invalidate(__func__); return false; }
+        // Heap bindings are per type: reversing the same valid two-heap
+        // set is redundant too. Preserve existing unknown/partial state.
         if (state_.heapsKnown && state_.heapCount == count &&
-            (!count || std::equal(heaps, heaps + count, state_.heaps.begin())))
+            (!count || std::equal(heaps, heaps + count, state_.heaps.begin()) ||
+             (count == 2 && heaps[0] == state_.heaps[1] && heaps[1] == state_.heaps[0])))
         {
             Trace("heaps-same", count ? reinterpret_cast<std::uint64_t>(heaps[0]) : 0,
                 count > 1 ? reinterpret_cast<std::uint64_t>(heaps[1]) : 0, count);
@@ -302,7 +474,10 @@ class NativeRecordingState
             for (auto& binding : stage->bindings)
                 if (binding.kind == RootKind::Table)
                 {
-                    binding.heapInvalidated = binding.known || binding.heapInvalidated;
+                    // A genuine heap-set change makes every table undefined,
+                    // including slots without a previously captured value.
+                    binding.tableInvalidated = true;
+                    binding.tableRootInvalidated = false;
                     binding.known = false;
                 }
         return true;
@@ -345,10 +520,10 @@ class NativeRecordingState
     {
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation)) return false;
-        if (!resource || !generation) { state_.tainted = true; return false; }
+        if (!resource || !generation) { Invalidate(__func__); return false; }
         const bool added = state_.resources.emplace(State::ResourceKey{resource, generation, subresource}, knownState).second;
         if (added) state_.Retain(resource);
-        if (!added) state_.tainted = true;
+        if (!added) Invalidate(__func__);
         return added;
     }
     bool ObserveTransition(std::uint64_t incarnation, ID3D12Resource* resource, std::uint64_t generation,
@@ -359,7 +534,7 @@ class NativeRecordingState
         auto it = state_.resources.find({resource, generation, subresource});
         if (it == state_.resources.end() || it->second != before)
         {
-            state_.tainted = true;
+            Invalidate(__func__);
             return false;
         }
         it->second = after;
@@ -369,7 +544,7 @@ class NativeRecordingState
     {
         std::lock_guard lock(mutex_);
         if (!Matches(incarnation)) return false;
-        if (count && !barriers) { state_.tainted = true; return false; }
+        if (count && !barriers) { Invalidate(__func__); return false; }
         for (UINT i = 0; i < count; ++i)
         {
             const auto& barrier = barriers[i];
@@ -378,15 +553,15 @@ class NativeRecordingState
                 // A split transition has a pending interval. Until that interval
                 // is modeled, neither half authenticates an ordinary final state.
                 if (barrier.Flags != D3D12_RESOURCE_BARRIER_FLAG_NONE)
-                { state_.tainted = true; return false; }
+                { Invalidate(__func__); return false; }
                 const auto& transition = barrier.Transition;
-                if (!transition.pResource) { state_.tainted = true; return false; }
+                if (!transition.pResource) { Invalidate(__func__); return false; }
                 for (auto& [key, current] : state_.resources)
                 {
                     if (key.resource != transition.pResource ||
                         (key.subresource != transition.Subresource &&
                          transition.Subresource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)) continue;
-                    if (current != transition.StateBefore) { state_.tainted = true; return false; }
+                    if (current != transition.StateBefore) { Invalidate(__func__); return false; }
                     current = transition.StateAfter;
                 }
             }
@@ -396,10 +571,10 @@ class NativeRecordingState
                     if (!barrier.Aliasing.pResourceBefore || !barrier.Aliasing.pResourceAfter ||
                         key.resource == barrier.Aliasing.pResourceBefore ||
                         key.resource == barrier.Aliasing.pResourceAfter)
-                    { state_.tainted = true; return false; }
+                    { Invalidate(__func__); return false; }
             }
             else if (barrier.Type != D3D12_RESOURCE_BARRIER_TYPE_UAV)
-            { state_.tainted = true; return false; }
+            { Invalidate(__func__); return false; }
         }
         return true;
     }
@@ -408,14 +583,7 @@ class NativeRecordingState
                                     NativeStateCaptureDiagnostic* diagnostic = nullptr) const
     {
         std::lock_guard lock(mutex_);
-        if (diagnostic)
-        {
-            *diagnostic = {};
-            diagnostic->traceTotal = traceTotal_;
-            diagnostic->traceCount = static_cast<UINT>(std::min<std::uint64_t>(traceTotal_, trace_.size()));
-            for (UINT i=0; i<diagnostic->traceCount; ++i)
-                diagnostic->trace[i] = trace_[(traceTotal_-diagnostic->traceCount+i)%trace_.size()];
-        }
+        if (diagnostic) FillCaptureDiagnostic(diagnostic);
         const auto refuse = [&](const char* reason) -> std::optional<Snapshot> {
             if (diagnostic) diagnostic->reason = reason;
             return {};
@@ -425,20 +593,22 @@ class NativeRecordingState
         if (!state_.queries.empty()) return refuse("Native.State.QueryOpen");
         if (Has(mask, RestoreMask::Pipeline) && !state_.pipelineKnown) return refuse("Native.State.PipelineUnknown");
         if (Has(mask, RestoreMask::Heaps) && !state_.heapsKnown) return refuse("Native.State.HeapsUnknown");
-        const bool invalidated = Has(mask, RestoreMask::HeapInvalidatedTables);
+        if (Has(mask, RestoreMask::BlendFactor) && (!state_.blendKnown || !state_.blendOrdinary))
+            return refuse("Native.State.BlendFactorUnknownOrOpaque");
+        const bool invalidated = Has(mask, RestoreMask::HeapInvalidatedTables) || Has(mask, RestoreMask::RootInvalidatedTables);
         if (invalidated && (!Has(mask, RestoreMask::Heaps) || !state_.heapsKnown || !state_.heapCount))
             return refuse("Native.State.InvalidationRequiresBoundHeaps");
-        if (Has(mask, RestoreMask::Compute) && !Complete(state_.compute, invalidated))
-        { DiagnoseStage(state_.compute, true, false, diagnostic, invalidated); return {}; }
-        if (Has(mask, RestoreMask::Graphics) && !Complete(state_.graphics, invalidated))
-        { DiagnoseStage(state_.graphics, false, false, diagnostic, invalidated); return {}; }
+        if (Has(mask, RestoreMask::Compute) && !Complete(state_.compute, mask))
+        { DiagnoseStage(state_.compute, true, false, diagnostic, mask); return {}; }
+        if (Has(mask, RestoreMask::Graphics) && !Complete(state_.graphics, mask))
+        { DiagnoseStage(state_.graphics, false, false, diagnostic, mask); return {}; }
         // A heap change affects tables at both bind points, even if one root signature is untouched.
         if (Has(mask, RestoreMask::Heaps))
         {
-            if (state_.compute.signatureKnown && !CompleteTables(state_.compute, invalidated))
-            { DiagnoseStage(state_.compute, true, true, diagnostic, invalidated); return {}; }
-            if (state_.graphics.signatureKnown && !CompleteTables(state_.graphics, invalidated))
-            { DiagnoseStage(state_.graphics, false, true, diagnostic, invalidated); return {}; }
+            if (state_.compute.signatureKnown && !CompleteTables(state_.compute, mask))
+            { DiagnoseStage(state_.compute, true, true, diagnostic, mask); return {}; }
+            if (state_.graphics.signatureKnown && !CompleteTables(state_.graphics, mask))
+            { DiagnoseStage(state_.graphics, false, true, diagnostic, mask); return {}; }
         }
         Snapshot result;
         result.state = state_;
@@ -461,43 +631,60 @@ class NativeRecordingState
         return snapshot;
     }
 
-    bool Restore(const Snapshot& snapshot, const OriginalSetters& original)
+    void DiagnoseRestore(const Snapshot& snapshot, RestoreDiagnostic* diagnostic) const
+    {
+        if (!diagnostic) return;
+        std::lock_guard lock(mutex_);
+        FillRestoreDiagnostic(snapshot, diagnostic, true);
+    }
+    bool Restore(const Snapshot& snapshot, const OriginalSetters& original,
+                 RestoreDiagnostic* diagnostic = nullptr)
     {
         std::lock_guard lock(mutex_);
         const auto& saved = snapshot.state;
-        if (!Matches(saved.incarnation) || state_.list != saved.list || state_.tainted || !saved.active)
+        if (diagnostic) { *diagnostic = {}; FillRestoreDiagnostic(snapshot, diagnostic, false); }
+        auto refuse = [&](const char* reason) {
+            if (diagnostic) { FillRestoreDiagnostic(snapshot, diagnostic, true); diagnostic->reason = reason; }
             return false;
-        if (!state_.queries.empty() || !saved.queries.empty()) return false;
+        };
+        if (!Matches(saved.incarnation) || state_.list != saved.list || state_.tainted || !saved.active)
+            return refuse("Native.Restore.InactiveOrTainted");
+        if (!state_.queries.empty() || !saved.queries.empty()) return refuse("Native.Restore.QueryOpen");
+        if (state_.discardOrdinal != saved.discardOrdinal)
+        { Invalidate("Native.Restore.DiscardBoundary", 51); return refuse("Native.Restore.DiscardBoundary"); }
+        if ((!Has(snapshot.mask, RestoreMask::BlendFactor) && state_.blendMutation != saved.blendMutation) ||
+            state_.blendMutation == UINT64_MAX)
+        { Invalidate("Native.Restore.BlendFactorBoundary"); return refuse("Native.Restore.BlendFactorBoundary"); }
         // A partial restore may leave a bind point untouched only if no setter
         // changed it since capture. Set-away/set-back is still a mutation.
         if ((!Has(snapshot.mask, RestoreMask::Compute) && state_.compute.mutationOrdinal != saved.compute.mutationOrdinal) ||
             (!Has(snapshot.mask, RestoreMask::Graphics) && state_.graphics.mutationOrdinal != saved.graphics.mutationOrdinal) ||
             state_.compute.mutationOrdinal == UINT64_MAX || state_.graphics.mutationOrdinal == UINT64_MAX ||
             state_.unrestorableGraphicsOrdinal != saved.unrestorableGraphicsOrdinal)
-        { state_.tainted = true; return false; }
+        { Invalidate("Native.Restore.MutationBoundary"); return refuse("Native.Restore.MutationBoundary"); }
         // The preflight covers exactly the watched resources present in the
         // snapshot. A newly enrolled resource has no authenticated prior state.
         if (state_.resources.size() != saved.resources.size())
-        { state_.tainted = true; return false; }
+        { Invalidate("Native.Restore.ResourceSetChanged"); return refuse("Native.Restore.ResourceSetChanged"); }
         // Heap restoration also restores both sets of tables. Without restoring
         // a stage's signature, those tables must still name the same root layout.
         if (Has(snapshot.mask, RestoreMask::Heaps) &&
             ((!Has(snapshot.mask, RestoreMask::Compute) && state_.compute.signature != saved.compute.signature) ||
              (!Has(snapshot.mask, RestoreMask::Graphics) && state_.graphics.signature != saved.graphics.signature)))
-        { state_.tainted = true; return false; }
+        { Invalidate("Native.Restore.RootIdentityChanged"); return refuse("Native.Restore.RootIdentityChanged"); }
         for (const auto& [key, prior] : saved.resources)
         {
             auto it = state_.resources.find(key);
-            if (it == state_.resources.end()) { state_.tainted = true; return false; }
-            if (it->second != prior && !original.barriers) { state_.tainted = true; return false; }
+            if (it == state_.resources.end()) { Invalidate("Native.Restore.ResourceMissing"); return refuse("Native.Restore.ResourceMissing"); }
+            if (it->second != prior && !original.barriers) { Invalidate("Native.Restore.BarrierSetterMissing"); return refuse("Native.Restore.BarrierSetterMissing"); }
         }
-        if (!CanRestore(snapshot, original)) { state_.tainted = true; return false; }
+        if (!CanRestore(snapshot, original)) { Invalidate("Native.Restore.OriginalSetterMissing"); return refuse("Native.Restore.OriginalSetterMissing"); }
         try
         {
             auto* list = saved.list;
             // Force real table invalidation even if inserted work leaves exactly
             // the same heap array bound. Then replay only authenticated tables.
-            if (Has(snapshot.mask, RestoreMask::HeapInvalidatedTables) &&
+            if ((Has(snapshot.mask, RestoreMask::HeapInvalidatedTables) || Has(snapshot.mask, RestoreMask::RootInvalidatedTables)) &&
                 (HasInvalidatedTables(saved.compute) || HasInvalidatedTables(saved.graphics)))
                 original.heaps(list, 0, saved.heaps.data());
             if (Has(snapshot.mask, RestoreMask::Heaps)) original.heaps(list, saved.heapCount, saved.heaps.data());
@@ -508,6 +695,7 @@ class NativeRecordingState
                 RestoreBindings(list, saved.compute, original, true, Has(snapshot.mask, RestoreMask::Compute));
             if (Has(snapshot.mask, RestoreMask::Graphics) || Has(snapshot.mask, RestoreMask::Heaps))
                 RestoreBindings(list, saved.graphics, original, false, Has(snapshot.mask, RestoreMask::Graphics));
+            if (Has(snapshot.mask, RestoreMask::BlendFactor)) original.blendFactor(list, saved.blendFactor.data());
             for (const auto& [key, prior] : saved.resources)
             {
                 const auto after = state_.resources.at(key);
@@ -530,6 +718,13 @@ class NativeRecordingState
                 state_.heapCount = saved.heapCount;
                 state_.heapsKnown = saved.heapsKnown;
             }
+            if (Has(snapshot.mask, RestoreMask::BlendFactor))
+            {
+                state_.blendFactor = saved.blendFactor;
+                state_.blendKnown = saved.blendKnown;
+                state_.blendOrdinary = saved.blendOrdinary;
+                ++state_.blendMutation; // Never rewind the observation history.
+            }
             auto restoreStage = [&](Stage& current, const Stage& prior, RestoreMask part) {
                 if (Has(snapshot.mask, part))
                 {
@@ -545,13 +740,66 @@ class NativeRecordingState
             restoreStage(state_.graphics, saved.graphics, RestoreMask::Graphics);
             for (const auto& [key, prior] : saved.resources) state_.resources.at(key) = prior;
             Trace("restore", static_cast<std::uint64_t>(snapshot.mask));
+            if (diagnostic) diagnostic->reason = "Native.Restore.Restored";
             return true;
         }
-        catch (...) { state_.tainted = true; return false; }
+        catch (...) { Invalidate("Native.Restore.ReplayException"); return refuse("Native.Restore.ReplayException"); }
     }
 
   private:
-    static void DiagnoseStage(const Stage& stage, bool compute, bool tablesOnly, NativeStateCaptureDiagnostic* d, bool invalidated)
+    static bool CopyBlend(const float* values, std::array<float,4>& result) noexcept
+    {
+        if (!values) { result = {1.f,1.f,1.f,1.f}; return true; }
+        __try { std::memcpy(result.data(),values,sizeof(result)); return true; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    }
+    // All callers hold mutex_. First cause survives later failures and ring wrap.
+    void Invalidate(const char* reason, UINT slot = UINT_MAX)
+    {
+        if (!state_.tainted)
+        {
+            Trace("invalidation", slot);
+            state_.firstInvalidation = {reason, slot, traceTotal_, state_.workOrdinal};
+        }
+        state_.tainted = true;
+    }
+    void FillCaptureDiagnostic(NativeStateCaptureDiagnostic* d) const
+    {
+        *d = {};
+        d->recordingPresent = state_.list != nullptr;
+        d->rawActive = state_.active; d->tainted = state_.tainted;
+        d->incarnation = state_.incarnation;
+        d->firstInvalidation = state_.firstInvalidation;
+        d->traceTotal = traceTotal_;
+        d->traceCount = static_cast<UINT>(std::min<std::uint64_t>(traceTotal_, trace_.size()));
+        for (UINT i = 0; i < d->traceCount; ++i)
+            d->trace[i] = trace_[(traceTotal_ - d->traceCount + i) % trace_.size()];
+    }
+    void FillRestoreDiagnostic(const Snapshot& snapshot, RestoreDiagnostic* d, bool tail) const
+    {
+        const auto& saved = snapshot.state;
+        d->savedComputeMutation = saved.compute.mutationOrdinal;
+        d->currentComputeMutation = state_.compute.mutationOrdinal;
+        d->savedGraphicsMutation = saved.graphics.mutationOrdinal;
+        d->currentGraphicsMutation = state_.graphics.mutationOrdinal;
+        d->savedBlendMutation = saved.blendMutation;
+        d->currentBlendMutation = state_.blendMutation;
+        d->savedUnrestorableOrdinal = saved.unrestorableGraphicsOrdinal;
+        d->currentUnrestorableOrdinal = state_.unrestorableGraphicsOrdinal;
+        d->savedWorkOrdinal = saved.workOrdinal; d->currentWorkOrdinal = state_.workOrdinal;
+        d->savedIncarnation = saved.incarnation; d->currentIncarnation = state_.incarnation;
+        d->active = state_.active; d->tainted = state_.tainted;
+        d->lastUnrestorableSlot = state_.lastUnrestorableSlot;
+        d->lastUnrestorableSequence = state_.lastUnrestorableSequence;
+        d->lastUnrestorableOrdinal = state_.lastUnrestorableOrdinal;
+        d->lastUnrestorableWorkOrdinal = state_.lastUnrestorableWorkOrdinal;
+        d->lastUnrestorableA = state_.lastUnrestorableA;
+        d->lastUnrestorableB = state_.lastUnrestorableB;
+        d->lastUnrestorableC = state_.lastUnrestorableC;
+        if (!tail) return;
+        FillCaptureDiagnostic(&d->tail);
+    }
+    static void DiagnoseStage(const Stage& stage, bool compute, bool tablesOnly, NativeStateCaptureDiagnostic* d, RestoreMask mask)
     {
         if (!d) return;
         if (!stage.signatureKnown)
@@ -559,7 +807,7 @@ class NativeRecordingState
         for (UINT i = 0; i < stage.bindings.size(); ++i)
         {
             const auto& b = stage.bindings[i];
-            if (RestorableBinding(b, invalidated) || (tablesOnly && b.kind != RootKind::Table)) continue;
+            if (RestorableBinding(b, mask) || (tablesOnly && b.kind != RootKind::Table)) continue;
             d->parameter = i;
             if (b.kind == RootKind::Constants)
             {
@@ -582,20 +830,20 @@ class NativeRecordingState
     bool ObserveSignature(std::uint64_t incarnation, Stage& stage, ID3D12RootSignature* signature)
     {
         if (!Matches(incarnation)) return false;
-        if (stage.mutationOrdinal == UINT64_MAX) { state_.tainted = true; return false; }
-        ++stage.mutationOrdinal;
-        if (!signature) { state_.tainted = true; return false; }
+        if (stage.mutationOrdinal == UINT64_MAX) { Invalidate(__func__); return false; }
+        if (!signature) { Invalidate(__func__); return false; }
         auto it = layouts_.find(signature);
-        if (it == layouts_.end()) { state_.tainted = true; return false; }
-        // D3D12 preserves root arguments on a redundant signature set. Keep
-        // partial/unknown arguments partial; the observed setter still advances
-        // the mutation ordinal above for omitted-stage restoration checks.
+        if (it == layouts_.end()) { Invalidate(__func__); return false; }
+        // D3D12 preserves state on an exact redundant signature set. Keep
+        // partial/unknown arguments partial and retain the trace, but do not
+        // report a mutation of an omitted stage when no state changed.
         if (stage.signatureKnown && stage.signature == signature)
         {
             Trace(&stage==&state_.compute ? "compute-signature-same" : "graphics-signature-same",
                 reinterpret_cast<std::uint64_t>(signature), it->second.size());
             return true;
         }
+        ++stage.mutationOrdinal;
         Trace(&stage==&state_.compute ? "compute-signature-changed" : "graphics-signature-changed",
             reinterpret_cast<std::uint64_t>(signature), it->second.size());
         stage.signature = signature;
@@ -606,6 +854,9 @@ class NativeRecordingState
         {
             Binding b;
             b.kind = p.kind;
+            // This actual changed-root call is provenance for undefined tables,
+            // distinct from missed observation and from a real heap switch.
+            b.tableRootInvalidated = p.kind == RootKind::Table;
             if (p.kind == RootKind::Constants)
             {
                 b.constants.resize(p.constants);
@@ -618,12 +869,13 @@ class NativeRecordingState
     bool ObserveTable(std::uint64_t incarnation, Stage& stage, UINT index, D3D12_GPU_DESCRIPTOR_HANDLE table)
     {
         if (!Matches(incarnation)) return false;
-        if (stage.mutationOrdinal == UINT64_MAX) { state_.tainted = true; return false; }
+        if (stage.mutationOrdinal == UINT64_MAX) { Invalidate(__func__); return false; }
         ++stage.mutationOrdinal;
         if (!state_.heapsKnown || index >= stage.bindings.size() ||
             stage.bindings[index].kind != RootKind::Table || !table.ptr)
-        { state_.tainted = true; return false; }
-        stage.bindings[index].heapInvalidated = false;
+        { Invalidate(__func__); return false; }
+        stage.bindings[index].tableInvalidated = false;
+        stage.bindings[index].tableRootInvalidated = false;
         stage.bindings[index].table = table;
         stage.bindings[index].known = true;
         Trace(&stage==&state_.compute ? "compute-table" : "graphics-table", index, table.ptr);
@@ -632,14 +884,14 @@ class NativeRecordingState
     bool ObserveConstants(std::uint64_t incarnation, Stage& stage, UINT index, UINT count, const void* values, UINT offset)
     {
         if (!Matches(incarnation)) return false;
-        if (stage.mutationOrdinal == UINT64_MAX) { state_.tainted = true; return false; }
+        if (stage.mutationOrdinal == UINT64_MAX) { Invalidate(__func__); return false; }
         ++stage.mutationOrdinal;
         if (index >= stage.bindings.size() ||
             stage.bindings[index].kind != RootKind::Constants || !values || !count)
-        { state_.tainted = true; return false; }
+        { Invalidate(__func__); return false; }
         auto& b = stage.bindings[index];
         if (offset > b.constants.size() || count > b.constants.size() - offset)
-        { state_.tainted = true; return false; }
+        { Invalidate(__func__); return false; }
         auto* source = static_cast<const UINT*>(values);
         for (UINT i = 0; i < count; ++i)
         {
@@ -654,11 +906,11 @@ class NativeRecordingState
                            D3D12_GPU_VIRTUAL_ADDRESS address)
     {
         if (!Matches(incarnation)) return false;
-        if (stage.mutationOrdinal == UINT64_MAX) { state_.tainted = true; return false; }
+        if (stage.mutationOrdinal == UINT64_MAX) { Invalidate(__func__); return false; }
         ++stage.mutationOrdinal;
         if (index >= stage.bindings.size() ||
             stage.bindings[index].kind != kind || kind == RootKind::Table || kind == RootKind::Constants)
-        { state_.tainted = true; return false; }
+        { Invalidate(__func__); return false; }
         stage.bindings[index].address = address;
         stage.bindings[index].known = true;
         Trace(&stage==&state_.compute ? "compute-descriptor" : "graphics-descriptor", index, address,
@@ -668,31 +920,33 @@ class NativeRecordingState
     static bool HasInvalidatedTables(const Stage& stage)
     {
         return std::any_of(stage.bindings.begin(), stage.bindings.end(), [](const Binding& b) {
-            return b.kind == RootKind::Table && !b.known && b.heapInvalidated;
+            return b.kind == RootKind::Table && !b.known && (b.tableInvalidated || b.tableRootInvalidated);
         });
     }
-    static bool RestorableBinding(const Binding& b, bool invalidated)
+    static bool RestorableBinding(const Binding& b, RestoreMask mask)
     {
-        return b.known || (invalidated && b.kind == RootKind::Table && b.heapInvalidated);
+        return b.known || (b.kind == RootKind::Table &&
+            ((Has(mask, RestoreMask::HeapInvalidatedTables) && b.tableInvalidated) ||
+             (Has(mask, RestoreMask::RootInvalidatedTables) && b.tableRootInvalidated)));
     }
-    static bool Complete(const Stage& stage, bool invalidated)
+    static bool Complete(const Stage& stage, RestoreMask mask)
     {
         if (!stage.signatureKnown) return false;
-        return std::all_of(stage.bindings.begin(), stage.bindings.end(), [invalidated](const Binding& b) { return RestorableBinding(b, invalidated); });
+        return std::all_of(stage.bindings.begin(), stage.bindings.end(), [mask](const Binding& b) { return RestorableBinding(b, mask); });
     }
-    static bool CompleteTables(const Stage& stage, bool invalidated)
+    static bool CompleteTables(const Stage& stage, RestoreMask mask)
     {
         return std::all_of(stage.bindings.begin(), stage.bindings.end(),
-                           [invalidated](const Binding& b) { return b.kind != RootKind::Table || RestorableBinding(b, invalidated); });
+                           [mask](const Binding& b) { return b.kind != RootKind::Table || RestorableBinding(b, mask); });
     }
-    static bool CanBindings(const Stage& stage, const OriginalSetters& o, bool compute, bool all, bool invalidated)
+    static bool CanBindings(const Stage& stage, const OriginalSetters& o, bool compute, bool all, RestoreMask mask)
     {
         for (const auto& b : stage.bindings)
         {
             if (!all && b.kind != RootKind::Table) continue;
             if (!b.known)
             {
-                if (RestorableBinding(b, invalidated)) continue;
+                if (RestorableBinding(b, mask)) continue;
                 return false;
             }
             switch (b.kind)
@@ -713,7 +967,7 @@ class NativeRecordingState
         {
             const auto& b = stage.bindings[i];
             if (!all && b.kind != RootKind::Table) continue;
-            if (!b.known && b.kind == RootKind::Table && b.heapInvalidated) continue;
+            if (!b.known && b.kind == RootKind::Table && (b.tableInvalidated || b.tableRootInvalidated)) continue;
             switch (b.kind)
             {
             case RootKind::Table: (compute ? o.computeTable : o.graphicsTable)(list, i, b.table); break;
@@ -733,10 +987,11 @@ class NativeRecordingState
         if (Has(s.mask, RestoreMask::Pipeline) && !o.pipeline) return false;
         if (Has(s.mask, RestoreMask::Compute) && !o.computeSignature) return false;
         if (Has(s.mask, RestoreMask::Graphics) && !o.graphicsSignature) return false;
+        if (Has(s.mask, RestoreMask::BlendFactor) && (!x.blendKnown || !x.blendOrdinary || !o.blendFactor)) return false;
         if ((Has(s.mask, RestoreMask::Compute) || Has(s.mask, RestoreMask::Heaps)) &&
-            !CanBindings(x.compute, o, true, Has(s.mask, RestoreMask::Compute), Has(s.mask, RestoreMask::HeapInvalidatedTables))) return false;
+            !CanBindings(x.compute, o, true, Has(s.mask, RestoreMask::Compute), s.mask)) return false;
         if ((Has(s.mask, RestoreMask::Graphics) || Has(s.mask, RestoreMask::Heaps)) &&
-            !CanBindings(x.graphics, o, false, Has(s.mask, RestoreMask::Graphics), Has(s.mask, RestoreMask::HeapInvalidatedTables))) return false;
+            !CanBindings(x.graphics, o, false, Has(s.mask, RestoreMask::Graphics), s.mask)) return false;
         return true;
     }
     void Trace(const char* operation, std::uint64_t a=0, std::uint64_t b=0, std::uint64_t c=0)
@@ -825,8 +1080,13 @@ class NativeRecordingObserver
                     [](const auto& a, const auto& b) { return a.kind == b.kind && a.constants == b.constants; });
         for (auto& [list, entry] : entries_)
             if (!entry->state.RegisterLayout(signature, layout)) return false;
-        layouts_.emplace(signature, std::move(layout));
-        layoutOwners_.try_emplace(signature, signature);
+        // Retain only after both allocating insertions finish. Until then,
+        // rollback destroys an empty owner and cannot call foreign Release.
+        auto [owner, inserted] = layoutOwners_.try_emplace(signature);
+        if (!inserted) return false;
+        try { layouts_.emplace(signature, std::move(layout)); }
+        catch (...) { layoutOwners_.erase(owner); throw; }
+        owner->second = signature;
         return true;
     }
     bool Reset(ID3D12GraphicsCommandList* list, ID3D12PipelineState* initialPipeline)
@@ -878,23 +1138,32 @@ class NativeRecordingObserver
     bool ResetWithIdentity(ID3D12GraphicsCommandList* list, ID3D12PipelineState* initialPipeline,
                            std::shared_ptr<const NativeRecordingIdentity> identity)
     {
+        // These owners outlive the lock guard. COM Release may reenter the
+        // observer; neither old nor failed candidate entries retire under it.
+        std::unique_ptr<Entry> retired, candidate;
         std::lock_guard lock(mutex_);
         if (!list || nextIncarnation_ == UINT64_MAX) return false;
+        if (auto existing = entries_.find(list); existing != entries_.end())
+        {
+            retired = std::move(existing->second);
+            entries_.erase(existing);
+        }
         try
         {
-            auto& entry = entries_[list];
-            if (!entry)
-            {
-                entry = std::make_unique<Entry>();
-                for (const auto& [signature, layout] : layouts_)
-                    if (!entry->state.RegisterLayout(signature, layout)) return false;
-            }
+            candidate = std::make_unique<Entry>();
+            for (const auto& [signature, layout] : layouts_)
+                if (!candidate->state.RegisterLayout(signature, layout)) return false;
             const auto next = ++nextIncarnation_;
-            if (!entry->state.Begin(list, next, initialPipeline)) return false;
-            entry->incarnation = next;
-            entry->hookGeneration = hookGeneration_;
-            entry->completeAtReset = completeHookCoverage_ && (!coveredRoute_ || (identity && coveredRoute_(*identity)));
-            entry->identity = std::move(identity);
+            if (!candidate->state.Begin(list, next, initialPipeline)) return false;
+            candidate->incarnation = next;
+            candidate->hookGeneration = hookGeneration_;
+            candidate->completeAtReset = completeHookCoverage_ &&
+                (!coveredRoute_ || (identity && coveredRoute_(*identity)));
+            candidate->identity = std::move(identity);
+            // Allocate the map node without passing a COM-owning temporary.
+            // Failure leaves the old recording absent, never still restorable.
+            auto entry = entries_.try_emplace(list).first;
+            entry->second = std::move(candidate);
             return true;
         }
         catch (...) { return false; }
@@ -903,11 +1172,18 @@ class NativeRecordingObserver
   public:
     void Close(ID3D12GraphicsCommandList* list)
     {
-        std::lock_guard lock(mutex_);
-        auto it = entries_.find(list);
-        // Closed epochs cannot be restored. Drop their live observer ownership;
-        // any extant snapshot independently retains the native objects it needs.
-        if (it != entries_.end()) entries_.erase(it);
+        std::unique_ptr<Entry> retired;
+        {
+            std::lock_guard lock(mutex_);
+            auto it = entries_.find(list);
+            // Remove authority while locked, then release foreign COM objects
+            // after unlocking. Existing snapshots keep their independent holds.
+            if (it != entries_.end())
+            {
+                retired = std::move(it->second);
+                entries_.erase(it);
+            }
+        }
     }
     bool Work(ID3D12GraphicsCommandList* list)
     {
@@ -915,27 +1191,46 @@ class NativeRecordingObserver
             return state.ObserveWork(incarnation);
         });
     }
-    NativeRecordingObservation Observe(ID3D12GraphicsCommandList* list) const
+    NativeRecordingObservation Observe(ID3D12GraphicsCommandList* list,
+                                       NativeStateCaptureDiagnostic* diagnostic = nullptr) const
     {
         std::lock_guard lock(mutex_);
+        if (diagnostic) *diagnostic = {};
         auto it = entries_.find(list);
         if (it == entries_.end()) return {};
         auto ordinal = it->second->state.Activity(list, it->second->incarnation);
         const bool historyComplete = CurrentCoverage(*it->second);
+        if (diagnostic)
+        {
+            it->second->state.Diagnose(diagnostic);
+            diagnostic->historyKnown = true;
+            diagnostic->historyComplete = historyComplete;
+            diagnostic->hookGeneration = it->second->hookGeneration;
+        }
         return {list, it->second->incarnation, ordinal.value_or(0), ordinal.has_value(),
                 historyComplete && ordinal.has_value(), it->second->hookGeneration,
                 true, !historyComplete, it->second->identity};
     }
     template <typename Action>
-    bool WithCurrent(ID3D12GraphicsCommandList* list, Action&& action)
+    bool WithCurrent(ID3D12GraphicsCommandList* list, Action&& action, UINT slot = UINT_MAX)
     {
         std::lock_guard lock(mutex_);
         auto it = entries_.find(list);
         if (it == entries_.end()) return false;
-        try { return action(it->second->state, it->second->incarnation); }
+        const bool wasActive = slot != UINT_MAX &&
+            it->second->state.Activity(list, it->second->incarnation).has_value();
+        try
+        {
+            const bool accepted = action(it->second->state, it->second->incarnation);
+            // Only the call which invalidated a usable recording can attribute
+            // its slot. Later failures cannot relabel an existing first cause.
+            if (wasActive && !accepted)
+                it->second->state.AttributeInvalidation(it->second->incarnation, slot);
+            return accepted;
+        }
         catch (...)
         {
-            it->second->state.Taint(it->second->incarnation);
+            it->second->state.Taint(it->second->incarnation, "ObservationException", slot);
             return false;
         }
     }
@@ -945,17 +1240,51 @@ class NativeRecordingObserver
     {
         std::lock_guard lock(mutex_);
         auto it = entries_.find(list);
-        if (it == entries_.end() || !CurrentCoverage(*it->second)) return {};
-        return it->second->state.CaptureRestorable(list, it->second->incarnation, mask, original, diagnostic);
+        if (it == entries_.end()) { if (diagnostic) *diagnostic = {}; return {}; }
+        const bool coverage = CurrentCoverage(*it->second);
+        std::optional<NativeRecordingState::Snapshot> captured;
+        if (coverage)
+            captured = it->second->state.CaptureRestorable(list, it->second->incarnation, mask, original, diagnostic);
+        else if (diagnostic)
+        {
+            it->second->state.Diagnose(diagnostic);
+            diagnostic->reason = "Native.State.CoverageIncomplete";
+        }
+        if (diagnostic)
+        {
+            diagnostic->historyKnown = true; diagnostic->historyComplete = coverage;
+            diagnostic->hookGeneration = it->second->hookGeneration;
+        }
+        return captured;
+    }
+    void DiagnoseRestore(ID3D12GraphicsCommandList* list, const NativeRecordingState::Snapshot& snapshot,
+                         NativeRecordingState::RestoreDiagnostic* diagnostic) const
+    {
+        if (!diagnostic) return;
+        std::lock_guard lock(mutex_);
+        auto it = entries_.find(list);
+        if (it != entries_.end()) it->second->state.DiagnoseRestore(snapshot, diagnostic);
     }
     bool Restore(ID3D12GraphicsCommandList* list, std::uint64_t incarnation,
                  const NativeRecordingState::Snapshot& snapshot,
-                 const NativeRecordingState::OriginalSetters& original)
+                 const NativeRecordingState::OriginalSetters& original,
+                 NativeRecordingState::RestoreDiagnostic* diagnostic = nullptr)
     {
         std::lock_guard lock(mutex_);
         auto it = entries_.find(list);
-        if (it == entries_.end() || !CurrentCoverage(*it->second) || it->second->incarnation != incarnation) return false;
-        return it->second->state.Restore(snapshot, original) && CurrentCoverage(*it->second);
+        auto refuse = [&](const char* reason) {
+            if (diagnostic) {
+                if (it != entries_.end()) it->second->state.DiagnoseRestore(snapshot, diagnostic);
+                diagnostic->reason = reason;
+            }
+            return false;
+        };
+        if (it == entries_.end()) return refuse("Native.Restore.ObserverEntryMissing");
+        if (!CurrentCoverage(*it->second)) return refuse("Native.Restore.ObserverCoverageIncomplete");
+        if (it->second->incarnation != incarnation) return refuse("Native.Restore.ObserverIncarnationChanged");
+        if (!it->second->state.Restore(snapshot, original, diagnostic)) return false;
+        if (!CurrentCoverage(*it->second)) return refuse("Native.Restore.CoverageLostAfterReplay");
+        return true;
     }
 
   private:

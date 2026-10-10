@@ -625,6 +625,7 @@ class Config
     CustomOptional<bool> AllowGameController { true };
     // Missing Scale uses display-based sizing; explicit numeric settings remain respected.
     CustomOptional<float, NoDefault> MenuScale;
+    CustomOptional<uint32_t> MenuCorner { 0 }; // 0 UL, 1 UR, 2 LL, 3 LR; missing means upper left
     CustomOptional<bool> OverlayMenu { true };
     CustomOptional<int> ShortcutKey { VK_INSERT };
     CustomOptional<bool> EscapeClosesMenu { false };

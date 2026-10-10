@@ -42,6 +42,8 @@ struct AnythingController::Impl {
  const SessionPolicy policy;
  mutable std::mutex mutex;AnythingSnapshot view;
  std::thread supervisor;std::atomic<bool> finish=false;
+ std::atomic<bool> shutdownRequested=false;bool quitSent=false;
+ bool retiring=false,retireForced=false,retireError=false;std::string retireReason;
  std::atomic<bool> processExitProven=true;
  bool connectWanted=false,restartWanted=false,stopWanted=false;
  AJson queued,queuedComparison,queuedProcessing,queuedGeneration;uint64_t revision=0,measurementId=0,pendingMeasurementId=0;
@@ -89,15 +91,26 @@ struct AnythingController::Impl {
    view.status["measurement"]={{"state","pending"},{"requestId",pendingMeasurementId},{"summaries",nullptr},{"ownershipRetired",false},{"appAcknowledgementPending",true},{"reason","Waiting for the worker to acknowledge this measurement."}};
   }
  }
- void Kill(const std::string& reason,bool forced,bool error){
-  {std::lock_guard lock(mutex);workerPid=0;}
-  if(job.value)TerminateJobObject(job.value,forced?4:0);
-  if(process.value)processExitProven.store(WaitForSingleObject(process.value,1000)==WAIT_OBJECT_0,std::memory_order_release);
+ void CompleteRetirement(const std::string& reason,bool forced,bool error){
   if(writing){CancelIoEx(input.value,&write);DWORD bytes=0;GetOverlappedResult(input.value,&write,&bytes,TRUE);writing=false;}
+  {std::lock_guard lock(mutex);workerPid=0;}
   input.Reset();output.Reset();stderrRead.Reset();process.Reset();job.Reset();writeEvent.Reset();
-  pending=AJson();wire.clear();stdoutBuffer.clear();
+  retiring=false;pending=AJson();wire.clear();stdoutBuffer.clear();
   std::lock_guard lock(mutex);pendingMeasurementId=0;measurementCanceled=false;view.connected=false;view.busy=false;view.ready=false;view.active=false;view.stopping=false;
   view.forcedTermination=forced;view.phase=error?Neurotic::UiLiteral("desktop.anythingview.error_eab1d8bf", "Error"):Neurotic::UiLiteral("desktop.anythingview.stopped_6c16cb30", "Stopped");view.message=reason;view.lastError=error?reason:"";view.status=AJson::object();view.windows.clear();queued=AJson();queuedComparison=AJson();queuedProcessing=AJson();queuedGeneration=AJson();
+ }
+ void Kill(const std::string& reason,bool forced,bool error){
+  if(retiring)return;
+  if(job.value)TerminateJobObject(job.value,forced?4:0);
+  if(process.value)processExitProven.store(WaitForSingleObject(process.value,1000)==WAIT_OBJECT_0,std::memory_order_release);
+  if(process.value&&!processExitProven.load(std::memory_order_acquire)){
+   // Retain the actual process, job and pending-I/O owners until exit signals.
+   // A termination request or supervisor return is never an exit proof.
+   retiring=true;retireReason=reason;retireForced=forced;retireError=error;
+   std::lock_guard lock(mutex);view.ready=false;view.active=false;view.busy=true;view.stopping=true;view.message=reason;
+   queued=queuedComparison=queuedProcessing=queuedGeneration=AJson();return;
+  }
+  CompleteRetirement(reason,forced,error);
  }
  bool Launch(){
   try{
@@ -215,18 +228,28 @@ struct AnythingController::Impl {
  void Loop(){
   while(!finish){
    try{
+    if(retiring){
+     if(process.value&&WaitForSingleObject(process.value,0)==WAIT_OBJECT_0){
+      processExitProven.store(true,std::memory_order_release);CompleteRetirement(retireReason,retireForced,retireError);
+     }
+     Sleep(10);continue;
+    }
     bool reconnect=false,connect=false,stop=false;{
      std::lock_guard lock(mutex);reconnect=restartWanted;restartWanted=false;connect=connectWanted;connectWanted=false;stop=stopWanted;stopWanted=false;
     }
-    if(reconnect){Kill(Neurotic::UiLiteral("desktop.anythingcontroller.restarting_window_worker_717d591d", "Restarting Window Worker."),true,false);if(Launch())RestoreModel();}
+     if(shutdownRequested){reconnect=connect=stop=false;std::lock_guard lock(mutex);connectWanted=restartWanted=stopWanted=false;queued=queuedComparison=queuedProcessing=queuedGeneration=AJson();}
+     if(shutdownRequested&&!process.value){finish=true;break;}
+     if(reconnect){Kill(Neurotic::UiLiteral("desktop.anythingcontroller.restarting_window_worker_717d591d", "Restarting Window Worker."),true,false);if(Launch())RestoreModel();}
     else if(connect&&!process.value){if(Launch())RestoreModel();}
+    if(retiring){Sleep(10);continue;}
     if(process.value){
      if(writing){DWORD written=0;if(GetOverlappedResult(input.value,&write,&written,FALSE)){writing=false;if(written!=wire.size())throw std::runtime_error(Neurotic::UiMessage("desktop.anythingcontroller.incomplete_worker_request_c9d4ef35", "Incomplete worker request"));}else if(GetLastError()!=ERROR_IO_INCOMPLETE)throw std::runtime_error(Neurotic::UiMessage("desktop.anythingcontroller.worker_input_failed_7e7dddfe", "Worker input failed"));}
      if(stop){if(writing){Kill(Neurotic::UiLiteral("desktop.anythingcontroller.stopped_the_unresponsive_window_worker_process_g_b9f7c95e", "Stopped the unresponsive Window Worker process; GPU retirement was not proved."),true,false);}
       else{pending=AJson();Send({{"command","stop"}});}}
-     if(!process.value){Sleep(10);continue;}
+     if(retiring||!process.value){Sleep(10);continue;}
      Drain(output.value,true);Drain(stderrRead.value,false);
      if(WaitForSingleObject(process.value,0)==WAIT_OBJECT_0){DWORD code=0;GetExitCodeProcess(process.value,&code);Kill(Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_exited_519763c8", "Window Worker exited (")+std::to_string(code)+Neurotic::UiLiteral("desktop.anythingcontroller.restart_to_reconnect_b5b7f609", "). Restart to reconnect."),false,true);}
+     else if(shutdownRequested){if(!writing&&pending.is_null()&&!quitSent){Send({{"command","quit"}});quitSent=true;}}
      else if(!pending.is_null()&&GetTickCount64()>=pendingDeadline){bool wasStop=pending.value("command","")=="stop";Kill(wasStop?Neurotic::UiLiteral("desktop.anythingcontroller.stopped_the_unresponsive_window_worker_process_g_b9f7c95e", "Stopped the unresponsive Window Worker process; GPU retirement was not proved."):Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_did_not_acknowledge_the_operation__a7e18077", "Window Worker did not acknowledge the operation; its process was stopped. Restart to reconnect."),true,!wasStop);}
      else if(pending.is_null()&&GetTickCount64()-lastResponse>15000){Kill(Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_stopped_responding_its_process_was_0e8ae789", "Window Worker stopped responding; its process was stopped. Restart to reconnect."),true,true);}
      else if(!writing&&pending.is_null()){
@@ -282,6 +305,8 @@ void AnythingController::Connect(){std::lock_guard lock(impl->mutex);impl->conne
 void AnythingController::Restart(){std::lock_guard lock(impl->mutex);if(impl->view.connected&&impl->view.busy&&!impl->view.active)return;impl->pendingMeasurementId=0;impl->measurementCanceled=true;impl->ProjectMeasurement();impl->restartWanted=true;impl->view.ready=false;impl->view.active=false;impl->view.busy=true;impl->view.lastError.clear();impl->view.message=Neurotic::UiMessage("desktop.anythingcontroller.restarting_window_worker_73a74625", "Restarting Window Worker...");}
 void AnythingController::Stop(){std::lock_guard lock(impl->mutex);if(!impl->view.connected)return;impl->pendingMeasurementId=0;impl->measurementCanceled=true;impl->ProjectMeasurement();impl->queued=AJson();impl->queuedComparison=AJson();impl->queuedProcessing=AJson();impl->queuedGeneration=AJson();impl->stopWanted=true;impl->view.busy=true;impl->view.stopping=true;impl->view.active=false;impl->view.phase="Stopping";impl->view.message=Neurotic::UiMessage("desktop.anythingcontroller.stopping_rendering_70263e0c", "Stopping rendering...");}
 bool AnythingController::ShutdownAndWait(unsigned stopTimeoutMs){Stop();return impl->ShutdownAndWait(stopTimeoutMs);}
+void AnythingController::RequestShutdown(){impl->shutdownRequested=true;}
+bool AnythingController::ShutdownReady()const{return impl->processExitProven.load(std::memory_order_acquire)&&(!impl->supervisor.joinable()||WaitForSingleObject(impl->supervisor.native_handle(),0)==WAIT_OBJECT_0);}
 bool AnythingController::SelectModel(const std::filesystem::path& file,bool import){
  if(import&&!impl->policy.persistPreferences)return false;
  auto path=Utf8(file.wstring());if(path.empty()||path.find('\0')!=std::string::npos||path.size()>32768)return false;

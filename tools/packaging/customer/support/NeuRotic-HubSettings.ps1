@@ -1,4 +1,4 @@
-﻿# BEGIN GENERATED LANGUAGE METADATA (backend_metadata.py)
+# BEGIN GENERATED LANGUAGE METADATA (backend_metadata.py)
 $script:HubSettingLanguageMetadata=@{
  'ObjectRules/ProfileHex'=@{labelId='desktop.gamesettingsview.object_rules_bb34e3c8';descriptionId='';valueLabelIds=@{}}
  'Plugins/LoadReShade'=@{labelId='desktop.neurotic-hubsettings.reshade_compatibility_3223e3ab';descriptionId='desktop.neurotic-hubsettings.loads_reshade64_dll_beside_the_game_executable_a_f7e24f36';valueLabelIds=@{}}
@@ -13,6 +13,7 @@ $script:HubSettingLanguageMetadata=@{
  'Menu/EscapeClosesMenu'=@{labelId='desktop.neurotic-hubsettings.escape_closes_the_menu_2bdf4e40';descriptionId='';valueLabelIds=@{}}
  'Menu/LightTheme'=@{labelId='desktop.neurotic-hubsettings.light_theme_500b1866';descriptionId='';valueLabelIds=@{}}
  'Menu/ReduceMotion'=@{labelId='desktop.gamesettingsview.turn_animations_off_d9407864';descriptionId='';valueLabelIds=@{}}
+ 'Menu/Corner'=@{labelId='desktop.menu-layout.corner';descriptionId='';valueLabelIds=@{'0'='desktop.menu-layout.upper-left';'1'='desktop.menu-layout.upper-right';'2'='desktop.menu-layout.lower-left';'3'='desktop.menu-layout.lower-right'}}
  'Menu/Scale'=@{labelId='desktop.neurotic-hubsettings.menu_scale_2b1c5b56';descriptionId='';valueLabelIds=@{}}
  'Menu/Brightness'=@{labelId='desktop.neurotic-hubsettings.menu_brightness_0a02b16b';descriptionId='';valueLabelIds=@{}}
  'Menu/AllowGameMouse'=@{labelId='desktop.neurotic-hubsettings.allow_game_mouse_while_menu_is_open_0bba3307';descriptionId='';valueLabelIds=@{}}
@@ -289,6 +290,7 @@ $script:HubSettingsSchema=@(
  New-HubSetting Menu EscapeClosesMenu 'Escape closes the menu' $general
  New-HubSetting Menu LightTheme 'Light theme' $general
  New-HubSetting Menu ReduceMotion 'Turn animations off' $general
+ New-HubSetting Menu Corner 'Menu corner' $general -Values @('0','1','2','3') -MissingValue '0' -ValueLabels @{'0'='Upper left';'1'='Upper right';'2'='Lower left';'3'='Lower right'}
  New-HubSetting Menu Scale 'Menu scale' $general -Type float -Values @() -Minimum .5 -Maximum 2
  New-HubSetting Menu Brightness 'Menu brightness' $general -Type float -Values @() -Minimum .25 -Maximum 3
  New-HubSetting Menu AllowGameMouse 'Allow game mouse while menu is open' $general
