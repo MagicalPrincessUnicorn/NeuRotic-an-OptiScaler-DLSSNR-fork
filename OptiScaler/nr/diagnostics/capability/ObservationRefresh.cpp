@@ -47,7 +47,9 @@ BackendSample ReadBackend(bool vulkan) {
     input.lifecycleOpen=native.lifecycleOpen;input.lifecycle=native.lifecycleGeneration;
     input.resources=present.resourceGeneration;
     input.presentGuided=present.actualInputClass==PresentInputDecision::InputClass::Guided;
-    input.completedAfter=input.nativeRoute?native.gpuCompletedOutputEvaluations:present.modelSubmissions;
+    input.signals=native.signalReceipts;
+    input.completedAfter=native.signalReceipts[size_t(SignalReceipts::Signal::Evaluation)].state==SignalReceipts::State::Consumed?
+        native.signalReceipts[size_t(SignalReceipts::Signal::Evaluation)].sequence:0;
     input.parametersAfter=native.nativeInputs.observations;
     input.finiteJitter=native.nativeInputs.jitterSupplied && native.nativeInputs.jitter.has_value();
     input.finitePreExposure=native.nativeInputs.preExposureSupplied && native.nativeInputs.preExposure.has_value();
@@ -123,6 +125,9 @@ DWORD WINAPI Worker(void* argument) noexcept {
             use.contextMatched=!service->control.Cancelled(token) && initial.capture.snapshot && report->observation.capture.snapshot &&
                 initial.capture.state==CaptureState::Complete && report->observation.capture.state==CaptureState::Complete &&
                 SameOwnerIdentities(*initial.capture.snapshot,*report->observation.capture.snapshot);
+            report->signals=final.evidence.signals;report->signalRoute=final.state.requestedRoute;
+            report->signalOwnerSupported=!final.vulkan && final.state.requestedRoute!=3 &&
+                (!report->preparedBuiltIn.available || !report->preparedBuiltIn.fresh || report->renderingOutput.producer!=RenderingOutput::Producer::BuiltIn);
             report->owner=NormalizeUseEvidence(use);report->operation=token.identity;report->context=token.context;
             report->manual=token.manual;report->started=token.started;report->completed=GetTickCount64();
             report->completedUtc=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(

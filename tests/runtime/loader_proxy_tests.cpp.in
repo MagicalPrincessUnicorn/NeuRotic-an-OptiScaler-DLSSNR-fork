@@ -1,0 +1,52 @@
+#include <Windows.h>
+#include <winternl.h>
+#include <filesystem>
+#include <string>
+#include <cstdio>
+#include <detours.h>
+#define LOG_ERROR(...) ((void)0)
+// PRODUCTION_PROXY_CLASSES
+
+static NtdllProxy::PFN_LdrLoadDll originalLoad;
+static unsigned interposed = 0, bypassed = 0;
+static NTSTATUS NTAPI ObserveLoad(PWSTR path, PULONG flags, PUNICODE_STRING name, PHANDLE result)
+{
+    if (NtdllProxy::IsInternalLoad())
+    {
+        ++bypassed;
+        return originalLoad(path, flags, name, result);
+    }
+    // Model the existing loader hook's re-entry into its provider/system loader.
+    if (++interposed > 2) return NTSTATUS(0xC0000001);
+    std::wstring requested(name->Buffer, name->Length / sizeof(wchar_t));
+    *result = NtdllProxy::LoadLibraryExW_Ldr(requested.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    return *result ? 0 : NTSTATUS(0xC0000001);
+}
+int wmain()
+{
+    unsigned failed = 0, checked = 0;
+    auto check = [&](bool value, const char* label) { ++checked; failed += !value; std::printf("%s %s\n", value ? "PASS" : "FAIL", label); };
+    KernelBaseProxy::Init(); NtdllProxy::Init();
+    auto local = LoadLibraryW(std::filesystem::absolute(L"version.dll").c_str());
+    check(local != nullptr, "local same-name proxy loaded");
+    auto ordinary = LoadLibraryExW(L"version.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    check(ordinary == local, "negative control: bare SYSTEM32 name can reuse local proxy");
+    auto system = NtdllProxy::LoadLibraryExW_Ldr(L"version.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    check(system && system != local, "production loader selects system module, not local proxy");
+    check(system && GetProcAddress(system, "GetFileVersionInfoSizeW"), "system export remains callable");
+    check(!NtdllProxy::IsInternalLoad(), "internal admission closed after success");
+    auto missing = NtdllProxy::LoadLibraryExW_Ldr(L"NeuRotic-missing-fixture.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    check(!missing && !NtdllProxy::IsInternalLoad(), "failed native load restores internal admission");
+    auto data = NtdllProxy::LoadLibraryExW_Ldr(L"tzres.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE);
+    check(data && (reinterpret_cast<ULONG_PTR>(data) & 3), "Win32 data-file flags retained");
+    if (data) FreeLibrary(data);
+    originalLoad = NtdllProxy::Hook_LdrLoadDll(reinterpret_cast<PVOID>(ObserveLoad));
+    check(originalLoad != nullptr, "real NTDLL detour installed");
+    auto multimedia = LoadLibraryExW(L"winmm.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    check(multimedia && interposed == 1 && bypassed >= 1, "nested native load bypasses re-interposition");
+    auto time = multimedia ? reinterpret_cast<DWORD(WINAPI*)()>(GetProcAddress(multimedia, "timeGetTime")) : nullptr;
+    check(time && time() > 0, "nested system export executes");
+    check(!NtdllProxy::IsInternalLoad(), "internal admission restored after nested load");
+    std::printf("Loader proxy contracts: %u checks, %u failures\n", checked, failed);
+    return failed ? 1 : 0;
+}

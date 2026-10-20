@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+--- a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
++++ b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+@@ -58,7 +58,7 @@
+        !s.leases.Size())return false;
+     for(const auto& lease:s.leases)
+     {
+-        if(!Lifecycle::ValidBinding(lease)||!lease.plan||*lease.plan!=m.plan.header.record||
++        if(!Lifecycle::ValidBinding(lease)||(lease.plan&&*lease.plan!=m.plan.header.record)||
+            !lease.profile||*lease.profile!=profile.header.record||!lease.route||lease.route->identity!=s.generation.Describe()||
+            lease.consumer!=s.consumer||lease.description.context!=recipe.context||!lease.sameRecording||
+            lease.sameRecording->recording!=s.recording||lease.sameRecording->reservation!=s.reservation)return false;

@@ -1,0 +1,101 @@
+{
+  "sdkCommit": "c6efa6bf7f2027b3ec94f28578bb5965eabb9e55",
+  "license": "MIT",
+  "members": [
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainDebugPacingPS.h",
+      "member": "FrameInterpolationSwapchainDebugPacingPS.h",
+      "sha256": "82e84eac330f04382a40ddf326aa5beea90e4131d319a7e56b7f2c49569406ab",
+      "adaptedSha256": "82e84eac330f04382a40ddf326aa5beea90e4131d319a7e56b7f2c49569406ab"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainDebugPacingVS.h",
+      "member": "FrameInterpolationSwapchainDebugPacingVS.h",
+      "sha256": "fca1ebb7b4ae6ffaa571735a066402d977fe5ebc3f8b51a7a9072a508db26820",
+      "adaptedSha256": "fca1ebb7b4ae6ffaa571735a066402d977fe5ebc3f8b51a7a9072a508db26820"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainUiCompositionPremulPS.h",
+      "member": "FrameInterpolationSwapchainUiCompositionPremulPS.h",
+      "sha256": "dd6d2d79979b648ee1835b91e6128f0dbfde915e467fb998eff238db1a0463d2",
+      "adaptedSha256": "dd6d2d79979b648ee1835b91e6128f0dbfde915e467fb998eff238db1a0463d2"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainUiCompositionPremulVS.h",
+      "member": "FrameInterpolationSwapchainUiCompositionPremulVS.h",
+      "sha256": "f849bdde91e9713eeaba9ccf1caa8926c7a52c3a4c9b1ae45a7be5f8fb97b506",
+      "adaptedSha256": "f849bdde91e9713eeaba9ccf1caa8926c7a52c3a4c9b1ae45a7be5f8fb97b506"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainUiCompositionPS.h",
+      "member": "FrameInterpolationSwapchainUiCompositionPS.h",
+      "sha256": "489545cf854bc5651fb47c70c25817496b43ab78e7ad54b4b757876f64dba8e5",
+      "adaptedSha256": "489545cf854bc5651fb47c70c25817496b43ab78e7ad54b4b757876f64dba8e5"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainUiCompositionVS.h",
+      "member": "FrameInterpolationSwapchainUiCompositionVS.h",
+      "sha256": "386051d190e4bd0cbf6447d08e5b2f482b759f552cd568f1966334a74c7f8443",
+      "adaptedSha256": "386051d190e4bd0cbf6447d08e5b2f482b759f552cd568f1966334a74c7f8443"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK.cpp",
+      "member": "FrameInterpolationSwapchainVK.cpp",
+      "sha256": "304dbc09949cb68a3708611a17d9ace5e2131116c8865e5777ad6146f637739f",
+      "adaptedSha256": "c6c60fe6445509054e7b6210a41b7de0bb653abbe5f9f1bd441aa83a93f7b768"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK.h",
+      "member": "FrameInterpolationSwapchainVK.h",
+      "sha256": "ae1d0b9d179b0a08bf6562db2f2cf25a547fbd9d77addf0423342903aa8e8e74",
+      "adaptedSha256": "6c47a88be6a06f3013772ebffe2097c4fc8d8ba7dfb61fa7dcfc6a909cd5b56b"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK_DebugPacing.cpp",
+      "member": "FrameInterpolationSwapchainVK_DebugPacing.cpp",
+      "sha256": "9b4a97b1cdc5b7cf431077adb1b64de9679635028446cc6d1f0e43a0d941558b",
+      "adaptedSha256": "9b4a97b1cdc5b7cf431077adb1b64de9679635028446cc6d1f0e43a0d941558b"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK_DebugPacing.h",
+      "member": "FrameInterpolationSwapchainVK_DebugPacing.h",
+      "sha256": "2008c4d797fad982a8711edce66e2d70f2618b92c19f6f17835e92f9c8484cd7",
+      "adaptedSha256": "2008c4d797fad982a8711edce66e2d70f2618b92c19f6f17835e92f9c8484cd7"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK_Helpers.cpp",
+      "member": "FrameInterpolationSwapchainVK_Helpers.cpp",
+      "sha256": "14e82d56b4b9b5a3ffd6b7be70a540b1ad5f0738aeb3632c3916df151f45fa5c",
+      "adaptedSha256": "14e82d56b4b9b5a3ffd6b7be70a540b1ad5f0738aeb3632c3916df151f45fa5c"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK_Helpers.h",
+      "member": "FrameInterpolationSwapchainVK_Helpers.h",
+      "sha256": "c709acf5641ee5b1a7b9d41dfaa9ecd6b6709efd25cace23469f4bb28d01b23d",
+      "adaptedSha256": "c709acf5641ee5b1a7b9d41dfaa9ecd6b6709efd25cace23469f4bb28d01b23d"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK_UiComposition.cpp",
+      "member": "FrameInterpolationSwapchainVK_UiComposition.cpp",
+      "sha256": "bb87ab25474fc29920506d12e462a08180271181fc53987e453e04f1e72c3e58",
+      "adaptedSha256": "bb87ab25474fc29920506d12e462a08180271181fc53987e453e04f1e72c3e58"
+    },
+    {
+      "source": "external/FidelityFX-SDK/sdk/src/backends/vk/FrameInterpolationSwapchain/FrameInterpolationSwapchainVK_UiComposition.h",
+      "member": "FrameInterpolationSwapchainVK_UiComposition.h",
+      "sha256": "fc04dd5876575cde5dd8b24ba0cc7c8c0aa9344b765e70388725bb2c79fca845",
+      "adaptedSha256": "fc04dd5876575cde5dd8b24ba0cc7c8c0aa9344b765e70388725bb2c79fca845"
+    }
+  ],
+  "adaptation": "Public physicalSwapchain accessor for translating oldSwapchain, scoped private-call dispatch; original hashes above",
+  "adaptations": [
+    "Native standalone callback and dispatch recursion/queue guards",
+    "Bounded timeline joins and failed submission retention",
+    "Explicit destruction success propagation",
+    "Correct partial image enumeration and physical-acquire error propagation",
+    "Skipped physical presentation completes drain timeline",
+    "Critical-section lifetime supports partial initialization",
+    "Observed same-family Present queue binding after scheduled work and presenter worker joins; late failure refusal",
+    "Initial failure cleanup does not idle an unused provisional application queue"
+  ]
+}

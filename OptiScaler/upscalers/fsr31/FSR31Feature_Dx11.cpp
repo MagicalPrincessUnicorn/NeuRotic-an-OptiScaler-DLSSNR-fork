@@ -113,6 +113,23 @@ void FSR31FeatureDx11::ReleaseResources()
     }
 }
 
+bool FSR31FeatureDx11::PrepareEvaluation(NVSDK_NGX_Parameter* InParameters)
+{
+    ID3D11Resource* exposure = nullptr;
+    if (!AutoExposure())
+    {
+        if (InParameters->Get(NVSDK_NGX_Parameter_ExposureTexture, &exposure) != NVSDK_NGX_Result_Success)
+            InParameters->Get(NVSDK_NGX_Parameter_ExposureTexture, (void**) &exposure);
+        if (!exposure)
+        {
+            State::Instance().autoExposure = true;
+            State::Instance().changeBackend[Handle()->Id] = true;
+            return false;
+        }
+    }
+    return true;
+}
+
 bool FSR31FeatureDx11::EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Parameter* InParameters)
 {
     LOG_FUNC();

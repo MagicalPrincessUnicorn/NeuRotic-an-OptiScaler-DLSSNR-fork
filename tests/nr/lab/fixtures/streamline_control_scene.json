@@ -1,0 +1,283 @@
+{
+  "options": {
+    "globalToneStrength": 1.0,
+    "intensity": 1.0,
+    "localStructureStrength": 1.0,
+    "localToneStrength": 1.0,
+    "mode": 1,
+    "name": "OpenNrExplicitV3Control",
+    "performanceMode": 3,
+    "preset": 1,
+    "skinStructureStrength": -1.0,
+    "style": 0,
+    "useAutoMask": 0
+  },
+  "constants": {
+    "cameraAspectRatio": 1,
+    "cameraFOV": 1.5707963705062866,
+    "cameraFar": 100.0,
+    "cameraFwd": [
+      0,
+      0,
+      1
+    ],
+    "cameraMotionIncluded": true,
+    "cameraNear": 0.10000000149011612,
+    "cameraPinholeOffset": [
+      0,
+      0
+    ],
+    "cameraPos": [
+      0,
+      0,
+      0
+    ],
+    "cameraRight": [
+      1,
+      0,
+      0
+    ],
+    "cameraUp": [
+      0,
+      1,
+      0
+    ],
+    "cameraViewToClip": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.001001000404358,
+        1.0
+      ],
+      [
+        0.0,
+        0.0,
+        -0.10010010004043579,
+        0.0
+      ]
+    ],
+    "clipToCameraView": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        -9.989999771118164
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        10.0
+      ]
+    ],
+    "clipToLensClip": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "clipToPrevClip": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "color_linear_rgba": [
+      0.25,
+      0.5,
+      0.75,
+      1
+    ],
+    "depth": 1,
+    "depthInverted": false,
+    "exposure": "not required by selected profile; no fabricated exposure tag",
+    "frame_id": 1,
+    "jitterOffset": [
+      0,
+      0
+    ],
+    "minRelativeLinearDepthObjectSeparation": 40,
+    "motionVectors3D": false,
+    "motionVectorsDilated": false,
+    "motionVectorsInvalidValue": 3.4028234663852886E+38,
+    "motionVectorsJittered": false,
+    "motion_pixels": [
+      0,
+      0
+    ],
+    "mvecScale": [
+      0.015625,
+      0.015625
+    ],
+    "orthographicProjection": false,
+    "prevClipToClip": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "producer": "P1 fixed 64x64 constant-radiance plane at z=100, stationary LH perspective camera",
+    "reset": true,
+    "viewport": 1
+  },
+  "resources": {
+    "adapter_luid": 20703,
+    "command_list_identity": 1629817127856,
+    "device_identity": 1629741405280,
+    "profile": "Dagor output-resolution color; render-resolution depth and motion; fixed64x64; no mask; no alias",
+    "resources": [
+      {
+        "device_identity": 1629741405280,
+        "extent": [
+          0,
+          0,
+          64,
+          64
+        ],
+        "format": 10,
+        "generation": 1,
+        "height": 64,
+        "identity": 1629816878608,
+        "lifetime": "evaluate_local",
+        "state": 64,
+        "tag": 70,
+        "width": 64
+      },
+      {
+        "device_identity": 1629741405280,
+        "extent": [
+          0,
+          0,
+          64,
+          64
+        ],
+        "format": 10,
+        "generation": 1,
+        "height": 64,
+        "identity": 1629816929280,
+        "lifetime": "evaluate_local",
+        "state": 8,
+        "tag": 71,
+        "width": 64
+      },
+      {
+        "device_identity": 1629741405280,
+        "extent": [
+          0,
+          0,
+          64,
+          64
+        ],
+        "format": 41,
+        "generation": 1,
+        "height": 64,
+        "identity": 1629816885360,
+        "lifetime": "evaluate_local",
+        "state": 64,
+        "tag": 0,
+        "width": 64
+      },
+      {
+        "device_identity": 1629741405280,
+        "extent": [
+          0,
+          0,
+          64,
+          64
+        ],
+        "format": 34,
+        "generation": 1,
+        "height": 64,
+        "identity": 1629816914512,
+        "lifetime": "evaluate_local",
+        "state": 64,
+        "tag": 1,
+        "width": 64
+      }
+    ]
+  }
+}

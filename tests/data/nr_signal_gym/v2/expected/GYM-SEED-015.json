@@ -1,0 +1,107 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-015",
+  "case_input_sha256": "e83ab5d8946b110ea90a3f75eec0d50203b5a23e4b02563b7fbc4ffc343dc5a7",
+  "revision": 1,
+  "transport_checks": [
+    {
+      "check_id": "T-AMBIGUOUS",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/ambiguous-motion-frame/signals/0/presence",
+      "comparison": "exact",
+      "expected": "ambiguous",
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    },
+    {
+      "check_id": "T-CLAIMS",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/ambiguous-motion-frame/signals/0/provenance",
+      "comparison": "exact",
+      "expected": [
+        {
+          "claim_id": "claim-motion-1",
+          "source_kind": "synthetic_specification",
+          "producer": "specification-builder",
+          "source_version": {
+            "state": "known",
+            "value": "2.0.0"
+          },
+          "source_frame_id": {
+            "state": "known",
+            "value": "frame-100"
+          },
+          "lineage_parents": [],
+          "evidence_refs": [
+            "SRC-E-01"
+          ],
+          "confidence": {
+            "state": "not_observed",
+            "reason_id": "GYM.NOT_OBSERVED"
+          }
+        },
+        {
+          "claim_id": "claim-motion-2",
+          "source_kind": "synthetic_specification",
+          "producer": "specification-builder",
+          "source_version": {
+            "state": "known",
+            "value": "2.0.0"
+          },
+          "source_frame_id": {
+            "state": "known",
+            "value": "frame-99"
+          },
+          "lineage_parents": [],
+          "evidence_refs": [
+            "SRC-E-01"
+          ],
+          "confidence": {
+            "state": "not_observed",
+            "reason_id": "GYM.NOT_OBSERVED"
+          }
+        }
+      ],
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    }
+  ],
+  "qualifications": [],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

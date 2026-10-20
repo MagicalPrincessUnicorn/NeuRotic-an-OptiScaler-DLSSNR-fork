@@ -6,8 +6,8 @@ struct RenderingDiagnosticsDestination {
     bool forceNeural=false,forceDiagnostics=false;
 };
 inline RenderingDiagnosticsDestination ResolveRenderingDiagnosticsDestination(int main,int neural,int diagnosticsChild,int requested,bool firstNeuralVisit=false) {
-    RenderingDiagnosticsDestination destination{std::clamp(main,0,6),std::clamp(neural,0,6),diagnosticsChild,requested>=0,false};
-    if(requested>=0){destination.main=2;destination.neural=std::clamp(requested,0,6);}
+    RenderingDiagnosticsDestination destination{std::clamp(main,0,6),std::clamp(neural,0,7),diagnosticsChild,requested>=0,false};
+    if(requested>=0){destination.main=2;destination.neural=std::clamp(requested,0,7);}
     else if(firstNeuralVisit&&destination.main==2){destination.neural=0;destination.forceNeural=true;}
     if(destination.main==2&&destination.neural==3){
         destination.main=6;destination.diagnosticsChild=4;destination.neural=0;

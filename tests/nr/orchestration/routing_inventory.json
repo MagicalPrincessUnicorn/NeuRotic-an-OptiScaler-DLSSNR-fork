@@ -1,0 +1,338 @@
+{
+  "work_order": "NR-ORCH-001",
+  "suites": {
+    "routing-policy": [
+      {
+        "id": "T22.contract-version-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.ctx-unrelated-conflict-fixture",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.diagnostics-not-authority",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.future-schema-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.handoff-hard",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.healthy-incumbent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.missing-implementation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.permutation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.required-conflict-hard-clear",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.stable-tie",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.unknown-cost-not-known-maximum",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.unknown-evidence-not-known-maximum",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.unknown-lifetime",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.unrelated-conflict-not-global-veto",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.first-real-waits",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.generated-no-increment",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.immediate-hard-revoke",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.old-base-no-increment",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.progress-owner-required",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.progress-scope-required",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.repeated-no-increment",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.same-base-after-reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.same-base-no-increment",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.second-real-waits",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T23.third-real-promotes",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC01-no-incumbent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC01-no-legacy-inference",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC02-exact-incumbent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC03-hard-clear",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC04-unavailable-retain",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC05-same-returns",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC06-no-rebind",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC07-content-not-identity",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC07-stale-retain",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC08-release",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.LC09-generated-no-promotion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.advanced-needs-scoped-optin",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.auto-unavailable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.basic-soft-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.fixed-no-fallback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.forbid",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.lexicographic-degradation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.mandatory-fg",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.mandatory-rr",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.no-execution-effect",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.preference",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.preference-after-degradation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.scoped-optin",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.structural-generation-clears",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.temporary-cannot-hide-later-hard",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.unknown-freshness-retains",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.unknown-host-demand",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.unqualified-cannot-hide-hard-intent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.unqualified-cannot-hide-host-failure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.unrestricted-keeps-hard-invariants",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.unsatisfied-require",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.wrong-optin-scope",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "routing-replay": [
+      {
+        "id": "T22.canonical-input-permutation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.digest-deterministic",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.encode-future-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.fact-set-canonicalization",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.malformed-replay-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.missing-metadata-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.replay-bytes",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.replay-evidence-saved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.replay-exact-plan",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.serialize-input",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "routing-publication": [
+      {
+        "id": "T22.c05-config-owner",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.c05-pure-proposal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.c11-owner-receipt",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.forged-decision-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.legacy-delta-values-only",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T22.no-commit-authority",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.fixed-native-placement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.parser-auto-stays-fixed-default",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.projection-exact-revision",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.projection-future-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.projection-no-auto",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T24.shadow-preserves-fixed-intent",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "routing-policy": {
+      "emitted_suite": "routing-policy"
+    },
+    "routing-replay": {
+      "emitted_suite": "routing-replay"
+    },
+    "routing-publication": {
+      "emitted_suite": "routing-publication"
+    }
+  }
+}

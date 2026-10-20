@@ -13,7 +13,7 @@ namespace Neurotic::Semantic::Character {
 // Exact member/donor differences: overnight-universal-intake/inspector-cohort-change.json.
 // Packaging must reject a changed worker cohort until this pin is updated and
 // the host rebuilt. The editable manifest is never its own trust anchor.
-inline constexpr char InspectorCohortDigest[]="ee2c72fdf1225bbc811d58c6c485f2b983270c44592dfbb8f18952d62e9794cc";
+inline constexpr char InspectorCohortDigest[]="29940d0efb4a165c37379178c8ebbd76e825473befe518f6dc77346f544d658a";
 class CharacterCohort {
  std::vector<HANDLE> handles;std::set<std::filesystem::path> directories;
  HANDLE Pin(const std::filesystem::path& path,bool directory){

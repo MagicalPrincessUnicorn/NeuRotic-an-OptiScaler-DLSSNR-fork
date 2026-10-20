@@ -8,6 +8,24 @@
   "version": "2-draft",
   "desktop": [
     {
+      "id": "desktop.anything.capture_scrgb",
+      "translation": "Último color capturado: scRGB (FP16)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.anything.capture_sdr",
+      "translation": "Último color capturado: SDR (8 bits)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.anything.capture_unknown",
+      "translation": "Último color capturado: Desconocido",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.anything.countdown_action",
       "translation": "NR Anything · %d",
       "revision": 0,
@@ -98,6 +116,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.anything.probe_color_unknown",
+      "translation": "Medición no disponible: color capturado desconocido.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.anything.probe_complete",
       "translation": "Medición completada. Copie el estado de la sesión para compartir los cuatro resultados.",
       "revision": 0,
@@ -114,6 +138,12 @@
       "translation": "Error en la medición.",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.anything.probe_hdr_unavailable",
+      "translation": "Medición no disponible para HDR.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.anything.probe_invalidated",
@@ -2102,6 +2132,66 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.closing.anything",
+      "translation": "Deteniendo NR Anything",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.artwork",
+      "translation": "Finalizando la limpieza de imágenes",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.bundle",
+      "translation": "Finalizando la exportación de diagnósticos",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.diagnostics",
+      "translation": "Finalizando los diagnósticos del juego",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.discovery",
+      "translation": "Finalizando el análisis de la biblioteca",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.installer",
+      "translation": "Finalizando la operación de instalación",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.preflight",
+      "translation": "Finalizando la comprobación previa",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.resources",
+      "translation": "Liberando recursos de la aplicación",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.title",
+      "translation": "Cerrando NeuRotic",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.update",
+      "translation": "Finalizando la búsqueda de actualizaciones",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
       "id": "desktop.diagnosticbundle.cannot_create_diagnostic_export_working_director_7afa01fb",
       "translation": "No se puede crear el directorio de trabajo de exportación de diagnósticos.",
       "revision": 0,
@@ -3212,6 +3302,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.hubshell.clear_search",
+      "translation": "Borrar búsqueda",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.hubshell.clears_saved_game_inspection_and_profile_data_th_b9afdcd0",
       "translation": "Borra los datos de inspección y perfiles del juego guardados. La biblioteca, los juegos ocultos y la configuración de la carpeta de cada juego permanecen sin cambios. Se leerán detalles nuevos la próxima vez que selecciones un juego. No es necesario reiniciar.",
       "revision": 0,
@@ -3219,9 +3315,9 @@
     },
     {
       "id": "desktop.hubshell.clears_the_local_library_including_hidden_games__516f3998",
-      "translation": "Borra la biblioteca local (incluidos los juegos ocultos), las preferencias, los perfiles de juego, las ilustraciones, los recibos de operaciones y los archivos del entorno de ejecución importados, como los modelos NR y Streamline. NeuRotic se reiniciará. Los archivos de juegos instalados permanecen intactos.",
+      "translation": "Borra la biblioteca local (incluidos los juegos ocultos), las preferencias, los perfiles de juego, las ilustraciones y los recibos de operaciones. Se conservan los perfiles de DLL de NR guardados y otros archivos de Runtime importados. NeuRotic se reiniciará. Los archivos de los juegos instalados permanecerán intactos.",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.hubshell.close_4bae39a9",
@@ -3828,6 +3924,12 @@
       "translation": "Actualizar componentes",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.hubshell.refresh_d284aefe",
+      "translation": "Actualizar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.hubshell.refresh_details_0ab28849",
@@ -5084,16 +5186,136 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installation.architecture_warning",
+      "translation": "Ejecutable de 32 bits. Este paquete de 64 bits no puede ofrecer integración en el juego. Use NR Anything hasta que haya una integración compatible.",
+      "revision": 0,
+      "note": "Codex draft aligned to NR Anything compatibility fallback; native-speaker review pending."
+    },
+    {
+      "id": "desktop.installation.batch_complete",
+      "translation": "Instalaciones completadas",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.check_failed",
+      "translation": "Error de comprobación",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.complete",
+      "translation": "Instalación completada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.fresh_help",
+      "translation": "Usar los valores predeterminados del paquete. Una instalación normal conserva tu configuración guardada.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.inspector_help",
+      "translation": "El inspector es totalmente opcional y está incompleto. Es una función en desarrollo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.inspector_only_install",
+      "translation": "La instalación del inspector corresponde solo a Instalar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.install_inspector",
+      "translation": "Instalar inspector",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.installation.installed",
       "translation": "Instalado",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installation.installed_saved",
+      "translation": "Instalado (guardado)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.not_installed_saved",
+      "translation": "No instalado (guardado)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.other_architecture_warning",
+      "translation": "La arquitectura del ejecutable difiere de la del paquete. Si no hay integración compatible en el juego, use NR Anything.",
+      "revision": 0,
+      "note": "Codex draft aligned to NR Anything compatibility fallback; native-speaker review pending."
+    },
+    {
+      "id": "desktop.installation.package",
+      "translation": "Paquete",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
       "id": "desktop.installation.partial",
       "translation": "Parcial",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.installation.partial_saved",
+      "translation": "Parcial (guardado)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.preferences_invalid",
+      "translation": "No se pudieron leer las opciones de instalación de juegos guardadas. Tu biblioteca se conservó.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.remember_failed",
+      "translation": "No se pudo guardar tu elección. Se te volverá a preguntar la próxima vez.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.remember_risk",
+      "translation": "Recordar mi elección para este juego",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.risk_accepted",
+      "translation": "Antitrampas: elección aceptada",
+      "revision": 0,
+      "note": "English final after Desktop46+3visuals; translation draft, native quality/fit pending."
+    },
+    {
+      "id": "desktop.installation.risk_remembered",
+      "translation": "Antitrampas: elección recordada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.unknown",
+      "translation": "Estado desconocido",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.unknown_saved",
+      "translation": "Estado desconocido (guardado)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.installdefaults.confirm_safety",
@@ -5126,6 +5348,18 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installdefaults.logging_new_ini",
+      "translation": "Los valores predeterminados guardados se aplican a los archivos INI nuevos.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installdefaults.logging_unknown",
+      "translation": "Política de registro del paquete no disponible.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.installdefaults.mfg_help",
       "translation": "El desbloqueo de MFG guarda una solicitud de inicio. Aún se aplican las comprobaciones de compatibilidad del juego, la GPU y el proveedor.",
       "revision": 0,
@@ -5154,6 +5388,12 @@
       "translation": "Desactivado",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.installdefaults.on",
+      "translation": "Activado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.installdefaults.package_defaults_fallback",
@@ -5222,6 +5462,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installdefaults.saved_anything",
+      "translation": "NR Anything (guardado)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.installdefaults.style",
       "translation": "Estilo",
       "revision": 0,
@@ -5232,6 +5478,240 @@
       "translation": "Valores predeterminados de instalación",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.installdefaults.test_trace",
+      "translation": "Los paquetes de prueba mantienen habilitado el registro Trace.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.admission_conflict",
+      "translation": "Finaliza o cancela la operación actual antes de poner una instalación en cola.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.already_queued",
+      "translation": "Ya está en cola. Cancela ese elemento antes de cambiar sus opciones de instalación.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.cancel_item",
+      "translation": "Cancelar elemento en cola",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.cancelled",
+      "translation": "Cancelado",
+      "revision": 2,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.choose_executable",
+      "translation": "Elige un ejecutable de juego adecuado antes de poner una instalación en cola.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.clear_history",
+      "translation": "Borrar historial",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.closed_cancelled",
+      "translation": "Cancelado al cerrar la aplicación. Ninguna instalación en cola se reanuda automáticamente.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.defaults_changed",
+      "translation": "Los valores predeterminados de instalación cambiaron después de este clic. Restaura esos valores predeterminados o cancela este elemento y ponlo en cola con los nuevos valores.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.defaults_unavailable",
+      "translation": "Los valores predeterminados de instalación no están disponibles. Comprúebalos antes de poner esta instalación en cola.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.empty",
+      "translation": "La cola está vacía.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.executable_changed",
+      "translation": "El ejecutable cambió mientras estaba en cola. Cancela este elemento y elígelo de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.executable_unavailable",
+      "translation": "El ejecutable en cola no está disponible. Cancela este elemento y elige el ejecutable de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.finish_before_restore",
+      "translation": "Finaliza o cancela las instalaciones en cola antes de restaurar los valores predeterminados de la configuración guardada.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.finishing_item",
+      "translation": "Este elemento aún está finalizando. Inténtalo de nuevo en breve.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.folder_changed",
+      "translation": "La carpeta de instalación cambió mientras estaba en cola. Cancela este elemento y elígela de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.folder_identity_unavailable",
+      "translation": "No se pudo comprobar la identidad de la carpeta de instalación. Elige la carpeta del juego de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.help",
+      "translation": "Las instalaciones se ejecutan en orden. Puedes explorar y poner otro juego en cola. Un juego que requiera atención pausa la cola. Cerrar la aplicación cancela los elementos que no hayan empezado a instalarse.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.identity_unavailable",
+      "translation": "No se pudo comprobar la identidad del ejecutable en cola.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.installing",
+      "translation": "Instalando",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.item_cancelled",
+      "translation": "Elemento de la cola cancelado. Se conservaron los archivos existentes del juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.needs_attention",
+      "translation": "Requiere atención",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.operation_conflict",
+      "translation": "Finaliza o cancela las instalaciones en cola antes de realizar otra operación de juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.options_changed",
+      "translation": "La elección de proxy de este elemento cambió. Cancélalo y pon en cola la nueva elección.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.plan_changed",
+      "translation": "Vuelve a preparar esta instalación en cola antes de aplicarla.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.preparing",
+      "translation": "Preparando instalación",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.queued",
+      "translation": "En cola",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.receipt_target_changed",
+      "translation": "La respuesta pertenece a otro destino en cola.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.remove_item",
+      "translation": "Quitar elemento",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.request_changed",
+      "translation": "La solicitud de instalación en cola cambió. Cancela este elemento y ponlo en cola de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.resolve_help",
+      "translation": "Reintenta este elemento en la cola de instalación, o cancélalo y elige nuevas opciones.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.retries_cancelled",
+      "translation": "Se cancelaron los reintentos adicionales.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.retry",
+      "translation": "Reintentar este elemento",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.review",
+      "translation": "Revisar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.review_warning",
+      "translation": "Revisar la advertencia antitrampas de este juego",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.title",
+      "translation": "Cola de instalación",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.unexpected_receipt",
+      "translation": "Respuesta inesperada de la operación en cola. Vuelve a preparar este elemento.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.worker_busy",
+      "translation": "Espera a que finalice la operación en cola actual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.writer_cannot_cancel",
+      "translation": "La instalación actual debe finalizar antes de poder cerrar este elemento.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.keybindcapture.keybind_e08bbdb3",
@@ -5678,6 +6158,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.languages.list-unavailable",
+      "translation": "No se pudieron listar los idiomas de la comunidad. Los idiomas incluidos siguen disponibles. Restaure el acceso a la carpeta y luego elija Reintentar.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.languages.local_conflict",
       "translation": "Esta entrada base cambió después de tu edición local. Tu edición tiene prioridad; revísala antes de compartirla.",
       "revision": 0,
@@ -5700,6 +6186,12 @@
       "translation": "Marcadores de posición requeridos: %s",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.languages.retry-list",
+      "translation": "Reintentar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.languagestore.community_pack_imported_6caffa6d",
@@ -5876,6 +6368,30 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.library-intake.save-protected",
+      "translation": "Los cambios de la biblioteca no se guardaron porque no se pudo validar la biblioteca existente. Restaure una biblioteca válida o use Mantenimiento de datos de la aplicación para recuperarla.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.library-intake.unsupported-schema",
+      "translation": "Esta biblioteca tiene un formato no compatible. Las actualizaciones están desactivadas para conservarla.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.library.hide_game",
+      "translation": "Ocultar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.library.show_game",
+      "translation": "Mostrar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.manuallibrary.a_compatible_in_game_integration_is_unavailable__87dd6414",
       "translation": "Una integración compatible en el juego no está disponible para esta arquitectura. Utiliza NR Anything.",
       "revision": 0,
@@ -5910,6 +6426,54 @@
       "translation": "Selecciona un ejecutable de juego de 32 o 64 bits existente",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.corner",
+      "translation": "Esquina del menú",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.heading",
+      "translation": "Disposición del menú",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.lower-left",
+      "translation": "Inferior izquierda",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.lower-right",
+      "translation": "Inferior derecha",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.reset",
+      "translation": "Restablecer disposición",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.restart",
+      "translation": "Menú del juego. Guarda y reinicia el juego.",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.upper-left",
+      "translation": "Superior izquierda",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.upper-right",
+      "translation": "Superior derecha",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
     },
     {
       "id": "desktop.native.19701ba31b62",
@@ -8492,6 +9056,468 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.nrdll.add",
+      "translation": "Añadir DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.add_update",
+      "translation": "Añadir/actualizar NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.add_update_help",
+      "translation": "Añade o reemplaza el NR DLL de este juego con el perfil seleccionado. Los demás archivos de instalación permanecen sin cambios.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.cancel_edit",
+      "translation": "Cancelar edición",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.cancel_operation",
+      "translation": "Detener operación actual",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.cancelled",
+      "translation": "La operación se detuvo. La lista de perfiles muestra los archivos guardados actuales.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.catalog_issues",
+      "translation": "Algunos perfiles guardados no están disponibles o tienen información ilegible. Tus archivos se conservaron; elige otro perfil o la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.catalog_pending",
+      "translation": "Espera a que terminen de cargarse los perfiles de NR DLL o elige la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.changed_asset",
+      "translation": "El NR DLL guardado cambió. Impórtalo de nuevo para usar los nuevos bytes.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.choose_copy_profile",
+      "translation": "Elige un perfil de NR DLL guardado para añadir o actualizar el archivo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.choose_file",
+      "translation": "Elige tu nvngx_dlssnr.dll",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.clear_default",
+      "translation": "Borrar predeterminado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.close",
+      "translation": "Cerrar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.closing",
+      "translation": "Finalizando operación de archivo NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.confirm_remove",
+      "translation": "Confirmar eliminación",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copy_catalog_pending",
+      "translation": "Espera a que terminen de cargarse los perfiles de NR DLL.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copy_profile_unavailable",
+      "translation": "El perfil de NR DLL seleccionado no está disponible. Elige un perfil disponible.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copy_source_unavailable",
+      "translation": "El NR DLL en cola no está disponible. Cancela este elemento y pon en cola un perfil disponible.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copying",
+      "translation": "Actualizando NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.corrupt_metadata",
+      "translation": "No se pudo leer parte de la información de los perfiles guardados. Tus archivos se conservaron.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default",
+      "translation": "Predeterminado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_not_current",
+      "translation": "No se pudo confirmar el perfil de NR DLL predeterminado. Espera al administrador, selecciona un perfil específico o elige la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_recovery",
+      "translation": "No se pudo leer el valor predeterminado guardado. Tus demás perfiles siguen disponibles. Selecciona un perfil y establécelo como predeterminado, borra explícitamente el predeterminado o elige la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_unavailable",
+      "translation": "Predeterminado no disponible",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_unreadable",
+      "translation": "El perfil de NR DLL predeterminado no está disponible. Selecciona un perfil específico, elige la instalación manual o repara el predeterminado en el administrador.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.destination_changed",
+      "translation": "El destino seleccionado cambió. Revisa de nuevo la acción de NR DLL.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.empty",
+      "translation": "No hay perfiles de NR DLL guardados. Añade un archivo o usa la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.file_filter",
+      "translation": "NR DLL (nvngx_dlssnr.dll)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.in_use",
+      "translation": "Este perfil o su configuración están ocupados. Finaliza cualquier instalación en cola o cierra otros programas que usen los archivos e inténtalo de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.inspection_unavailable",
+      "translation": "La acción de NR DLL finalizó, pero no se pudo actualizar la configuración del juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_copy",
+      "translation": "La solicitud de NR DLL seleccionada no es válida. Elige el archivo de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_name",
+      "translation": "Escribe un nombre de perfil en una sola línea. Si es demasiado largo, acórtalo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_path",
+      "translation": "Elige un archivo normal llamado nvngx_dlssnr.dll que NeuRotic pueda leer.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_preferences",
+      "translation": "No se pudieron leer las selecciones de NR DLL guardadas. La biblioteca se conservó.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.io_error",
+      "translation": "La operación de NR DLL no pudo finalizar. Comprueba que el archivo sea accesible e inténtalo de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.loading",
+      "translation": "Cargando perfiles…",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manage",
+      "translation": "Administrar NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manage_short",
+      "translation": "Administrar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manager_help",
+      "translation": "Añade tu DLL, ponle nombre a la copia guardada y elige un perfil predeterminado. Cada juego puede usar el predeterminado, un perfil específico o la instalación manual. Los perfiles guardados no cambian los archivos ya instalados en los juegos.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manager_help_short",
+      "translation": "Añade archivos DLL como perfiles con nombre. Elige un perfil predeterminado o uno para cada juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manager_title",
+      "translation": "Administrador de NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manual",
+      "translation": "Manual — no copiar un NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.missing_profile",
+      "translation": "Este perfil no está disponible. Elige otro perfil o la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.needs_attention",
+      "translation": "Los perfiles requieren atención",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.no_default",
+      "translation": "Ningún predeterminado seleccionado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.no_profiles",
+      "translation": "No hay perfiles guardados",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.open_folder",
+      "translation": "Abrir carpeta del perfil seleccionado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.open_folder_failed",
+      "translation": "No se pudo abrir la carpeta del perfil guardado. Comprueba que siga disponible e inténtalo de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.ownership_metadata_invalid",
+      "translation": "No se pudieron actualizar los metadatos de propiedad de NR DLL. Se conservaron.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.preparing_copy",
+      "translation": "Preparando actualización de NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.presence_help",
+      "translation": "Los perfiles guardados indican la disponibilidad del archivo. La compatibilidad en tiempo de ejecución se comprueba al usar la DLL seleccionada.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.profile_editor",
+      "translation": "Guardar perfil de NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.profile_name",
+      "translation": "Nombre del perfil",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.queue_manual",
+      "translation": "Instalar este elemento sin copiar un NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.queued_source_unavailable",
+      "translation": "El NR DLL en cola cambió o no está disponible. Elige la instalación manual para este elemento, o cancélalo y pon en cola una nueva selección.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.read_only",
+      "translation": "Esta sesión de la aplicación no puede cambiar los perfiles de NR DLL guardados.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.refresh_home",
+      "translation": "Actualizar Microsoft Visual C++, Streamline y los perfiles de NR DLL guardados",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.remove",
+      "translation": "Eliminar perfil",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.remove_confirm",
+      "translation": "¿Eliminar este perfil guardado? Las DLL instaladas en los juegos y la descarga original no cambiarán. Los juegos con esta selección explícita la mostrarán como no disponible.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.rename",
+      "translation": "Cambiar nombre",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.save_profile",
+      "translation": "Guardar perfil",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.saved_path",
+      "translation": "NR DLL guardado: {path}",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.saved_profiles",
+      "translation": "Perfiles guardados",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.selection_unavailable",
+      "translation": "El NR DLL seleccionado no está disponible. Elige otro perfil o la opción manual antes de instalar.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.selector",
+      "translation": "NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.session_unavailable",
+      "translation": "Abre una sesión de la aplicación con permisos de escritura para administrar NR DLL.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.set_default",
+      "translation": "Establecer como predeterminado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.source_changed",
+      "translation": "El NR DLL seleccionado cambió después de ponerse en cola. Elígelo de nuevo o usa la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.source_not_held",
+      "translation": "El NR DLL seleccionado no está disponible para esta instalación en cola. Elige la opción manual o ponla en cola de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.source_unavailable",
+      "translation": "El NR DLL seleccionado no está disponible. Elige otro perfil o la instalación manual.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.target_uncertain",
+      "translation": "Puede que esta carpeta ya contenga una instalación de NeuRotic, por lo que su NR DLL se dejó sin cambios. Puedes colocar el archivo nvngx_dlssnr.dll elegido junto al ejecutable del juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.unavailable",
+      "translation": "Perfil no disponible",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.unsafe_path",
+      "translation": "La carpeta de perfiles guardados de NeuRotic es un enlace o es inaccesible. Restaura el acceso a los datos de la aplicación e inténtalo de nuevo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.update_help",
+      "translation": "Las instalaciones nuevas usan esta selección. Las actualizaciones mantienen sin cambios el NR DLL del juego, incluso cuando falta.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.update_preserved",
+      "translation": "La instalación existente se actualizó sin cambiar su NR DLL. El perfil seleccionado solo se aplica a una instalación nueva.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.working",
+      "translation": "Trabajando con archivos NR DLL…",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.wrong_filename",
+      "translation": "Elige un archivo llamado nvngx_dlssnr.dll.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.nrmodelreminder.neurotic_is_installed_in_this_game_but_nvngx_dls_d93d3bad",
       "translation": "NeuRotic está instalado en este juego, pero falta nvngx_dlssnr.dll en la carpeta de su ejecutable.",
       "revision": 0,
@@ -9344,6 +10370,108 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.saved-control.default-unavailable",
+      "translation": "Valor predeterminado no disponible. Actualice los detalles de instalación o repare el paquete local.",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.saved-control.unknown-saved-value",
+      "translation": "Valor guardado: %s. Elija un valor para reemplazarlo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.allow-game-input",
+      "translation": "Permitir entrada del juego con el menú abierto",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.compatibility",
+      "translation": "Compatibilidad",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.controller",
+      "translation": "Mando",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.escape-closes",
+      "translation": "Esc cierra el menú",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.fg-hud",
+      "translation": "Opciones de HUD de FG",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.gpu-identity",
+      "translation": "Identidad de GPU",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.keyboard",
+      "translation": "Teclado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.mouse",
+      "translation": "Ratón",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.pacing-latency",
+      "translation": "Ritmo y latencia",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.replacement-fg",
+      "translation": "FG de reemplazo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.setup",
+      "translation": "Configuración",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.startup-hooks",
+      "translation": "Hooks de inicio",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.state-restoration",
+      "translation": "Restauración de estado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.toggle-menu",
+      "translation": "Alternar menú",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.unfinished-rule",
+      "translation": "Aplique o restablezca la regla de objeto sin terminar antes de guardar.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.settings.anything_resolution",
       "translation": "Resolución de NR Anything",
       "revision": 0,
@@ -9396,6 +10524,12 @@
       "translation": "Desactivado",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.dlssg/overrideinterpolationcount.ff6d137fab",
+      "translation": "Solo solicitud guardada. Automático usa la configuración del juego. 0 selecciona Desactivado. 1-5 fotogramas generados equivalen a 2X-6X en total. La disponibilidad depende del proveedor activo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.settings.dlssnr/compare.e888155d8c",
@@ -9692,6 +10826,48 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.settings.mfg-restart",
+      "translation": "Experimental. Guarde y reinicie el juego. Active FG en el juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution",
+      "translation": "Resolución nativa",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_full",
+      "translation": "Salida completa",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_help",
+      "translation": "Ambas opciones usan las dimensiones de entrada nativas. La etapa seleccionada determina cuándo se ejecuta Neural Rendering.",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_post",
+      "translation": "Igualar nativa (después de Super Resolution)",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_pre",
+      "translation": "Igualar nativa (antes de Super Resolution)",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_unknown",
+      "translation": "Resolución guardada desconocida. Selecciona una opción conocida para reemplazarla.",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
       "id": "desktop.settings.nr_mode",
       "translation": "Modo NR",
       "revision": 0,
@@ -9770,6 +10946,24 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.settings.tristate.auto",
+      "translation": "AUTO",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.settings.tristate.false",
+      "translation": "FALSE",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.settings.tristate.true",
+      "translation": "TRUE",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.settings.v-sync/forcevsync.784de20752",
       "translation": "V-Sync",
       "revision": 0,
@@ -9780,6 +10974,84 @@
       "translation": "Activado",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.anything-missing",
+      "translation": "NR Anything: se requiere configurar el modelo",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.available",
+      "translation": "Archivos compartidos disponibles",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.available-short",
+      "translation": "Disponible",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.checking",
+      "translation": "Comprobando archivos compartidos...",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.game-help",
+      "translation": "Las carpetas compartidas son opcionales para configurar juegos. Añada archivos aquí para copiarlos automáticamente, o coloque los archivos necesarios junto al ejecutable del juego.",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.game-missing",
+      "translation": "Carpeta del juego: falta nvngx_dlssnr.dll",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.model-help",
+      "translation": "El renderizado neuronal requiere nvngx_dlssnr.dll. Para juegos, añádalo aquí para copiarlo automáticamente o colóquelo junto al ejecutable del juego. NR Anything necesita su propia configuración de modelo en la aplicación.",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.not-supplied",
+      "translation": "No proporcionado",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.not-supplied-copy",
+      "translation": "No proporcionado para la copia automática",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.nrdll_optional",
+      "translation": "Opcional. Guarda aquí perfiles de NR DLL para copiarlos automáticamente a los juegos.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.shared-files.streamline-help",
+      "translation": "Necesario para las funciones que usan Streamline. Mantenga los archivos necesarios juntos aquí para copiarlos automáticamente, o junto al ejecutable del juego.",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.streamline_optional",
+      "translation": "Opcional. Añada archivos de Streamline aquí para copiarlos automáticamente en la carpeta Streamline de cada juego.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.shared-files.unknown",
+      "translation": "Estado de archivos compartidos no disponible",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
     },
     {
       "id": "desktop.sleekwidgets.checking_files_93d27895",
@@ -9822,6 +11094,12 @@
       "translation": "Cambiar al tema claro",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.startup.loading",
+      "translation": "Cargando...",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.translationcontrolpreview.button_3f140455",
@@ -10248,6 +11526,66 @@
       "translation": "Worker no admite la escala de resolución de NR",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.neurotic-hubsettings.force_dynamic_mfg_game_8ca83550",
+      "revision": 1,
+      "translation": "Forzar MFG dinámico (Juego)",
+      "note": "Positive Force toggle for the game-native frame-generation path; Game scope must remain distinct from OptiScaler output. Machine draft; native-speaker review and on-screen fit pending."
+    },
+    {
+      "id": "desktop.neurotic-hubsettings.force_dynamic_mfg_optiscaler_d76565d1",
+      "revision": 1,
+      "translation": "Forzar MFG dinámico (OptiScaler)",
+      "note": "Positive Force toggle for OptiScaler frame-generation output; OptiScaler scope must remain distinct from game-native output. Machine draft; native-speaker review and on-screen fit pending."
+    },
+    {
+      "id": "desktop.anythingpreferences.partial_recovery",
+      "translation": "No se pudieron cargar algunos ajustes. Los datos sin cambios se conservan.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.operation.inspection_unavailable",
+      "translation": "No se pudieron actualizar los ajustes del juego.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.operation.cleanup_unavailable",
+      "translation": "No se pudieron eliminar los datos temporales de la operación.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.neurotic-hubprotocol.invalid_reviewed_file_identity_e9c32528",
+      "translation": "Identidad de archivo revisado no válida",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.installqueue.cancel_and_edit",
+      "translation": "Cancelar y editar",
+      "revision": 1,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.resolve_here",
+      "translation": "Reintenta este elemento o cambia sus opciones de instalación.",
+      "revision": 1,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.in_queue",
+      "translation": "En cola",
+      "revision": 1,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.failed",
+      "translation": "Fallido",
+      "revision": 1,
+      "note": ""
     }
   ],
   "in_game": [
@@ -11110,6 +12448,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.control_32d7e820",
+      "translation": "Control",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.controlled_by_basic_multi_pass_9185ace2",
       "translation": "Controlado por Multi Pass básico",
       "revision": 0,
@@ -11294,6 +12638,12 @@
       "translation": "hace las imágenes, y no hay nada que arrastrar. Intercambiar lados mueve el",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.done_11a6767d",
+      "translation": "Listo",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.done_f2fca027",
@@ -11704,6 +13054,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.guide_usage_21e129b1",
+      "translation": "Uso de guías",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.hdr_images_use_a_shared_sdr_preview_conversion_t_adc2e1fa",
       "translation": "Las imágenes HDR utilizan una conversión de vista previa SDR compartida; pueden diferir de tu pantalla.",
       "revision": 0,
@@ -11780,6 +13136,12 @@
       "translation": "Retener fotograma",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.hover_or_focus_a_signal_for_details_518d3624",
+      "translation": "Pase el cursor o enfoque una señal para ver detalles.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.how_much_of_the_frame_each_half_shows_5fc04bcb",
@@ -12376,6 +13738,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.native_temporal_requires_depth_and_motion_5899e54e",
+      "translation": "Temporal nativo requiere profundidad y movimiento.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.native_vulkan_nr_active_after_the_upscaler_944eeafb",
       "translation": "NR de Vulkan nativo activo después de escalar imagen.",
       "revision": 0,
@@ -12821,21 +14189,21 @@
     },
     {
       "id": "ingame.dlssnr-menu.passes_2_n_have_mixed_detail_strengths_adjusting_f777bdb1",
-      "translation": "Los pases 2–N tienen intensidades de detalle mixtas; ajustar este control deslizante aplica un valor a todos ellos.",
+      "translation": "Las pasadas posteriores usan diferentes intensidades de detalle. Ajuste este control deslizante para aplicar una misma intensidad a todas las pasadas posteriores.",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.passes_2_n_have_mixed_model_resolutions_adjustin_2723e966",
-      "translation": "Los pases 2–N tienen resoluciones de modelo mixtas; ajustar este control deslizante aplica un valor a todos ellos.",
+      "translation": "Las pasadas posteriores usan diferentes resoluciones. Ajuste este control deslizante para aplicar una misma resolución a todas las pasadas posteriores.",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.passes_2_n_have_mixed_model_strengths_adjusting__3a5ad482",
-      "translation": "Los pases 2–N tienen intensidades de modelo mixtas; ajustar este control deslizante aplica un valor a todos ellos.",
+      "translation": "Las pasadas posteriores usan diferentes intensidades de modelo. Ajuste este control deslizante para aplicar una misma intensidad a todas las pasadas posteriores.",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.passes_e154f1e3",
@@ -12854,6 +14222,12 @@
       "translation": "Resumen de ritmo pendiente: no disponible",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.pending_stale_44da3b17",
+      "translation": "Pendiente / desactualizado",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.performance_pairs_use_fresh_history_and_may_brie_f27ef9bc",
@@ -13192,6 +14566,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.remove_override_6d43eea1",
+      "translation": "Quitar anulación",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.render_scopes_llu_depth_copies_recorded_llu_esti_e0840c5d",
       "translation": "Ámbitos de renderizado %llu | Copias de profundidad registradas %llu | Asociaciones estimadas %llu",
       "revision": 0,
@@ -13340,6 +14720,12 @@
       "translation": "Se requiere reiniciar: los ganchos de captura y el transporte se seleccionaron al inicio del juego.",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.restart_the_game_to_apply_standalone_frame_generatio_1af12c21",
+      "translation": "Reinicie el juego para aplicar. La generación de fotogramas independiente usa Direct3D 12.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.restart_the_game_to_apply_the_frame_generation_s_1f97d457",
@@ -13762,6 +15148,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.status_920e413c",
+      "translation": "Estado",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.stored_setting_and_stays_put_once_the_menu_is_cl_357b06fc",
       "translation": "configuración guardada y se queda fija una vez que se cierra el menú.",
       "revision": 0,
@@ -14050,6 +15442,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.this_override_can_restrict_sources_on_the_inputs_boa_147f66af",
+      "translation": "Esta anulación puede restringir las fuentes en el panel de entradas.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.this_was_once_a_multiplier_on_a_measured_white_p_6aa78244",
       "translation": "Esto alguna vez fue un multiplicador sobre un punto blanco medido. La medición ha",
       "revision": 0,
@@ -14180,6 +15578,12 @@
       "translation": "Ruta de compatibilidad de imagen final verificada",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.vulkan_capture_renderer_6c0f81ce",
+      "translation": "Renderizador de captura Vulkan",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.vulkan_format_and_color_space_observed_f3b97dc3",
@@ -14606,6 +16010,192 @@
       "translation": "Desbloqueo nativo de MFG para la serie RTX 40",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.input-sources.auto",
+      "translation": "Automático",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.builtin",
+      "translation": "Captura integrada",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.depth",
+      "translation": "Profundidad",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.detected",
+      "translation": "Detectado, sin usar",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.external",
+      "translation": "Externo",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.motion",
+      "translation": "Vectores de movimiento",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.native",
+      "translation": "Nativo",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.none",
+      "translation": "Sin señal actual",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.activation",
+      "translation": "Requiere activación",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.convention",
+      "translation": "Convención desconocida",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.device",
+      "translation": "Dispositivo incompatible",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.fallback",
+      "translation": "Fuente solicitada no disponible; alternativa activa",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.frame",
+      "translation": "Fotograma incorrecto",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.generation",
+      "translation": "La fuente ha cambiado",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.identity",
+      "translation": "Identidad del fotograma no disponible",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.interval",
+      "translation": "Intervalo de movimiento incorrecto",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.lease",
+      "translation": "Uso seguro del recurso no garantizado",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.provider",
+      "translation": "Proveedor no compatible",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.raster",
+      "translation": "Mapeo de imagen no compatible",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.ready",
+      "translation": "Listo",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.stage",
+      "translation": "No disponible antes de esta etapa",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.sync",
+      "translation": "Falta sincronización",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.target",
+      "translation": "Destino incorrecto",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.unavailable",
+      "translation": "No disponible",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.view",
+      "translation": "Vista incorrecta",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reshade",
+      "translation": "ReShade",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.restore",
+      "translation": "Restaurar automático",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.scope",
+      "translation": "La selección por señal requiere entradas D3D12 preparadas. Las demás rutas conservan sus entradas actuales.",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.strict",
+      "translation": "Bloqueo estricto de fuentes (experimental)",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.title",
+      "translation": "Fuentes de entrada (experimental)",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.used",
+      "translation": "En uso",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
     },
     {
       "id": "ingame.keybind.unbound",
@@ -20866,6 +22456,54 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.menu-layout.corner",
+      "translation": "Esquina del menú",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.heading",
+      "translation": "Disposición del menú",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.lower-left",
+      "translation": "Inferior izquierda",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.lower-right",
+      "translation": "Inferior derecha",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.reset",
+      "translation": "Restablecer disposición",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.scale",
+      "translation": "Escala del menú",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.upper-left",
+      "translation": "Superior izquierda",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.upper-right",
+      "translation": "Superior derecha",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
       "id": "ingame.menu-overlay-vk.image_acquisition_unobserved_406bb866",
       "translation": "adquisición de imagen no observada",
       "revision": 0,
@@ -21048,6 +22686,594 @@
     {
       "id": "ingame.mfgrestartwarning.save_settings_and_restart_the_game_eb6aa130",
       "translation": "GUARDAR CONFIGURACIÓN Y REINICIAR EL JUEGO",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.mixed-input.auto_chooses_compatible_inputs_refresh_sources_updat_4ac536d4",
+      "translation": "Automático elige entradas compatibles. Actualizar fuentes pone al día la disponibilidad.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.automatic_d461a493",
+      "translation": "Automático",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.availability_reflects_the_last_refresh_in_use_confir_ff2160ab",
+      "translation": "La disponibilidad refleja la última actualización. En uso confirma el procesamiento reciente.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.availability_reflects_the_last_refresh_in_use_means__45341090",
+      "translation": "La disponibilidad refleja la última actualización. En uso significa que el procesamiento reciente usó esta fuente. No observado significa que aún no hay evidencia.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.choose_a_compatible_source_cbdf2a1b",
+      "translation": "Elija una fuente compatible.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.choose_sources_for_color_depth_and_motion_a0f729f5",
+      "translation": "Elija las fuentes de color, profundidad y movimiento.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.color_6b73191a",
+      "translation": "Color",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.depth_f1dbc339",
+      "translation": "Profundidad",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.effective_source_5d4211c5",
+      "translation": "Fuente efectiva",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.in_use_detected_fallback_waiting_refused_off_unknown_93f6196b",
+      "translation": "En uso | Detectado | Respaldo / en espera | Rechazado | Desactivado / desconocido",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.input_choices_are_unavailable_for_this_method_22174bd1",
+      "translation": "Las opciones de entrada no están disponibles para este método.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.motion_8ca34424",
+      "translation": "Movimiento",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.native_color_is_from_an_earlier_stage_present_uses_t_95b687ba",
+      "translation": "El color nativo proviene de una etapa anterior. Presente usa la imagen final del juego.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.no_recent_source_selection_59b2335e",
+      "translation": "Sin selección de fuente reciente.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.no_recent_use_1890559d",
+      "translation": "Sin uso reciente",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.not_in_use_e5c557a8",
+      "translation": "Sin usar",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.policy_llu_capture_llu_7cd5a6e9",
+      "translation": "Política %llu / captura %llu",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.prefer_no_input_enable_require_selected_sources_to_p_4962e811",
+      "translation": "Preferir sin entrada. Active Exigir fuentes seleccionadas para evitar el respaldo. NR se pausa si falta una entrada requerida.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.prefer_no_input_require_selected_sources_prevents_fa_c5be3e82",
+      "translation": "Preferir sin entrada. Exigir fuentes seleccionadas evita el respaldo.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferences_allow_fallback_unless_require_selected_s_e75a0595",
+      "translation": "Las preferencias permiten el respaldo a menos que Exigir fuentes seleccionadas esté activado. Esto también se aplica a Ninguno. El jitter y la exposición son automáticos. Las fuentes deben coincidir con el fotograma actual.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferences_saved_not_supported_by_this_method_77946faa",
+      "translation": "Preferencias guardadas; no compatible con este método.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferred_s_c6377036",
+      "translation": "Preferido: %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferred_source_185bfa90",
+      "translation": "Fuente preferida",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.require_selected_sources_68964ea5",
+      "translation": "Exigir fuentes seleccionadas",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.s_preferred_s_selected_s_used_s_s_59b880dd",
+      "translation": "%s: preferido %s; seleccionado %s; usado %s. %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.selected_s_6f1df5fc",
+      "translation": "Seleccionado: %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.signal_1e9806e4",
+      "translation": "Señal",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.source_preference_44bff705",
+      "translation": "Preferencia de fuente",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.this_method_uses_fixed_input_sources_saved_preferenc_c1f66ed7",
+      "translation": "Este método usa fuentes de entrada fijas. Las preferencias guardadas no se aplican.",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.unknown_b764cdc0",
+      "translation": "Desconocido",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.used_by_nr_dadc94fa",
+      "translation": "Usado por NR",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.used_s_0ce6f0f7",
+      "translation": "Usado: %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.above_native",
+      "translation": "Solo por encima del 100% de resolución del modelo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.apply_help",
+      "translation": "Desactivado oculta la edición de esta pasada. El procesamiento continúa.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.auto_skin_mask",
+      "translation": "Máscara de piel automática",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.below_native",
+      "translation": "Solo por debajo del 100% de resolución del modelo.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.close",
+      "translation": "Cerrar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.colour_strength",
+      "translation": "Intensidad de color",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.completed",
+      "translation": "%u solicitadas | %u completadas en el último fotograma",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.composition",
+      "translation": "Composición",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.configured",
+      "translation": "Configurado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.configured_contributions",
+      "translation": "Contribuciones configuradas. Los totales incluyen la Pasada 1.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.configured_values",
+      "translation": "Valores configurados. La edición del modelo muestra el ajuste Aplicar guardado.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.copy_preceding",
+      "translation": "Copiar pasada anterior",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.detail",
+      "translation": "Detalle",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.detail_strength",
+      "translation": "Intensidad de detalle",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.downscaler",
+      "translation": "Reductor de escala",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.edit",
+      "translation": "Editar",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.enable",
+      "translation": "Activar multipasada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.enlargement",
+      "translation": "Ampliación",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.experimental_composition",
+      "translation": "Modo de composición experimental.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.hidden",
+      "translation": "Oculto",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.high_count",
+      "translation": "Un número elevado de pasadas es experimental y puede agotar la memoria de la GPU o el tiempo de fotograma.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.highlight_guard",
+      "translation": "Protección de altas luces",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.local_structure",
+      "translation": "Estructura local",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.local_tone",
+      "translation": "Tono local",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.local_tuning",
+      "translation": "Ajuste local",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.maximum",
+      "translation": "Máximo de pasadas",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.mixed",
+      "translation": "Valores mixtos. Ajuste para aplicar un mismo valor a todas las pasadas adicionales.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model",
+      "translation": "Modelo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_edit",
+      "translation": "Edición de modelo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_preset",
+      "translation": "Preajuste de modelo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_resolution",
+      "translation": "Resolución de modelo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_strength",
+      "translation": "Intensidad de modelo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.not_requested",
+      "translation": "No solicitado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.off",
+      "translation": "Multipasada desactivada. Se conservan los ajustes guardados.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.open_rendering",
+      "translation": "Configuración de renderizado >",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.output_completed",
+      "translation": "%u solicitadas | salida completada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass",
+      "translation": "Pasada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass_number",
+      "translation": "Pasada %u",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass_overview",
+      "translation": "Resumen de pasadas",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass_settings",
+      "translation": "Configuración de pasada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.preceding_input",
+      "translation": "Entrada: imagen completada de la Pasada %u.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.proxy_composition",
+      "translation": "Composición proxy",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.rendering",
+      "translation": "Renderizado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.rendering_link",
+      "translation": "Renderizado >",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.requested",
+      "translation": "Solicitado",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_additional",
+      "translation": "Restablecer pasadas adicionales",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_additional_question",
+      "translation": "¿Restablecer los nueve perfiles de pasadas adicionales y desactivar Multipasada? La Pasada 1 y el número de pasadas permanecen sin cambios.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_pass",
+      "translation": "Restablecer pasada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_pass_question",
+      "translation": "¿Restablecer todos los ajustes de la Pasada %u? Las demás pasadas permanecen sin cambios.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.resolution",
+      "translation": "Resolución",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.settings",
+      "translation": "Configuración",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.shared_additional",
+      "translation": "Configuración compartida · pasadas adicionales",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.shared_look",
+      "translation": "El preajuste, el estilo y otros ajustes de imagen siguen a Renderizado.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.shared_scope",
+      "translation": "Se aplica a partir de la Pasada 2. La Pasada 1 permanece sin cambios.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.skin_follow",
+      "translation": "-1 sigue a Estructura local.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.skin_structure",
+      "translation": "Estructura de piel",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.strength_totals",
+      "translation": "Totales de intensidad",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.style",
+      "translation": "Estilo",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.unobserved",
+      "translation": "%u solicitadas | finalización no observada",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.unsupported",
+      "translation": "Multipasada requiere un adaptador Native o Present compatible.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.visible",
+      "translation": "Visible",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.zero",
+      "translation": "0 pasadas solicitadas. Efecto omitido; se conservan los recursos cargados.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.native-resolution.help",
+      "translation": "Ambas opciones usan las dimensiones de entrada nativas. La etapa seleccionada determina cuándo se ejecuta Neural Rendering.",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.native-resolution.post",
+      "translation": "Igualar nativa (después de Super Resolution)",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.native-resolution.pre",
+      "translation": "Igualar nativa (antes de Super Resolution)",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.native-resolution.unknown",
+      "translation": "Preferencia de resolución nativa desconocida",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
     },
@@ -21479,9 +23705,9 @@
     },
     {
       "id": "ingame.nr-diagnostics.last_recorded",
-      "translation": "Valores del propietario registrados por última vez · totales de sesión",
+      "translation": "Últimos valores reportados - totales de la sesión",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.nr-diagnostics.matched",
@@ -23452,6 +25678,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.pipeline.processing_order",
+      "translation": "Orden de procesamiento",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.preparedguidestatus.copyback_completed_30487a34",
       "translation": "Copia de retorno completada",
       "revision": 0,
@@ -24100,10 +26332,172 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.timing.callback_average_ms",
+      "translation": "Callback: %6.2f ms | Prom.: %6.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_detail",
+      "translation": "Promedio de callback de salida: %.2f ms. Los callbacks de FG pueden llegar en ráfagas.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_fps",
+      "translation": "FPS de callback: %6.1f",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_graph",
+      "translation": "Callbacks: %7.2f ms / %6.1f FPS",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_graph_compact",
+      "translation": "Callbacks: %.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.cpu_not_display",
+      "translation": "Temporización de CPU. Ritmo de pantalla no disponible.",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_callback_ms",
+      "translation": "Juego: %6.2f ms | Callback: %6.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_fps",
+      "translation": "FPS del juego: %6.1f",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_graph",
+      "translation": "Juego: %7.2f ms / %6.1f FPS",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_graph_compact",
+      "translation": "Juego: %.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_graph_waiting",
+      "translation": "Juego: esperando",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_waiting",
+      "translation": "FPS del juego: esperando",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "ingame.timing.upscaler_ms",
       "translation": "Escalador: %7.2f ms",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.timing.waiting_callback_ms",
+      "translation": "Juego: esperando | Callback: %6.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mfg-runtime-reason.waiting_for_dlss_g_callback_b0d7f0d4",
+      "translation": "esperando callback de DLSS-G",
+      "revision": 0,
+      "note": "Machine draft; native/fit review pending. Runtime-reason label, no hardware compatibility claim."
+    },
+    {
+      "id": "ingame.mfg-runtime-reason.dlss_g_callback_targets_differ_481c6cfb",
+      "translation": "los destinos de callback de DLSS-G difieren",
+      "revision": 0,
+      "note": "Machine draft; native/fit review pending. Runtime-reason label, no hardware compatibility claim."
+    },
+    {
+      "id": "ingame.mfg-runtime-reason.dlss_g_callback_tracking_unavailable_5cfd729e",
+      "translation": "seguimiento de callback de DLSS-G no disponible",
+      "revision": 0,
+      "note": "Machine draft; native/fit review pending. Runtime-reason label, no hardware compatibility claim."
+    },
+    {
+      "id": "ingame.nr-final-color.active",
+      "translation": "FG usa la imagen completa. La UI puede presentar ghosting.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.off-restoration-pending",
+      "translation": "NR desactivado. Restauración de UI pendiente. FG aún puede usar la imagen completa mientras espera nuevas entradas de UI del juego.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.restoration-pending",
+      "translation": "Restauración de UI pendiente. FG aún puede usar la imagen completa mientras espera nuevas entradas de UI del juego.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.fresh-game-ui-accepted",
+      "translation": "Últimas entradas de UI del juego reportadas: aceptadas.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.game-hudless-only",
+      "translation": "Últimas entradas de FG del juego reportadas: aceptadas sin búferes de UI separados.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.game-optional-cleared",
+      "translation": "Últimas entradas opcionales de UI para FG reportadas: retiradas por el juego.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.unsafe",
+      "translation": "Las entradas de FG cambiaron durante el envío de la salida. El resultado mostrado es desconocido.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.policy-pending",
+      "translation": "Esperando a que FG acepte la imagen completa. NR está en pausa.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.policy-changed",
+      "translation": "Las entradas de FG cambiaron antes de la salida de NR. NR está en pausa.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.provider-requirements",
+      "translation": "Present FG requiere un proveedor nativo detectado, un multiplicador fijo de 2x-6x y ajustes de cola compatibles.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.mixed-input.require_sources_help",
+      "translation": "Evitar la sustitución de fuentes. Si las entradas requeridas no están disponibles, NR se pausa.",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
     }
   ]
 }

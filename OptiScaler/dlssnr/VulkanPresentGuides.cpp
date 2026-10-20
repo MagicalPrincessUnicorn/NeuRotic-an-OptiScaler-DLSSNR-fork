@@ -234,6 +234,21 @@ std::shared_ptr<VkNrUseId> VulkanPresentGuides::HoldSelection(VkNrUseId use)
     return std::shared_ptr<VkNrUseId>(new VkNrUseId(use),[owner=&owner_](VkNrUseId* held){owner->RemoveConsumerHold(*held);owner->ReleaseUse(*held);delete held;});
 }
 std::optional<VkNrGuideLease> VulkanPresentGuides::Select(const VkNrFrameContract& f,const VkNrGuideSelection* selection,VkImage image)
+{ return SelectImpl(f,selection,image,true); }
+bool VulkanPresentGuides::SelectedLeaseCurrent(const VkNrFrameContract& f,const VkNrGuideSelection* selection,
+    VkImage image,const VkNrGuideLease& expected)
+{
+    // Association, live slot, exact producer receipt, device and queue rights
+    // are still authenticated by SelectImpl. Only future publication differs.
+    const auto current=SelectImpl(f,selection,image,false);
+    return current&&expected.selectionHold&&current->selectionHold==expected.selectionHold&&
+        *expected.selectionHold==expected.sourceUse&&current->slot==expected.slot&&
+        current->images==expected.images&&current->sourceUse==expected.sourceUse&&
+        current->producerSubmission==expected.producerSubmission&&current->producerQueue==expected.producerQueue&&
+        current->outputImage==expected.outputImage&&current->contract.evaluation==expected.contract.evaluation;
+}
+std::optional<VkNrGuideLease> VulkanPresentGuides::SelectImpl(const VkNrFrameContract& f,
+    const VkNrGuideSelection* selection,VkImage image,bool requirePublication)
 {
     selectionReason_="Physical Present has no authenticated selected-output association";
     if(!selection||selection->source_!=this||!image)return {};
@@ -248,7 +263,7 @@ std::optional<VkNrGuideLease> VulkanPresentGuides::Select(const VkNrFrameContrac
     if(!association)return {};
     auto lease=association->lease;
     if(!lease.slot||!lease.selectionHold){selectionReason_="Public backbuffer has no unique successful source evaluation";return {};}
-    const auto slot=std::find_if(slots_.begin(),slots_.end(),[&](const auto& s){return s.lease.slot==lease.slot&&s.ready&&s.published;});
+    const auto slot=std::find_if(slots_.begin(),slots_.end(),[&](const auto& s){return s.lease.slot==lease.slot&&s.ready&&(!requirePublication||s.published);});
     if(slot==slots_.end()){selectionReason_="Public guide packet publication was revoked";return {};}
     const auto proof=owner_.ProducerProof(lease.sourceUse);
     if(!proof||proof->deviceGeneration!=f.deviceGeneration||proof->submission!=lease.producerSubmission||proof->queue!=lease.producerQueue){

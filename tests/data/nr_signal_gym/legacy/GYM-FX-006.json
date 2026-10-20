@@ -1,0 +1,455 @@
+{
+  "schema_version": "1.0.0-provisional",
+  "fixture_id": "GYM-FX-006",
+  "title": "Double-applied motion scale",
+  "purpose": "Catch the case where motion samples are already in output pixels but non-unit conversion metadata would apply the render/output ratio again.",
+  "contract_status": "provisional_chat_d",
+  "coverage": [
+    "negative",
+    "semantic_corruption",
+    "boundary"
+  ],
+  "seed": "1001",
+  "identity": {
+    "session_id": "session-synthetic-0001",
+    "stream_id": "stream-main",
+    "view_id": "view-0",
+    "device_epoch": "1",
+    "swapchain_id": "swapchain-main",
+    "swapchain_generation": "1",
+    "frame_id": "frame-000100",
+    "native_eval_id": "native-eval-000100",
+    "present_interval_id": "present-000100",
+    "provider_frame_id": "provider-000100",
+    "recording_id": "recording-000100",
+    "route_generation": "route-native-1",
+    "plan_commit_ref": "C05:plan-native-1@1"
+  },
+  "environment": {
+    "api": "d3d12",
+    "runner_layers": [
+      "L0_schema",
+      "L1_semantic"
+    ],
+    "requires_gpu": false,
+    "requires_model": false,
+    "requires_game": false,
+    "provider_identity": "synthetic-provider-v1",
+    "adapter": "provisional SignalGym adapter; live symbol must be inspected before implementation",
+    "capability_fingerprint_ref": "CAP:not_observed"
+  },
+  "resources": [
+    {
+      "resource_ref": "color:g1",
+      "logical_resource_id": "color",
+      "generation": "1",
+      "allocation_id": "alloc-color:g1-1",
+      "api": "d3d12",
+      "dimension": "texture_2d",
+      "format": "R16G16B16A16_FLOAT",
+      "width": 1280,
+      "height": 720,
+      "sample_count": 1,
+      "mip_levels": 1,
+      "array_size": 1,
+      "subresource": {
+        "mip": 0,
+        "array_slice": 0,
+        "plane": 0
+      },
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "ownership": "synthetic",
+      "lifetime_state": "readable",
+      "payload": {
+        "kind": "procedural",
+        "generator": "translation_checkerboard",
+        "parameters": {
+          "pattern": "checkerboard",
+          "frame_delta_x": "2",
+          "frame_delta_y": "-1"
+        },
+        "license_id": "CC0-1.0",
+        "media_type": "application/x-neurotic-procedural-field"
+      }
+    },
+    {
+      "resource_ref": "motion:g1",
+      "logical_resource_id": "motion",
+      "generation": "1",
+      "allocation_id": "alloc-motion:g1-1",
+      "api": "d3d12",
+      "dimension": "texture_2d",
+      "format": "R16G16_FLOAT",
+      "width": 1280,
+      "height": 720,
+      "sample_count": 1,
+      "mip_levels": 1,
+      "array_size": 1,
+      "subresource": {
+        "mip": 0,
+        "array_slice": 0,
+        "plane": 0
+      },
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "ownership": "synthetic",
+      "lifetime_state": "readable",
+      "payload": {
+        "kind": "procedural",
+        "generator": "translation_checkerboard",
+        "parameters": {
+          "pattern": "checkerboard",
+          "frame_delta_x": "2",
+          "frame_delta_y": "-1"
+        },
+        "license_id": "CC0-1.0",
+        "media_type": "application/x-neurotic-procedural-field"
+      }
+    },
+    {
+      "resource_ref": "depth:g1",
+      "logical_resource_id": "depth",
+      "generation": "1",
+      "allocation_id": "alloc-depth:g1-1",
+      "api": "d3d12",
+      "dimension": "texture_2d",
+      "format": "R32_FLOAT",
+      "width": 1280,
+      "height": 720,
+      "sample_count": 1,
+      "mip_levels": 1,
+      "array_size": 1,
+      "subresource": {
+        "mip": 0,
+        "array_slice": 0,
+        "plane": 0
+      },
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "ownership": "synthetic",
+      "lifetime_state": "readable",
+      "payload": {
+        "kind": "procedural",
+        "generator": "translation_checkerboard",
+        "parameters": {
+          "pattern": "checkerboard",
+          "frame_delta_x": "2",
+          "frame_delta_y": "-1"
+        },
+        "license_id": "CC0-1.0",
+        "media_type": "application/x-neurotic-procedural-field"
+      }
+    },
+    {
+      "resource_ref": "output:g1",
+      "logical_resource_id": "output",
+      "generation": "1",
+      "allocation_id": "alloc-output:g1-1",
+      "api": "d3d12",
+      "dimension": "texture_2d",
+      "format": "R16G16B16A16_FLOAT",
+      "width": 1920,
+      "height": 1080,
+      "sample_count": 1,
+      "mip_levels": 1,
+      "array_size": 1,
+      "subresource": {
+        "mip": 0,
+        "array_slice": 0,
+        "plane": 0
+      },
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "ownership": "neurotic_owned",
+      "lifetime_state": "initialized",
+      "payload": {
+        "kind": "none"
+      }
+    }
+  ],
+  "signals": {
+    "color": {
+      "resource_ref": "color:g1",
+      "representation": "linear_hdr",
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      }
+    },
+    "motion": {
+      "resource_ref": "motion:g1",
+      "direction": "current_to_previous",
+      "space": "render_pixels",
+      "scale_x": {
+        "state": "known",
+        "decimal": "1.5",
+        "f32_bits_hex": "3fc00000",
+        "unit": "output_pixels_per_render_pixel"
+      },
+      "scale_y": {
+        "state": "known",
+        "decimal": "1.5",
+        "f32_bits_hex": "3fc00000",
+        "unit": "output_pixels_per_render_pixel"
+      },
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "provenance_frame_id": "frame-000100"
+    },
+    "depth": {
+      "resource_ref": "depth:g1",
+      "convention": "reversed_z",
+      "range": "zero_to_one",
+      "active_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "provenance_frame_id": "frame-000100"
+    },
+    "jitter": {
+      "x": {
+        "state": "known",
+        "decimal": "0.125",
+        "f32_bits_hex": "3e000000",
+        "unit": "render_pixels"
+      },
+      "y": {
+        "state": "known",
+        "decimal": "-0.25",
+        "f32_bits_hex": "be800000",
+        "unit": "render_pixels"
+      },
+      "space": "render_pixels",
+      "phase_index": 3,
+      "sequence_length": 8,
+      "provenance_frame_id": "frame-000100"
+    },
+    "exposure": {
+      "mode": "auto",
+      "resource_ref": null,
+      "value": {
+        "state": "not_applicable",
+        "reason_id": "SEM.EXPOSURE_AUTO"
+      },
+      "provenance_frame_id": "frame-000100"
+    },
+    "creation_flags": {
+      "mv_low_res": "true",
+      "mv_jittered": "false",
+      "depth_inverted": "true",
+      "auto_exposure": "true",
+      "hdr": "true"
+    },
+    "reset": {
+      "requested": false,
+      "reason_id": "SEM.RESET_NONE",
+      "acknowledged": "not_applicable"
+    }
+  },
+  "events": [
+    {
+      "event_index": 0,
+      "logical_tick": 0,
+      "event_type": "feed_observed",
+      "actor": "FEED-001",
+      "target_ref": "bundle:raw",
+      "frame_id": "frame-000100",
+      "details": {
+        "observation": "complete_candidate_bundle"
+      }
+    },
+    {
+      "event_index": 1,
+      "logical_tick": 1,
+      "event_type": "context_built",
+      "actor": "CTX",
+      "target_ref": "bundle:context",
+      "frame_id": "frame-000100",
+      "details": {
+        "coherence": "candidate"
+      }
+    },
+    {
+      "event_index": 2,
+      "logical_tick": 2,
+      "event_type": "signals_normalized",
+      "actor": "SEM",
+      "target_ref": "bundle:normalized",
+      "frame_id": "frame-000100",
+      "details": {
+        "contract": "SEM-provisional"
+      }
+    },
+    {
+      "event_index": 3,
+      "logical_tick": 3,
+      "event_type": "validation_requested",
+      "actor": "GYM",
+      "target_ref": "bundle:normalized",
+      "frame_id": "frame-000100",
+      "details": {
+        "validator": "production_adapter"
+      }
+    },
+    {
+      "event_index": 4,
+      "logical_tick": 4,
+      "event_type": "admission_requested",
+      "actor": "ORCH-002",
+      "target_ref": "route-native-1",
+      "frame_id": "frame-000100",
+      "details": {
+        "plan_commit_ref": "C05:plan-native-1@1"
+      }
+    },
+    {
+      "event_index": 5,
+      "logical_tick": 5,
+      "event_type": "admission_decided",
+      "actor": "ORCH-002",
+      "target_ref": "route-native-1",
+      "frame_id": "frame-000100",
+      "details": {
+        "decision": "fixture_expected"
+      }
+    },
+    {
+      "event_index": 6,
+      "logical_tick": 6,
+      "event_type": "handoff_prepared",
+      "actor": "RENDER",
+      "target_ref": "recording:frame-000100",
+      "frame_id": "frame-000100",
+      "details": {}
+    },
+    {
+      "event_index": 7,
+      "logical_tick": 7,
+      "event_type": "handoff_accepted",
+      "actor": "LIFE",
+      "target_ref": "recording:frame-000100",
+      "frame_id": "frame-000100",
+      "details": {}
+    }
+  ],
+  "expected": {
+    "normalization": {
+      "status": "provisional",
+      "reason_ids": [
+        "SEM.MV_SCALE_DOUBLE_APPLICATION"
+      ],
+      "allowed_statuses": [
+        "refused",
+        "accepted_with_transform"
+      ],
+      "forbidden_statuses": [
+        "accepted"
+      ],
+      "contract_basis": "provisional_chat_d",
+      "normalized_fields": {},
+      "conditions": [
+        "Reconcile exact transform/refusal choice and reason ID with Chat D SEM contract."
+      ]
+    },
+    "admission": {
+      "status": "provisional",
+      "reason_ids": [],
+      "allowed_statuses": [
+        "refused",
+        "admit"
+      ],
+      "forbidden_statuses": [],
+      "contract_basis": "provisional_chat_d",
+      "normalized_fields": {},
+      "conditions": [
+        "Admit only after a verified transform; otherwise refuse."
+      ]
+    },
+    "handoff": {
+      "status": "provisional",
+      "reason_ids": [],
+      "allowed_statuses": [
+        "accepted",
+        "not_reached"
+      ],
+      "forbidden_statuses": [],
+      "contract_basis": "provisional_chat_d",
+      "normalized_fields": {},
+      "conditions": []
+    },
+    "completion": {
+      "status": "not_executed",
+      "reason_ids": [
+        "GYM.RUNTIME_NOT_EXECUTED"
+      ],
+      "allowed_statuses": [],
+      "forbidden_statuses": [],
+      "contract_basis": "runtime_only",
+      "normalized_fields": {},
+      "conditions": []
+    },
+    "oracle_expectations": [
+      {
+        "oracle_id": "GYM-ORACLE-PROVISIONAL-SEM",
+        "oracle_type": "metamorphic",
+        "assertion": "The corrupted record may be refused or explicitly transformed under Chat D; silent accepted-unchanged is forbidden (SEM.MV_SCALE_DOUBLE_APPLICATION).",
+        "severity": "hard"
+      },
+      {
+        "oracle_id": "GYM-ORACLE-DISPLACEMENT",
+        "oracle_type": "exact",
+        "assertion": "Normalized displacement must match the procedural two-pixel translation, not three pixels.",
+        "severity": "hard"
+      }
+    ],
+    "runtime_only_assertions": [
+      "No lower-layer result establishes proprietary-model quality."
+    ]
+  },
+  "applicable_mutations": [
+    "GYM-MUT-003",
+    "GYM-MUT-004",
+    "GYM-MUT-015"
+  ],
+  "provenance": {
+    "synthetic": true,
+    "contains_game_assets": false,
+    "contains_model_binary": false,
+    "contains_personal_data": false,
+    "license_ids": [
+      "CC0-1.0",
+      "NeuRotic-project-design-artifact"
+    ],
+    "evidence_refs": [
+      "EVID-BUNDLE-SOURCE-MAP",
+      "EVID-CHAT-E-CHARTER"
+    ],
+    "capture_policy": "synthetic_only"
+  },
+  "notes": []
+}

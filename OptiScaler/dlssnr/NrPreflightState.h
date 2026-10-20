@@ -2,7 +2,16 @@
 
 namespace NrPreflightState
 {
-enum class State { Inactive, Ready, Fault, Detected };
+enum class State { Inactive, Ready, Fault, Detected, Pending, Off, NotApplicable, Usable, Consumed, Stale, Unavailable, NotReported };
+inline const char* Name(State state) noexcept {
+    switch(state){case State::Ready:case State::Consumed:return "Consumed (completed receipt)";
+    case State::Detected:return "Detected";case State::Usable:return "Validated, not consumed";
+    case State::NotReported:return "Not reported";
+    case State::Pending:return "Pending initialization / runtime";case State::Off:return "Off";
+    case State::NotApplicable:return "Not applicable";case State::Stale:return "Stale";
+    case State::Fault:return "Invalid or blocked";case State::Unavailable:return "Unavailable";
+    default:return "No current signal";}
+}
 
 // Observation and consumption are separate facts. A valid detected input only
 // turns green when the effective owner reports that it is in use.

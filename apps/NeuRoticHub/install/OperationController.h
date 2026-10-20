@@ -13,6 +13,8 @@ std::wstring Quote(const std::wstring& value);
 struct ProcessJob {
  private:
  std::string antiCheatApproval;
+ void ObserveCompletion(const Json& receipt);
+ bool readOnlyCancelled=false;
  uint64_t progressOffset=0;
  std::string progressPartial;
  int64_t progressDone=-1,progressTotal=-1;
@@ -36,5 +38,7 @@ struct ProcessJob {
  void StartDiscovery(const Json& payload=Json{{"protocolVersion",2},{"kind","DiscoverGames"}});
  void Cancel();
  bool Poll(Json& value);
+ // Called by the Hub after all receipt consumers and pending-plan registration.
+ void AcknowledgeCompleted() noexcept;
 };
 }

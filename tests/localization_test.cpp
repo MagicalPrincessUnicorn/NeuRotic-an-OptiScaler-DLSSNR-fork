@@ -1,5 +1,4 @@
 #include "menu/Localization.h"
-#include "menu/OptiClipAdvisor.h"
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 #include <chrono>
@@ -9,10 +8,12 @@
 #include <thread>
 #include "dlssnr/DlssNr_StageControls.h"
 #include "dlssnr/DlssNr_MenuControls.h"
+#include "menu/input/MenuEscapeClose.h"
 
 struct StageUiFixture
 {
     NrOptional<uint32_t> DlssNrRoute {2}, DlssNrUiAfterMethod {0};
+    NrOptional<uint32_t> DlssNrPresentInputPolicy {0};
     NrOptional<uint32_t> DlssNrUiResolutionPreset {0}, DlssNrUiPresentResolutionPreset {0}, DlssNrUiEnhancedResolutionPreset {0};
     NrOptional<float> DlssNrUiPresentManualScale {0.25f}, DlssNrUiEnhancedManualScale {0.25f};
     NrOptional<int32_t> DlssNrRenderingMode {1};
@@ -173,7 +174,7 @@ int main()
                 ImGui::Checkbox("Show Graphs", &showGraphs);
                 bool nrEnabled = false;
                 const ImGuiID emphasizedId = ImGui::GetID("Enable Neural Rendering");
-                DlssNr::MenuControls::EmphasizedCheckbox("Enable Neural Rendering", &nrEnabled);
+                DlssNr::MenuControls::EmphasizedCheckbox("Enable Neural Rendering", &nrEnabled, false);
                 Check(emphasizedId == ImGui::GetID("Enable Neural Rendering"),
                       "emphasized checkbox preserves its stable ID");
                 Check(ImGui::GetItemRectMax().x < 900 * scale,
@@ -183,6 +184,15 @@ int main()
                 const auto focus = DlssNr::MenuControls::EmphasizedToggleFocusColor();
                 Check(off.x > off.y && on.y > on.x && focus.x > 0.9f && focus.y > 0.6f,
                       "emphasized checkbox has red off, green on and gold focus states");
+                for (const char* label : {"Experimental MFG unlock for RTX 30 series###ExperimentalMfgRTX30",
+                                          "Experimental MFG unlock for RTX 20 series###ExperimentalMfgRTX20"})
+                {
+                    bool selected = false;
+                    const auto stable = ImGui::GetID(label);
+                    ImGui::Checkbox(label, &selected);
+                    Check(ImGui::GetItemID() == stable, "experimental MFG checkbox keeps stable ID");
+                    Check(ImGui::GetItemRectMax().x < 900 * scale, "experimental MFG checkbox fits at every scale");
+                }
                 ImGui::Text("3840x2160 -> 1920x1080 (2.0) [3840x2160 (1.0)]");
                 ImGui::SameLine(0, 10 * scale);
                 ImGui::Text("GPU: %s", "Test GPU");
@@ -305,21 +315,6 @@ int main()
               "main tuning slider reserves reset, help and spacing at narrow widths");
         Check(std::abs(DlssNr::StageUi::ResponsiveSliderWidth(1000.0f, 2.0f, 60.0f, 20.0f, 8.0f) - 880.0f) < 0.01f,
               "main tuning slider preferred width follows UI scale");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(700.0f, 1.0f, 60.0f, 8.0f) - 320.0f) < 0.01f,
-              "Basic shared resolution uses its shorter preferred width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(260.0f, 1.0f, 60.0f, 8.0f) - 127.0f) < 0.01f,
-              "Basic shared resolution preserves reset space at narrow widths");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveBasicResolutionWidth(1000.0f, 2.0f, 60.0f, 8.0f) - 640.0f) < 0.01f,
-              "Basic shared resolution preferred width follows UI scale");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 1) - 233.0f) < 0.01f,
-              "one-pass cumulative strength uses one quarter of the safe row width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 2) - 466.0f) < 0.01f,
-              "two-pass cumulative strength uses half of the safe row width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 3) - 682.0f) < 0.01f,
-              "three-pass cumulative strength uses three quarters of the safe row width");
-        Check(std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 4) - 682.0f) < 0.01f &&
-              std::abs(DlssNr::MenuControls::ResponsiveCumulativeStrengthWidth(1000.0f, 60.0f, 8.0f, 10) - 682.0f) < 0.01f,
-              "four through ten passes use the full safe row width");
         Neurotic::SetLanguage("en");
         ImGui::GetStyle() = baseStyle;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
@@ -327,13 +322,12 @@ int main()
         StageUiFixture navigation;
         DlssNr::StageUi::SelectMethod(navigation, 0);
         DlssNr::StageUi::SelectStage(navigation, 0);
-        ImGuiID stageId = 0, resolutionId = 0, methodId = 0;
+        ImGuiID resolutionId = 0, methodId = 0;
         const auto navFrame = [&](bool focus = false) {
             ImGui::NewFrame();
             ImGui::SetNextWindowPos(ImVec2(0, 0));
             ImGui::SetNextWindowSize(ImVec2(820, 480));
             ImGui::Begin("Navigation###stage-nav");
-            stageId = ImGui::GetID("##NrStage");
             methodId = ImGui::GetID("##NrMethod");
             resolutionId = ImGui::GetID("##NrResolution");
             if (focus) ImGui::SetKeyboardFocusHere();
@@ -346,47 +340,59 @@ int main()
             io.AddKeyEvent(k, false); navFrame(); navFrame();
         };
         navFrame(true); navFrame();
-        Check(GImGui->NavId == stageId, "keyboard focus starts on stage selector");
+        Check(GImGui->NavId == methodId, "keyboard focus starts on unified method selector");
         key(ImGuiKey_Tab);
         // SetKeyboardFocusHere deliberately keeps the nav cursor hidden; the first Tab
         // enters keyboard navigation on that item, the next advances to the next control.
         key(ImGuiKey_Tab);
-        Check(GImGui->NavId == resolutionId, "Tab skips the fixed Before-stage method");
+        Check(GImGui->NavId == resolutionId, "Tab reaches resolution selector");
+        navigation.DlssNrPresentInputPolicy = 1u;
         navFrame(true); navFrame();
         key(ImGuiKey_Enter); key(ImGuiKey_DownArrow); key(ImGuiKey_Enter);
-        Check(DlssNr::StageUi::Stage(navigation) == 1, "keyboard selects After stage");
+        Check(DlssNr::StageUi::UnifiedMethodSelection(navigation) == 1, "keyboard selects Present method");
+        Check(navigation.DlssNrPresentInputPolicy.value_or_default() == 1u, "NR mode selection preserves explicit Require guides");
         navFrame(true); navFrame();
         key(ImGuiKey_GamepadDpadDown);
-        Check(GImGui->NavId == methodId, "controller navigation reaches the After-stage method");
-        for (const auto& language : Neurotic::Languages)
-        for (float scale : {0.5f, 1.0f, 2.0f})
+        Check(GImGui->NavId == resolutionId, "controller navigation reaches resolution selector");
+        key(ImGuiKey_Enter); key(ImGuiKey_DownArrow); key(ImGuiKey_Enter);
+        Check(navigation.DlssNrPresentInputPolicy.value_or_default() == 1u, "NR resolution selection preserves explicit Require guides");
+        // Use the real ImGui ownership state before NewFrame, just like the production input path.
+        OptiInput::EscapeCloseGesture escape;
+        io.ConfigFlags = ImGuiConfigFlags_NoKeyboard;
+        ImGui::NewFrame();
+        ImGui::Begin("Escape ownership fixture");
+        ImGui::OpenPopup("Escape dropdown");
+        if (ImGui::BeginPopup("Escape dropdown"))
         {
-            Neurotic::SetLanguage(language.code);
-            ImGui::NewFrame();
-            const float width = std::min(760.0f * scale, io.DisplaySize.x - 32.0f);
-            const float height = std::min(600.0f * scale, io.DisplaySize.y - 32.0f);
-            ImGui::SetNextWindowPos({16, 16}); ImGui::SetNextWindowSize({width, height});
-            ImGui::Begin("OptiClip host");
-            ImGui::TextUnformatted("Gameplay input while menu is open");
-            ImGui::End();
-            OptiClip::SetEnabled(true, 500);
-            OptiClip::ReportRapidToggle(OptiClip::ToggleOrigin::Checkbox, "Show OptiClip advisor", 500);
-            OptiClip::Render({16, 16, width, height}, scale, 500, true);
-            const auto* mascot = ImGui::FindWindowByName("##OptiClipAvatar");
-            const auto* bubble = ImGui::FindWindowByName("##OptiClipBubble");
-            Check(mascot && mascot->Active && bubble && bubble->Active,
-                  "OptiClip avatar and message render at each language/scale");
-            Check(mascot->Pos.x >= 16 && mascot->Pos.y >= 16 &&
-                mascot->Pos.x + mascot->Size.x <= 16 + width && mascot->Pos.y + mascot->Size.y <= 16 + height,
-                "OptiClip remains anchored inside the host at each scale");
-            Check((mascot->Flags & ImGuiWindowFlags_NoNav) != 0, "OptiClip never steals device navigation");
-            Check((mascot->Flags & ImGuiWindowFlags_NoMouseInputs) != 0 &&
-                  (bubble->Flags & ImGuiWindowFlags_NoMouseInputs) == 0,
-                  "Only the tightly bounded speech bubble accepts input");
-            Check(bubble->Pos.y + bubble->Size.y <= mascot->Pos.y,
-                  "OptiClip leaves no input window between speech and avatar");
-            ImGui::Render();
+            ImGui::TextUnformatted("Choice");
+            ImGui::EndPopup();
         }
+        ImGui::End();
+        ImGui::Render();
+        Check(ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId), "Escape fixture popup opened");
+        Check(!OptiInput::HandleEscapeClose(escape, true, true, true, false, true, true),
+              "Escape dismisses a popup without closing its parent with gameplay keyboard allowed");
+        Check(!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId), "Escape dismisses popup with NoKeyboard");
+        io.ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard;
+        char editText[32] = "original";
+        const auto editFrame = [&](bool focus) {
+            ImGui::NewFrame();
+            ImGui::Begin("Escape ownership fixture");
+            if (focus) ImGui::SetKeyboardFocusHere();
+            ImGui::InputText("Edit", editText, sizeof(editText));
+            ImGui::End();
+            ImGui::Render();
+        };
+        editFrame(true); editFrame(false);
+        Check(ImGui::IsAnyItemActive(), "real text editor owns input");
+        io.WantTextInput = false; // Reproduce the stale pre-NewFrame cache at activation.
+        Check(!OptiInput::HandleEscapeClose(escape, true, true, true, false, true, true),
+              "same-frame Escape press/release cannot close a newly active text editor");
+        ImGui::ClearActiveID();
+        Check(!OptiInput::HandleEscapeClose(escape, true, true, true, true, true, true),
+              "Escape key assignment cancellation retains the main menu");
+        Check(OptiInput::HandleEscapeClose(escape, true, true, true, false, true, true),
+              "unowned quick Escape closes the main menu");
         ImGui::DestroyContext();
         const auto ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();

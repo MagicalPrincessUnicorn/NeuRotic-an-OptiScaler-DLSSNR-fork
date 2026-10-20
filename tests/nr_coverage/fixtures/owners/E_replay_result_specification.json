@@ -1,0 +1,52 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ReplayResult",
+  "case_id": "GYM-SEED-001",
+  "case_input_sha256": "3489fbaaae27f9bbb38738754df48bf76c5d3c7ae06f602e3ea52cb7986b6000",
+  "expectations_sha256": "6b423049aeda13c3af17fd5f80eae184fc22fdc525711a1e8a98eb8c67d072b1",
+  "overlay_sha256": {
+    "state": "not_observed",
+    "reason_id": "GYM.NO_OVERLAY"
+  },
+  "execution_status": "NOT_READY",
+  "layers": [
+    {
+      "layer": "L0",
+      "status": "NOT_RUN",
+      "reason_id": "GYM.SPECIFICATION_EXAMPLE"
+    },
+    {
+      "layer": "L1",
+      "status": "NOT_RUN",
+      "reason_id": "GYM.SPECIFICATION_EXAMPLE"
+    }
+  ],
+  "deterministic": {
+    "transport": {},
+    "operations": {},
+    "closeout": {},
+    "mismatches": [],
+    "capture_gaps": [],
+    "qualified_check_count": 0,
+    "decision_check_count": 0,
+    "transport_check_count": 0
+  },
+  "behavior_sha256": "00b6182fd7e755f994bbc99775438b88a211c19c79d2067c525b34819b995da6",
+  "run_provenance": {
+    "evidence_kind": "specification_example",
+    "source_commit": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "source_dirty": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "adapter_build_hashes": [],
+    "observations_path": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "runtime_qualification": "NOT_RUN"
+  }
+}

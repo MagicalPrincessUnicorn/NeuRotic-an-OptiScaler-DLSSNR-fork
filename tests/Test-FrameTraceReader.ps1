@@ -1,6 +1,7 @@
+param([string]$FixtureRoot = (Join-Path $PSScriptRoot '..\builds\frame-trace-reader-fixtures'))
 $ErrorActionPreference = 'Stop'
-$root = Join-Path 'C:\OptiScaler-NR-Dev\logs' ('frame-trace-reader-fixtures-' + [Guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $root | Out-Null
+$root = [IO.Path]::GetFullPath($FixtureRoot)
+New-Item -ItemType Directory -Force -Path $root | Out-Null
 $reader = Join-Path $PSScriptRoot '..\tools\diagnostics\Read-FrameTrace.ps1'
 $session = '0123456789abcdef0123456789abcdef'
 $manifestPath = Join-Path $root 'manifest.json'
@@ -30,4 +31,11 @@ Run-Case 'mixed-process' ($first + "`n" + $second.Replace('pid=1','pid=3')) $tru
 Run-Case 'gap' $second $false
 $gap = Get-Content (Join-Path $root 'gap\TRACE-MANIFEST.json') -Raw | ConvertFrom-Json
 if ($gap.issues.Count -ne 1) { throw 'Gap not reported.' }
+Run-Case 'prepared-depth' ($first.Replace('kind=probe classification=unknown value=1',
+    'kind=nr-prepared-depth-decision classification=unknown guideVersion=1 generation=2 id=3 decision=1 allocated=true copyRecorded=true')) $false
+$prepared = Get-Content (Join-Path $root 'prepared-depth\TRACE-MANIFEST.json') -Raw | ConvertFrom-Json
+$preparedRows = @(Import-Csv (Join-Path $root 'prepared-depth\events.csv'))
+if ($prepared.result -ne 'Inconclusive' -or $preparedRows[0].details -notmatch 'copyRecorded=true') {
+    throw 'Prepared depth raw evidence was lost or promoted to qualification.'
+}
 Write-Host "PASS: raw retention, sorting, input immutability, duplicate/session/clock/schema failures, gaps. Fixtures: $root"

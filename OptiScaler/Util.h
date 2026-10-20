@@ -29,6 +29,9 @@ struct Luid
     auto operator<=>(const Luid&) const = default;
 };
 
+// Consuming DLL startup modes validate both roots before any config/hook consumer.
+// On failure, no cache is published and GetLastError retains the cause.
+bool InitializeModulePaths(HMODULE module) noexcept;
 std::filesystem::path ExePath();
 std::filesystem::path DllPath();
 std::optional<std::filesystem::path> NvngxPath();

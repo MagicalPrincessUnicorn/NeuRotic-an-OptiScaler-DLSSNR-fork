@@ -6,11 +6,172 @@
 #include <dxgi1_4.h>
 #include <d3d12sdklayers.h>
 #include <cassert>
+#include <dlssnr/NrSignalReceipts.h>
 #include <cstdio>
+#include "nr_streamline_proxy_fixture.h"
+#include "nr_reshade_device_fixture.h"
 
 using Microsoft::WRL::ComPtr;
 namespace Safety = DlssNr::GpuSafety;
 static void Check(HRESULT hr) { assert(SUCCEEDED(hr)); }
+
+// Reproduce ReShade GetDevice at the actual list/queue boundary while keeping
+// real WARP recording/submission/reset operations and production safety hooks.
+static HRESULT (STDMETHODCALLTYPE* originalDeviceQuery)(ID3D12DeviceChild*, REFIID, void**) = nullptr;
+static ID3D12DeviceChild* aliasList = nullptr;
+static ID3D12DeviceChild* aliasQueue = nullptr;
+static ID3D12Device* aliasDevice = nullptr;
+static unsigned aliasListQueries = 0, aliasQueueQueries = 0;
+static HRESULT STDMETHODCALLTYPE DeviceQuery(ID3D12DeviceChild* child, REFIID id, void** out)
+{
+    if (child == aliasList || child == aliasQueue)
+    {
+        if (child == aliasList) ++aliasListQueries; else ++aliasQueueQueries;
+        return aliasDevice->QueryInterface(id, out);
+    }
+    return originalDeviceQuery(child, id, out);
+}
+
+// An owning base-interface QI may return IUnknown through multiple layers;
+// callers must resolve the requested fence interface before using its methods.
+class FenceAlias final : public ID3D12Fence
+{
+    std::atomic<ULONG> refs {1};
+    ComPtr<ID3D12Fence> fence;
+    ComPtr<IUnknown> base;
+public:
+    FenceAlias(ID3D12Fence* value, IUnknown* identity) : fence(value), base(identity) {}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override
+    {
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        if (id == DlssNr::NativeIdentity::streamlineBase)
+            return base->QueryInterface(__uuidof(IUnknown), out);
+        if (id == __uuidof(IUnknown) || id == __uuidof(ID3D12Object) ||
+            id == __uuidof(ID3D12DeviceChild) || id == __uuidof(ID3D12Pageable) || id == __uuidof(ID3D12Fence))
+        { *out = this; AddRef(); return S_OK; }
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++refs; }
+    ULONG STDMETHODCALLTYPE Release() override { const auto n = --refs; if (!n) delete this; return n; }
+    HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID g, UINT* s, void* d) override { return fence->GetPrivateData(g,s,d); }
+    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID g, UINT s, const void* d) override { return fence->SetPrivateData(g,s,d); }
+    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID g, const IUnknown* d) override { return fence->SetPrivateDataInterface(g,d); }
+    HRESULT STDMETHODCALLTYPE SetName(LPCWSTR n) override { return fence->SetName(n); }
+    HRESULT STDMETHODCALLTYPE GetDevice(REFIID id, void** out) override { return fence->GetDevice(id,out); }
+    UINT64 STDMETHODCALLTYPE GetCompletedValue() override { return fence->GetCompletedValue(); }
+    HRESULT STDMETHODCALLTYPE SetEventOnCompletion(UINT64 v, HANDLE e) override { return fence->SetEventOnCompletion(v,e); }
+    HRESULT STDMETHODCALLTYPE Signal(UINT64 v) override { return fence->Signal(v); }
+};
+
+static void TestMfgWaits(ID3D12Device* device)
+{
+    namespace P = DlssNr::PreFg;
+    for (auto type : {D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_TYPE_COMPUTE})
+    for (unsigned generated = 1; generated <= 5; ++generated)
+    for (auto format : {DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R10G10B10A2_UNORM})
+    for (bool sharedList : {false,true})
+    for (bool retiring : {false,true})
+    {
+        ComPtr<ID3D12CommandQueue> queue;
+        D3D12_COMMAND_QUEUE_DESC desc {}; desc.Type=type;
+        Check(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue)));
+        ComPtr<ID3D12Fence> producer, finished;
+        Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&producer)));
+        Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&finished)));
+        std::array<ComPtr<ID3D12CommandAllocator>,5> allocators;
+        std::array<ComPtr<ID3D12GraphicsCommandList>,5> lists;
+        const unsigned listCount=sharedList ? 1 : generated;
+        for (unsigned i=0;i<listCount;++i) {
+            Check(device->CreateCommandAllocator(type,IID_PPV_ARGS(&allocators[i])));
+            Check(device->CreateCommandList(0,type,allocators[i].Get(),nullptr,IID_PPV_ARGS(&lists[i])));
+        }
+        ComPtr<ID3D12Resource> carrier;
+        D3D12_RESOURCE_DESC carrierDesc {}; carrierDesc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        carrierDesc.Width=16; carrierDesc.Height=16; carrierDesc.DepthOrArraySize=1; carrierDesc.MipLevels=1;
+        carrierDesc.Format=format; carrierDesc.SampleDesc.Count=1;
+        D3D12_HEAP_PROPERTIES carrierHeap {}; carrierHeap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        Check(device->CreateCommittedResource(&carrierHeap,D3D12_HEAP_FLAG_NONE,&carrierDesc,
+            D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&carrier)));
+        auto* resource=carrier.Get();
+        P::CompletionLedger ledger;
+        const auto packet=ledger.Reserve(resource,3,4,5,100,101,P::CompletionKind::Probe,nullptr,true);
+        assert(packet && ledger.Commit(packet,resource,producer.Get(),1,P::CompletionKind::Probe));
+        const auto aggregate=ledger.Status(packet);
+        P::StartupReadiness readiness;
+        P::ReadinessIdentity identity {}; identity.provider=3;
+        assert(readiness.Submit(identity,producer.Get(),1,101,aggregate));
+        readiness.Presented(101,true);
+        std::shared_ptr<Safety::ExternalWaitStatus> last;
+        for (unsigned child=1;child<=generated;++child) {
+            if (retiring && child==2) ledger.CloseAdmission();
+            const auto claim=ledger.Claim(resource,retiring && child>1?9:3,4,5,100,101,generated,child);
+            assert(claim.result==P::CompletionClaimResult::Ready);
+            last=claim.dependency.status;
+            assert(Safety::BindExternalWait(lists[sharedList?0:child-1].Get(),producer.Get(),1,100,101,last));
+            assert(aggregate->bound==(child==generated));
+            assert(!readiness.Poll(identity,device,102));
+        }
+        for (unsigned i=0;i<listCount;++i) {
+            Check(lists[i]->Close());
+            ID3D12CommandList* batch[]={lists[i].Get()};
+            queue->ExecuteCommandLists(1,batch);
+            assert(aggregate->applied==(i+1==listCount));
+        }
+        assert(!readiness.Poll(identity,device,102)); // all waits applied, producer incomplete
+        Check(queue->Signal(finished.Get(),1));
+        assert(finished->GetCompletedValue()==0);
+        Check(producer->Signal(1));
+        HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr); assert(event);
+        Check(finished->SetEventOnCompletion(1,event));
+        assert(WaitForSingleObject(event,5000)==WAIT_OBJECT_0);
+        assert(readiness.Poll(identity,device,102));
+        // Replaying a recording reapplies its wait without double-counting children.
+        for (unsigned i=0;i<listCount;++i) {
+            ID3D12CommandList* batch[]={lists[i].Get()};
+            queue->ExecuteCommandLists(1,batch);
+        }
+        Check(queue->Signal(finished.Get(),2));
+        Check(finished->SetEventOnCompletion(2,event));
+        assert(WaitForSingleObject(event,5000)==WAIT_OBJECT_0);
+        CloseHandle(event);
+        assert(!aggregate->failed && readiness.Ready());
+        // An ordinary duplicate is still refused and poisons readiness.
+        assert(!Safety::BindExternalWait(lists[sharedList?0:generated-1].Get(),producer.Get(),1,100,101,last));
+        assert(aggregate->failed && !readiness.Poll(identity,device,103));
+        for (unsigned i=0;i<listCount;++i) Check(lists[i]->Reset(allocators[i].Get(),nullptr));
+        // Reset of an unsubmitted MFG group must fail every sibling's proof.
+        P::CompletionLedger canceled;
+        const auto canceledPacket=canceled.Reserve(resource,3,4,5,200,201,P::CompletionKind::Probe,nullptr,true);
+        assert(canceled.Commit(canceledPacket,resource,producer.Get(),2));
+        for (unsigned child=1;child<=generated;++child) {
+            auto claim=canceled.Claim(resource,3,4,5,200,201,generated,child);
+            assert(Safety::BindExternalWait(lists[0].Get(),producer.Get(),2,200,201,claim.dependency.status));
+        }
+        assert(canceled.Status(canceledPacket)->bound && !canceled.Status(canceledPacket)->applied);
+        Check(lists[0]->Close()); Check(lists[0]->Reset(allocators[0].Get(),nullptr));
+        assert(canceled.Status(canceledPacket)->failed);
+        for (unsigned i=0;i<listCount;++i) Check(lists[i]->Close());
+        // A later child cannot inherit proof from an already submitted recording.
+        Check(lists[0]->Reset(allocators[0].Get(),nullptr));
+        P::CompletionLedger late;
+        const auto latePacket=late.Reserve(resource,3,4,5,300,301,P::CompletionKind::Probe,nullptr,true);
+        assert(late.Commit(latePacket,resource,producer.Get(),1));
+        const auto first=late.Claim(resource,3,4,5,300,301,2,1);
+        assert(Safety::BindExternalWait(lists[0].Get(),producer.Get(),1,300,301,first.dependency.status));
+        Check(lists[0]->Close());
+        ID3D12CommandList* submitted[]={lists[0].Get()};
+        queue->ExecuteCommandLists(1,submitted);
+        const auto lateChild=late.Claim(resource,3,4,5,300,301,2,2);
+        assert(!Safety::BindExternalWait(lists[0].Get(),producer.Get(),1,300,301,lateChild.dependency.status));
+        assert(late.Status(latePacket)->failed && !late.Status(latePacket)->applied);
+        Check(queue->Signal(finished.Get(),3));
+        event=CreateEventW(nullptr,FALSE,FALSE,nullptr); assert(event);
+        Check(finished->SetEventOnCompletion(3,event));
+        assert(WaitForSingleObject(event,5000)==WAIT_OBJECT_0); CloseHandle(event);
+    }
+    std::puts("PASS: MFG 2x-6x FP16/R10 DIRECT/COMPUTE, shared/separate lists, delayed GPU, aggregate readiness, replay, duplicate and canceled group");
+}
 
 int main()
 {
@@ -24,6 +185,24 @@ int main()
     Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp)));
     Check(D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device)));
+    // The fence and FG list may expose different wrapper layers for one device.
+    // Exercise the production comparison used at both bind and queue execution.
+    ComPtr<IdentityProxy> deviceAlias, nestedAlias;
+    deviceAlias.Attach(new IdentityProxy(device.Get()));
+    nestedAlias.Attach(new IdentityProxy(deviceAlias.Get()));
+    const auto aliasRefs = deviceAlias->References();
+    assert(Safety::SameDevice(nestedAlias.Get(), device.Get()));
+    assert(Safety::SameDevice(device.Get(), nestedAlias.Get()));
+    assert(deviceAlias->References() == aliasRefs);
+    assert(!Safety::SameDevice(nullptr, device.Get()));
+    for (auto mode : {IdentityProxy::NullBase, IdentityProxy::Self, IdentityProxy::Error,
+                      IdentityProxy::Unsupported})
+    {
+        ComPtr<IdentityProxy> invalid;
+        invalid.Attach(new IdentityProxy(device.Get(), mode));
+        assert(!Safety::SameDevice(invalid.Get(), device.Get()));
+        assert(invalid->References() == 1);
+    }
     ComPtr<ID3D12CommandQueue> queue, otherQueue;
     D3D12_COMMAND_QUEUE_DESC queueDesc {};
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -40,6 +219,40 @@ int main()
     ComPtr<ID3D12Fence> externalProducer, externalConsumer;
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&externalProducer)));
     Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&externalConsumer)));
+    ComPtr<IdentityProxy> fenceIdentity;
+    fenceIdentity.Attach(new IdentityProxy(externalProducer.Get()));
+    ComPtr<FenceAlias> fenceAlias;
+    fenceAlias.Attach(new FenceAlias(externalProducer.Get(), fenceIdentity.Get()));
+    ComPtr<ID3D12Device> foreignDevice;
+    for (UINT i = 0;; ++i)
+    {
+        ComPtr<IDXGIAdapter1> candidate;
+        if (factory->EnumAdapters1(i, &candidate) == DXGI_ERROR_NOT_FOUND) break;
+        if (SUCCEEDED(D3D12CreateDevice(candidate.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&foreignDevice))) &&
+            !Safety::SameDevice(foreignDevice.Get(), device.Get())) break;
+        foreignDevice.Reset();
+    }
+    if (foreignDevice)
+    {
+        ComPtr<ID3D12Fence> foreignFence;
+        Check(foreignDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&foreignFence)));
+        auto foreignStatus = std::make_shared<Safety::ExternalWaitStatus>();
+        assert(!Safety::BindExternalWait(list.Get(), foreignFence.Get(), 1, 39, 40, foreignStatus));
+        assert(foreignStatus->failed && !foreignStatus->bound && !foreignStatus->applied);
+        std::puts("PASS: distinct-device fence rejected before binding");
+    }
+    else std::puts("SKIP: no distinct D3D12 device available for foreign-fence check");
+    for (auto mode : {IdentityProxy::NullBase, IdentityProxy::Self, IdentityProxy::Error,
+                      IdentityProxy::Unsupported})
+    {
+        ComPtr<IdentityProxy> invalidIdentity;
+        invalidIdentity.Attach(new IdentityProxy(externalProducer.Get(), mode));
+        ComPtr<FenceAlias> invalidFence;
+        invalidFence.Attach(new FenceAlias(externalProducer.Get(), invalidIdentity.Get()));
+        auto invalidStatus = std::make_shared<Safety::ExternalWaitStatus>();
+        assert(!Safety::BindExternalWait(list.Get(), invalidFence.Get(), 1, 39, 40, invalidStatus));
+        assert(invalidStatus->failed && !invalidStatus->bound && !invalidStatus->applied);
+    }
     assert(!Safety::BindExternalWait(nullptr, externalProducer.Get(), 1, 41, 42));
     assert(!Safety::BindExternalWait(list.Get(), nullptr, 1, 41, 42));
     assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 0, 41, 42));
@@ -57,13 +270,24 @@ int main()
         probe.dependency.kind == PreFg::CompletionKind::Probe && probe.dependency.reservation == probeReservation);
     assert(probeLedger.Claim(probeResource, 3, 4, 5, 41, 42).result == PreFg::CompletionClaimResult::Refused);
     auto waitStatus = probe.dependency.status;
+    ComPtr<ReShadeDeviceProxy> reshadeDevice;
+    reshadeDevice.Attach(new ReShadeDeviceProxy(device.Get()));
+    aliasDevice = reshadeDevice.Get(); aliasList = list.Get(); aliasQueue = otherQueue.Get();
+    originalDeviceQuery = reinterpret_cast<decltype(originalDeviceQuery)>((*(void***)list.Get())[7]);
+    // This fixture requires the runtime's shared child GetDevice implementation.
+    assert((*(void***)otherQueue.Get())[7] == reinterpret_cast<void*>(originalDeviceQuery));
+    assert(DetourTransactionBegin() == NO_ERROR);
+    assert(DetourUpdateThread(GetCurrentThread()) == NO_ERROR);
+    assert(DetourAttach(reinterpret_cast<PVOID*>(&originalDeviceQuery), DeviceQuery) == NO_ERROR);
+    assert(DetourTransactionCommit() == NO_ERROR);
     PreFg::StartupReadiness certificate;
     PreFg::ReadinessIdentity certificateKey {};
     certificateKey.provider = 3; certificateKey.nativeGeneration = 4; certificateKey.nativeInstance = 5;
     assert(certificate.Submit(certificateKey, probe.dependency.fence.Get(), probe.dependency.value,
         probe.dependency.sequence, waitStatus));
     certificate.Presented(42, true);
-    assert(Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 41, 42, waitStatus));
+    assert(Safety::BindExternalWait(list.Get(), fenceAlias.Get(), 1, 41, 42, waitStatus));
+    assert(Safety::Get<Safety::ExternalWait>(list.Get(), Safety::externalWaitGuid)->fence.Get() == externalProducer.Get());
     assert(waitStatus->bound && !waitStatus->applied && !waitStatus->failed);
     assert(!Safety::BindExternalWait(list.Get(), externalProducer.Get(), 1, 43, 44));
     Check(list->Close());
@@ -83,6 +307,14 @@ int main()
     probeLedger.RetireBefore(43);
     assert(probeLedger.Claim(probeResource, 3, 4, 5, 43, 43).result == PreFg::CompletionClaimResult::None);
     assert(certificate.Ready()); // retained proof survives ordinary packet retirement
+    assert(aliasListQueries > 0 && aliasQueueQueries > 0);
+    assert(DetourTransactionBegin() == NO_ERROR);
+    assert(DetourUpdateThread(GetCurrentThread()) == NO_ERROR);
+    assert(DetourDetach(reinterpret_cast<PVOID*>(&originalDeviceQuery), DeviceQuery) == NO_ERROR);
+    assert(DetourTransactionCommit() == NO_ERROR);
+    aliasList = aliasQueue = nullptr; aliasDevice = nullptr;
+    assert(reshadeDevice->References() == 1);
+    std::puts("PASS: ReShade device identity on real list bind, queue wait and readiness activation");
     // A provider may reuse a list whose completed wait cookie is still attached.
     // The finished producer can retire without Reset, but the new unfinished
     // dependency must survive duplicates and further attempted replacements.
@@ -132,6 +364,15 @@ int main()
     assert(!Safety::OrderBefore(abandoned, queue.Get()));
     assert(!Safety::OrderedOn(abandoned, queue.Get()));
     assert(abandoned && !Safety::Reusable(abandoned) && !Safety::Drain(0));
+    const auto abandonedReport=Safety::InspectPending();
+    assert(abandonedReport.slots.unsubmittedUnsealed>0 && !abandonedReport.slots.registryFailed);
+    const auto abandonedEntry=std::find_if(abandonedReport.recordings.begin(),abandonedReport.recordings.end(),
+        [&](const auto& entry){return entry.incarnation==abandoned->incarnation;});
+    assert(abandonedEntry!=abandonedReport.recordings.end() && !abandonedEntry->sealed &&
+        abandonedEntry->submissions==0 && abandonedEntry->completion.empty());
+    assert(!Safety::Reusable(abandoned) && !Safety::Drain(0)); // diagnostic grants nothing
+    const auto boundedReport=Safety::InspectPending(0,0);
+    assert(boundedReport.recordings.empty() && boundedReport.omitted>0);
     Check(list->Close());
     Check(list->Reset(allocator.Get(), nullptr));
     assert(Safety::Reusable(abandoned) && !Safety::Readable(abandoned));
@@ -164,6 +405,13 @@ int main()
                !replacementSessionCreated);
     }
     assert(!Safety::Drain(1));
+    const auto pendingReport=Safety::InspectPending();
+    const auto pendingEntry=std::find_if(pendingReport.recordings.begin(),pendingReport.recordings.end(),
+        [&](const auto& entry){return entry.incarnation==pending->incarnation;});
+    assert(pendingEntry!=pendingReport.recordings.end() && pendingEntry->sealed && pendingEntry->submissions==1);
+    assert(pendingEntry->state==Safety::RecordingTerminalState::Reset && pendingEntry->completion.size()==1);
+    assert(pendingEntry->completion[0].timeline!=0 &&
+        pendingEntry->completion[0].observed<pendingEntry->completion[0].required);
     Check(gate->Signal(1));
     HANDLE handoffDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     assert(handoffDone);
@@ -182,6 +430,13 @@ int main()
     submit(queue.Get());
     assert(Safety::Drain(5000));
     assert(!Safety::Reusable(replay)); // completed but still executable
+    const auto replayReport=Safety::InspectPending();
+    assert(replayReport.slots.completedUnsealed>0);
+    const auto replayEntry=std::find_if(replayReport.recordings.begin(),replayReport.recordings.end(),
+        [&](const auto& entry){return entry.incarnation==replay->incarnation;});
+    assert(replayEntry!=replayReport.recordings.end() && !replayEntry->sealed && replayEntry->submissions==1);
+    assert(replayEntry->completion[0].observed>=replayEntry->completion[0].required);
+    std::puts("shutdown diagnostics: unsubmitted, delayed GPU, completed replayable, bounded read-only PASS");
     Check(queue->Wait(gate.Get(), 2));
     submit(queue.Get());
     Check(list->Reset(allocator.Get(), nullptr));
@@ -197,14 +452,33 @@ int main()
     Check(queue->Wait(ownedGate.Get(), 1));
     auto owned = Safety::Record(list.Get());
     auto ownedRetirement = Safety::Pending();
+    namespace Receipts=DlssNr::SignalReceipts;
+    Receipts::Tracker<Safety::Ticket> receipts;Receipts::Epoch receiptEpoch{1,1,1,1,1,1,2};
+    const auto receiptSequence=receipts.Begin(receiptEpoch,100);
+    Receipts::Fact motionFact;motionFact.present=true;motionFact.width=2258;motionFact.height=1270;
+    receipts.Observe(receiptSequence,Receipts::Signal::Motion,motionFact);
+    receipts.Values(receiptSequence,Receipts::Signal::Motion,2256,1264);
+    receipts.Admit(receiptSequence,Receipts::Signal::Motion);
+    receipts.Record(receiptSequence,owned,Receipts::Bit(Receipts::Signal::Motion));
+    const auto inspect=[](const Safety::Ticket& ticket){const auto p=Safety::InspectRecording(ticket);
+        return Receipts::Proof{p.valid&&!(p.reusable&&!p.submitted),p.submitted,p.completed};};
+
     assert(!Safety::SealOwnedRecording(list.Get())); // still unsubmitted
     Check(list->Close());
     submit(queue.Get());
     assert(Safety::SealOwnedRecording(list.Get()));
     assert(!Safety::Reusable(owned) && !Safety::Readable(owned) && !Safety::Reusable(ownedRetirement));
+    receipts.Poll(inspect);
+    assert(receipts.Read(Receipts::Signal::Motion,receiptEpoch,101,Receipts::Mode::Active).state==Receipts::State::Pending);
     Check(ownedGate->Signal(1));
     assert(Safety::Drain(5000));
     assert(Safety::Reusable(owned) && Safety::Readable(owned) && Safety::Reusable(ownedRetirement));
+    receipts.Poll(inspect);
+    const auto receipt=receipts.Read(Receipts::Signal::Motion,receiptEpoch,102,Receipts::Mode::Active);
+    assert(receipt.state==Receipts::State::Consumed&&receipt.fact.x==2256&&receipt.fact.y==1264);
+    ++receiptEpoch.route;
+    assert(receipts.Read(Receipts::Signal::Motion,receiptEpoch,103,Receipts::Mode::Active).state==Receipts::State::Pending);
+    puts("PASS: Present diagnostic receipt waits for real owned-recording GPU completion and retains exact model values");
     Check(list->Reset(allocator.Get(), nullptr));
 
     // Track both queues without introducing a cycle into the host's Wait/Signal graph.
@@ -415,6 +689,7 @@ int main()
         Check(copyList->Close());
     }
     std::puts("PASS: DIRECT/COMPUTE/DIRECT actual queue handoffs, cross-queue waits, replay, observation cancellation and COPY refusal");
+    TestMfgWaits(device.Get());
 
     if (debugEnabled)
     {
@@ -463,6 +738,10 @@ int main()
     assert(!Safety::Reusable(refusedTicket) && !Safety::Readable(refusedTicket));
     refusedList.Reset();
 
+    const auto failedReport=Safety::InspectPending();
+    assert(failedReport.slots.registryFailed && failedReport.slots.failed>0);
+    assert(!Safety::Reusable(refusedTicket));
+
     // Fence failure is a permanent failure, never mistaken for permission to reclaim.
     auto failed = std::make_shared<Safety::Recording>();
     failed->sealed = true;
@@ -474,6 +753,8 @@ int main()
     assert(!certificate.Poll(certificateKey, device.Get(), 44));
     // The sentinel UINT64_MAX is device loss, not a very large successful fence value.
     assert(!Safety::Reusable(pending) && !Safety::Readable(pending));
+    const auto lossReport=Safety::InspectPending();
+    assert(lossReport.slots.failed>0 && lossReport.slots.registryFailed);
     std::puts("PASS: unsubmitted cancellation, 1000 premature reuse/read checks, delayed GPU completion,");
     std::puts("      replay, explicit owned-list sealing, independent queues/host dependencies, retirement,");
     std::puts("      capture shape changes, failure and device loss.");

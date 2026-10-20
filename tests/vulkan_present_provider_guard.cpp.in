@@ -1,0 +1,76 @@
+// Only external Streamline/provider ABI and the authentic-owner query service
+// are fake. The whole production provider method is extracted without edits.
+#include <dlssnr/connections/ConnectionPolicy.h>
+#include <dlssnr/VulkanNrModelLifetime.h>
+#include <dlssnr/VulkanPresentProviderPreparation.h>
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <string>
+static uint64_t revision=9;static int tokens=0,tags=0;
+static bool changeAtToken=false,changeAtTag=false;
+static unsigned lifetimeChangeAtToken=0;
+static std::optional<DlssNr::VkNrPresentModelLifetime> liveModel;
+namespace DlssNr::Connections{Mixed::Policy SignalPreferences()noexcept{Mixed::Policy p;p.revision=revision;return p;}}
+namespace DlssNr{std::optional<VkNrPresentModelLifetime> CurrentVulkanPresentModelLifetimeVk(){return liveModel;}}
+namespace sl{
+enum class Result{eOk,eError};
+struct FrameToken{uint32_t structVersion=1,id=0;explicit operator uint32_t()const{return id;}};
+struct ViewportHandle{explicit ViewportHandle(uint32_t){}};
+enum class ResourceLifecycle{eValidUntilPresent};
+enum BufferType{kBufferTypeHUDLessColor,kBufferTypeUIColorAndAlpha,kBufferTypeUIAlpha};
+struct ResourceTag{ResourceTag(void*,BufferType,ResourceLifecycle){}};
+}
+namespace DlssNr{
+struct Adapter{uint64_t Generation()const{return 5;}std::string Reason(uint32_t)const{return {};}};
+static Adapter& VulkanNrStreamlineAdapter(){static Adapter a;return a;}
+}
+static sl::Result Token(sl::FrameToken*& out,const uint32_t* id){
+ ++tokens;static sl::FrameToken token;token.id=*id;out=&token;if(changeAtToken)++revision;
+ switch(lifetimeChangeAtToken){
+  case 1:++liveModel->resumeGeneration;break;
+  case 2:++liveModel->inputInterruptionEpoch;break;
+  case 3:++liveModel->routeEpoch;break;
+  case 4:++liveModel->deviceGeneration;break;
+  case 5:++liveModel->device;break;
+  case 6:liveModel.reset();break; // owner busy/unknown must refuse too
+ }
+ return sl::Result::eOk;
+}
+static sl::Result Tag(const sl::FrameToken&,sl::ViewportHandle,const sl::ResourceTag*,uint32_t,void*){
+ ++tags;if(changeAtTag)++revision;return sl::Result::eOk;
+}
+static auto o_slGetNewFrameToken=&Token;static auto o_slSetTagForFrame=&Tag;
+class StreamlineHooks{public:
+ // PRODUCTION_PROVIDER_DECLARATION
+};
+// PRODUCTION_PROVIDER_PREPARE
+// Fixture-only ABI adapter. Baseline omits the new argument because authentic
+// baseline code does not accept it; candidate forwards the exact captured value.
+static bool Prepare(uint64_t provider,uint64_t frame,uint32_t viewport,uint64_t sourceRevision,const DlssNr::VkNrPresentModelLifetime& lifetime){
+ (void)lifetime;
+ return StreamlineHooks::PrepareVulkanFullFrame(provider,frame,viewport,sourceRevision /* FIXTURE_PROVIDER_LIFETIME_ARGUMENT */).prepared;
+}
+static void Reset(){revision=9;tokens=tags=0;changeAtToken=changeAtTag=false;lifetimeChangeAtToken=0;liveModel=DlssNr::VkNrPresentModelLifetime{1,1,50,0,0};}
+int main(){
+ Reset();const auto captured=*liveModel;
+ assert(Prepare(5,7,0,9,captured)&&tokens==1&&tags==1);
+ tokens=tags=0;assert(!Prepare(5,7,0,8,captured)&&!tokens&&!tags);
+ changeAtToken=true;assert(!Prepare(5,7,0,9,captured)&&tokens==1&&!tags);
+ Reset();changeAtTag=true;
+ // Already forwarded: post-callback lifetime/revision failure belongs to executor.
+ assert(Prepare(5,7,0,9,captured)&&tokens==1&&tags==1&&revision==10);
+ for(unsigned mutation=1;mutation<=6;++mutation){
+  Reset();const auto recorded=*liveModel;lifetimeChangeAtToken=mutation;
+  const bool prepared=Prepare(5,7,0,9,recorded);
+  assert((!prepared&&tokens==1&&tags==0)&&"C1-001 lifetime change inside token must prevent tag forward");
+  assert(revision==9); // no policy/provider-generation change can explain refusal
+ }
+ Reset();auto stale=*liveModel;++stale.routeEpoch;
+ assert(!Prepare(5,7,0,9,stale)&&!tokens&&!tags);
+ Reset();auto invalid=*liveModel;invalid.routeEpoch=0;
+ assert(!Prepare(5,7,0,9,invalid)&&!tokens&&!tags);
+ Reset();liveModel.reset();
+ assert(!Prepare(5,7,0,9,captured)&&!tokens&&!tags);
+ std::puts("PASS actual provider method: each forward requires exact revision and recorded/current authentic lifetime; token mutations/unknown owner refuse tags");
+}

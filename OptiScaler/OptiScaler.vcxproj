@@ -1022,6 +1022,9 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="dlssnr\VulkanPresentExecutor.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="dlssnr\VulkanPresentInitialization.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="dlssnr\VulkanPresentStatus.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>

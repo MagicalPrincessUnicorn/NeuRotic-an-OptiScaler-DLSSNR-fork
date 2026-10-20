@@ -38,6 +38,7 @@ $script:HubSettingLanguageMetadata=@{
  'DlssNr/AnythingScale'=@{labelId='desktop.settings.anything_resolution';descriptionId='';valueLabelIds=@{}}
  'DlssNr/PresentInputPolicy'=@{labelId='desktop.neurotic-hubsettings.present_guide_policy_e5e9d9c7';descriptionId='';valueLabelIds=@{'0'='desktop.neurotic-hubsettings.image_only_4ecb5db9';'1'='desktop.neurotic-hubsettings.require_guides_73f8ad7f';'2'='desktop.neurotic-hubsettings.automatic_guides_b3505571'}}
  'DlssNr/RenderingMode'=@{labelId='desktop.neurotic-hubsettings.native_placement_d8bc95ff';descriptionId='desktop.neurotic-hubsettings.canonical_placement_key_takes_precedence_over_le_c236aee7';valueLabelIds=@{'0'='desktop.neurotic-hubsettings.after_super_resolution_1dada3c4';'1'='desktop.neurotic-hubsettings.before_super_resolution_performance_2361fbff'}}
+ 'DlssNr/NativeResolutionChoice'=@{labelId='desktop.settings.native_resolution';descriptionId='desktop.settings.native_resolution_help';valueLabelIds=@{'full'='desktop.settings.native_resolution_full';'pre'='desktop.settings.native_resolution_pre';'post'='desktop.settings.native_resolution_post';'manual'='desktop.neurotic-hubsettings.manual_percent_6747b8ff'}}
  'DlssNr/Preset'=@{labelId='desktop.neurotic-hubsettings.model_preset_2776030c';descriptionId='desktop.neurotic-hubsettings.applied_when_the_model_is_created_restart_the_ga_e34a9976';valueLabelIds=@{'0'='desktop.settings.dlssnr/preset/value.21b111cbfe';'1'='desktop.settings.dlssnr/preset/value.d1ced74051';'2'='desktop.settings.dlssnr/preset/value.c475c17845';'3'='desktop.settings.dlssnr/preset/value.e7aebbc38a'}}
  'DlssNr/Style'=@{labelId='desktop.neurotic-hubsettings.model_style_e4e353be';descriptionId='';valueLabelIds=@{'0'='desktop.settings.dlssnr/style/value.ef6691545d';'1'='desktop.settings.dlssnr/style/value.d6acb6d51c';'2'='desktop.settings.dlssnr/style/value.912d0988b0'}}
  'DlssNr/ApplyModel'=@{labelId='desktop.neurotic-hubsettings.apply_model_output_ceba94c7';descriptionId='';valueLabelIds=@{}}
@@ -174,7 +175,7 @@ $script:HubSettingLanguageMetadata=@{
  'XeFG/IgnoreInitChecks'=@{labelId='desktop.neurotic-hubsettings.ignore_init_checks_8362c855';descriptionId='desktop.neurotic-hubsettings.saves_the_in_game_xefg_precheck_bypass_request_d_fdc00aff';valueLabelIds=@{}}
  'OptiFG/HUDLimit'=@{labelId='desktop.settings.optifg/hudlimit.674b0ed54b';descriptionId='desktop.neurotic-hubsettings.delays_hudless_capture_high_values_can_cause_a_c_1bfdd5d1';valueLabelIds=@{}}
  'DLSSG/InterpolationCount'=@{labelId='desktop.neurotic-hubsettings.interpolation_count_d519fd53';descriptionId='';valueLabelIds=@{}}
- 'DLSSG/OverrideInterpolationCount'=@{labelId='desktop.neurotic-hubsettings.native_mfg_interpolation_count_override_c12a3a8b';descriptionId='desktop.neurotic-hubsettings.saved_request_only_zero_disables_the_override_ra_a66f0429';valueLabelIds=@{}}
+ 'DLSSG/OverrideInterpolationCount'=@{labelId='desktop.neurotic-hubsettings.native_mfg_interpolation_count_override_c12a3a8b';descriptionId='desktop.settings.dlssg/overrideinterpolationcount.ff6d137fab';valueLabelIds=@{}}
  'FSRFG/FPTVarianceFactor'=@{labelId='desktop.neurotic-hubsettings.variance_factor_b7a0e7e0';descriptionId='';valueLabelIds=@{}}
  'FSRFG/FPTHybridSpinTime'=@{labelId='desktop.neurotic-hubsettings.hybrid_spin_time_a5800cb7';descriptionId='';valueLabelIds=@{}}
  'Framerate/FramerateLimit'=@{labelId='desktop.neurotic-hubsettings.fps_limit_49d91bb4';descriptionId='';valueLabelIds=@{}}
@@ -193,7 +194,7 @@ $script:HubSettingLanguageMetadata=@{
  'DLSSD/RenderPresetOverride'=@{labelId='desktop.neurotic-hubsettings.render_presets_override_1853a067';descriptionId='';valueLabelIds=@{}}
  'DLSS/RenderPresetOverride'=@{labelId='desktop.neurotic-hubsettings.render_presets_override_1853a067';descriptionId='';valueLabelIds=@{}}
  'DLSS/UseGenericAppIdWithDlss'=@{labelId='desktop.neurotic-hubsettings.use_generic_app_id_with_dlss_f8dd9194';descriptionId='';valueLabelIds=@{}}
- 'DLSSG/OverrideForceDMFG'=@{labelId='desktop.neurotic-hubsettings.force_dynamic_mfg_73298f3d';descriptionId='';valueLabelIds=@{}}
+ 'DLSSG/OverrideForceDMFG'=@{labelId='desktop.neurotic-hubsettings.force_dynamic_mfg_game_8ca83550';descriptionId='';valueLabelIds=@{}}
  'FrameGen/DrawUIOverFG'=@{labelId='desktop.neurotic-hubsettings.draw_ui_over_22ce6990';descriptionId='';valueLabelIds=@{}}
  'FrameGen/UIPremultipliedAlpha'=@{labelId='desktop.neurotic-hubsettings.ui_premult_alpha_c3fc4d1e';descriptionId='';valueLabelIds=@{}}
  'FrameGen/DisableUI'=@{labelId='desktop.neurotic-hubsettings.disable_ui_texture_de2b2aab';descriptionId='';valueLabelIds=@{}}
@@ -209,7 +210,7 @@ $script:HubSettingLanguageMetadata=@{
  'XeFG/UIComposition'=@{labelId='desktop.neurotic-hubsettings.ui_composition_f4be85e9';descriptionId='';valueLabelIds=@{}}
  'XeFG/DebugView'=@{labelId='desktop.neurotic-hubsettings.debug_view_e6919c6d';descriptionId='';valueLabelIds=@{}}
  'XeFG/ForceBorderless'=@{labelId='desktop.neurotic-hubsettings.force_borderless_15f5ed3b';descriptionId='';valueLabelIds=@{}}
- 'DLSSG/ForceDMFG'=@{labelId='desktop.neurotic-hubsettings.force_dynamic_mfg_73298f3d';descriptionId='';valueLabelIds=@{}}
+ 'DLSSG/ForceDMFG'=@{labelId='desktop.neurotic-hubsettings.force_dynamic_mfg_optiscaler_d76565d1';descriptionId='';valueLabelIds=@{}}
  'DLSSG/UseGamesReflexMarkers'=@{labelId='desktop.neurotic-hubsettings.use_game_s_reflex_markers_9c24d2a1';descriptionId='';valueLabelIds=@{}}
  'OptiFG/HUDFix'=@{labelId='desktop.settings.optifg/hudfix.2938aee663';descriptionId='';valueLabelIds=@{}}
  'OptiFG/EnableDepthScale'=@{labelId='desktop.neurotic-hubsettings.scale_depth_to_fix_dlss_rr_c61d1d2c';descriptionId='';valueLabelIds=@{}}
@@ -263,6 +264,7 @@ $script:HubSettingLanguageMetadata=@{
 }
 # END GENERATED LANGUAGE METADATA
 . (Join-Path $PSScriptRoot 'NeuRotic-ObjectRules.ps1')
+$script:HubNrSelectionContract=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'NeuRotic-RenderingRequirements.json') -Raw|ConvertFrom-Json
 function New-HubSetting {
  param($Section,$Key,$Label,$Group,$Type='choice',$Values=@('auto','true','false'),$Minimum=$null,$Maximum=$null,$Description='',$ValueLabels=@{},$MissingValue='auto')
  if($null -ne $Minimum){$Minimum=[double]$Minimum};if($null -ne $Maximum){$Maximum=[double]$Maximum}
@@ -315,6 +317,7 @@ $script:HubSettingsSchema=@(
  New-HubSetting DlssNr AnythingScale 'NR Anything resolution' $nr -Type integer -Values @() -Minimum 25 -Maximum 100 -MissingValue '100'
  New-HubSetting DlssNr PresentInputPolicy 'Present guide policy' $nr -Values @('0','1','2') -ValueLabels @{'0'='Image only';'1'='Require guides';'2'='Automatic guides'} -MissingValue '2'
  New-HubSetting DlssNr RenderingMode 'Native placement' $nr -Values @('auto','0','1') -ValueLabels @{'0'='After super resolution';'1'='Before super resolution (Performance)'} -Description 'Canonical placement key; takes precedence over legacy PerformanceMode and RunBeforeSR.'
+ New-HubSetting DlssNr NativeResolutionChoice 'Native resolution' $nr -Values @('full','pre','post','manual') -MissingValue 'full' -ValueLabels @{'full'='Full output';'pre'='Match Native (Pre Super Resolution)';'post'='Match Native (Post Super Resolution)';'manual'='Manual percent'} -Description 'Both Match Native options use the native input dimensions. The selected stage controls when Neural Rendering runs.'
  New-HubSetting DlssNr Preset 'Model preset' $nr -Values @('auto','0','1','2','3') -ValueLabels @{'0'='Default';'1'='Preset 1';'2'='Preset 2';'3'='Preset 3'} -Description 'Applied when the model is created; restart the game after changing this setting.'
  New-HubSetting DlssNr Style 'Model style' $nr -Values @('auto','0','1','2') -ValueLabels @{'0'='Standard';'1'='Natural';'2'='Cinematic'}
  New-HubSetting DlssNr ApplyModel 'Apply model output' $nr
@@ -443,7 +446,7 @@ $script:HubSettingsSchema+=@(
  New-HubSetting FSR HorizontalFov 'Horz. FOV' $up -Type float -Values @() -Minimum 0 -Maximum 180 -Description 'Use Automatic for the other FOV orientation when selecting a saved vertical or horizontal FOV.'
  New-HubSetting FSR CameraNear 'Camera Near' $up -Type float -Values @() -Minimum .1 -Maximum 500000
  New-HubSetting FSR CameraFar 'Camera Far' $up -Type float -Values @() -Minimum .1 -Maximum 500000
- New-HubSetting DLSSG FramerateTargetDMFG 'DMFG FPS Target' $fg -Type float -Values @() -Minimum 0 -Maximum 200
+ New-HubSetting DLSSG FramerateTargetDMFG 'DMFG FPS Target' $fg -Type float -Values @() -Minimum 0 -Maximum ([double][float]::MaxValue)
  New-HubSetting FrameGen HudCutoff 'Hud Cutoff' $fg -Type float -Values @() -Minimum 0 -Maximum 1
  New-HubSetting CAS Contrast 'Contrast' $up -Type float -Values @() -Minimum -2 -Maximum 2
  New-HubSetting CAS MotionSharpness 'MotionSharpness' $up -Type float -Values @() -Minimum -1 -Maximum 1
@@ -456,7 +459,7 @@ $script:HubSettingsSchema+=@(
  New-HubSetting XeFG IgnoreInitChecks 'Ignore Init Checks' $fg -Description 'Saves the in-game XeFG precheck bypass request. Do not use this to skip a motion-vector size warning for Unreal Engine games. Runtime compatibility is not established by this preference.'
  New-HubSetting OptiFG HUDLimit 'Limit' $fg -Type integer -Values @() -Minimum 1 -Maximum 999 -Description 'Delays HUDless capture. High values can cause a crash; this saved preference does not establish runtime stability.'
  New-HubSetting DLSSG InterpolationCount 'Interpolation count' $fg -Type integer -Values @() -Minimum 1 -Maximum 6
- New-HubSetting DLSSG OverrideInterpolationCount 'Native MFG interpolation count override' $fg -Type integer -Values @() -Minimum 0 -Maximum 6 -Description 'Saved request only. Zero disables the override. Ratios depend on the running game, graphics card and provider qualification.'
+ New-HubSetting DLSSG OverrideInterpolationCount 'Native MFG interpolation count override' $fg -Type integer -Values @() -Minimum 0 -Maximum 5 -Description 'Saved request only. Automatic uses the game setting. 0 selects Off. 1-5 generated frames means 2X-6X total. Availability depends on the active provider.'
  New-HubSetting FSRFG FPTVarianceFactor 'Variance Factor' $fg -Type float -Values @() -Minimum 0 -Maximum 1
  New-HubSetting FSRFG FPTHybridSpinTime 'Hybrid Spin Time' $fg -Type integer -Values @() -Minimum 0 -Maximum 100
  New-HubSetting Framerate FramerateLimit 'FPS Limit' $fg -Type float -Values @() -Minimum 0 -Maximum 200
@@ -490,7 +493,7 @@ $script:HubSettingsSchema+=@(
  New-HubSetting DLSSD RenderPresetOverride 'Render Presets Override' 'Saved game settings'
  New-HubSetting DLSS RenderPresetOverride 'Render Presets Override' 'Saved game settings'
  New-HubSetting DLSS UseGenericAppIdWithDlss 'Use Generic App Id with DLSS' 'Saved game settings'
- New-HubSetting DLSSG OverrideForceDMFG 'Force Dynamic MFG' 'Saved game settings'
+ New-HubSetting DLSSG OverrideForceDMFG 'Force Dynamic MFG (Game)' 'Saved game settings'
  New-HubSetting FrameGen DrawUIOverFG 'Draw UI over' 'Saved game settings'
  New-HubSetting FrameGen UIPremultipliedAlpha 'UI Premult. alpha' 'Saved game settings'
  New-HubSetting FrameGen DisableUI 'Disable UI texture' 'Saved game settings'
@@ -506,7 +509,7 @@ $script:HubSettingsSchema+=@(
  New-HubSetting XeFG UIComposition 'UI Composition' 'Saved game settings'
  New-HubSetting XeFG DebugView 'Debug View' 'Saved game settings'
  New-HubSetting XeFG ForceBorderless 'Force Borderless' 'Saved game settings'
- New-HubSetting DLSSG ForceDMFG 'Force Dynamic MFG' 'Saved game settings'
+ New-HubSetting DLSSG ForceDMFG 'Force Dynamic MFG (OptiScaler)' 'Saved game settings'
  New-HubSetting DLSSG UseGamesReflexMarkers 'Use Game''s Reflex Markers' 'Saved game settings'
  New-HubSetting OptiFG HUDFix 'HUDFix' 'Saved game settings'
  New-HubSetting OptiFG EnableDepthScale 'Scale Depth to fix DLSS RR' 'Saved game settings'
@@ -577,7 +580,10 @@ $script:HubSettingsSchema+=@(
  New-HubSetting OptiFG HudfixDisableDispatch 'Disable Dispatch Tracking' 'Saved game settings'
 )
 function Read-HubSettingsDocument([string]$Path){
- $bytes=[IO.File]::ReadAllBytes($Path);$offset=0
+ return Read-HubSettingsBytesDocument ([IO.File]::ReadAllBytes($Path))
+}
+function Read-HubSettingsBytesDocument([byte[]]$bytes){
+ $offset=0
  if($bytes.Length -ge 4 -and [BitConverter]::ToUInt32($bytes,0) -eq 65279){$encoding=New-Object Text.UTF32Encoding($false,$true,$true);$offset=4}
  elseif($bytes.Length -ge 4 -and $bytes[0] -eq 0 -and $bytes[1] -eq 0 -and $bytes[2] -eq 254 -and $bytes[3] -eq 255){$encoding=New-Object Text.UTF32Encoding($true,$true,$true);$offset=4}
  elseif($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191){$encoding=New-Object Text.UTF8Encoding($true,$true);$offset=3}
@@ -603,33 +609,184 @@ function Get-HubSettingsProjection([string]$Root){
  $path=SafePath $Root 'OptiScaler.ini';if(-not (Test-Path -LiteralPath $path)){return @()}
  return @(ConvertTo-HubSettingsProjection (Read-HubSettingsDocument $path))
 }
+function New-HubSettingRowIndex($Rows,[bool]$CaseSensitive=$false){
+ # Match PowerShell string equality without folding identifiers or losing
+ # duplicate records. This index belongs only to the current caller invocation.
+ $comparer=if($CaseSensitive){[StringComparer]::InvariantCulture}else{[StringComparer]::InvariantCultureIgnoreCase}
+ $sections=[Collections.Generic.Dictionary[string,object]]::new($comparer);$fallback=$false
+ foreach($row in $Rows){
+  if($row.section -isnot [string] -or $row.key -isnot [string]){$fallback=$true;continue}
+  if(-not $sections.ContainsKey($row.section)){$sections.Add($row.section,[Collections.Generic.Dictionary[string,object]]::new($comparer))}
+  $keys=$sections[$row.section]
+  if(-not $keys.ContainsKey($row.key)){$keys.Add($row.key,[Collections.Generic.List[object]]::new())}
+  $keys[$row.key].Add($row)
+ }
+ return [pscustomobject]@{sections=$sections;rows=$Rows;caseSensitive=$CaseSensitive;fallback=$fallback}
+}
+function Get-HubIndexedSettingRows($Index,$Section,$Key){
+ # Unusual non-string data retains the original operators' conversion and
+ # filtering behavior rather than acquiring a new indexing admission rule.
+ if($Index.fallback -or $Section -isnot [string] -or $Key -isnot [string]){
+  if($Index.caseSensitive){return @($Index.rows|Where-Object{$_.section -ceq $Section -and $_.key -ceq $Key})}
+  return @($Index.rows|Where-Object{$_.section -ieq $Section -and $_.key -ieq $Key})
+ }
+ if($Index.sections.ContainsKey($Section)){
+  $keys=$Index.sections[$Section];if($keys.ContainsKey($Key)){return $keys[$Key]}
+ }
+}
 function ConvertTo-HubSettingsProjection($doc){
+ $native=Get-HubNativeResolutionState $doc
+ $entryIndex=New-HubSettingRowIndex $doc.entries
+ $sectionCounts=[Collections.Generic.Dictionary[string,int]]::new([StringComparer]::InvariantCultureIgnoreCase);$sectionFallback=$false
+ foreach($section in $doc.sections){
+  if($section.name -isnot [string]){$sectionFallback=$true;continue}
+  if($sectionCounts.ContainsKey($section.name)){$sectionCounts[$section.name]++}else{$sectionCounts.Add($section.name,1)}
+ }
  return @($script:HubSettingsSchema|ForEach-Object{
-  $schema=$_;$entry=@($doc.entries|Where-Object{$_.section -ieq $schema.section -and $_.key -ieq $schema.key})
-  $sections=@($doc.sections|Where-Object{$_.name -ieq $schema.section})
+  $schema=$_;$entry=@(Get-HubIndexedSettingRows $entryIndex $schema.section $schema.key);$sectionCount=0
+  if($sectionFallback -or $schema.section -isnot [string]){$sectionCount=@($doc.sections|Where-Object{$_.name -ieq $schema.section}).Count}
+  elseif($sectionCounts.ContainsKey($schema.section)){$sectionCount=$sectionCounts[$schema.section]}
   $missingValue=$schema.missingValue
+  if($schema.section -ceq 'DlssNr' -and $schema.key -ceq 'Route'){$missingValue=[string]$native.missingRoute}
+  if($schema.section -ceq 'DlssNr' -and $schema.key -ceq 'RenderingMode'){$missingValue=[string]$native.missingRenderingMode}
+  if($schema.section -ceq 'DlssNr' -and $schema.key -ceq 'NativeResolutionChoice'){
+   # This row is a read-only semantic projection until an explicit user action.
+   # It is never serialized as an INI key, including during default inspection.
+   [pscustomobject]@{section=$schema.section;key=$schema.key;labelId=$schema.labelId;descriptionId=$schema.descriptionId;valueLabelIds=$schema.valueLabelIds;label=$schema.label;group=$schema.group;type=$schema.type;values=$schema.values;minimum=$schema.minimum;maximum=$schema.maximum;description=$schema.description;valueLabels=$schema.valueLabels;value=$native.choice;nativeManualScale=$(if($native.manual){$native.scale}else{$native.manualScale}).ToString('G',[Globalization.CultureInfo]::InvariantCulture);available=$native.available;present=$false}
+   return
+  }
   if($schema.section -eq 'DlssNr' -and $schema.key -eq 'PresentInputPolicy' -and $entry.Count -eq 0){
-   $route=@($doc.entries|Where-Object{$_.section -ieq 'DlssNr' -and $_.key -ieq 'Route'})
+   $route=@(Get-HubIndexedSettingRows $entryIndex 'DlssNr' 'Route')
    if($route.Count -eq 1){if($route[0].value -eq '1'){$missingValue='0'}elseif($route[0].value -eq '2'){$missingValue='1'}}
   }
-  [pscustomobject]@{section=$schema.section;key=$schema.key;labelId=$schema.labelId;descriptionId=$schema.descriptionId;valueLabelIds=$schema.valueLabelIds;label=$schema.label;group=$schema.group;type=$schema.type;values=$schema.values;minimum=$schema.minimum;maximum=$schema.maximum;description=$schema.description;valueLabels=$schema.valueLabels;value=$(if($entry.Count -eq 1){$entry[0].value}else{$missingValue});available=($entry.Count -le 1 -and $sections.Count -le 1);present=($entry.Count -eq 1)}
+  [pscustomobject]@{section=$schema.section;key=$schema.key;labelId=$schema.labelId;descriptionId=$schema.descriptionId;valueLabelIds=$schema.valueLabelIds;label=$schema.label;group=$schema.group;type=$schema.type;values=$schema.values;minimum=$schema.minimum;maximum=$schema.maximum;description=$schema.description;valueLabels=$schema.valueLabels;value=$(if($entry.Count -eq 1){$entry[0].value}else{$missingValue});available=($entry.Count -le 1 -and $sectionCount -le 1);present=($entry.Count -eq 1)}
  })
 }
-function Get-HubDefaultSettings($Target,$Inspection,$Package){
- # Fresh installation defaults come from the same approved payload as Setup,
- # never the current INI, retained user settings or an inspection cache.
+function Get-HubNativeResolutionState($doc){
+ $values=@{};$available=@($doc.sections|Where-Object{$_.name -ieq 'DlssNr'}).Count -le 1
+ foreach($key in @('Route','NativeResolution','RenderingMode','PerformanceMode','RunBeforeSR','WorkingScale','UiManualResolution','UiManualScale')){
+  $entries=@($doc.entries|Where-Object{$_.section -ieq 'DlssNr' -and $_.key -ieq $key})
+  if($entries.Count -gt 1){$available=$false};if($entries.Count -eq 1){$values[$key]=$entries[0].value}
+ }
+ # Match the runtime raw-key boundary, not only successfully parsed values.
+ $savedSelection=@($doc.entries|Where-Object{$_.section -ieq 'DlssNr' -and $_.key -iin $script:HubNrSelectionContract.savedSelectionKeys}).Count -gt 0
+ $missingRoute=if($savedSelection){2}else{$script:HubNrSelectionContract.defaults.route}
+ $missingRenderingMode=if($savedSelection){1}else{$script:HubNrSelectionContract.defaults.renderingMode}
+ $missingNativeResolution=if($savedSelection){0}else{$script:HubNrSelectionContract.defaults.nativeResolution}
+ $scale=1.0;$manualScale=.25
+ if($values.ContainsKey('WorkingScale') -and $values.WorkingScale -ine 'auto'){
+  if(-not [double]::TryParse($values.WorkingScale,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$scale) -or [double]::IsNaN($scale) -or [double]::IsInfinity($scale) -or $scale -lt .25 -or $scale -gt 2){$available=$false}
+ }
+ if($values.ContainsKey('UiManualScale')){
+  if(-not [double]::TryParse($values.UiManualScale,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$manualScale) -or [double]::IsNaN($manualScale) -or [double]::IsInfinity($manualScale) -or $manualScale -lt .25 -or $manualScale -gt 2){$manualScale=.25}
+ }
+ $manual=$scale -ne 1 -or $values.UiManualResolution -ieq 'true'
+ $before=$missingRenderingMode -ne 0;$mode=0
+ if($values.ContainsKey('RenderingMode') -and [int]::TryParse($values.RenderingMode,[ref]$mode)){$before=$mode -gt 0}
+ elseif(-not $values.ContainsKey('RenderingMode') -or $values.RenderingMode -ieq 'auto'){
+  # Match Config.cpp precedence for legacy profiles without the canonical key.
+  if($values.PerformanceMode -iin @('true','false')){$before=$values.PerformanceMode -ieq 'true'}elseif($values.RunBeforeSR -iin @('true','false')){$before=$values.RunBeforeSR -ieq 'true'}
+ }else{$available=$false}
+ $choice=if($manual){'manual'}elseif($before){'pre'}else{'full'}
+ if(-not $values.ContainsKey('NativeResolution') -and $missingNativeResolution -eq 1){$choice='post'}
+ if($values.ContainsKey('NativeResolution') -and $values.NativeResolution -cnotin @('0','auto')){
+  $choice=if($values.NativeResolution -ceq '1'){'post'}else{'unknown:'+$values.NativeResolution}
+ }
+ return [pscustomobject]@{values=$values;available=$available;choice=$choice;manual=$manual;scale=$scale;manualScale=$manualScale;missingRoute=$missingRoute;missingRenderingMode=$missingRenderingMode;route=$(if($values.ContainsKey('Route')){$values.Route}else{[string]$missingRoute})}
+}
+function Expand-HubNativeResolutionPatches($doc,$Patches){
+ $patchesById=@{};$requested=New-Object Collections.Generic.List[object]
+ foreach($patch in @($Patches)){
+  foreach($name in $patch.PSObject.Properties.Name){if($name -cnotin @('section','key','value') -and -not ($name -ceq 'nativeManualScale' -and $patch.section -ceq 'DlssNr' -and $patch.key -ceq 'NativeResolutionChoice')){throw 'Unknown settings patch field'}}
+  if($patch.section -ceq 'DlssNr' -and $patch.key -cin @('NativeResolution','RunBeforeSR','UiManualResolution','UiManualScale')){throw 'Internal Native settings require the resolution choice action'}
+  $id=$patch.section+'/'+$patch.key;if($patchesById.ContainsKey($id)){throw 'Duplicate settings edit'}
+  $patchesById[$id]=$patch;$requested.Add($patch)
+ }
+ $state=Get-HubNativeResolutionState $doc
+ $route=$state.route;if($patchesById.ContainsKey('DlssNr/Route')){$route=$patchesById['DlssNr/Route'].value}
+ $semantic=$patchesById['DlssNr/NativeResolutionChoice'];$scalePatch=$patchesById['DlssNr/WorkingScale']
+ # A scale edit while Native is selected is an explicit Manual action too.
+ if($null -eq $semantic -and $null -ne $scalePatch -and $route -ceq '0'){$semantic=[pscustomobject]@{section='DlssNr';key='NativeResolutionChoice';value='manual'}}
+ if($null -eq $semantic){return $requested.ToArray()}
+ if($route -cne '0'){throw 'Native resolution choices require the Native route'}
+ if(-not $state.available){throw 'Native resolution dependencies are ambiguous or invalid; preserved'}
+ if($semantic.value -isnot [string] -or $semantic.value -cnotin @('full','pre','post','manual')){throw 'Unknown Native resolution preference; preserved'}
+ $choice=$semantic.value
+ # Optional action metadata carries an unsaved Manual draft across an automatic
+ # selection. Validate it before generating any persistent coupled settings.
+ $remembered=$null
+ if($semantic.PSObject.Properties.Name -ccontains 'nativeManualScale'){
+  $spec=@($script:HubSettingsSchema|Where-Object{$_.section -ceq 'DlssNr' -and $_.key -ceq 'WorkingScale'})[0]
+  if($semantic.nativeManualScale -isnot [string] -or -not (Test-HubSettingValue $spec $semantic.nativeManualScale)){throw 'Remembered Manual resolution requires a valid scale'}
+  $remembered=if($semantic.nativeManualScale -ceq 'auto'){'1'}else{([double]::Parse($semantic.nativeManualScale,[Globalization.CultureInfo]::InvariantCulture)).ToString('G',[Globalization.CultureInfo]::InvariantCulture)}
+ }
+ $targetScale=if($choice -ceq 'manual'){
+  if($state.manual){$state.scale}else{$state.manualScale}
+ }else{1.0}
+ if($null -ne $scalePatch){
+  $spec=@($script:HubSettingsSchema|Where-Object{$_.section -ceq 'DlssNr' -and $_.key -ceq 'WorkingScale'})[0]
+  if(-not (Test-HubSettingValue $spec $scalePatch.value)){throw 'Manual resolution requires a valid scale'}
+  $supplied=if($scalePatch.value -ceq 'auto'){1.0}else{[double]::Parse($scalePatch.value,[Globalization.CultureInfo]::InvariantCulture)}
+  if($choice -cne 'manual' -and $supplied -ne 1){throw 'Match Native and Full output require scale 1'}
+  $targetScale=$supplied
+ }
+ $coupled=[ordered]@{Route='0';NativeResolution=$(if($choice -ceq 'post'){'1'}else{'0'});RenderingMode=$(if($choice -ceq 'pre'){'1'}else{'0'});RunBeforeSR=$(if($choice -ceq 'pre'){'true'}else{'false'});WorkingScale=$targetScale.ToString('G',[Globalization.CultureInfo]::InvariantCulture);UiManualResolution=$(if($choice -ceq 'manual'){'true'}else{'false'})}
+ if($choice -ceq 'manual'){$coupled.UiManualScale=$coupled.WorkingScale}
+ elseif($null -ne $remembered){$coupled.UiManualScale=$remembered}
+ elseif($state.manual){$coupled.UiManualScale=$state.scale.ToString('G',[Globalization.CultureInfo]::InvariantCulture)}
+ if($choice -ceq 'manual' -and $null -ne $scalePatch -and $scalePatch.value -ceq 'auto'){$coupled.WorkingScale='auto'}
+ $result=New-Object Collections.Generic.List[object]
+ foreach($patch in $requested){
+  if($patch.section -ceq 'DlssNr' -and $patch.key -ceq 'NativeResolutionChoice'){continue}
+  if($patch.section -ceq 'DlssNr' -and $coupled.Contains($patch.key)){
+   if($patch.key -cne 'WorkingScale' -and $patch.value -cne $coupled[$patch.key]){throw 'Conflicting Native resolution settings'}
+   continue
+  }
+  $result.Add($patch)
+ }
+ foreach($key in $coupled.Keys){$result.Add([pscustomobject]@{section='DlssNr';key=$key;value=$coupled[$key]})}
+ return $result.ToArray()
+}
+function Get-HubPackageDefaultProjection($Package){
  $defaultPath='payload\OptiScaler.ini'
  $entries=@($Package.manifest.files|Where-Object{$_.path.Replace('/','\') -ieq $defaultPath})
  if($entries.Count -ne 1){throw 'Approved package has no unique default INI'}
  $path=SafePath $Package.root $entries[0].path
  $document=Read-HubSettingsDocument $path
  if((HashBytes $document.bytes) -ine $entries[0].sha256){throw 'Approved default INI changed'}
- $defaults=@(ConvertTo-HubSettingsProjection $document)
+ return @(ConvertTo-HubSettingsProjection $document)
+}
+function Add-HubSettingResetProjection($Inspection,$Package){
+ # Read-only default data. Never replace current/saved values or infer a default
+ # from the current game INI. Build the validated values before publishing them.
+ $defaults=@(Get-HubPackageDefaultProjection $Package)
+ $defaultIndex=New-HubSettingRowIndex $defaults $true;$schemaIndex=New-HubSettingRowIndex $script:HubSettingsSchema $true
+ $pending=New-Object Collections.Generic.List[object]
+ foreach($current in $Inspection.settings){
+  $row=@(Get-HubIndexedSettingRows $defaultIndex $current.section $current.key)
+  $schema=@(Get-HubIndexedSettingRows $schemaIndex $current.section $current.key)
+  if($row.Count -ne 1 -or $schema.Count -ne 1 -or -not $row[0].available -or -not $current.available){continue}
+  $value=[string]$row[0].value
+  if(-not (Test-HubSettingValue $schema[0] $value)){continue}
+  $pending.Add([pscustomobject]@{row=$current;value=$value;manualScale=[string](Get-HubProperty $row[0] 'nativeManualScale' '0.25')})
+ }
+ foreach($entry in $pending){$entry.row.resetKnown=$true;$entry.row.resetValue=$entry.value;$entry.row.resetNativeManualScale=$entry.manualScale}
+}
+function Get-HubDefaultSettings($Target,$Inspection,$Package){
+ # Fresh installation defaults share the exact same approved source as each
+ # per-control Reset. Existing coupled global/default staging stays unchanged.
+ $defaults=@(Get-HubPackageDefaultProjection $Package)
  # Explicit coexistence is carried by the small receipt. Missing or edited
  # game files never require a restore-chain health check.
  $loadReShade=[bool](Get-HubProperty $Inspection.state 'reshadeRename')
  $result=New-Object Collections.Generic.List[object]
  foreach($default in $defaults){
+  # Native defaults are one coupled selection. Explicit Reset to Defaults must
+  # carry the package resolution as well as its route; inspection stays read-only.
+  if($default.section -ceq 'DlssNr' -and $default.key -ceq 'NativeResolutionChoice'){
+   $packageRoute=@($defaults|Where-Object{$_.section -ceq 'DlssNr' -and $_.key -ceq 'Route'})
+   if($packageRoute.Count -ne 1 -or $packageRoute[0].value -cne '0'){continue}
+  }
   $current=@($Inspection.settings|Where-Object{$_.section -ceq $default.section -and $_.key -ceq $default.key})
   if($current.Count -ne 1 -or -not $current[0].available){continue}
   if(-not $default.available){throw ('Ambiguous package default: '+$default.section+'/'+$default.key)}
@@ -639,7 +796,9 @@ function Get-HubDefaultSettings($Target,$Inspection,$Package){
   if($schema.Count -ne 1 -or -not (Test-HubSettingValue $schema[0] $value)){throw ('Unsupported package default: '+$default.section+'/'+$default.key)}
   # Automatic is intentional: dllmain's getQuirksForExe re-resolves game and
   # GPU facts at next launch (including dd2.exe); do not freeze runtime facts.
-  if($current[0].value -cne $value){$result.Add([pscustomobject]@{section=$default.section;key=$default.key;value=$value})}
+  # Even an unchanged Native choice must accompany raw default scale edits;
+  # otherwise the explicit scale action correctly means Manual to Save Settings.
+  if($current[0].value -cne $value -or ($default.section -ceq 'DlssNr' -and $default.key -ceq 'NativeResolutionChoice')){$result.Add([pscustomobject]@{section=$default.section;key=$default.key;value=$value})}
  }
  # Run the exact Save Settings coupled-value and ambiguity checks read-only.
  [void](Get-HubSettingsBytes (Get-HubSettingsRoot $Target) $result.ToArray())
@@ -678,12 +837,25 @@ function Test-HubSettingValue($Schema,[string]$Value){
 }
 function Get-HubSettingsBytes([string]$Root,$Patches){
  $doc=Read-HubSettingsDocument (SafePath $Root 'OptiScaler.ini')
+ return ,(Get-HubSettingsDocumentBytes $doc $Patches)
+}
+function Get-HubSettingsDocumentBytes($doc,$Patches){
  if(@($Patches).Count -gt 512){throw 'Too many settings edits'}
+ $Patches=@(Expand-HubNativeResolutionPatches $doc $Patches)
+ # Coupled keys are implementation details of the semantic action, not extra
+ # independent controls or public admission to writing internal preferences.
+ $internal=@(
+  New-HubSetting DlssNr NativeResolution '' '' -Values @('0','1')
+  New-HubSetting DlssNr RunBeforeSR '' '' -Values @('true','false')
+  New-HubSetting DlssNr UiManualResolution '' '' -Values @('true','false')
+  New-HubSetting DlssNr UiManualScale '' '' -Type float -Values @() -Minimum .25 -Maximum 2
+ )
  $edits=New-Object Collections.Generic.List[object];$seen=@{};$missing=[ordered]@{}
  foreach($patch in @($Patches)){
   foreach($name in $patch.PSObject.Properties.Name){if($name -cnotin @('section','key','value')){throw 'Unknown settings patch field'}}
   $id=$patch.section+'/'+$patch.key;if($seen.ContainsKey($id)){throw 'Duplicate settings edit'};$seen[$id]=$patch.value
   $schema=@($script:HubSettingsSchema|Where-Object{$_.section -ceq $patch.section -and $_.key -ceq $patch.key})
+  if($schema.Count -eq 0){$schema=@($internal|Where-Object{$_.section -ceq $patch.section -and $_.key -ceq $patch.key})}
   if($schema.Count -ne 1 -or $patch.value -isnot [string] -or ($patch.value.Length -gt 64 -and $schema[0].type -ne 'objectrules')){throw 'Setting is not in the current editable schema'}
   if(-not (Test-HubSettingValue $schema[0] $patch.value)){throw ('Unsupported value for '+$id)}
   $entries=@($doc.entries|Where-Object{$_.section -ieq $patch.section -and $_.key -ieq $patch.key})
@@ -769,7 +941,7 @@ function Get-HubSettingsRoot($Target){
 function Test-HubPreparedSetting([string]$Section,[string]$Key){
  if($Section -ceq 'DlssNrBasic'){return $true}
  if($Section -ceq 'DlssNr'){
-  return $Key -cnotin @('ToggleKey','VulkanPrepare','Route','RenderingMode','PresentResolution','PresentCustomScale','ExperimentalMode','PreSrSoftReset','PreparedDepth')
+  return $Key -cnotin @('ToggleKey','VulkanPrepare','Route','RenderingMode','NativeResolution','NativeResolutionChoice','PresentResolution','PresentCustomScale','ExperimentalMode','PreSrSoftReset','PreparedDepth')
  }
  return $false
 }
@@ -777,7 +949,6 @@ function Invoke-HubSettingsSave($Target,$Request){
  $relative=Get-HubSettingsRelativePath $Target
  $path=SafePath $Target.directory $relative
  if((HashFile $path) -ne $Request.configRevision){return [ordered]@{status='PreconditionChanged';reason='Settings changed externally; reload'}}
- if($Target.bitness -ne 64){throw 'In-game settings are unavailable for this architecture. Use NR Anything.'}
  $new=Get-HubSettingsBytes (Get-HubSettingsRoot $Target) $Request.settings
  $written=WriteVerifiedBytes $new $path (HashBytes $new) $Request.configRevision
  if(-not $written){return [ordered]@{status='PreconditionChanged';reason='Settings changed externally; outside edit preserved. Reload before saving.'}}

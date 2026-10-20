@@ -15,6 +15,7 @@ void RetireInactiveVulkanPresentGuides(VkDevice device);
 std::optional<VkNrGuideLease> SelectVulkanPresentGuides(const VkNrFrameContract&,const VkNrGuideSelection*,VkImage image=VK_NULL_HANDLE);
 std::optional<VkNrFrameContract> SelectVulkanGuideMetadata(const VkNrFrameContract&);
 std::optional<VkNrFrameContract> SelectVulkanResolutionMetadata(const VkNrFrameContract&,const VkNrGuideSelection*);
+bool CurrentVulkanPresentGuideLease(const VkNrFrameContract&,const VkNrGuideSelection*,VkImage,const VkNrGuideLease&);
 bool BindVulkanPresentGuides(const VkNrGuideLease&,VkNrUseId,VkQueue);
 void VulkanGuidesDeviceDestroyed(VkDevice);
 uint64_t VulkanGuidePrivateBytes();

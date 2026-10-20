@@ -1,0 +1,11 @@
+#include "menu/localization/LanguageFonts.h"
+#include "menu/localization/LanguageBundles.h"
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
+#include <cstdio>
+#include <set>
+int main(){using namespace Neurotic::Localization;int failures=0,checks=0;std::set<unsigned> chars;auto collect=[&](std::string_view text){for(auto* cursor=text.data();cursor<text.data()+text.size();){unsigned cp=0;int count=ImTextCharFromUtf8(&cp,cursor,text.data()+text.size());if(count<=0){++failures;break;}cursor+=count;if(cp>32)chars.insert(cp);}};for(const auto& [id,e]:CanonicalEnglish())collect(e.english);for(const auto& pack:IncludedPacks()){auto parsed=ValidatePack(pack.document.dump(),CanonicalEnglish());for(const auto& error:parsed.errors){printf("FAIL included %s %s: %s\n",pack.locale.c_str(),error.id.c_str(),error.reason.c_str());++failures;}for(const auto& [id,e]:pack.entries)collect(e.text);}
+ for(bool installed:{false,true}){auto* context=ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.DisplaySize={900,700};io.DeltaTime=1.f/60.f;io.BackendFlags|=ImGuiBackendFlags_RendererHasTextures;io.Fonts->AddFontDefault();AddFontFallbacks(io.Fonts,18,"zh-CN",installed);auto* regular=io.Fonts->Fonts[0];io.Fonts->AddFontDefault();auto* bold=io.Fonts->Fonts.back();AddFontFallbacks(io.Fonts,18,"ja",installed);ImGui::NewFrame();for(auto* font:{regular,bold}){auto* baked=font->GetFontBaked(18);for(auto cp:chars){++checks;if(!baked->FindGlyphNoFallback(cp)){printf("FAIL missing U+%04X installed=%d face=%s\n",cp,installed,font==regular?"regular":"bold");++failures;}}}ImGui::Render();ImGui::DestroyContext(context);}
+ auto* c=ImGui::CreateContext();auto& i=ImGui::GetIO();i.DisplaySize={900,700};i.DeltaTime=1.f/60.f;i.BackendFlags|=ImGuiBackendFlags_RendererHasTextures;auto* latin=i.Fonts->AddFontDefault();ImGui::NewFrame();if(MissingGlyphs(latin,18,"A中")!=1||MissingGlyphs(latin,18,"ABC")!=0){++failures;printf("FAIL editor missing-glyph detection\n");}ImGui::Render();ImGui::DestroyContext(c);
+ printf("%s %d glyph checks, %zu characters, canonical and nine included packs, regular/bold with installed fallback absent/present\n",failures?"FAIL":"PASS",checks,chars.size());return failures?1:0;
+}

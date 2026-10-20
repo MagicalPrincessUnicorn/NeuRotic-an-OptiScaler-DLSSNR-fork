@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+--- a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
++++ b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+@@ -4,7 +4,7 @@
+ {
+ static bool SameLease(const Lifecycle::LeaseBinding& a,const Lifecycle::LeaseBinding& b)noexcept
+ {
+-    return a.description==b.description&&a.consumer==b.consumer&&a.purpose==b.purpose&&a.plan==b.plan&&
++    return a.description==b.description&&a.consumer==b.consumer&&a.plan==b.plan&&
+         a.profile==b.profile&&a.route==b.route&&a.contentBasis==b.contentBasis&&a.cpuReadback==b.cpuReadback&&
+         a.callbackScoped==b.callbackScoped&&a.dependencyRequired==b.dependencyRequired&&a.sameRecording==b.sameRecording;
+ }

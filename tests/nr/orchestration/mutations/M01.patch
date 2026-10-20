@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -71,7 +71,7 @@
+     InitStatus result=InitStatus::Refused;
+     try
+     {
+-        if(!p.root.port_->Enabled())result=InitStatus::Disabled;
++        if(!p.root.port_->Enabled()&&p.state.phase==RoutePhase::Closed)result=InitStatus::Disabled;
+         else prepared=p.root.port_->Prepare(p.root.enrollment_);
+         if(prepared&&prepared->record_)
+         {

@@ -43,10 +43,18 @@ template<class Field> bool SetNumericDraft(Field& field,const std::vector<Field>
 #include "../../../OptiScaler/menu/SleekContentCard.h"
 namespace nh {
 template<class Field> void RenderNumericSetting(Field& field,const std::vector<Field>& fields,bool card=false){
+ // Keep the caller's raw draft: auto, exact decimals and unknown saved values
+ // must not be replaced by a parsed slider value merely by opening the page.
+ if(field.section=="DLSSG"&&field.key=="FramerateTargetDMFG"){
+  ImGui::InputText("##Value",field.draft.data(),field.draft.size());return;
+ }
  auto range=NumericSliderRange(field,fields);auto parsed=ParseNumericDraft(field.draft.data());
  const float available=ImGui::GetContentRegionAvail().x;
- const float controlWidth=card?available:std::min(ImGui::GetFontSize()*20,available);
- const float actionsWidth=ImGui::CalcTextSize(Neurotic::UiLiteral("desktop.numericsettings.automaticexact_entry_3dbd510e", "AutomaticExact entry")).x+ImGui::GetStyle().FramePadding.x*4+ImGui::GetStyle().ItemSpacing.x*2;
+ const auto automatic=Neurotic::Translate(Neurotic::UiLiteral("desktop.gamesettingsview.automatic_1573651c", "Automatic"));
+ const auto exact=Neurotic::Translate(Neurotic::UiLiteral("desktop.numericsettings.exact_entry_398b69eb", "Exact entry"));
+ const float actionsWidth=ImGui::CalcTextSize(automatic.c_str()).x+ImGui::CalcTextSize(exact.c_str()).x+ImGui::GetStyle().FramePadding.x*4+ImGui::GetStyle().ItemSpacing.x*2;
+ const bool inlineActions=available>=ImGui::GetFontSize()*8.f+actionsWidth;
+ const float controlWidth=inlineActions?(card?available-actionsWidth:std::min(ImGui::GetFontSize()*20,available-actionsWidth)):(card?available:std::min(ImGui::GetFontSize()*20,available));
  if(!range.enabled){ImGui::InputText("##Value",field.draft.data(),field.draft.size());return;}
  const bool editable=parsed.valid&&(parsed.automatic||(parsed.value>=range.minimum&&parsed.value<=range.maximum&&(!range.integer||std::trunc(parsed.value)==parsed.value)));
  if(editable){
@@ -55,7 +63,7 @@ template<class Field> void RenderNumericSetting(Field& field,const std::vector<F
   if(range.integer){int number=static_cast<int>(value),minimum=static_cast<int>(range.minimum),maximum=static_cast<int>(range.maximum);if(ImGui::SliderInt("##Value",&number,minimum,maximum,parsed.automatic?Neurotic::UiLiteral("desktop.gamesettingsview.automatic_1573651c", "Automatic"):"%d"))SetNumericDraft(field,fields,number);}
   else if(card?Neurotic::Sleek::CardSliderScalar("##Value",ImGuiDataType_Double,&value,&range.minimum,&range.maximum,parsed.automatic?Neurotic::UiLiteral("desktop.numericsettings.auto_d2dcb07c", "Auto"):"%.3f",ImGuiSliderFlags_NoRoundToFormat):ImGui::SliderScalar("##Value",ImGuiDataType_Double,&value,&range.minimum,&range.maximum,parsed.automatic?Neurotic::UiLiteral("desktop.gamesettingsview.automatic_1573651c", "Automatic"):"%.3f",ImGuiSliderFlags_NoRoundToFormat))SetNumericDraft(field,fields,value);
  }else ImGui::TextWrapped(Neurotic::UiLiteral("desktop.numericsettings.saved_manual_value_s_it_is_preserved_use_exact_e_39e60e19", "Saved/manual value: %s. It is preserved; use exact entry to edit it."),Neurotic::Translate(field.draft.data()).c_str());
- if(editable&&available>=controlWidth+actionsWidth)ImGui::SameLine();
+ if(editable&&inlineActions)ImGui::SameLine();
  if(ImGui::SmallButton(Neurotic::UiLiteral("desktop.gamesettingsview.automatic_1573651c", "Automatic")))std::memcpy(field.draft.data(),Neurotic::UiLiteral("desktop.gamesettingsview.auto_d1f397f2", "auto"),5);
  ImGui::SameLine();if(ImGui::SmallButton(Neurotic::UiLiteral("desktop.numericsettings.exact_entry_398b69eb", "Exact entry")))ImGui::OpenPopup(Neurotic::UiLiteral("desktop.numericsettings.numericentry_9956de30", "NumericEntry"));
  if(ImGui::BeginPopup(Neurotic::UiLiteral("desktop.numericsettings.numericentry_9956de30", "NumericEntry"))){ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.numericsettings.exact_value_or_auto_8445a3c2", "Exact value (or auto)"));ImGui::SetNextItemWidth(ImGui::GetFontSize()*16);ImGui::InputText("##ExactValue",field.draft.data(),field.draft.size());if(ImGui::Button(Neurotic::UiLiteral("desktop.anythingview.done_3598b18e", "Done")))ImGui::CloseCurrentPopup();ImGui::EndPopup();}

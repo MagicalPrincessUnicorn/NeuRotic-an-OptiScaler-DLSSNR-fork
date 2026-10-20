@@ -574,6 +574,9 @@ void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     }
 
     LOG_DEBUG("");
+    const auto timingOwner = DlssNr::PreFg::GetOwner(pSwapChain);
+    const Neurotic::FrameCadence::OutputScope timingScope(
+        DlssNr::PreFg::State().swapchains == 1 ? reinterpret_cast<uintptr_t>(timingOwner.Get()) : 0);
 
     ID3D12CommandQueue* cq = nullptr;
     ID3D11Device* device = nullptr;

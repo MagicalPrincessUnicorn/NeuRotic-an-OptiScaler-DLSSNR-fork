@@ -91,6 +91,8 @@ class DispatchResourceStates
 {
     using Emit = void (*)(ID3D12GraphicsCommandList*, ID3D12Resource*, D3D12_RESOURCE_STATES,
                          D3D12_RESOURCE_STATES);
+    using EmitWithContext = void (*)(void*,ID3D12GraphicsCommandList*,ID3D12Resource*,
+        D3D12_RESOURCE_STATES,D3D12_RESOURCE_STATES,bool);
     struct Entry
     {
         ID3D12Resource* resource;
@@ -99,13 +101,17 @@ class DispatchResourceStates
     };
     ID3D12GraphicsCommandList* _cmd;
     Emit _emit;
+    void* _context=nullptr;
+    EmitWithContext _contextEmit=nullptr;
     // Ten composed passes can transition ten independent five-surface scratch sets in one
     // invocation. Sixty-four retains headroom for the target and readable guide clones.
     std::array<Entry, 64> _entries {};
     size_t _count = 0;
 
   public:
-    DispatchResourceStates(ID3D12GraphicsCommandList* cmd, Emit emit) : _cmd(cmd), _emit(emit) {}
+    DispatchResourceStates(ID3D12GraphicsCommandList* cmd, Emit emit,
+        void* context=nullptr,EmitWithContext contextEmit=nullptr)
+        :_cmd(cmd),_emit(emit),_context(context),_contextEmit(contextEmit){}
     DispatchResourceStates(const DispatchResourceStates&) = delete;
     DispatchResourceStates& operator=(const DispatchResourceStates&) = delete;
     ~DispatchResourceStates() { Restore(); }
@@ -121,17 +127,29 @@ class DispatchResourceStates
             _entries[_count++] = { resource, from, from };
         }
         assert(_entries[i].current == from);
-        _emit(_cmd, resource, from, to);
+        if(_context&&_contextEmit)_contextEmit(_context,_cmd,resource,from,to,false);
+        else _emit(_cmd,resource,from,to);
         _entries[i].current = to;
     }
 
+    bool CommitCurrent(ID3D12Resource* resource,D3D12_RESOURCE_STATES expected)noexcept
+    {
+        for(size_t i=0;i<_count;++i)if(_entries[i].resource==resource){
+            if(_entries[i].current!=expected)return false;
+            _entries[i].arrival=_entries[i].current;return true;
+        }
+        return false;
+    }
     void Restore()
     {
         while (_count != 0)
         {
             const auto& entry = _entries[--_count];
             if (entry.current != entry.arrival)
-                _emit(_cmd, entry.resource, entry.current, entry.arrival);
+            {
+                if(_context&&_contextEmit)_contextEmit(_context,_cmd,entry.resource,entry.current,entry.arrival,true);
+                else _emit(_cmd,entry.resource,entry.current,entry.arrival);
+            }
         }
     }
 };

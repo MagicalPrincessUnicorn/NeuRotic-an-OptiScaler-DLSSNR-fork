@@ -1,0 +1,95 @@
+#include "dlssnr/VulkanNrReservations.h"
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+using namespace DlssNr;
+unsigned destroyedShaders=0,destroyedMeters=0,destroyedQueries=0,polls=0;
+void Check(bool ok,const char* reason){if(!ok){std::fprintf(stderr,"FAIL: %s\n",reason);std::exit(1);}}
+struct Slots {
+ VkNrReservationPool pool;unsigned drains=0;
+ bool DrainReleased(){++drains;return pool.DrainReleased();}
+};
+struct Shader {
+ Slots slots;~Shader(){++destroyedShaders;}
+ bool DrainReleased(){return slots.DrainReleased();}
+};
+struct Resettable {unsigned resets=0;void Reset(){++resets;}};
+enum class VkNrRoute{Native,Present};
+struct VkNrQueueContext{VkQueue queue=VK_NULL_HANDLE;uint32_t family=UINT32_MAX;};
+struct VkState {
+ VkDevice device=reinterpret_cast<VkDevice>(1);
+ VkQueue modelQueue=VK_NULL_HANDLE;uint32_t modelQueueFamily=1;
+ void* resources=reinterpret_cast<void*>(1);std::optional<int> candidate=1,performanceSource=1,performanceEvaluation=1;
+ VkNrUseId performanceUse{1};uint64_t performanceSerial=1;bool preSrDelivered=true,nativeDeliveryAccepted=true;
+ std::unique_ptr<Shader> pass;Shader* borrowedPass=nullptr;
+ Slots querySlots;std::unique_ptr<Slots> meterSlots=std::make_unique<Slots>();
+ Resettable scan,exposureHold,automaticWhitePoint;
+ int exposureContext=1;float gameExposure=4,gamePreExposure=2;uint64_t gameExposureSequence=1;
+ bool reportedAutomaticWhitePoint=true;unsigned automaticMeterFrames=5;
+ std::array<VkNrUseId,4> meterUses{},queryUses{};
+ std::array<bool,4> meterPublished{},queryPublished{};std::array<int,4> queryFrames{};
+ bool meterAllocated=true;VkQueryPool queryPool=reinterpret_cast<VkQueryPool>(1);
+ uint32_t timestampBits=64;float timestampPeriod=1;uint64_t lastQueryUse=1;
+ std::optional<double> lastGpuTime=1;std::optional<int> lastGpuFrame=1;unsigned timedFrames=1;
+ std::optional<int> admittedWorkload=1;int chain=1;bool reset=false;uint64_t resetRevision=0;
+ std::unique_ptr<int> generations=std::make_unique<int>(123);
+};
+std::array<std::unique_ptr<VkState>,10> native;
+VkState present;
+VkState* current;
+VkState& PassStateVk(VkNrRoute route,uint32_t pass){return route==VkNrRoute::Native?*native[pass]:present;}
+VkState& ActiveVk(){return *current;}
+struct ScopedVkSession {VkState* previous;ScopedVkSession(VkNrRoute route,uint32_t pass):previous(current){current=&PassStateVk(route,pass);}~ScopedVkSession(){current=previous;}};
+void ClearFinalSource(VkState&){}
+void PollVkNrCompletions(){++polls;}
+void DestroyMeterReadback(){if(ActiveVk().meterAllocated){++destroyedMeters;ActiveVk().meterAllocated=false;}}
+void FakeDestroyQueryPool(VkDevice,VkQueryPool,const VkAllocationCallbacks*){++destroyedQueries;}
+#define vkDestroyQueryPool FakeDestroyQueryPool
+#define LOG_INFO(...) ((void)0)
+// PRODUCTION_TRANSITION
+int main(){
+ auto& owner=VulkanNrRecordings();
+ for(unsigned scenario=0;scenario<5;++scenario){
+  for(auto& state:native)state=std::make_unique<VkState>();
+  native[0]->pass=std::make_unique<Shader>();for(unsigned i=1;i<10;++i)native[i]->borrowedPass=native[0]->pass.get();
+  current=&present;destroyedShaders=destroyedMeters=destroyedQueries=polls=0;
+  auto cb=reinterpret_cast<VkCommandBuffer>(uintptr_t(10+scenario));auto queue=reinterpret_cast<VkQueue>(3);
+  owner.OnAllocate(reinterpret_cast<VkDevice>(1),reinterpret_cast<VkCommandPool>(4),cb,1);
+  const bool replayable=scenario==1;
+  owner.OnBegin(cb,replayable?0:VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,VK_SUCCESS);
+  auto use=*owner.Reserve(cb,1);
+  if(scenario<3)Check(native[0]->pass->slots.pool.Reserve(use,1).has_value(),"shader reservation created");
+  else if(scenario==3)Check(native[5]->querySlots.pool.Reserve(use,1).has_value(),"child query reservation created");
+  else Check(native[9]->meterSlots->pool.Reserve(use,1).has_value(),"child meter reservation created");
+  owner.OnEnd(cb,VK_SUCCESS);auto uses=*owner.SnapshotUses(cb);
+  auto submission=*owner.PrepareSubmission({queue,1,uses});owner.SubmissionReturned(submission,VK_SUCCESS);owner.CheckpointReturned(submission,VK_SUCCESS);
+  if(scenario==1)owner.ObserveFence(submission,VK_SUCCESS);
+  if(scenario==2){Check(owner.AddConsumerHold(use),"real consumer hold installed");owner.ObserveFence(submission,VK_SUCCESS);}
+  Check(PrepareNativeQueueTransitionLocked({VK_NULL_HANDLE,1}),"unchanged family keeps current owners");
+  Check(polls==0&&!destroyedShaders&&!destroyedMeters&&!destroyedQueries,"unchanged family does no drain or destruction");
+  Check(!PrepareNativeQueueTransitionLocked({VK_NULL_HANDLE,2}),"pending GPU/recording/consumer proof prevents transition");
+  Check(!destroyedShaders&&!destroyedMeters&&!destroyedQueries,"failed phase one destroys no auxiliary resources");
+  for(const auto& state:native){
+   Check(state->querySlots.drains==1&&state->meterSlots->drains==1,"drain visits every child despite earlier pending owner");
+   Check(state->modelQueueFamily==1&&state->generations&&*state->generations==123,"pending transition preserves queue identity and model payloads");
+  }
+  if(scenario==1)owner.OnReset(cb,VK_SUCCESS);
+  else if(scenario==2)owner.RemoveConsumerHold(use);
+  else owner.ObserveFence(submission,VK_SUCCESS);
+  Check(PrepareNativeQueueTransitionLocked({VK_NULL_HANDLE,2}),"exact owner proof permits transition");
+  Check(destroyedShaders==1&&destroyedMeters==10&&destroyedQueries==10,"phase two destroys each auxiliary exactly once");
+  Check(current==&present&&present.modelQueueFamily==1&&present.meterAllocated,"Native cleanup preserves Present and active context");
+  for(const auto& state:native){
+   Check(state->modelQueueFamily==2&&!state->borrowedPass&&!state->resources,"all Native passes move and discard stale aliases");
+   Check(!state->timestampBits&&!state->timestampPeriod&&!state->lastGpuTime&&state->reset,"family-specific timing/history resets");
+   Check(state->generations&&*state->generations==123,"old model generations remain owned");
+  }
+  Check(PrepareNativeQueueTransitionLocked({VK_NULL_HANDLE,2})&&destroyedShaders==1&&destroyedQueries==10,"repeated family is stable");
+  Check(PrepareNativeQueueTransitionLocked({VK_NULL_HANDLE,1}),"returning family can reopen after drain");
+ }
+ // A known same-family queue change is also an explicit context transition.
+ native[0]->modelQueue=reinterpret_cast<VkQueue>(20);
+ Check(PrepareNativeQueueTransitionLocked({reinterpret_cast<VkQueue>(21),1}),"known queue switch admits after owned drain");
+ Check(native[0]->modelQueue==reinterpret_cast<VkQueue>(21),"new queue identity is published");
+ std::puts("PASS actual Native queue transition: pending GPU, recording and consumer lifetime; all-pass drain; two-phase destruction; family return; queue switch; Present isolation");
+}

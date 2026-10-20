@@ -1,0 +1,1625 @@
+{
+  "schema_version": 1,
+  "source": "S1 §T embedded exact original scenario/oracle strings; standalone 03_VERIFICATION_58.json bytes not recovered",
+  "identity": "N01–N12/O01–O12/L01–L15/F01–F12/R01–R07",
+  "original_results_are_not_claimed_current": true,
+  "current_product_results": "NOT_RUN_IN_THIS_CHAT",
+  "cases": [
+    {
+      "id": "N01",
+      "ordinal": 1,
+      "original_scenario": "Real production activation from valid owner preparation",
+      "original_oracle": "Exactly one coherent active PlanCommit/RouteGeneration/delivery contract; no fixture producer.",
+      "original_layers": [
+        "unit",
+        "integration",
+        "structural"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N01",
+        "actual_file_lines": [
+          571,
+          584
+        ]
+      },
+      "positive_control": "Real enrolled cold activation; identical repeat retains same tuple.",
+      "semantic_mutant": "Replace real activation with a selected-only record.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N02",
+      "ordinal": 2,
+      "original_scenario": "Selected receipt or allocated generation without actual activation",
+      "original_oracle": "No model entry.",
+      "original_layers": [
+        "unit",
+        "mutation",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N02",
+        "actual_file_lines": [
+          585,
+          598
+        ]
+      },
+      "positive_control": "Actual Active tuple from N01 admits an otherwise valid sample.",
+      "semantic_mutant": "Skip current-slot/commit check.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N03",
+      "ordinal": 3,
+      "original_scenario": "Copy old PlanCommit after revocation",
+      "original_oracle": "No new invocation/model start despite structurally valid record.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N03",
+        "actual_file_lines": [
+          599,
+          612
+        ]
+      },
+      "positive_control": "Same exact record before revoke allows one valid start.",
+      "semantic_mutant": "Treat serialized commitment as current membership.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N04",
+      "ordinal": 4,
+      "original_scenario": "Two wrappers use the same outer Native sample",
+      "original_oracle": "Exactly one accepted first model entry.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N04",
+        "actual_file_lines": [
+          613,
+          626
+        ]
+      },
+      "positive_control": "One authentic outer invocation executes once through one wrapper.",
+      "semantic_mutant": "Include wrapper identity in the sample attempt key.",
+      "owning_sps": [
+        "SP03",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N05",
+      "ordinal": 5,
+      "original_scenario": "Change placement/config during host SR",
+      "original_oracle": "Original immutable invocation selection governs; no pre+post double attempt.",
+      "original_layers": [
+        "state-machine",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N05",
+        "actual_file_lines": [
+          627,
+          640
+        ]
+      },
+      "positive_control": "Frozen pre-SR selection remains pre-SR through actual SR.",
+      "semantic_mutant": "Reread live placement at the post-SR seam.",
+      "owning_sps": [
+        "SP04",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N06",
+      "ordinal": 6,
+      "original_scenario": "Change EvaluationId/route label for the same admitted sample",
+      "original_oracle": "No second opportunity.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N06",
+        "actual_file_lines": [
+          641,
+          654
+        ]
+      },
+      "positive_control": "A genuinely new source sample can reserve after rightful closure.",
+      "semantic_mutant": "Rekey uniqueness on reset/evaluation/route changes.",
+      "owning_sps": [
+        "SP03",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N07",
+      "ordinal": 7,
+      "original_scenario": "Reuse feature handle/address after incarnation change",
+      "original_oracle": "Old invocation and output references reject.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N07",
+        "actual_file_lines": [
+          655,
+          668
+        ]
+      },
+      "positive_control": "Genuine new feature incarnation enrolls with fresh owner bindings.",
+      "semantic_mutant": "Compare feature pointer without incarnation.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N08",
+      "ordinal": 8,
+      "original_scenario": "Simultaneous revoke versus model-start gate",
+      "original_oracle": "One linearized outcome: revoke wins and no new call, or started work remains owned.",
+      "original_layers": [
+        "unit",
+        "state-machine"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N08",
+        "actual_file_lines": [
+          669,
+          682
+        ]
+      },
+      "positive_control": "Run start-before-revoke with retained actual owner guard.",
+      "semantic_mutant": "Release the owner pin between start reservation and actual call.",
+      "owning_sps": [
+        "SP03",
+        "SP09"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N09",
+      "ordinal": 9,
+      "original_scenario": "Native sample ordinal supplied as game BaseRealFrameId",
+      "original_oracle": "Final qualification rejects absent authentic association.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N09",
+        "actual_file_lines": [
+          683,
+          696
+        ]
+      },
+      "positive_control": "Authentic provider-issued final association qualifies exact scope.",
+      "semantic_mutant": "Cast sample ordinal to BaseRealFrameId.",
+      "owning_sps": [
+        "SP03",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N10",
+      "ordinal": 10,
+      "original_scenario": "Unknown base-frame identity with coherent supported Native sample",
+      "original_oracle": "HostReturn qualifier succeeds; final consumer remains unqualified.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N10",
+        "actual_file_lines": [
+          697,
+          710
+        ]
+      },
+      "positive_control": "Genuine invocation publication plus valid semantic/use/history facts qualifies local input.",
+      "semantic_mutant": "Require a fabricated final frame for local HostReturn, or bypass strict association.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N11",
+      "ordinal": 11,
+      "original_scenario": "Two different Native samples with both final identities Unknown",
+      "original_oracle": "They are not treated as the same sample through Unknown==Unknown.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N11",
+        "actual_file_lines": [
+          711,
+          724
+        ]
+      },
+      "positive_control": "The same known Native sample matches only its own resources/recipe.",
+      "semantic_mutant": "Allow Unknown final IDs to establish equality.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "N12",
+      "ordinal": 12,
+      "original_scenario": "Imported raw receipt/record attempts to reconstruct live capability",
+      "original_oracle": "Production API refuses; negative compile/API test has a valid positive control.",
+      "original_layers": [
+        "compile-time",
+        "structural"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / N12",
+        "actual_file_lines": [
+          725,
+          738
+        ]
+      },
+      "positive_control": "Enrolled owner constructs and uses the live capability through its legitimate API.",
+      "semantic_mutant": "Expose public construction or deserialization of a live borrow/ticket.",
+      "owning_sps": [
+        "SP03",
+        "SP08"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O01",
+      "ordinal": 13,
+      "original_scenario": "Actual post-SR model/resolve writes exact caller target",
+      "original_oracle": "HostReturnRecorded identifies correct output version and record point.",
+      "original_layers": [
+        "integration",
+        "controlled D3D12 host",
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O01",
+        "actual_file_lines": [
+          739,
+          752
+        ]
+      },
+      "positive_control": "Actual post-SR chain records complete target operation and restores parameters.",
+      "semantic_mutant": "Publish stage return before the required caller-target pass.",
+      "owning_sps": [
+        "SP04"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O02",
+      "ordinal": 14,
+      "original_scenario": "Model succeeded but only scratch was produced",
+      "original_oracle": "No HostReturn success.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O02",
+        "actual_file_lines": [
+          753,
+          766
+        ]
+      },
+      "positive_control": "A real scratch-to-caller resolve produces valid delivery.",
+      "semantic_mutant": "Accept C07 Produced alone as local delivery.",
+      "owning_sps": [
+        "SP04"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O03",
+      "ordinal": 15,
+      "original_scenario": "Pre-SR scratch exists but host SR fails or uses different input",
+      "original_oracle": "No successful candidate-to-host-return proof.",
+      "original_layers": [
+        "integration",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O03",
+        "actual_file_lines": [
+          767,
+          780
+        ]
+      },
+      "positive_control": "One real SR call consumes the exact NR output and completes output chain.",
+      "semantic_mutant": "Accept wrong input, skipped SR or SR failure as delivery.",
+      "owning_sps": [
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O04",
+      "ordinal": 16,
+      "original_scenario": "Owned output pass fails while outer legacy wrapper returns true",
+      "original_oracle": "Typed result refuses false delivery; baseline boolean is not accepted as proof.",
+      "original_layers": [
+        "unit",
+        "integration",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O04",
+        "actual_file_lines": [
+          781,
+          794
+        ]
+      },
+      "positive_control": "All required typed pass results establish complete output chain.",
+      "semantic_mutant": "Use outer Boolean instead of typed failed-pass status.",
+      "owning_sps": [
+        "SP04",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O05",
+      "ordinal": 17,
+      "original_scenario": "Pass skips without writing intended output",
+      "original_oracle": "Preserve only a proven existing content version; no planned-output success.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O05",
+        "actual_file_lines": [
+          795,
+          808
+        ]
+      },
+      "positive_control": "Qualified identity preserves actual existing version without a new write.",
+      "semantic_mutant": "Mint output revision for a skipped required pass.",
+      "owning_sps": [
+        "SP04",
+        "SP06"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O06",
+      "ordinal": 18,
+      "original_scenario": "Wrong output, stale write version, subresource or active rectangle",
+      "original_oracle": "No delivery proof.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O06",
+        "actual_file_lines": [
+          809,
+          822
+        ]
+      },
+      "positive_control": "Exact target/subresource/full active region and actual owned revision match.",
+      "semantic_mutant": "Ignore one target/generation/range check, including overflow.",
+      "owning_sps": [
+        "SP04",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O07",
+      "ordinal": 19,
+      "original_scenario": "Every early return/exception after parameter redirection",
+      "original_oracle": "Exact CPU parameter restoration; no assertion of GPU rollback.",
+      "original_layers": [
+        "integration",
+        "state-machine"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O07",
+        "actual_file_lines": [
+          823,
+          836
+        ]
+      },
+      "positive_control": "Successful substitution/call restores each original parameter before commit.",
+      "semantic_mutant": "Drop one restoration path or commit before a fallible destructor.",
+      "owning_sps": [
+        "SP04",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O08",
+      "ordinal": 20,
+      "original_scenario": "Refusal before any possible work",
+      "original_oracle": "Original/legacy behavior only if positive nonattempt/nonrecording proof exists.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O08",
+        "actual_file_lines": [
+          837,
+          850
+        ]
+      },
+      "positive_control": "Positive untouched/no-candidate-effect proof allows required original SR once.",
+      "semantic_mutant": "Infer no effects solely from a failed return code.",
+      "owning_sps": [
+        "SP04",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O09",
+      "ordinal": 21,
+      "original_scenario": "Failure after possible model advancement",
+      "original_oracle": "No same-sample legacy NR retry; retain actual attempt and reset/retention facts.",
+      "original_layers": [
+        "unit",
+        "integration",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O09",
+        "actual_file_lines": [
+          851,
+          864
+        ]
+      },
+      "positive_control": "Failure prefix stays retained and later genuinely new sample uses proper reset permit.",
+      "semantic_mutant": "Relabel possible advancement as NotAttempted and retry NR.",
+      "owning_sps": [
+        "SP03",
+        "SP04",
+        "SP05"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O10",
+      "ordinal": 22,
+      "original_scenario": "Optional diagnostic sink fails",
+      "original_oracle": "Actual Native work/ownership remains correct; no duplicate call or fake failure-neutral cleanup.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O10",
+        "actual_file_lines": [
+          865,
+          878
+        ]
+      },
+      "positive_control": "Required in-memory state survives a silent healthy sink.",
+      "semantic_mutant": "Make required retirement/ownership depend on successful logging.",
+      "owning_sps": [
+        "SP04",
+        "SP08"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O11",
+      "ordinal": 23,
+      "original_scenario": "Required publication reservation fails before work",
+      "original_oracle": "No irreversible candidate action or false success.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O11",
+        "actual_file_lines": [
+          879,
+          892
+        ]
+      },
+      "positive_control": "Reserved ledger/result/failure capacity permits the first action.",
+      "semantic_mutant": "Allocate required failure state only after model entry.",
+      "owning_sps": [
+        "SP03",
+        "SP04"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "O12",
+      "ordinal": 24,
+      "original_scenario": "Required result publication fails after model entry",
+      "original_oracle": "Possible advancement remains recorded/retained; no NotAttempted relabel.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / O12",
+        "actual_file_lines": [
+          893,
+          906
+        ]
+      },
+      "positive_control": "Emergency retained failure slot keeps owner pins through real terminality.",
+      "semantic_mutant": "Drop effect accounting when result publication throws.",
+      "owning_sps": [
+        "SP03",
+        "SP04"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L01",
+      "ordinal": 25,
+      "original_scenario": "More than ledger capacity successful frames, no Present/C13",
+      "original_oracle": "Native continues and legitimately retires; resources/metadata reach a bounded plateau.",
+      "original_layers": [
+        "integration",
+        "controlled D3D12 host",
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L01",
+        "actual_file_lines": [
+          907,
+          920
+        ]
+      },
+      "positive_control": "Run at least max(1024,10*K+1) valid actual samples with real owner retirement and no Present/C13.",
+      "semantic_mutant": "Require C13 for HostReturn retirement, or evict unresolved entries by age.",
+      "owning_sps": [
+        "SP03",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L02",
+      "ordinal": 26,
+      "original_scenario": "CPU records multiple frames ahead",
+      "original_oracle": "No reset solely because final consumption has not occurred; actual predecessor GPU order still validated.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L02",
+        "actual_file_lines": [
+          921,
+          934
+        ]
+      },
+      "positive_control": "Owner-qualified ordered predecessor permits several in-flight samples.",
+      "semantic_mutant": "Equate CPU call order with GPU dependency, or force final receipt per frame.",
+      "owning_sps": [
+        "SP03",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L03",
+      "ordinal": 27,
+      "original_scenario": "Earlier required recording is canceled before execution",
+      "original_oracle": "Continuity invalidated/reset or safely canceled under actual owner policy.",
+      "original_layers": [
+        "state-machine",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L03",
+        "actual_file_lines": [
+          935,
+          948
+        ]
+      },
+      "positive_control": "Ordered live predecessor supports successor; safe owned cancellation closes its use.",
+      "semantic_mutant": "Keep history valid after losing a required predecessor.",
+      "owning_sps": [
+        "SP03",
+        "SP09"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L04",
+      "ordinal": 28,
+      "original_scenario": "Recorded but not submitted work",
+      "original_oracle": "Not reported GPU-complete, not prematurely reused.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L04",
+        "actual_file_lines": [
+          949,
+          962
+        ]
+      },
+      "positive_control": "Owner-proven nonreplayable canceled recording retires after every hold ends.",
+      "semantic_mutant": "Treat callback exit or no observed submit as completed/canceled use.",
+      "owning_sps": [
+        "SP03"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L05",
+      "ordinal": 29,
+      "original_scenario": "Completed GPU work but provider retains input/output",
+      "original_oracle": "Retention remains until actual release; no HostReturn shortcut.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L05",
+        "actual_file_lines": [
+          963,
+          976
+        ]
+      },
+      "positive_control": "Exact provider release after GPU completion allows final relevant hold to end.",
+      "semantic_mutant": "Release provider-held output on producer fence alone.",
+      "owning_sps": [
+        "SP03",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L06",
+      "ordinal": 30,
+      "original_scenario": "Same-recording dependent operations",
+      "original_oracle": "Required UAV/state barriers and resource-use order remain correct.",
+      "original_layers": [
+        "controlled D3D12 host",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L06",
+        "actual_file_lines": [
+          977,
+          990
+        ]
+      },
+      "positive_control": "Actual dependent operations with qualified state/UAV plan produce correct readback.",
+      "semantic_mutant": "Remove required barrier; absence of an observable failure is not a mutation kill.",
+      "owning_sps": [
+        "SP05",
+        "SP06"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L07",
+      "ordinal": 31,
+      "original_scenario": "Supported cross-queue handoff",
+      "original_oracle": "Real signal/wait dependency; unrelated fence does not qualify.",
+      "original_layers": [
+        "controlled D3D12 host",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L07",
+        "actual_file_lines": [
+          991,
+          1004
+        ]
+      },
+      "positive_control": "Owned two-queue path uses exact successful producer signal/consumer wait.",
+      "semantic_mutant": "Substitute queue/device/fence/value or ignore failed Wait.",
+      "owning_sps": [
+        "SP03",
+        "SP06"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L08",
+      "ordinal": 32,
+      "original_scenario": "Recording replay or reused command-list incarnation",
+      "original_oracle": "Follow qualified provider/replay rules; stale rights reject; CPU call count is not mistaken for GPU executions.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L08",
+        "actual_file_lines": [
+          1005,
+          1018
+        ]
+      },
+      "positive_control": "Controlled source certifies one-shot ordered recording with complete use accounting.",
+      "semantic_mutant": "Treat CPU borrow/dedup or first completed fence as proof replay is impossible.",
+      "owning_sps": [
+        "SP03",
+        "SP09"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L09",
+      "ordinal": 33,
+      "original_scenario": "Pointer/heap/resource alias reuse",
+      "original_oracle": "Old content and allocation-generation proof rejects.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L09",
+        "actual_file_lines": [
+          1019,
+          1032
+        ]
+      },
+      "positive_control": "Exact retained object/owner generations and valid owned-write binding qualify.",
+      "semantic_mutant": "Accept same pointer/heap offset after alias/incarnation replacement.",
+      "owning_sps": [
+        "SP03",
+        "SP06"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L10",
+      "ordinal": 34,
+      "original_scenario": "Camera cut, input-history break, model error/unknown advancement",
+      "original_oracle": "Existing conservative reset/owner acknowledgment policy retained.",
+      "original_layers": [
+        "unit",
+        "integration",
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L10",
+        "actual_file_lines": [
+          1033,
+          1046
+        ]
+      },
+      "positive_control": "Exact affected-owner reset effect acknowledges only its demand.",
+      "semantic_mutant": "Clear newer reset demand with old ack or generic model success.",
+      "owning_sps": [
+        "SP03",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L11",
+      "ordinal": 35,
+      "original_scenario": "Valid local handoff followed only by skipped display frame",
+      "original_oracle": "No reset merely due to absent final certificate/Present disposition.",
+      "original_layers": [
+        "unit",
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L11",
+        "actual_file_lines": [
+          1047,
+          1060
+        ]
+      },
+      "positive_control": "Valid local return with ordered history continues without display evidence.",
+      "semantic_mutant": "Reset history solely because Present/C13 is missing.",
+      "owning_sps": [
+        "SP03",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L12",
+      "ordinal": 36,
+      "original_scenario": "Capacity exhausted by genuinely unresolved provider work",
+      "original_oracle": "Explicit refusal; no eviction or overwrite; reported as unresolved, not sustained PASS.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L12",
+        "actual_file_lines": [
+          1061,
+          1074
+        ]
+      },
+      "positive_control": "Free authentic slot admits; held-full table refuses without writes.",
+      "semantic_mutant": "Overwrite/evict oldest unresolved slot to maintain throughput.",
+      "owning_sps": [
+        "SP03",
+        "SP09"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L13",
+      "ordinal": 37,
+      "original_scenario": "Late invocation capability after slot reuse/closed prefix",
+      "original_oracle": "Reject; no model reentry.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L13",
+        "actual_file_lines": [
+          1075,
+          1088
+        ]
+      },
+      "positive_control": "New slot revision accepts its exact new sample only.",
+      "semantic_mutant": "Ignore ticket slot revision or authentic closed-prefix exclusion.",
+      "owning_sps": [
+        "SP03",
+        "SP09"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L14",
+      "ordinal": 38,
+      "original_scenario": "Disable during recorded/submitted work",
+      "original_oracle": "New starts stop, actual existing work drains/retains; unrelated final clients not globally stranded.",
+      "original_layers": [
+        "state-machine",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L14",
+        "actual_file_lines": [
+          1089,
+          1102
+        ]
+      },
+      "positive_control": "Stop ingress, finish/abort protected tails, then stop shared finalizer and drain.",
+      "semantic_mutant": "Globally stop finalizer before outstanding legitimate seal tails settle.",
+      "owning_sps": [
+        "SP03",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "L15",
+      "ordinal": 39,
+      "original_scenario": "All GPU work finished but callback/metadata consumer still active",
+      "original_oracle": "CPU object lifetime retained until actual quiescence.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / L15",
+        "actual_file_lines": [
+          1103,
+          1116
+        ]
+      },
+      "positive_control": "After callback/reader closure and all holds, root drains and cold transfer becomes legal.",
+      "semantic_mutant": "Destroy root on facade drop/GPU completion despite live reader.",
+      "owning_sps": [
+        "SP03",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F01",
+      "ordinal": 40,
+      "original_scenario": "Actual owned copy/transform/HUD chain uses exact contribution",
+      "original_oracle": "Exact final-boundary proof accepted, subject to real rights/provider qualification.",
+      "original_layers": [
+        "integration",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F01",
+        "actual_file_lines": [
+          1117,
+          1130
+        ]
+      },
+      "positive_control": "Enrolled supported actual chain with exact pre-reserved scope and final predicates qualifies.",
+      "semantic_mutant": "Issue lineage from a planned but unrecorded edge.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F02",
+      "ordinal": 41,
+      "original_scenario": "Same frame/queue/fence/descriptors, host uses unrelated scene",
+      "original_oracle": "No Native-derived C13 seal.",
+      "original_layers": [
+        "controlled D3D12 host",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F02",
+        "actual_file_lines": [
+          1131,
+          1144
+        ]
+      },
+      "positive_control": "Same-boundary known dependent chain validates contribution.",
+      "semantic_mutant": "Accept unrelated image because timing/descriptors match.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F03",
+      "ordinal": 42,
+      "original_scenario": "Same pointer but later invalidating overwrite",
+      "original_oracle": "Reject old candidate lineage.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F03",
+        "actual_file_lines": [
+          1145,
+          1158
+        ]
+      },
+      "positive_control": "Current unmodified owned output version extends a known chain.",
+      "semantic_mutant": "Ignore later clear/overwrite/alias generation.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F04",
+      "ordinal": 43,
+      "original_scenario": "Unknown host transform or unobserved intermediate branch",
+      "original_oracle": "No fabricated pass edge; final proof unavailable.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F04",
+        "actual_file_lines": [
+          1159,
+          1172
+        ]
+      },
+      "positive_control": "Every traversed pass has actual supported semantics and exact versions.",
+      "semantic_mutant": "Bridge an unknown transform with matching input/output labels.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F05",
+      "ordinal": 44,
+      "original_scenario": "Merely bind an unused input descriptor",
+      "original_oracle": "Not sufficient as image-dataflow evidence.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F05",
+        "actual_file_lines": [
+          1173,
+          1186
+        ]
+      },
+      "positive_control": "Certified consuming operation with actual bound version emits edge.",
+      "semantic_mutant": "Treat descriptor binding alone as model contribution.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F06",
+      "ordinal": 45,
+      "original_scenario": "Wrong viewport, final-frame association, provider or handoff generation",
+      "original_oracle": "Reject; no newest-frame matching heuristic.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F06",
+        "actual_file_lines": [
+          1187,
+          1200
+        ]
+      },
+      "positive_control": "Exact provider/consumer/frame/view/generation reservation matches final output.",
+      "semantic_mutant": "Use latest/nearest frame or ignore a provider generation.",
+      "owning_sps": [
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F07",
+      "ordinal": 46,
+      "original_scenario": "HUD/color/required-host-rendering mismatch",
+      "original_oracle": "Preserve existing final-boundary refusal.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F07",
+        "actual_file_lines": [
+          1201,
+          1214
+        ]
+      },
+      "positive_control": "All original HUD/color/rendering predicates match exact output.",
+      "semantic_mutant": "Bypass one original strict final-boundary predicate.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F08",
+      "ordinal": 47,
+      "original_scenario": "FinalConsumerRequired selected with no actual bridge",
+      "original_oracle": "Contract admission refuses; no silent HostReturn downgrade.",
+      "original_layers": [
+        "unit",
+        "integration",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F08",
+        "actual_file_lines": [
+          1215,
+          1228
+        ]
+      },
+      "positive_control": "Actually enrolled provider and early reservation allow strict preparation.",
+      "semantic_mutant": "Default missing bridge/delivery field to HostReturn.",
+      "owning_sps": [
+        "SP03",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F09",
+      "ordinal": 48,
+      "original_scenario": "Duplicate final attachment/seal request",
+      "original_oracle": "Same immutable result/idempotent response; no second model call or second seal.",
+      "original_layers": [
+        "unit",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F09",
+        "actual_file_lines": [
+          1229,
+          1242
+        ]
+      },
+      "positive_control": "First valid attachment produces one stored seal through sole finalizer.",
+      "semantic_mutant": "Reissue FinalSealId or rerun model on duplicate attachment.",
+      "owning_sps": [
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F10",
+      "ordinal": 49,
+      "original_scenario": "Later genuine association for originally unassociated Native sample",
+      "original_oracle": "Join record validated; original C06/C07 not rewritten; final scope remains known from actual host owner.",
+      "original_layers": [
+        "unit",
+        "integration"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F10",
+        "actual_file_lines": [
+          1243,
+          1256
+        ]
+      },
+      "positive_control": "Late genuine join remains evidence with original HostReturn unchanged.",
+      "semantic_mutant": "Retroactively upgrade HostReturn or rewrite C06/C07 for a late join.",
+      "owning_sps": [
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F11",
+      "ordinal": 50,
+      "original_scenario": "Rejected final continuation after valid HostReturn",
+      "original_oracle": "HostReturn remains historical fact; no claim that final delivery succeeded.",
+      "original_layers": [
+        "unit",
+        "state-machine"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F11",
+        "actual_file_lines": [
+          1257,
+          1270
+        ]
+      },
+      "positive_control": "Recorded local event persists while strict tail genuinely completes or fails.",
+      "semantic_mutant": "Erase local history or fabricate a dummy seal to retire a failed strict reservation.",
+      "owning_sps": [
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "F12",
+      "ordinal": 51,
+      "original_scenario": "Provider holds final packet after Native scratch is no longer needed",
+      "original_oracle": "Release independently only according to exact hold graph; no whole-session leak or premature free.",
+      "original_layers": [
+        "unit",
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / F12",
+        "actual_file_lines": [
+          1271,
+          1284
+        ]
+      },
+      "positive_control": "Independently terminal scratch retires while still-used final output stays held.",
+      "semantic_mutant": "Free whole graph on scratch completion or retain all scratch until unrelated final release.",
+      "owning_sps": [
+        "SP06",
+        "SP07"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R01",
+      "ordinal": 52,
+      "original_scenario": "Candidate disabled",
+      "original_oracle": "Retained legacy path and supported controls unchanged.",
+      "original_layers": [
+        "integration",
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R01",
+        "actual_file_lines": [
+          1285,
+          1298
+        ]
+      },
+      "positive_control": "Exact retained control path runs with candidate OFF.",
+      "semantic_mutant": "Perform candidate model/owner actions despite OFF or alter original SR error behavior.",
+      "owning_sps": [
+        "SP04",
+        "SP05",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R02",
+      "ordinal": 53,
+      "original_scenario": "Real model in controlled D3D12 host",
+      "original_oracle": "Actual output capture and actual execution evidence, not a stub model counter.",
+      "original_layers": [
+        "controlled D3D12 host"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R02",
+        "actual_file_lines": [
+          1299,
+          1312
+        ]
+      },
+      "positive_control": "Actual authorized model/NR ingress plus real SR for pre-SR produce trace and capture.",
+      "semantic_mutant": "Accept synthetic model count or copy pixels as real NR/SR evidence.",
+      "owning_sps": [
+        "SP06",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R03",
+      "ordinal": 54,
+      "original_scenario": "WARP-only lifetime test",
+      "original_oracle": "Clearly labelled mechanics-only; no NR model/IQ acceptance.",
+      "original_layers": [
+        "controlled D3D12 host",
+        "mutation"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R03",
+        "actual_file_lines": [
+          1313,
+          1326
+        ]
+      },
+      "positive_control": "WARP receipt is accepted only for declared software mechanics.",
+      "semantic_mutant": "Relabel WARP/synthetic provider result as hardware/model PASS.",
+      "owning_sps": [
+        "SP08",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R04",
+      "ordinal": 55,
+      "original_scenario": "Native candidate/control A/A and paired ABBA",
+      "original_oracle": "Exact identities, matched settings/scenario/history, run variance and honest verdict.",
+      "original_layers": [
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R04",
+        "actual_file_lines": [
+          1327,
+          1340
+        ]
+      },
+      "positive_control": "Qualified T49 campaign with exact binaries/settings and repeatable same-boundary capture.",
+      "semantic_mutant": "Accept changed binary/environment/warm-up or omit A/A variance check.",
+      "owning_sps": [
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R05",
+      "ordinal": 56,
+      "original_scenario": "Final game image differs from stage output due to later effects",
+      "original_oracle": "Report both capture boundaries; no false pixel equality expectation across tonemapping/HUD.",
+      "original_layers": [
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R05",
+        "actual_file_lines": [
+          1341,
+          1354
+        ]
+      },
+      "positive_control": "Compare candidate/control at same declared capture boundary.",
+      "semantic_mutant": "Require pixel equality across stage and final-game boundaries.",
+      "owning_sps": [
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R06",
+      "ordinal": 57,
+      "original_scenario": "Live FG/MFG combination tested",
+      "original_oracle": "Provider/ratio/profile/build-specific result, not blanket support from bridge-only tests.",
+      "original_layers": [
+        "live GPU/game/G2"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R06",
+        "actual_file_lines": [
+          1355,
+          1368
+        ]
+      },
+      "positive_control": "Named actually integrated provider/ratio/profile/hardware cell has real evidence.",
+      "semantic_mutant": "Generalize a controlled bridge test to all FG/MFG games/ratios.",
+      "owning_sps": [
+        "SP07",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    },
+    {
+      "id": "R07",
+      "ordinal": 58,
+      "original_scenario": "Missing required evidence",
+      "original_oracle": "Remains NOT_RUN/BLOCKED on that axis; no aggregate green status.",
+      "original_layers": [
+        "unit",
+        "mutation",
+        "structural"
+      ],
+      "source": {
+        "id": "S1",
+        "heading": "§T / R07",
+        "actual_file_lines": [
+          1369,
+          1382
+        ]
+      },
+      "positive_control": "Complete exact-scope fixture is accepted for evaluator testing only.",
+      "semantic_mutant": "Drop mandatory cell/identity or infer human G2 from machine completeness.",
+      "owning_sps": [
+        "SP08",
+        "SP09",
+        "SP10"
+      ],
+      "status_this_chat": "NOT_RUN",
+      "product_test_binding": "LIVE_BINDING_REQUIRED",
+      "operator_report_mapping": "NOT_ESTABLISHED",
+      "required_result_cells": "Expand original layer obligations against the exact requested profile/placement/delivery/environment; no synthetic promotion."
+    }
+  ]
+}

@@ -1,9 +1,12 @@
-#include <menu/MfgRequestReadout.h>
+﻿#include <menu/MfgRequestReadout.h>
 #include "languages/LanguageManagerView.h"
 #include "../../OptiScaler/menu/localization/LanguageRuntime.h"
 #include "../../OptiScaler/menu/localization/LanguageFonts.h"
 #include "storage/UserDataSession.h"
 #include <windows.h>
+#include "ui/StartupTimingProbe.h"
+#include "ui/StartupFeedback.h"
+#include "tests/StartupFeedbackFixture.h"
 #include <shellapi.h>
 #include <d3d11.h>
 #include <wincodec.h>
@@ -13,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <cstdlib>
 #include <crtdbg.h>
 #include "storage/AppDataMaintenance.h"
@@ -38,6 +42,7 @@ using Microsoft::WRL::ComPtr;
 int RunHubSelfTests();
 int RunLoadingUiTests();
 int RunScrollLayoutTests();
+int RunCompactRowsReviewUiTests();
 int RunFocusedUxTests();
 int RunHiddenLibraryTests();
 int RunLibraryPolishUiTests();
@@ -56,6 +61,7 @@ static nh::ResizeTimingFixture* sizingProbe=nullptr;
 static POINT libraryPreviewWorkArea{};
 static std::function<bool()> mainCloseGate;
 static LRESULT WINAPI WindowProc(HWND hwnd,UINT msg,WPARAM w,LPARAM l){
+ if(msg==WM_PAINT)nh::startup_probe::Paint(hwnd);if(msg==WM_CLOSE)nh::startup_probe::Mark("wm_close");
  if(msg==WM_HOTKEY&&(w==nh::AnythingHotkey::Id||w==nh::AnythingHotkey::ScreenshotId)){if(anythingShortcut)anythingShortcut(w,l);return 0;}
  if(ImGui::GetCurrentContext() && ImGui_ImplWin32_WndProcHandler(hwnd,msg,w,l))return 1;
  if(sizingProbe)sizingProbe->Observe(msg);
@@ -79,14 +85,17 @@ static void SaveFrame(ID3D11Device* device,ID3D11DeviceContext* context,IDXGISwa
  ComPtr<IWICImagingFactory> factory;Check(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory)),"Screenshot factory failed");ComPtr<IWICStream> stream;Check(factory->CreateStream(&stream),"Screenshot stream failed");Check(stream->InitializeFromFilename(path.c_str(),GENERIC_WRITE),"Screenshot output failed");ComPtr<IWICBitmapEncoder> encoder;Check(factory->CreateEncoder(GUID_ContainerFormatPng,nullptr,&encoder),"Screenshot encoder failed");Check(encoder->Initialize(stream.Get(),WICBitmapEncoderNoCache),"Screenshot initialization failed");ComPtr<IWICBitmapFrameEncode> frame;ComPtr<IPropertyBag2> properties;Check(encoder->CreateNewFrame(&frame,&properties),"Screenshot frame failed");frame->Initialize(properties.Get());frame->SetSize(desc.Width,desc.Height);WICPixelFormatGUID format=GUID_WICPixelFormat32bppRGBA;frame->SetPixelFormat(&format);std::vector<BYTE> encoded(desc.Width*desc.Height*4); for(UINT y=0;y<desc.Height;y++){auto src=(BYTE*)mapped.pData+y*mapped.RowPitch;auto dst=encoded.data()+y*desc.Width*4;for(UINT x=0;x<desc.Width;x++){dst[x*4]=src[x*4+2];dst[x*4+1]=src[x*4+1];dst[x*4+2]=src[x*4];dst[x*4+3]=src[x*4+3];}} if(format!=GUID_WICPixelFormat32bppBGRA)throw std::runtime_error("Unexpected PNG output format");Check(frame->WritePixels(desc.Height,desc.Width*4,(UINT)encoded.size(),encoded.data()),"Screenshot write failed");frame->Commit();encoder->Commit();context->Unmap(staging.Get(),0);
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
- int previewWidth=0,previewHeight=0,previewWorkWidth=0,previewWorkHeight=0;bool libraryLayoutTest=false,libraryLongLabels=false;
+ nh::startup_probe::Session startupTrace;if(!startupTrace.valid)return ERROR_INVALID_PARAMETER;
+ int previewWidth=0,previewHeight=0,previewWorkWidth=0,previewWorkHeight=0;bool libraryLayoutTest=false,libraryLongLabels=false,softwareUi=false;
  bool resizeTimingTest=false;std::string resizeTimingControl="none";
  int count;auto arguments=CommandLineToArgvW(GetCommandLineW(),&count);bool installDefaultsTest=false;bool languageTest=false;bool anythingTest=false;bool installerTest=false;bool polishPreview=false;bool cleanupTest=false;bool objectRulesTest=false;bool selfTest=false,smoke=false,themeTest=false,heroTest=false,riskTest=false,settingsTest=false,scanTest=false,smokeLight=false,compact=false;float smokeScale=1;std::filesystem::path screenshotDir;std::string smokeLocale;std::filesystem::path diagnosticsFixtureWorker;bool diagnosticsLongLabels=false,anythingTargetLongLabels=false,anythingLayoutScroll=false,mfgReadoutTest=false,mfgReadoutLongLabels=false;Neurotic::Mfg::MfgRequestJournal mfgReadoutJournal;
  if(count==2&&std::wstring(arguments[1])==L"--hidden-library-tests"){LocalFree(arguments);return RunHiddenLibraryTests();}
  if(count==2&&std::wstring(arguments[1])==L"--library-polish-ui-test"){LocalFree(arguments);return RunLibraryPolishUiTests();}
  if(count==2&&std::wstring(arguments[1])==L"--loading-ui-test"){LocalFree(arguments);return RunLoadingUiTests();}
  if(count==2&&std::wstring(arguments[1])==L"--scroll-ui-test"){LocalFree(arguments);return RunScrollLayoutTests();}
+ if(count==2&&std::wstring(arguments[1])==L"--compact-rows-review-ui-test"){LocalFree(arguments);return RunCompactRowsReviewUiTests();}
  if(count==2&&std::wstring(arguments[1])==L"--focused-ui-test"){LocalFree(arguments);return RunFocusedUxTests();}
+ for(int i=1;i<count;i++)if(std::wstring(arguments[i])==L"--software-ui")softwareUi=true;
  for(int i=1;i+1<count;i++)if(std::wstring(arguments[i])==L"--library-polish-preview"){polishPreview=smoke=true;screenshotDir=arguments[++i];}
  for(int i=1;i+2<count;i++)if(std::wstring(arguments[i])==L"--preview-size"){previewWidth=_wtoi(arguments[i+1]);previewHeight=_wtoi(arguments[i+2]);}
  for(int i=1;i+1<count;i++)if(std::wstring(arguments[i])==L"--library-layout-preview"){libraryLayoutTest=smoke=true;screenshotDir=arguments[++i];auto fixture=screenshotDir/L"user-data";SetEnvironmentVariableW(L"NEUROTIC_HUB_FIXTURE_ROOT",fixture.c_str());}
@@ -112,31 +121,41 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
  if(smoke){_set_error_mode(_OUT_TO_STDERR);_set_abort_behavior(0,_WRITE_ABORT_MSG|_CALL_REPORTFAULT);}
  if(selfTest){try{return RunHubSelfTests();}catch(const std::exception& error){std::fprintf(stderr,"Native test exception: %s\n",error.what());return 1;}}
  if(scanTest){CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);int code=RunHubScanTest();CoUninitialize();return code;}
- CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
- try{
+  nh::startup_probe::Mark("arguments_complete");
+  nh::StartupFeedback startupFeedback;
+  if(!smoke){const bool shown=startupFeedback.Start(instance);nh::startup_probe::Mark("startup_feedback_painted",shown?1:0);}
+  nh::startup_probe::Mark("com_begin");CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);nh::startup_probe::Mark("com_end");
+  try{
   if(!diagnosticsFixtureWorker.empty()&&(!anythingTest||diagnosticsFixtureWorker.filename()!=L"AnythingProtocolFixture.exe"||!std::filesystem::is_regular_file(diagnosticsFixtureWorker)))throw std::runtime_error("Diagnostics preview requires the owned Anything UI/protocol fixture");
-  nh::UserDataSession dataSession(nh::UserRoot());
-  if(!dataSession.Owns()){MessageBoxW(nullptr,nh::Wide(Neurotic::UiMessage("desktop.native.3ce0c9d3ddbd", "NeuRotic is already open. Close the other App before opening this version.")).c_str(),L"NeuRotic",MB_OK|MB_ICONINFORMATION);CoUninitialize();return 0;}
-  if(!smoke)nh::ImportLegacyUserDocuments(nh::LegacyUserRoot(),nh::UserRoot());
+   if(nh::startup_probe::Active()){
+    const auto app=nh::AppRoot();
+    for(const auto& worker:{app/L"Tools"/L"WindowWorker"/L"NeuRotic.WindowWorker.exe",app/L"window-worker"/L"NeuRotic.WindowWorker.exe",app.parent_path()/L"WindowWorker"/L"NeuRotic.WindowWorker.exe"})
+     if(std::filesystem::exists(worker))throw std::runtime_error("Startup probe requires the approved worker-free App copy");
+   }
+   nh::startup_probe::Mark("userdata_begin");nh::UserDataSession dataSession(nh::UserRoot());nh::startup_probe::Mark("userdata_end",dataSession.Owns()?1:0);
+  if(!dataSession.Owns()){startupFeedback.Close();MessageBoxW(nullptr,nh::Wide(Neurotic::UiMessage("desktop.native.3ce0c9d3ddbd", "NeuRotic is already open. Close the other App before opening this version.")).c_str(),L"NeuRotic",MB_OK|MB_ICONINFORMATION);CoUninitialize();return 0;}
+  nh::startup_fixture::Checkpoint(L"before-migration");
+  nh::startup_probe::Mark("legacy_import_begin");if(!smoke)nh::ImportLegacyUserDocuments(nh::LegacyUserRoot(),nh::UserRoot());nh::startup_probe::Mark("legacy_import_end");
   if(smoke)std::filesystem::create_directories(screenshotDir);
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-  WNDCLASSEXW windowClass{sizeof(windowClass)};windowClass.style=CS_CLASSDC;windowClass.lpfnWndProc=WindowProc;windowClass.hInstance=instance;windowClass.hIcon=LoadIconW(instance,MAKEINTRESOURCEW(101));windowClass.hIconSm=windowClass.hIcon;windowClass.lpszClassName=L"NeuRoticHubWindow";RegisterClassExW(&windowClass);
+  nh::startup_probe::Mark("window_setup_begin");WNDCLASSEXW windowClass{sizeof(windowClass)};windowClass.style=CS_CLASSDC;windowClass.lpfnWndProc=WindowProc;windowClass.hInstance=instance;windowClass.hIcon=LoadIconW(instance,MAKEINTRESOURCEW(101));windowClass.hIconSm=windowClass.hIcon;windowClass.lpszClassName=L"NeuRoticHubWindow";RegisterClassExW(&windowClass);
   POINT pointer{};GetCursorPos(&pointer);MONITORINFO monitor{sizeof(monitor)};GetMonitorInfoW(MonitorFromPoint(pointer,MONITOR_DEFAULTTONEAREST),&monitor);
   if(libraryLayoutTest&&previewWorkWidth>=880&&previewWorkWidth<=10000&&previewWorkHeight>=600&&previewWorkHeight<=10000){monitor.rcWork={0,0,previewWorkWidth,previewWorkHeight};libraryPreviewWorkArea={previewWorkWidth,previewWorkHeight};}
   auto bounds=nh::FitHubWindow(monitor.rcWork.left,monitor.rcWork.top,monitor.rcWork.right-monitor.rcWork.left,monitor.rcWork.bottom-monitor.rcWork.top,(smoke?smokeScale:GetDpiForSystem()/96.f),compact);
   HWND window=CreateWindowExW(0,windowClass.lpszClassName,L"NeuRotic",WS_OVERLAPPEDWINDOW,bounds.x,bounds.y,bounds.width,bounds.height,nullptr,nullptr,instance,nullptr);if(!window)throw std::runtime_error(Neurotic::UiMessage("desktop.native.eba33b785bb8", "Application window could not be created"));
   bounds=nh::FitHubWindow(monitor.rcWork.left,monitor.rcWork.top,monitor.rcWork.right-monitor.rcWork.left,monitor.rcWork.bottom-monitor.rcWork.top,(smoke?smokeScale:GetDpiForWindow(window)/96.f),compact);SetWindowPos(window,nullptr,bounds.x,bounds.y,bounds.width,bounds.height,SWP_NOZORDER|SWP_NOACTIVATE);
-  DXGI_SWAP_CHAIN_DESC desc{};desc.BufferCount=2;desc.BufferDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.OutputWindow=window;desc.SampleDesc.Count=1;desc.Windowed=TRUE;desc.SwapEffect=DXGI_SWAP_EFFECT_DISCARD;
-  ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;ComPtr<IDXGISwapChain> chain;D3D_FEATURE_LEVEL level;D3D_FEATURE_LEVEL levels[]={D3D_FEATURE_LEVEL_11_0};HRESULT created=D3D11CreateDeviceAndSwapChain(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,levels,1,D3D11_SDK_VERSION,&desc,&chain,&device,&level,&context);
-  if(FAILED(created))created=D3D11CreateDeviceAndSwapChain(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,levels,1,D3D11_SDK_VERSION,&desc,&chain,&device,&level,&context);Check(created,"D3D11 UI device unavailable");
-  ComPtr<ID3D11RenderTargetView> target;auto createTarget=[&](){ComPtr<ID3D11Texture2D> texture;Check(chain->GetBuffer(0,IID_PPV_ARGS(&texture)),"Window buffer unavailable");Check(device->CreateRenderTargetView(texture.Get(),nullptr,&target),"Window target unavailable");};createTarget();
-  auto brand=LoadBrand(device.Get());IMGUI_CHECKVERSION();ImGui::CreateContext();auto& io=ImGui::GetIO();io.ConfigFlags|=ImGuiConfigFlags_NavEnableKeyboard;io.IniFilename=nullptr;
+  nh::startup_probe::Mark("window_setup_end");DXGI_SWAP_CHAIN_DESC desc{};desc.BufferCount=2;desc.BufferDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.OutputWindow=window;desc.SampleDesc.Count=1;desc.Windowed=TRUE;desc.SwapEffect=DXGI_SWAP_EFFECT_DISCARD;
+  ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;ComPtr<IDXGISwapChain> chain;D3D_FEATURE_LEVEL level;D3D_FEATURE_LEVEL levels[]={D3D_FEATURE_LEVEL_11_0};D3D_DRIVER_TYPE uiDriver=softwareUi?D3D_DRIVER_TYPE_WARP:D3D_DRIVER_TYPE_HARDWARE;nh::startup_probe::Mark("d3d_device_begin");HRESULT created=D3D11CreateDeviceAndSwapChain(nullptr,uiDriver,nullptr,0,levels,1,D3D11_SDK_VERSION,&desc,&chain,&device,&level,&context);
+   nh::startup_probe::Mark("d3d_device_end",static_cast<unsigned long>(created));if(FAILED(created)&&!softwareUi){nh::startup_probe::Mark("d3d_fallback_begin");uiDriver=D3D_DRIVER_TYPE_WARP;created=D3D11CreateDeviceAndSwapChain(nullptr,uiDriver,nullptr,0,levels,1,D3D11_SDK_VERSION,&desc,&chain,&device,&level,&context);nh::startup_probe::Mark("d3d_fallback_end",static_cast<unsigned long>(created));}nh::startup_probe::Mark("d3d_final_result",static_cast<unsigned long>(created));Check(created,"D3D11 UI device unavailable");
+  ComPtr<ID3D11RenderTargetView> target;auto createTarget=[&](){ComPtr<ID3D11Texture2D> texture;Check(chain->GetBuffer(0,IID_PPV_ARGS(&texture)),"Window buffer unavailable");Check(device->CreateRenderTargetView(texture.Get(),nullptr,&target),"Window target unavailable");};nh::startup_probe::Mark("render_target_begin");createTarget();nh::startup_probe::Mark("render_target_end");
+  nh::startup_probe::Mark("brand_wic_begin");auto brand=LoadBrand(device.Get());nh::startup_probe::Mark("brand_wic_end");IMGUI_CHECKVERSION();nh::startup_probe::Mark("imgui_context_begin");ImGui::CreateContext();nh::startup_probe::Mark("imgui_context_end");auto& io=ImGui::GetIO();io.ConfigFlags|=ImGuiConfigFlags_NavEnableKeyboard;io.IniFilename=nullptr;
   if(smoke&&!smokeLocale.empty()){nh::LanguageStore fixtureStore(nh::UserRoot());auto applied=fixtureStore.Apply("included-"+smokeLocale);if(!applied.success)throw std::runtime_error(applied.message);}
-  Neurotic::Localization::LoadSharedCatalogOnce();
+  nh::startup_probe::Mark("language_catalog_begin");Neurotic::Localization::LoadSharedCatalogOnce();nh::startup_probe::Mark("language_catalog_end");
+  if(!smoke)startupFeedback.SetLoadingText(nh::Wide(Neurotic::UiMessage("desktop.startup.loading","Loading...")));
   auto addFonts=[&](){wchar_t windows[MAX_PATH];GetWindowsDirectoryW(windows,MAX_PATH);auto font=nh::Utf8((std::filesystem::path(windows)/L"Fonts"/L"segoeui.ttf").wstring());if(!io.Fonts->AddFontFromFileTTF(font.c_str(),18.f))io.Fonts->AddFontFromMemoryCompressedBase85TTF(hack_compressed_compressed_data_base85,18.f);
-  Neurotic::Localization::AddFontFallbacks(io.Fonts,18.f,Neurotic::Localization::SelectedLocale());nh::ui::AddActionFont(io.Fonts,18.f);Neurotic::Localization::AddFontFallbacks(io.Fonts,18.f,Neurotic::Localization::SelectedLocale());};addFonts();auto fontLocale=Neurotic::Localization::SelectedLocale();
-  if(!ImGui_ImplWin32_Init(window)||!ImGui_ImplDX11_Init(device.Get(),context.Get()))throw std::runtime_error(Neurotic::UiMessage("desktop.native.41c6feb59149", "UI initialization failed"));auto modelOwner=std::make_unique<nh::HubModel>();auto& model=*modelOwner;auto languageManager=std::make_unique<nh::LanguageManagerView>(window,device.Get(),context.Get(),nh::UserRoot());nh::SetLanguageManager(languageManager.get());model.languageMaintenanceBusy=[&](){return languageManager->EditorOpen()&&languageManager->Editor().Model()->Dirty();};bool pendingMainClose=false,closeRequested=false;nh::ClosingSession closing;mainCloseGate=[&](){if(closeRequested)return false;bool ready=languageManager->RequestClose();pendingMainClose=!ready;if(ready)closeRequested=true;return false;};if(!objectRulesTest&&!installerTest&&!anythingTest&&!languageTest&&!libraryLayoutTest&&!resizeTimingTest&&!mfgReadoutTest&&!progressTest)model.Load();if(smoke){while(model.readiness.busy){model.Poll();Sleep(10);}}else ShowWindow(window,SW_SHOWDEFAULT);
-  auto artwork=std::make_unique<nh::ArtworkService>();artwork->Attach(device.Get());model.artwork=artwork.get();nh::ThemeTransition water;if(!water.Attach(device.Get(),context.Get()))throw std::runtime_error(Neurotic::UiMessage("desktop.native.dde1c3564ae1", "Theme transition could not be initialized"));if(!smoke)nh::StartUpdateCheck();if(smoke){model.onlineArtwork=false;model.light=smokeLight;model.reducedMotion=!themeTest&&!heroTest;if(!model.games.empty()){model.Select(0);auto start=GetTickCount64();while(model.installer.busy&&GetTickCount64()-start<50000){model.Poll();Sleep(10);}}}
+  Neurotic::Localization::AddFontFallbacks(io.Fonts,18.f,Neurotic::Localization::SelectedLocale());nh::ui::AddActionFont(io.Fonts,18.f);Neurotic::Localization::AddFontFallbacks(io.Fonts,18.f,Neurotic::Localization::SelectedLocale());};nh::startup_probe::Mark("font_sources_begin");addFonts();nh::startup_probe::Mark("font_sources_end");auto fontLocale=Neurotic::Localization::SelectedLocale();
+  if(!ImGui_ImplWin32_Init(window)||!ImGui_ImplDX11_Init(device.Get(),context.Get()))throw std::runtime_error(Neurotic::UiMessage("desktop.native.41c6feb59149", "UI initialization failed"));nh::startup_probe::Mark("model_construct_begin");auto modelOwner=std::make_unique<nh::HubModel>();nh::startup_probe::Mark("model_construct_end");auto& model=*modelOwner;model.nrDllManager=std::make_shared<nh::NrDllManager>(nh::SharedRuntimeRoot()/L"NrDllProfiles",dataSession.Owns());model.nrDllManager->Refresh();nh::startup_probe::Mark("language_manager_begin");auto languageManager=std::make_unique<nh::LanguageManagerView>(window,device.Get(),context.Get(),nh::UserRoot());nh::startup_probe::Mark("language_manager_end");nh::SetLanguageManager(languageManager.get());model.languageMaintenanceBusy=[&](){return languageManager->EditorOpen()&&languageManager->Editor().Model()->Dirty();};bool pendingMainClose=false,closeRequested=false;nh::ClosingSession closing;mainCloseGate=[&](){if(closeRequested)return false;bool ready=languageManager->RequestClose();pendingMainClose=!ready;if(ready)closeRequested=true;return false;};if(!objectRulesTest&&!installerTest&&!anythingTest&&!languageTest&&!libraryLayoutTest&&!resizeTimingTest&&!mfgReadoutTest&&!progressTest)model.Load();if(smoke){while(model.readiness.busy){model.Poll();Sleep(10);}}else{nh::startup_probe::Mark("show_window_begin");ShowWindow(window,SW_SHOWDEFAULT);nh::startup_probe::Mark("show_window_end",IsWindowVisible(window)?1:0);if(startupFeedback.DismissWhenMainVisible(window))nh::startup_probe::Mark("startup_feedback_dismissed",1);}
+  nh::startup_probe::Mark("artwork_attach_begin");auto artwork=std::make_unique<nh::ArtworkService>();artwork->Attach(device.Get());nh::startup_probe::Mark("artwork_attach_end");model.artwork=artwork.get();nh::ThemeTransition water;nh::startup_probe::Mark("theme_attach_begin");if(!water.Attach(device.Get(),context.Get()))throw std::runtime_error(Neurotic::UiMessage("desktop.native.dde1c3564ae1", "Theme transition could not be initialized"));nh::startup_probe::Mark("theme_attach_end");if(!smoke){if(nh::startup_probe::Offline()){nh::startup_probe::Mark("update_suppressed_probe_only");}else{nh::StartUpdateCheck();nh::startup_probe::Mark("update_thread_started");}}if(smoke){model.onlineArtwork=false;model.light=smokeLight;model.reducedMotion=!themeTest&&!heroTest;if(!model.games.empty()){model.Select(0);auto start=GetTickCount64();while(model.installer.busy&&GetTickCount64()-start<50000){model.Poll();Sleep(10);}}}
   if(objectRulesTest){using namespace Neurotic::Semantic::Rules;nh::Game game;game.id="object-rules-fixture";game.title="Object Rules UI fixture";game.target.suitable=true;model.games={game};model.selected=0;model.page=1;model.inspection={{"status","Fixture"}};nh::SettingsField field;field.section="ObjectRules";field.key="ProfileHex";field.type="objectrules";field.group="Neural Rendering";field.available=true;auto profile=DefaultProfile();profile["rules"][0]["enabled"]=true;field.profileDraft=field.original=EncodeIni(profile);field.ruleStore=std::make_shared<Store>();field.ruleStore->Commit(0,profile);field.ruleEditor=std::make_shared<Editor>();field.ruleEditor->selected=profile["rules"][0]["id"].get<std::string>();field.ruleEditor->detail=true;model.settings={field};}
   if(cleanupTest){if(model.games.empty())throw std::runtime_error("Cleanup UI fixture needs a game");model.page=1;model.inspection=nh::Json();model.showIssue=false;}
   if(polishPreview){if(model.games.empty())throw std::runtime_error("Library polish preview needs an inert fixture game");model.page=1;model.showIssue=false;}
@@ -170,8 +189,20 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
   if(!smoke)anythingShortcut=[&](WPARAM id,LPARAM binding){if(model.showDataMaintenance||model.restartForMaintenance)return;if(globalAnythingHotkey->Accept(id,binding,model.anythingUi))nh::ToggleAnythingSelected(model);else if(globalAnythingHotkey->AcceptScreenshot(id,binding,model.anythingUi))nh::CaptureAnythingScreenshot(model);};
   struct ShortcutScope{~ShortcutScope(){anythingShortcut={};}} shortcutScope;
   bool done=false;int frames=0;float lastDpi=0;bool lastLight=!model.light;
-  auto renderFrame=[&](){if(rendering||done)return;rendering=true;struct Reset{~Reset(){rendering=false;}} reset;
-   if(closeRequested&&!closing.Active()){
+  const auto paneLeafStarts=[](const ImGuiWindow* pane,std::string_view prefix){
+   std::string_view name(pane->Name);const auto slash=name.rfind('/');if(slash!=std::string_view::npos)name.remove_prefix(slash+1);
+   return pane->Active&&name.starts_with(prefix);
+  };
+  const auto savedFieldsLeaf=[&](const ImGuiWindow* pane){return paneLeafStarts(pane,"##SavedGameFields_");};
+  const auto settingsScrollOwner=[&](ImGuiWindow* pane){
+   // Compact natural fields deliberately delegate wheel input to the common
+   // workspace. Normal fields own their native viewport and scroll directly.
+   if((pane->Flags&ImGuiWindowFlags_NoScrollWithMouse)&&pane->ParentWindow&&paneLeafStarts(pane->ParentWindow,"SelectedGameWorkspace_"))return pane->ParentWindow;
+   return pane;
+  };
+  ImGuiWindow* settingsInputOwner=nullptr;nh::Json settingsInput={{"events",nh::Json::array()}};
+  auto renderFrame=[&](){if(rendering||done)return;const bool startupFirstFrame=nh::startup_probe::FirstFrame();nh::startup_probe::Scope startupFrame("first_frame_begin","first_frame_end",startupFirstFrame);rendering=true;struct Reset{~Reset(){rendering=false;}} reset;
+   if(closeRequested&&!closing.Active()){nh::startup_probe::Mark("closing_requested");
     closing.Begin(nh::UserRoot());anythingShortcut={};globalAnythingHotkey.reset();water.Cancel();
     artwork->RequestShutdown();closing.Record("cancellation_requested","artwork");
     nh::RequestUpdateStop();closing.Record("cancellation_requested","update");
@@ -181,7 +212,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
    // Apply explicit fixture dimensions after the initial monitor/DPI fit settles.
    if(smoke&&frames==2&&previewWidth>=880&&previewWidth<=10000&&previewHeight>=600&&previewHeight<=10000)SetWindowPos(window,nullptr,0,0,previewWidth,previewHeight,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
    if(resizeWidth&&resizeHeight){nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Resize);if(sizingProbe&&sizingProbe->measuring)++sizingProbe->resizeCount;water.Cancel();context->OMSetRenderTargets(0,nullptr,nullptr);target.Reset();Check(chain->ResizeBuffers(0,resizeWidth,resizeHeight,DXGI_FORMAT_UNKNOWN,0),"Window resize failed");resizeWidth=resizeHeight=0;createTarget();}
-   {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Model);if(libraryLayoutTest)model.discovery.busy=false;if(closing.Active())model.PollClosing();else if(!progressTest)model.Poll();if(libraryLayoutTest)nh::PrepareLibraryLayoutFixture(model,frames,screenshotDir);}if(closing.Active())closing.Observe({!artwork->ShutdownReady(),!nh::UpdateStopReady(),model.BundlePending(),model.DiagnosticsPending(),model.anything&&!model.anything->ShutdownReady(),model.installer.busy,model.discovery.busy,model.readiness.busy});if(!closing.Active()&&!maintenancePaused){nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Artwork);artwork->SetOnlineEnabled(model.onlineArtwork);artwork->Poll();}
+   {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Model);if(libraryLayoutTest)model.discovery.busy=false;nh::startup_probe::Scope startupPoll("first_model_poll_begin","first_model_poll_end",startupFirstFrame);if(closing.Active())model.PollClosing();else if(!progressTest)model.Poll();if(libraryLayoutTest)nh::PrepareLibraryLayoutFixture(model,frames,screenshotDir);}nh::startup_probe::Preflight(model.readiness.busy,model.preflight.is_object());if(closing.Active())closing.Observe({!artwork->ShutdownReady(),!nh::UpdateStopReady(),model.BundlePending(),model.DiagnosticsPending(),model.anything&&!model.anything->ShutdownReady(),model.installer.busy,model.discovery.busy,model.readiness.busy,model.NrDllPending()});if(!closing.Active()&&!maintenancePaused){nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Artwork);nh::startup_probe::Scope startupArtwork("first_artwork_poll_begin","first_artwork_poll_end",startupFirstFrame);artwork->SetOnlineEnabled(model.onlineArtwork&&!nh::startup_probe::Offline());artwork->Poll();}
    if(!closing.Active()&&!smoke&&!maintenancePaused&&!model.showDataMaintenance)globalAnythingHotkey->Update(window,model.anythingUi);
    // Deterministic presentation fixture only: no helper or transaction is started.
    if(progressTest)nh::PrepareInstallationProgressFixture(model,frames,progressLongLabels,progressReducedMotion);
@@ -237,7 +268,21 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
    // The dynamic atlas retires its own textures. Invalidating the renderer here
    // destroys the still-associated old atlas texture before Clear rebuilds it.
    if(fontLocale!=Neurotic::Localization::SelectedLocale()){io.Fonts->Clear();addFonts();fontLocale=Neurotic::Localization::SelectedLocale();}
-   ImGui_ImplDX11_NewFrame();ImGui_ImplWin32_NewFrame();if(heroTest||progressTest)io.DeltaTime=1.f/60.f;ImGui::NewFrame();
+   if(startupFirstFrame)nh::startup_probe::Mark("backend_dx11_newframe_begin");ImGui_ImplDX11_NewFrame();if(startupFirstFrame)nh::startup_probe::Mark("backend_dx11_newframe_end");if(startupFirstFrame)nh::startup_probe::Mark("backend_win32_newframe_begin");ImGui_ImplWin32_NewFrame();if(startupFirstFrame)nh::startup_probe::Mark("backend_win32_newframe_end");if(heroTest||progressTest)io.DeltaTime=1.f/60.f;
+   bool settingsWheelInjected=false;float settingsScrollBefore=0;ImVec2 settingsInputPoint{};
+   if(settingsTest&&settingsInputOwner&&frames%20>=5&&frames%20<=7){
+    const auto clip=settingsInputOwner->InnerClipRect;
+    if(clip.GetWidth()>1&&clip.GetHeight()>1){
+     settingsInputPoint={clip.Min.x+clip.GetWidth()*.5f,clip.Min.y+clip.GetHeight()*.75f};
+     settingsScrollBefore=settingsInputOwner->Scroll.y;
+     // Public ImGui input, after the Win32 backend update: do not move the
+     // system cursor or force any ancestor's scroll position.
+     io.AddMousePosEvent(settingsInputPoint.x,settingsInputPoint.y);io.AddMouseWheelEvent(0,-2);
+     settingsWheelInjected=true;
+    }
+   }
+   if(startupFirstFrame)nh::startup_probe::Mark("imgui_newframe_begin");ImGui::NewFrame();if(startupFirstFrame)nh::startup_probe::Mark("imgui_newframe_end");
+   if(settingsWheelInjected)settingsInput["events"].push_back({{"frame",frames+1},{"expectedOwner",settingsInputOwner->Name},{"hoveredWindow",GImGui->HoveredWindow?GImGui->HoveredWindow->Name:""},{"wheelOwner",GImGui->WheelingWindow?GImGui->WheelingWindow->Name:""},{"point",{settingsInputPoint.x,settingsInputPoint.y}},{"wheel",-2},{"beforeScroll",settingsScrollBefore}});
    if(polishPreview&&frames==105){ImGui::Begin("NeuRotic");ImGui::OpenPopup("Window list");ImGui::End();}
    {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Ui);if(closing.Active()){nh::RenderClosing(closing,brand.Get(),dpi);}else if(mfgReadoutTest){
     const auto viewport=ImGui::GetMainViewport();ImGui::SetNextWindowPos({viewport->Pos.x+32*dpi,viewport->Pos.y+32*dpi});
@@ -245,9 +290,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
     ImGui::Begin("MFG request diagnostics###MfgReadoutFixture",nullptr,ImGuiWindowFlags_NoSavedSettings);
     Neurotic::Sleek::DrawMfgRequestReadout(frames>=100?Neurotic::Mfg::MfgRequestReceipt{}:mfgReadoutJournal.Current());
     ImGui::Button("Following control###MfgFollowingFixture");ImGui::End();
-   }else nh::RenderHub(model,brand.Get(),dpi);if(!closing.Active()&&model.restartForMaintenance)done=true;
+   }else{nh::startup_probe::Scope startupDraw("first_hub_draw_begin","first_hub_draw_end",startupFirstFrame);nh::RenderHub(model,brand.Get(),dpi);}if(!closing.Active()&&model.restartForMaintenance)done=true;
    if(anythingTest&&frames==95)std::ofstream(screenshotDir/L"locale-observation.json")<<nh::Json{{"requested",smokeLocale},{"effective",Neurotic::Localization::SelectedLocale()},{"clearTarget",Neurotic::Localization::SharedText("desktop.anythingview.clear_target_1d772e62").text},{"saveProfile",Neurotic::Localization::SharedText("desktop.anythingview.save_profile_1a567671").text}}.dump(2);
-   ImGui::Render();float clear[]={0.078f,0.086f,0.102f,1.f};auto rt=target.Get();context->OMSetRenderTargets(1,&rt,nullptr);context->ClearRenderTargetView(target.Get(),clear);ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());}
+   if(startupFirstFrame)nh::startup_probe::Mark("first_render_submit_begin");ImGui::Render();float clear[]={0.078f,0.086f,0.102f,1.f};auto rt=target.Get();context->OMSetRenderTargets(1,&rt,nullptr);context->ClearRenderTargetView(target.Get(),clear);ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());if(startupFirstFrame)nh::startup_probe::Mark("first_render_submit_end");}
    {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Remember);ComPtr<ID3D11Texture2D> source;Check(chain->GetBuffer(0,IID_PPV_ARGS(&source)),"Theme buffer missing");if(sizingProbe){D3D11_TEXTURE2D_DESC remembered{};source->GetDesc(&remembered);sizingProbe->NoteRemember(remembered.Width,remembered.Height);}if(water.Active())water.Render(source.Get(),target.Get(),now);water.Remember(source.Get());}
    ++frames;
    {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Editor);languageManager->RenderEditor(model.light,smoke?smokeScale:0);if(pendingMainClose){if(!languageManager->EditorOpen()){closeRequested=true;pendingMainClose=false;}else if(languageManager->Editor().Model()->CloseStatus()==nh::CloseState::Open)pendingMainClose=false;}}
@@ -331,19 +376,32 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
    else if(heroTest){if(frames==25||frames==26||frames==30||frames==34||frames==45||frames==60||frames==61||frames==64||frames==80||frames==101)SaveFrame(device.Get(),context.Get(),chain.Get(),screenshotDir/(L"hero-"+std::to_wstring(frames)+L".png"));if(frames==25||frames==60){model.Select(frames==25?1:0);while(model.installer.busy){model.Poll();Sleep(5);}}if(frames==90){model.reducedMotion=true;model.Select(1);while(model.installer.busy){model.Poll();Sleep(5);}}if(frames==102)done=true;}
    else if(settingsTest){
     if(frames==5)for(auto* pane:GImGui->Windows)if(pane->Active&&std::strstr(pane->Name,"PageContent"))pane->StateStorage.SetBool(pane->GetID("##LibraryListCollapsed"),true);
-    if(frames%20==5)for(auto* pane:GImGui->Windows)if(pane->Active&&std::strstr(pane->Name,"GameDetails"))ImGui::SetScrollY(pane,280*smokeScale);
+    if(settingsWheelInjected)settingsInput["events"].back()["afterScroll"]=settingsInputOwner->Scroll.y;
+    const auto captureSettings=[&](const std::wstring& name,const char* state){
+     SaveFrame(device.Get(),context.Get(),chain.Get(),screenshotDir/(name+L".png"));
+     auto measured=nh::MeasureLibraryLayout(window,dpi);measured["state"]=state;measured["group"]=(frames-1)/20;measured["wheelInput"]=settingsInput;
+     std::ofstream(screenshotDir/(name+L".json"))<<measured.dump(2);
+    };
+    if(frames%20==1){
+     settingsInputOwner=nullptr;settingsInput={{"events",nh::Json::array()}};
+     for(auto* pane:GImGui->Windows)if(savedFieldsLeaf(pane))ImGui::SetScrollY(settingsScrollOwner(pane),0);
+    }
     for(auto& bar:GImGui->TabBars.Buf){for(auto& tab:bar.Tabs)if(std::strcmp(ImGui::TabBarGetTabName(&bar,&tab),"Game Settings")==0)bar.NextSelectedTabId=tab.ID;if(bar.Tabs.Size==7)bar.NextSelectedTabId=bar.Tabs[std::min(6,frames/20)].ID;}
-    if(frames%20==0)SaveFrame(device.Get(),context.Get(),chain.Get(),screenshotDir/(L"settings-"+std::to_wstring(frames/20-1)+L".png"));if(frames>=140)done=true;
+    if(frames%20==5){
+     for(auto* pane:GImGui->Windows)if(savedFieldsLeaf(pane))settingsInputOwner=settingsScrollOwner(pane);
+     captureSettings(L"settings-top-"+std::to_wstring((frames-1)/20),"top");
+    }
+    if(frames%20==0)captureSettings(L"settings-"+std::to_wstring(frames/20-1),"content");if(frames>=140)done=true;
    }
    else if(smoke&&!resizeTimingTest&&frames%20==0){SaveFrame(device.Get(),context.Get(),chain.Get(),screenshotDir/(L"page-"+std::to_wstring(model.page)+L".png"));if(model.page==5)done=true;else model.page++;}
-   {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Present);const UINT sync=modalRender?0:1,flags=modalRender?DXGI_PRESENT_DO_NOT_WAIT:0;HRESULT presented=sizingProbe?sizingProbe->PresentCall(chain.Get(),sync,flags):chain->Present(sync,flags);if(sizingProbe)sizingProbe->NotePresent(presented);if(modalRender&&(presented==DXGI_ERROR_WAS_STILL_DRAWING||presented==DXGI_STATUS_OCCLUDED)){if(sizingProbe)sizingProbe->NoteSkippedPresent();return;}if(FAILED(presented))throw std::runtime_error(Neurotic::UiMessage("desktop.native.a6d008d5f6da", "Desktop device lost; reopen the application"));}if(closing.Settled())done=true;if(smoke&&!resizeTimingTest)Sleep(5);
+   {nh::ResizeTimingFixture::Scope timing(sizingProbe,nh::ResizeTimingFixture::Present);const UINT sync=modalRender?0:1,flags=modalRender?DXGI_PRESENT_DO_NOT_WAIT:0;if(startupFirstFrame)nh::startup_probe::Mark("first_present_call_begin");HRESULT presented=sizingProbe?sizingProbe->PresentCall(chain.Get(),sync,flags):chain->Present(sync,flags);if(startupFirstFrame)nh::startup_probe::Mark("first_present_call_end",static_cast<unsigned long>(presented));nh::startup_probe::Presented(presented);if(sizingProbe)sizingProbe->NotePresent(presented);if(modalRender&&(presented==DXGI_ERROR_WAS_STILL_DRAWING||presented==DXGI_STATUS_OCCLUDED)){if(sizingProbe)sizingProbe->NoteSkippedPresent();return;}if(FAILED(presented))throw std::runtime_error(Neurotic::UiMessage("desktop.native.a6d008d5f6da", "Desktop device lost; reopen the application"));}if(closing.Settled())done=true;if(smoke&&!resizeTimingTest)Sleep(5);
   };liveRender=renderFrame;
   int fixtureExit=0;
   if(resizeTimingTest){nh::ResizeTimingFixture fixture;sizingProbe=&fixture;struct ProbeReset{~ProbeReset(){sizingProbe=nullptr;}} probeReset;fixtureExit=nh::RunResizeTimingFixture(window,chain.Get(),fixture,renderFrame,model,screenshotDir,resizeTimingControl);done=true;}
   while(!done){MSG message;while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);if(message.message==WM_QUIT)done=true;}if(done)break;renderFrame();if(themeTest&&frames==260){SendMessageW(window,WM_ENTERSIZEMOVE,0,0);SetWindowPos(window,nullptr,0,0,1040,760,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);int before=frames;SendMessageW(window,WM_TIMER,1,0);bool rendered=frames>before&&io.DisplaySize.x<1200;SaveFrame(device.Get(),context.Get(),chain.Get(),screenshotDir/L"resize-during-drag.png");std::ofstream(screenshotDir/L"resize.json")<<nh::Json{{"renderedBeforeRelease",rendered},{"width",io.DisplaySize.x},{"height",io.DisplaySize.y}}.dump(2);SendMessageW(window,WM_EXITSIZEMOVE,0,0);if(!rendered)throw std::runtime_error("Resize did not render during drag");done=true;}if(IsIconic(window)&&!smoke)Sleep(100);}
-  liveRender={};anythingShortcut={};mainCloseGate=[](){return false;};nh::SetLanguageManager(nullptr);languageManager.reset();globalAnythingHotkey.reset();KillTimer(window,1);water.Cancel();
+  nh::startup_probe::Mark("teardown_begin");liveRender={};anythingShortcut={};mainCloseGate=[](){return false;};nh::SetLanguageManager(nullptr);languageManager.reset();globalAnythingHotkey.reset();KillTimer(window,1);water.Cancel();
   const bool restartForMaintenance=model.restartForMaintenance;std::optional<nh::AppDataClearPlan> clearPlan;if(restartForMaintenance)clearPlan=model.dataMaintenancePlan;model.maintenanceQuiesce={};
-  if(smoke){nh::Json result={{"pagesRendered",progressTest?3:(libraryLayoutTest||installDefaultsTest||installerTest||polishPreview||cleanupTest||themeTest||heroTest||riskTest||settingsTest||objectRulesTest)?1:6},{"installationProgressTest",progressTest},{"installerPresentationTest",installerTest},{"themeTransitionTest",themeTest},{"heroSwipeTest",heroTest},{"antiCheatWarningTest",riskTest},{"objectRulesRenderTest",objectRulesTest},{"settingsRenderTest",settingsTest},{"activityPresentationTest",activityTest},{"brandEmbedded",true},{"ngxLoaded",GetModuleHandleW(L"nvngx_dlssnr.dll")!=nullptr},{"proxyLoaded",GetModuleHandleW(L"OptiScaler.dll")!=nullptr},{"captureStarted",false}};std::ofstream(screenshotDir/L"smoke.json")<<result.dump(2);}
+  if(smoke){nh::Json result={{"uiRenderer",uiDriver==D3D_DRIVER_TYPE_WARP?"WARP":"Hardware"},{"pagesRendered",progressTest?3:(libraryLayoutTest||installDefaultsTest||installerTest||polishPreview||cleanupTest||themeTest||heroTest||riskTest||settingsTest||objectRulesTest)?1:6},{"installationProgressTest",progressTest},{"installerPresentationTest",installerTest},{"themeTransitionTest",themeTest},{"heroSwipeTest",heroTest},{"antiCheatWarningTest",riskTest},{"objectRulesRenderTest",objectRulesTest},{"settingsRenderTest",settingsTest},{"activityPresentationTest",activityTest},{"brandEmbedded",true},{"ngxLoaded",GetModuleHandleW(L"nvngx_dlssnr.dll")!=nullptr},{"proxyLoaded",GetModuleHandleW(L"OptiScaler.dll")!=nullptr},{"captureStarted",false}};std::ofstream(screenshotDir/L"smoke.json")<<result.dump(2);}
   if(closing.Active())closing.Record("resources_begin");artwork->Shutdown();model.artwork=nullptr;nh::StopUpdateCheck();modelOwner.reset();ImGui_ImplDX11_Shutdown();ImGui_ImplWin32_Shutdown();ImGui::DestroyContext();target.Reset();brand.Reset();chain.Reset();context.Reset();device.Reset();CoUninitialize();if(closing.Active())closing.Record("resources_completed");mainCloseGate={};DestroyWindow(window);UnregisterClassW(windowClass.lpszClassName,instance);if(closing.Active())closing.Record("window_destroyed");
   if(clearPlan){
    // All callbacks, workers and the old model are gone. Never save stale state
@@ -357,6 +415,6 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int){
    if(!CreateProcessW(executable,command.data(),nullptr,nullptr,FALSE,0,nullptr,directory.c_str(),&start,&process)){MessageBoxW(nullptr,nh::Wide(Neurotic::UiMessage("desktop.native.28c63915dfef", "NeuRotic could not restart. Open NeuRotic.exe again. Old in-memory settings were not saved.")).c_str(),L"NeuRotic",MB_OK|MB_ICONERROR);return 1;}
    CloseHandle(process.hThread);CloseHandle(process.hProcess);return result.complete?0:1;
   }
-  return fixtureExit;
- }catch(const std::exception& error){liveRender={};mainCloseGate={};nh::SetLanguageManager(nullptr);nh::StopUpdateCheck();if(smoke){std::ofstream(screenshotDir/L"error.txt")<<error.what();}else MessageBoxW(nullptr,nh::Wide(error.what()).c_str(),L"NeuRotic",MB_OK|MB_ICONERROR);CoUninitialize();return 1;}
+  nh::startup_probe::Mark("teardown_complete");return fixtureExit;
+ }catch(const std::exception& error){startupFeedback.Close();nh::startup_probe::Mark("startup_or_runtime_exception");liveRender={};mainCloseGate={};nh::SetLanguageManager(nullptr);nh::StopUpdateCheck();if(smoke){std::ofstream(screenshotDir/L"error.txt")<<error.what();}else MessageBoxW(nullptr,nh::Wide(error.what()).c_str(),L"NeuRotic",MB_OK|MB_ICONERROR);CoUninitialize();return 1;}
 }

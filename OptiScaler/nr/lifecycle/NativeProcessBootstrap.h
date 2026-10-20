@@ -864,6 +864,8 @@ class NativeProcessBootstrap
             entry.nativeList=observed.nativeList;entry.recordingIncarnation=observed.incarnation;
             entry.workOrdinal=observed.workOrdinal;
             entry.completeCoverage=observed.active&&observed.completeCoverage&&observed.nativeList==list;
+            if(observed.interfaces && (!observed.identity || observed.identity->nativeList.Get()!=observed.interfaces->terminal.Get() ||
+               !operation->call->MatchesRecordingInterfaces(observed.interfaces)))entry.completeCoverage=false;
             const auto target=callback.CallerOutputTarget();
             entry.output={target->region.resource,target->view.identity};
             entry.outputRegion={target->region.x,target->region.y,target->region.width,target->region.height};

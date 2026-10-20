@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-26",
+  "project": "NeuRotic",
+  "status": "CANONICAL_ACCEPTED_PROVIDER_PACKAGE",
+  "accepted_project_fact": "This patched matched package is the provider baseline for NeuRotic and is accepted as proven working on RTX 20-, 30-, and 40-series GPUs.",
+  "archive": {
+    "filename": "streamline (Good).zip",
+    "bytes": 143760859,
+    "sha256": "f1898231b171267649916e866043fe3ffded5fc7a1b801bfad1dc57a3723cffa"
+  },
+  "rules": [
+    "Use this exact archive and exact member identities for provider integration, diagnostics, and controlled tests.",
+    "Do not substitute another nvngx_dlssnr.dll or mix Streamline members from another package unless the run is explicitly labeled as a separate comparison.",
+    "Provider existence and RTX 20/30/40 capability are closed assumptions for project planning.",
+    "A failure with this package is investigated as an integration, invocation, ABI/profile, resource, synchronization, or packaging problem unless direct evidence establishes otherwise.",
+    "Known-good provider status does not by itself define low-level resource lifetime or release semantics; existing conservative GPU-safety owners remain in force."
+  ],
+  "files": [
+    {
+      "path": "streamline (Good)/nis.license.txt",
+      "bytes": 1199,
+      "sha256": "f80ecfbce8a84a5b4c1c59dc5a9f0ee9cf5a989c9fba3a9486ee874f7595a454"
+    },
+    {
+      "path": "streamline (Good)/nvngx_dlss.dll",
+      "bytes": 58956400,
+      "sha256": "c85f971ce023c9f3492fc7455f0b01a24ba18ea39636407a846902c4360b0b7e"
+    },
+    {
+      "path": "streamline (Good)/nvngx_dlss.license.txt",
+      "bytes": 27316,
+      "sha256": "b6f4b4b6f582c9523ed4dfe89a4fae4cfc9c61f9c57e335e00ccee5f9b2b2e4b"
+    },
+    {
+      "path": "streamline (Good)/nvngx_dlssg.dll",
+      "bytes": 7453808,
+      "sha256": "5d5cbf14d2727d47f93fd10bf77bd91708ae122482a6f86fd564971641ebd47b"
+    },
+    {
+      "path": "streamline (Good)/nvngx_dlssnr.dll",
+      "bytes": 165840496,
+      "sha256": "ceb6432f6fbdf44d886014bcd47241932bf8b67439feef9bbdd0961436662650"
+    },
+    {
+      "path": "streamline (Good)/reflex.license.txt",
+      "bytes": 20504,
+      "sha256": "ebf83c07fb3b2939908c3795d887afde3161c89a28ba391724efc784ce1bdabe"
+    },
+    {
+      "path": "streamline (Good)/sl.common.dll",
+      "bytes": 830592,
+      "sha256": "a4b2b5acbe49fbc6d44dd432cac19cd53218f698b2539dc7ed0fb268c72cfc8d"
+    },
+    {
+      "path": "streamline (Good)/sl.dlss.dll",
+      "bytes": 421504,
+      "sha256": "1eb5fb3d6f01d340fe086d981cc2de4f18aa6d05ee276e5cf28ecd54818dcc8b"
+    },
+    {
+      "path": "streamline (Good)/sl.dlss_g.dll",
+      "bytes": 625792,
+      "sha256": "b8b5effd7debdb750abd216de43385fb653261712bc315d85eba68811fb3ee02"
+    },
+    {
+      "path": "streamline (Good)/sl.dlss_nr.dll",
+      "bytes": 401024,
+      "sha256": "9f6672e5e0170dc118a3188d21bda187e1fc1aa3502895b21ab846d23165c11d"
+    },
+    {
+      "path": "streamline (Good)/sl.interposer.dll",
+      "bytes": 651392,
+      "sha256": "27b2190057994c0b287c2c5716953bf1586f6499ac12fbbb2092b9aaf8396570"
+    },
+    {
+      "path": "streamline (Good)/sl.nis.dll",
+      "bytes": 1155200,
+      "sha256": "6039e38a1af56c8e86f3e936596e2db910bf3d76bbf4268562a3b13763049dfa"
+    },
+    {
+      "path": "streamline (Good)/sl.pcl.dll",
+      "bytes": 360064,
+      "sha256": "12aa4e76c28a27c735e4ecb3072f44d09428acb107b70ac38e4bd48ddb05f88d"
+    },
+    {
+      "path": "streamline (Good)/sl.reflex.dll",
+      "bytes": 382080,
+      "sha256": "ecf12973cdcec2ffced2ea77b1c7e45f4d387e7c864ddb5531b66a6f947effb3"
+    }
+  ]
+}

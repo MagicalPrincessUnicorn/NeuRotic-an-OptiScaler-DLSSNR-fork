@@ -1,4 +1,5 @@
 #pragma once
+#include "../nr/context/PreparedRasterBounds.h"
 #include <cmath>
 #include <cstdint>
 namespace DlssNr::NativeFg {
@@ -10,8 +11,7 @@ public:
     void Reset() {session_=generation_=frame_=0;}
     Decision Accept(std::uint64_t session,std::uint64_t generation,std::uint64_t frame,
                     unsigned width,unsigned height,bool inverted,bool reset,double deltaMs) {
-        if(!session||!generation||!frame||frame==UINT64_MAX||!width||!height||width>4096||height>4096||
-           std::uint64_t(width)*height>8388608||!std::isfinite(deltaMs)||deltaMs<=0||deltaMs>250)return {};
+        if(!session||!generation||!frame||frame==UINT64_MAX||!Neurotic::PreparedRaster::Admit(width,height)||!std::isfinite(deltaMs)||deltaMs<=0||deltaMs>250)return {};
         const bool same=session==session_&&generation==generation_;
         if(same&&frame<=frame_)return {};
         reset=reset||!same||!frame_||frame-frame_!=1||width!=width_||height!=height_||inverted!=inverted_;

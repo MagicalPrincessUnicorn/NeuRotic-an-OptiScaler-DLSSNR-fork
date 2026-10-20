@@ -1,0 +1,36 @@
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <dlssnr/VulkanNrImageFacts.h>
+#define LOG_DEBUG(...) ((void)0)
+#define LOG_WARN(...) ((void)0)
+#define LOG_ERROR(...) ((void)0)
+struct Feature {bool IsWithDx12()const{return false;}};
+struct State {Feature* currentFeature=nullptr;static State& Instance(){static State s;return s;}};
+// PRODUCTION_TRACKER
+static uint32_t graphics[2]{},compute[2]{},calls=0;
+static void VKAPI_CALL Push(VkCommandBuffer,VkPipelineLayout,VkShaderStageFlags stages,uint32_t offset,uint32_t size,const void* values){
+    ++calls;
+    if(stages&VK_SHADER_STAGE_FRAGMENT_BIT)std::memcpy(reinterpret_cast<char*>(graphics)+offset,values,size);
+    if(stages&VK_SHADER_STAGE_COMPUTE_BIT)std::memcpy(reinterpret_cast<char*>(compute)+offset,values,size);
+}
+static void Check(bool good,const char* why){if(!good){std::fprintf(stderr,"FAIL %s\n",why);std::exit(1);}}
+int main(){
+    vk_state::CommandBufferStateTracker tracker;tracker.EnableNativeObservations();
+    auto cmd=reinterpret_cast<VkCommandBuffer>(1);auto pool=reinterpret_cast<VkCommandPool>(2);auto layout=reinterpret_cast<VkPipelineLayout>(3);
+    vk_state::VulkanCmdFns fns{};fns.CmdPushConstants=Push;tracker.SetFunctionTable(fns);
+    tracker.OnAllocateCommandBuffers(reinterpret_cast<VkDevice>(1),pool,1,&cmd,0);VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};tracker.OnBegin(cmd,&begin);
+    uint32_t both[]{1,3},later=2;
+    tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,layout,VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_COMPUTE_BIT,0,8,both);
+    tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,layout,VK_SHADER_STAGE_FRAGMENT_BIT,0,4,&later);
+    vk_state::CommandBufferState saved;Check(tracker.CaptureNrState(cmd,saved),"capture mixed state");
+    vk_state::ReplayParams replay;replay.ReplayComputeToo=true;Check(tracker.ReplaySaved(cmd,saved,replay),"replay mixed state");
+    Check(graphics[0]==2&&graphics[1]==3&&compute[0]==1&&compute[1]==3,"mixed-stage chronology must preserve per-stage overlapping bytes");
+    Check(calls==2,"mixed stage entries replay exactly once");
+    uint32_t last=7;tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,4,4,&last);
+    Check(tracker.CaptureNrState(cmd,saved),"capture compute suffix");graphics[0]=graphics[1]=compute[0]=compute[1]=0;calls=0;
+    Check(tracker.ReplaySaved(cmd,saved,replay),"replay compute suffix");
+    Check(graphics[0]==2&&graphics[1]==3&&compute[0]==1&&compute[1]==7&&calls==3,"compute-only suffix preserves graphics");
+    replay.ReplayPushConstants=false;calls=0;tracker.ReplaySaved(cmd,saved,replay);Check(calls==0,"disabled push replay emits nothing");
+    std::puts("PASS production tracker chronological mixed-stage and overlapping push replay");
+}

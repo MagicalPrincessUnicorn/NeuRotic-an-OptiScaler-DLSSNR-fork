@@ -1,0 +1,84 @@
+#include <dlssnr/VulkanNrGeneration.h>
+#include <dlssnr/VulkanNrPreFg.h>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <thread>
+#include <atomic>
+using namespace DlssNr;
+static void Check(bool v,const char* why){if(!v){std::fprintf(stderr,"FAIL %s\n",why);std::exit(1);}}
+struct DlssNr_Vk{};
+struct VkState {
+    VkDevice device{};std::unique_ptr<DlssNr_Vk> pass;DlssNr_Vk* borrowedPass=nullptr;
+    std::unique_ptr<VkNrGenerationOwner> generations;VkNrGenerationPayload* resources=nullptr;
+    std::unique_lock<std::mutex>* controlLock=nullptr;bool reset=false;uint64_t resetRevision=0;
+    std::optional<int> candidate,performanceSource,lastGpuTime,lastGpuFrame;VkNrUseId performanceUse;
+    bool nativeDeliveryAccepted=false,preSrDelivered=false;
+    struct {uint64_t appliedGeneration=0;VkExtent2D appliedOutput{},appliedWork{};} workload;
+};
+VkState g_nativeVk,g_presentVk,nativeChildren[9],presentChildren[9];
+VkState& PassStateVk(VkNrRoute route,uint32_t pass){return route==VkNrRoute::Native?(pass?nativeChildren[pass-1]:g_nativeVk):(pass?presentChildren[pass-1]:g_presentVk);}
+// PRODUCTION_SCOPE
+VkNrRecordingOwner& recordings=VulkanNrRecordings();
+std::mutex g_vkMutex;
+// PRODUCTION_RETIREMENT
+std::mutex g_nativeRecordMutex;bool g_vkSessionClosed=false,g_vkCleanupActive=false;
+struct Session {void PollCompletions(){}}g_nativeSession,g_presentSession;
+struct Runtime {VkDevice device{};VkDevice Device(){return device;}}g_vkRuntime;
+std::unique_ptr<VkNrGenerationOwner> g_performancePairs,g_finalColorCarriers;
+void ClearFinalSource(VkState&){}
+// PRODUCTION_INACTIVE
+// PRODUCTION_HANDOFF
+struct Resource:VkNrGenerationPayload{Resource(){privateBytes=128;}};
+int main(){
+    auto device=reinterpret_cast<VkDevice>(1);auto queue=reinterpret_cast<VkQueue>(2);auto pool=reinterpret_cast<VkCommandPool>(3);auto cb=reinterpret_cast<VkCommandBuffer>(4);
+    auto& child=PassStateVk(VkNrRoute::Present,1);child.device=device;g_presentVk.device=device;
+    bool vendorFails=false;unsigned releases=0,creates=0;
+    child.generations=std::make_unique<VkNrGenerationOwner>(recordings,[&](const auto&,VkNrUseId,uint64_t){++creates;return VkNrGenerationCreation{std::make_unique<Resource>(),true,false,{}};},[&](VkNrGenerationPayload&){
+        Check(ActiveVk().device==device,"retirement must select the owning Present child when Native device is null");
+        Check(ActiveVk().controlLock&&ActiveVk().controlLock->owns_lock(),"provider release needs the correct owning control lock");
+        ActiveVk().controlLock->unlock();ActiveVk().controlLock->lock();
+        if(vendorFails)return false;++releases;return true;
+    });
+    recordings.OnAllocate(device,pool,cb,0);recordings.OnBegin(cb,0,VK_SUCCESS);auto use=*recordings.Reserve(cb,1);
+    VkNrGenerationKey key;key.frame.route=VkNrRoute::Present;key.frame.queue=queue;key.frame.output=key.frame.work={32,32};key.frame.deviceGeneration=key.frame.routeEpoch=1;
+    key.frame.representation.format=key.colorFormat=key.targetFormat=VK_FORMAT_R16G16B16A16_SFLOAT;
+    auto made=child.generations->Prepare(key,use);Check(made.ready&&child.generations->Commit(made.generation),"create child");child.resources=child.generations->Payload(made.generation);
+    RetireInactiveVk(device,true,2);Check(child.resources&&child.generations->AppliedGeneration()==made.generation,"active Present must not retire");
+    RetireInactiveVk(reinterpret_cast<VkDevice>(99),false,0);Check(child.resources,"foreign device maintenance must not retire");
+    std::atomic<bool> held=false,done=false;
+    std::thread blocker([&]{std::lock_guard guard(g_nativeRecordMutex);held=true;while(!done.load())std::this_thread::yield();});
+    while(!held.load())std::this_thread::yield();RetireInactiveVk(device,false,2);done=true;blocker.join();Check(child.resources,"busy recording skips maintenance without waiting");
+    recordings.OnEnd(cb,VK_SUCCESS);auto submission=*recordings.PrepareSubmission({queue,1,{use}});recordings.SubmissionReturned(submission,VK_SUCCESS);recordings.CheckpointReturned(submission,VK_SUCCESS);
+    auto retire=[&]{std::unique_lock lock(g_vkMutex);RetireVkPassGenerationsLocked(VkNrRoute::Present,1,lock);Check(lock.owns_lock(),"control lock recovered");};
+    auto handoff=[&]{std::unique_lock lock(g_vkMutex);return PrepareVkRouteTransitionLocked(device,VkNrRoute::Native,lock,2);};
+    Check(!handoff(),"route switch must not allocate replacement while old route is submitted");
+    RetireInactiveVk(device,false,2);Check(child.generations->Count()==1&&releases==0&&!child.resources,"disable invalidates alias while pending GPU ownership stays");
+    recordings.ObserveFence(submission,VK_SUCCESS);retire();Check(child.generations->Count()==1,"GPU completion cannot release replayable recording");
+    Check(!handoff(),"route switch waits replayable recording release");
+    recordings.AddConsumerHold(use);recordings.OnReset(cb,VK_SUCCESS);retire();Check(child.generations->Count()==1,"consumer hold survives disable");
+    Check(!handoff(),"route switch waits independent consumer");
+    recordings.RemoveConsumerHold(use);vendorFails=true;retire();Check(child.generations->Count()==1&&child.generations->PrivateBytes()==128,"failed provider release retains allocation");
+    Check(!handoff(),"route switch retains failed vendor release barrier");
+    vendorFails=false;Check(handoff(),"route switch proceeds after checked retirement");RetireInactiveVk(device,true,0);Check(child.generations->Count()==0&&releases==1&&child.generations->PrivateBytes()==0,"fully released inactive Present generation reclaimed while Native selected");
+    Check(&ActiveVk()==&g_nativeVk&&!child.controlLock,"owning route and control lock scope restored");
+    recordings.OnBegin(cb,0,VK_SUCCESS);auto next=*recordings.Reserve(cb,1);auto resumed=child.generations->Prepare(key,next);Check(resumed.ready&&resumed.generation!=made.generation&&creates==2,"resume creates fresh generation after disabled retirement");
+    VkNrContribution publication;publication.producer=next;publication.providerGeneration=8;publication.viewport=1;
+    publication.contentRevision=4;publication.image=reinterpret_cast<VkImage>(5);publication.view=reinterpret_cast<VkImageView>(6);
+    publication.subresource={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};publication.layout=VK_IMAGE_LAYOUT_GENERAL;
+    publication.frame=key.frame;publication.frame.temporal=VkNrTemporalMetadata{};publication.frame.temporal->frameToken=1;
+    publication.chain.requested=publication.chain.completed=1;publication.chain.deliverable=true;
+    publication.chain.outputVersion=1;publication.chain.recording.outputWriteRecorded=true;
+    // Give this returned route its own fresh epoch, then publish without a bound consumer.
+    publication.frame.routeEpoch=3;VulkanNrFgContributions().RevokeNewContributions(3);
+    Check(VulkanNrFgContributions().Publish(publication),"unbound publication retains a producer hold");
+    recordings.OnEnd(cb,VK_SUCCESS);auto last=*recordings.PrepareSubmission({queue,1,{next}});
+    recordings.SubmissionReturned(last,VK_SUCCESS);recordings.CheckpointReturned(last,VK_SUCCESS);
+    recordings.ObserveFence(last,VK_SUCCESS);recordings.OnReset(cb,VK_SUCCESS);
+    retire();Check(child.generations->Count()==1,"publication alone prevents premature destruction");
+    {std::unique_lock lock(g_vkMutex);Check(PrepareVkRouteTransitionLocked(device,VkNrRoute::Native,lock,4),
+        "new epoch revokes unbound publication before testing prior-route drain");}
+    Check(child.generations->Count()==0,"route handoff releases publication-held model without a consumer callback");
+    child.generations.reset(); // End the fixture owner before its function-local recording singleton.
+    std::puts("PASS production child retirement: route/device/lock, GPU, recording, consumer, failed provider release, fresh resume");
+}

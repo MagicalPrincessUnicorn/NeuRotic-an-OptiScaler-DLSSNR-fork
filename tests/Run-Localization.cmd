@@ -1,17 +1,19 @@
 @echo off
 setlocal
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
+call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 >nul
 if errorlevel 1 exit /b 1
-set "testOut=C:\OptiScaler-NR-Dev\logs\neurotic-localization"
+set "testOut=%~dp0..\builds\ui-release\localization"
 if not exist "%testOut%" mkdir "%testOut%"
 if not exist "%testOut%" exit /b 1
 pushd "%~dp0.."
-if errorlevel 1 exit /b 1
-cl /nologo /std:c++20 /EHsc /O2 /utf-8 /W3 /I tests\opticlip_stubs /I OptiScaler /I OptiScaler\include /I external\freetype tests\localization_test.cpp OptiScaler\menu\OptiClipAdvisor.cpp OptiScaler\menu\Localization.cpp OptiScaler\menu\LocalizationFonts.cpp OptiScaler\include\imgui\imgui.cpp OptiScaler\include\imgui\imgui_draw.cpp OptiScaler\include\imgui\imgui_widgets.cpp OptiScaler\include\imgui\imgui_tables.cpp OptiScaler\include\imgui\misc\freetype\imgui_freetype.cpp /Fe:"%testOut%\localization.exe" /Fo:"%testOut%\\" /link user32.lib shell32.lib external\freetype\freetype.lib >"%testOut%\build.txt" 2>&1
-if errorlevel 1 goto failed
+if not "%ERRORLEVEL%"=="0" exit /b 1
+cl /nologo /std:c++20 /EHsc /O2 /utf-8 /W3 /I tests\opticlip_stubs /I OptiScaler /I OptiScaler\include /I external\freetype tests\localization_test.cpp OptiScaler\menu\Localization.cpp /I external\nlohmann OptiScaler\menu\localization\LanguageRuntime.cpp OptiScaler\menu\localization\LanguagePack.cpp OptiScaler\menu\localization\LanguageCatalog.cpp OptiScaler\menu\localization\LanguageBundles.cpp OptiScaler\menu\LocalizationFonts.cpp OptiScaler\menu\localization\LanguageFonts.cpp OptiScaler\include\imgui\imgui.cpp OptiScaler\include\imgui\imgui_draw.cpp OptiScaler\include\imgui\imgui_widgets.cpp OptiScaler\include\imgui\imgui_tables.cpp OptiScaler\include\imgui\misc\freetype\imgui_freetype.cpp /Fe:"%testOut%\localization.exe" /Fo:"%testOut%\\" /link user32.lib shell32.lib external\freetype\freetype.lib >"%testOut%\build.txt" 2>&1
+if not "%ERRORLEVEL%"=="0" goto failed
 "%testOut%\localization.exe" >"%testOut%\test.txt" 2>&1
-if errorlevel 1 goto failed
+if not "%ERRORLEVEL%"=="0" goto failed
 type "%testOut%\test.txt"
+call tests\Run-LanguageFonts.cmd
+if errorlevel 1 goto failed
 popd
 exit /b 0
 :failed

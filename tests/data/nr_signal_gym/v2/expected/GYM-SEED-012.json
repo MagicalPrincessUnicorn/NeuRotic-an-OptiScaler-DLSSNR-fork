@@ -1,0 +1,54 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-012",
+  "case_input_sha256": "993cf2160ecb09533d96be19070c4b52981db27a9dc9fb2b7762c204ea313b57",
+  "revision": 1,
+  "transport_checks": [],
+  "qualifications": [],
+  "decisions": [
+    {
+      "check_id": "D-READINESS",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "readiness",
+      "actual_pointer": "/operations/readiness-generation-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "running": false,
+        "preSrDisplayReady": false,
+        "transitionPending": true,
+        "outputQuarantined": false
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "decision",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-readiness-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "3ce7a2b18c50e4a6dc06cb2971f463e41fa3caaf79e1ce3893c50baca201e3d3"
+        }
+      },
+      "stage": "readiness",
+      "scope": "source_policy_only"
+    }
+  ],
+  "approval": "synthetic_reviewed"
+}

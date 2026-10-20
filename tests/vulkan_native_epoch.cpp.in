@@ -1,0 +1,60 @@
+#include "dlssnr/VulkanNrSession.h"
+#include "dlssnr/VulkanNrRuntime.h"
+#include "dlssnr/VulkanNrFlightRecorder.h"
+#include <cstdio>
+#include <stdexcept>
+unsigned checks=0,failed=0,forbidden=0;
+void Check(bool value,const char* label){++checks;failed+=!value;std::printf("%s %s\n",value?"PASS":"FAIL",label);}
+[[noreturn]] void Unreached(){++forbidden;throw std::runtime_error("fixture must never enter recording or completion ownership");}
+namespace DlssNr {
+uint64_t VkNrCompletionDeviceGeneration(VkDevice){Unreached();}
+bool ReserveVkNrCompletion(VkDevice,VkNrUseId){Unreached();}
+struct NoRecording {
+ const char* ModelRecordingReason(VkCommandBuffer){Unreached();}
+ uint64_t Incarnation(VkCommandBuffer){Unreached();}
+ bool BindingsQualified(VkCommandBuffer){Unreached();}
+ std::optional<VkNrUseId> ReserveModel(VkCommandBuffer,uint64_t){Unreached();}
+ void CancelBeforeRecording(VkNrUseId){Unreached();}
+ uint32_t UseFamily(VkNrUseId){Unreached();}
+ bool RetainUse(VkNrUseId){Unreached();}
+};
+// Stand-in storage for the exact production Record body. No fabricated recording/completion rights.
+struct EpochSession {
+ using Recorder=VulkanNrSession::Recorder;
+ VkNrRoute route_;VulkanNrRuntime& runtime_;uint64_t observedEpoch_=0;
+ VkNrResetRevision resetState_{0};unsigned long long recorded_=0;
+ std::vector<VkNrUseId> pendingCompletion_;unsigned polls=0;NoRecording noRecording;
+ void PollCompletions(){++polls;}
+ NoRecording& Recordings(){return noRecording;}
+ VkRecordResult Record(const VkFrameRequest&,const Recorder&);
+};
+// ACTUAL_SESSION_RECORD
+}
+int main(){using namespace DlssNr;
+ VulkanNrRuntime runtime;EpochSession session{VkNrRoute::Native,runtime};
+ VkFrameRequest request;request.device=reinterpret_cast<VkDevice>(8);
+ request.contract.routeEpoch=runtime.Epoch()+1;
+ request.contract.evaluation={reinterpret_cast<VkCommandBuffer>(3),1,11,7};
+ request.contract.resumeGeneration=4;request.contract.inputInterruptionEpoch=2;
+ auto first=session.Record(request,[&](const VkFrameRequest& frame,bool reset){
+  Check(reset,"initial actual Session Record requests reset");
+  Check(runtime.EnsureDevice(frame.device,[]{return true;}),"actual runtime initializes through supplied CPU callback");
+  VkRecordResult result{VkRecordStatus::Complete,"",true,true};
+  result.nativeRecording=VkNrNativeRecordingReceipt{frame.contract,{31},5};return result;
+ });
+ Check(runtime.Initialized()&&runtime.IsActive(VkNrRoute::Native)&&runtime.Epoch()==2,"actual initialization plus route activation advance lifecycle twice");
+ Check(first.nativeRecording&&first.nativeRecording->frame.routeEpoch==runtime.Epoch(),"production Session exports resulting actual Native recording lifecycle epoch");
+ Check(first.nativeRecording&&first.nativeRecording->frame.evaluation==request.contract.evaluation&&
+   first.nativeRecording->frame.resumeGeneration==4&&first.nativeRecording->frame.inputInterruptionEpoch==2&&
+   first.nativeRecording->use.value==31&&first.nativeRecording->appliedGeneration==5,"epoch export preserves exact recording evaluation resume input use and applied generation");
+ Check(session.recorded_==1&&session.pendingCompletion_.empty()&&!first.use,"CPU recording-result projection creates no owned use or GPU completion");
+ runtime.Activate(VkNrRoute::Present);request.contract.routeEpoch=runtime.Epoch()+1;
+ auto next=session.Record(request,[&](const VkFrameRequest& frame,bool){
+  VkRecordResult result{VkRecordStatus::Complete,"",true,true};
+  result.nativeRecording=VkNrNativeRecordingReceipt{frame.contract,{32},5};return result;
+ });
+ Check(next.nativeRecording&&next.nativeRecording->frame.routeEpoch==runtime.Epoch(),"already initialized route transition retains actual resulting Native lifecycle");
+ Check(forbidden==0&&session.polls==2,"fixture never enters recording owner or completion API");
+ std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}
+// ACTUAL_RUNTIME

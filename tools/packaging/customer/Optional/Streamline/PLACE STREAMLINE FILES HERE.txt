@@ -1,0 +1,7 @@
+PLACE STREAMLINE FILES HERE
+
+Store your compatible Streamline DLL files in this folder.
+These files are supplied separately.
+
+Copy the files to your game's OptiScaler\streamline folder to use them.
+Setup does not copy files from this storage folder automatically.

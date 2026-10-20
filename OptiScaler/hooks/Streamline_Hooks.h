@@ -2,6 +2,7 @@
 #include "SysUtils.h"
 #include <atomic>
 #include <mutex>
+#include <optional>
 
 #include <sl.h>
 #include <sl1.h>
@@ -13,7 +14,12 @@
 #include "include/sl.param/parameters.h"
 
 #include "Hook_Utils.h"
+#include "StreamlineOnLoadInvocation.h"
 #include <mfg/MfgControl.h>
+#include <dlssnr/VulkanNrModelLifetime.h>
+#include <dlssnr/VulkanPresentProviderPreparation.h>
+
+namespace Neurotic::Mfg { class MfgWrapperResolution; }
 
 // Diagnostic-only context copied across the Streamline -> NGX call boundary.
 // The Vulkan diagnostic build uses this to determine whether the two APIs are
@@ -149,10 +155,13 @@ class StreamlineHooks
   public:
     typedef void* (*PFN_slGetPluginFunction)(const char* functionName);
     typedef bool (*PFN_slOnPluginLoad)(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
+    using OnLoadInvocation=Neurotic::Hooks::StreamlineOnLoadInvocation<sl::param::IParameters>;
+    using CommonInvocation=OnLoadInvocation;
+    using PFN_slOnPluginLoadBound=bool(*)(const CommonInvocation&,const char*,const char**);
     typedef sl::Result (*PFN_slSetData)(const sl::BaseStructure* inputs, sl::CommandBuffer* cmdBuffer);
     typedef bool (*PFN_slSetConstants_sl1)(const void* data, uint32_t frameIndex, uint32_t id);
     typedef void (*PFN_slSetParameters_sl1)(void* params);
-    typedef bool (*PFN_setVoid)(void* self, const char* key, void** value);
+    typedef void (*PFN_setVoid)(void* self, const char* key, void* value);
     typedef const char* (*PFN_slGetPluginJSONConfig_sl1)();
 
     static void updateForceReflex();
@@ -161,12 +170,17 @@ class StreamlineHooks
     static Neurotic::Mfg::MfgHighRatioRefusal mfgHighRatioRefusal() noexcept;
     static bool prepareExperimentalMfgCapabilities() noexcept;
     static bool experimentalFgLane(bool fg) noexcept;
+    // Actual device capability: absent is unknown, false is a detected other
+    // GPU, true is detected Ada. UI intent may remain selectable while unknown;
+    // code mutation requires true. No primary-device capability is borrowed.
+    static std::optional<bool> nativeMfgAdapter(LUID& adapter,
+        ID3D12GraphicsCommandList* command = nullptr) noexcept;
     static bool prepareNativeMfgCapabilities(HMODULE enteredProvider = nullptr,
         ID3D12GraphicsCommandList* command = nullptr);
 
     static void unhookInterposer();
     static void hookInterposer(HMODULE slInterposer);
-    static bool PrepareVulkanFullFrame(uint64_t provider,uint64_t frame,uint32_t viewport);
+    static DlssNr::VkPresentProviderPreparation PrepareVulkanFullFrame(uint64_t provider,uint64_t frame,uint32_t viewport,uint64_t sourceRevision,const DlssNr::VkNrPresentModelLifetime& sourceLifetime);
 
     static void unhookDlss();
     static void hookDlss(HMODULE slDlss);
@@ -195,14 +209,13 @@ class StreamlineHooks
     static bool isReflexHooked();
 
   private:
-    inline static sl::RenderAPI renderApi = sl::RenderAPI::eCount;
+    inline static std::atomic<sl::RenderAPI> renderApi {sl::RenderAPI::eCount};
     inline static std::mutex setConstantsMutex {};
 
     // System caps
-    inline static SystemCaps* systemCaps = nullptr;
     inline static SystemCapsSl15* systemCapsSl15 = nullptr;
     static void hookSystemCaps(sl::param::IParameters* params);
-    static uint32_t getSystemCapsArch(SystemCaps* altSystemCaps = nullptr);
+    static uint32_t getSystemCapsArch(const SystemCaps* altSystemCaps = nullptr);
     static void setArch(uint32_t arch, SystemCaps* altSystemCaps = nullptr);
     static void spoofArch(uint32_t currentArch, sl::Feature feature, SystemCaps* altSystemCaps = nullptr);
 
@@ -264,16 +277,14 @@ class StreamlineHooks
 
     // DLSS
     inline static PFN_slGetPluginFunction o_dlss_slGetPluginFunction = nullptr;
-    inline static PFN_slOnPluginLoad o_dlss_slOnPluginLoad = nullptr;
     inline static decltype(&slDLSSGetOptimalSettings) o_slDLSSGetOptimalSettings = nullptr;
 
-    static bool hkdlss_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
+    static bool hkdlss_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON, const char** pluginJSON);
     static sl::Result hkslDLSSGetOptimalSettings(const sl::DLSSOptions& options, sl::DLSSOptimalSettings& settings);
     static void* hkdlss_slGetPluginFunction(const char* functionName);
 
     // DLSSG
     inline static PFN_slGetPluginFunction o_dlssg_slGetPluginFunction = nullptr;
-    inline static PFN_slOnPluginLoad o_dlssg_slOnPluginLoad = nullptr;
     inline static PFN_slGetPluginJSONConfig_sl1 o_dlssg_slGetPluginJSONConfig_sl1 = nullptr;
     inline static decltype(&slDLSSGSetOptions) o_slDLSSGSetOptions = nullptr;
     inline static decltype(&slDLSSGGetState) o_slDLSSGGetState = nullptr;
@@ -284,22 +295,21 @@ class StreamlineHooks
     static inline std::atomic<HMODULE> mfgSelectedWrapper { nullptr };
     static inline std::mutex lastDlssgOptionsMutex;
 
-    static bool hkdlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
+    static bool hkdlssg_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON, const char** pluginJSON);
     static sl::Result hkslSetConstants(const sl::Constants& values, const sl::FrameToken& frame,
                                        const sl::ViewportHandle& viewport);
     static sl::Result hkslDLSSGSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSGOptions& options);
     static sl::Result hkslDLSSGGetState(const sl::ViewportHandle& viewport, sl::DLSSGState& state,
                                         const sl::DLSSGOptions* options);
     static void* hkdlssg_slGetPluginFunction(const char* functionName);
-    static void bindNativeMfgWrapper(const void* function);
-    static void wrapNativeDlssgFunction(const char* name, void*& function);
+    static void commitReturnedMfgCallback(Neurotic::Mfg::MfgWrapperResolution& observation, uint64_t ownAdvance = 0, Neurotic::Mfg::MfgWrapperResolution* invalidated = nullptr) noexcept;
+    static void wrapNativeDlssgFunction(const char* name, void*& function, Neurotic::Mfg::MfgWrapperResolution& observation);
     static const char* hkdlssg_slGetPluginJSONConfig_sl1();
 
     // Local DLSSG
     inline static PFN_slGetPluginFunction o_local_dlssg_slGetPluginFunction = nullptr;
-    inline static PFN_slOnPluginLoad o_local_dlssg_slOnPluginLoad = nullptr;
 
-    static bool hklocal_dlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+    static bool hklocal_dlssg_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                              const char** pluginJSON);
     static void* hklocal_dlssg_slGetPluginFunction(const char* functionName);
 
@@ -307,11 +317,11 @@ class StreamlineHooks
     inline static sl::ReflexMode reflexGamesLastMode = sl::ReflexMode::eOff;
     inline static PFN_slGetPluginFunction o_reflex_slGetPluginFunction = nullptr;
     inline static PFN_slSetConstants_sl1 o_reflex_slSetConstants_sl1 = nullptr;
-    inline static PFN_slOnPluginLoad o_reflex_slOnPluginLoad = nullptr;
     inline static decltype(&slReflexSetOptions) o_slReflexSetOptions = nullptr;
     inline static decltype(&slReflexSleep) o_slReflexSleep = nullptr;
+    inline static decltype(&slPCLSetMarker) o_slReflexSetMarker = nullptr;
 
-    static bool hkreflex_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+    static bool hkreflex_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                         const char** pluginJSON);
     static sl::Result hkslReflexSetOptions(const sl::ReflexOptions& options);
     static sl::Result hkslReflexSleep(const sl::FrameToken& frame);
@@ -320,24 +330,24 @@ class StreamlineHooks
 
     // PCL
     inline static PFN_slGetPluginFunction o_pcl_slGetPluginFunction = nullptr;
-    inline static PFN_slOnPluginLoad o_pcl_slOnPluginLoad = nullptr;
     inline static decltype(&slPCLSetMarker) o_slPCLSetMarker = nullptr;
 
-    static bool hkpcl_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
+    static bool hkpcl_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON, const char** pluginJSON);
     static void* hkpcl_slGetPluginFunction(const char* functionName);
     static sl::Result hkslPCLSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame);
+    static sl::Result hkslReflexSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame);
+    static sl::Result ForwardPCLSetMarker(decltype(&slPCLSetMarker) original, sl::PCLMarker marker, const sl::FrameToken& frame);
 
     // Common
     inline static PFN_slGetPluginFunction o_common_slGetPluginFunction = nullptr;
-    inline static PFN_slOnPluginLoad o_common_slOnPluginLoad = nullptr;
     inline static PFN_slSetParameters_sl1 o_common_slSetParameters_sl1 = nullptr;
     inline static PFN_setVoid o_setVoid = nullptr;
 
-    static bool hkcommon_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+    static bool hkcommon_slOnPluginLoad(const CommonInvocation& invocation, const char* loaderJSON,
                                         const char** pluginJSON);
     static void* hkcommon_slGetPluginFunction(const char* functionName);
     static void hkcommon_slSetParameters_sl1(void* params);
-    static bool hk_setVoid(void* self, const char* key, void** value);
+    static void hk_setVoid(void* self, const char* key, void* value);
 
     // Logging
     static char* trimStreamlineLog(const char* msg);
@@ -356,22 +366,24 @@ class StreamlineHooks
     VALIDATE_MEMBER_HOOK(hkslAllocateResources, decltype(&slAllocateResources))
     VALIDATE_MEMBER_HOOK(hkslGetNativeInterface, decltype(&slGetNativeInterface))
     VALIDATE_MEMBER_HOOK(hkslSetD3DDevice, decltype(&slSetD3DDevice))
-    VALIDATE_MEMBER_HOOK(hkdlss_slOnPluginLoad, PFN_slOnPluginLoad)
+    VALIDATE_MEMBER_HOOK(hkdlss_slOnPluginLoad, PFN_slOnPluginLoadBound)
     VALIDATE_MEMBER_HOOK(hkslDLSSGetOptimalSettings, decltype(&slDLSSGetOptimalSettings))
     VALIDATE_MEMBER_HOOK(hkdlss_slGetPluginFunction, PFN_slGetPluginFunction)
-    VALIDATE_MEMBER_HOOK(hkdlssg_slOnPluginLoad, PFN_slOnPluginLoad)
+    VALIDATE_MEMBER_HOOK(hkdlssg_slOnPluginLoad, PFN_slOnPluginLoadBound)
+    VALIDATE_MEMBER_HOOK(hklocal_dlssg_slOnPluginLoad, PFN_slOnPluginLoadBound)
     VALIDATE_MEMBER_HOOK(hkslSetConstants, decltype(&slSetConstants))
     VALIDATE_MEMBER_HOOK(hkslDLSSGSetOptions, decltype(&slDLSSGSetOptions))
     VALIDATE_MEMBER_HOOK(hkslDLSSGGetState, decltype(&slDLSSGGetState))
     VALIDATE_MEMBER_HOOK(hkdlssg_slGetPluginFunction, PFN_slGetPluginFunction)
-    VALIDATE_MEMBER_HOOK(hkreflex_slOnPluginLoad, PFN_slOnPluginLoad)
+    VALIDATE_MEMBER_HOOK(hkreflex_slOnPluginLoad, PFN_slOnPluginLoadBound)
     VALIDATE_MEMBER_HOOK(hkslReflexSetOptions, decltype(&slReflexSetOptions))
     VALIDATE_MEMBER_HOOK(hkreflex_slSetConstants_sl1, PFN_slSetConstants_sl1)
     VALIDATE_MEMBER_HOOK(hkreflex_slGetPluginFunction, PFN_slGetPluginFunction)
-    VALIDATE_MEMBER_HOOK(hkpcl_slOnPluginLoad, PFN_slOnPluginLoad)
+    VALIDATE_MEMBER_HOOK(hkpcl_slOnPluginLoad, PFN_slOnPluginLoadBound)
     VALIDATE_MEMBER_HOOK(hkpcl_slGetPluginFunction, PFN_slGetPluginFunction)
     VALIDATE_MEMBER_HOOK(hkslPCLSetMarker, decltype(&slPCLSetMarker))
-    VALIDATE_MEMBER_HOOK(hkcommon_slOnPluginLoad, PFN_slOnPluginLoad)
+    VALIDATE_MEMBER_HOOK(hkslReflexSetMarker, decltype(&slPCLSetMarker))
+    VALIDATE_MEMBER_HOOK(hkcommon_slOnPluginLoad, PFN_slOnPluginLoadBound)
     VALIDATE_MEMBER_HOOK(hkcommon_slGetPluginFunction, PFN_slGetPluginFunction)
     VALIDATE_MEMBER_HOOK(hkcommon_slSetParameters_sl1, PFN_slSetParameters_sl1)
     VALIDATE_MEMBER_HOOK(hk_setVoid, PFN_setVoid)

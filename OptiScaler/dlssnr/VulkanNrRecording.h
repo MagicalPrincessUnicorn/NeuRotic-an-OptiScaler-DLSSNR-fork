@@ -75,6 +75,31 @@ class VkNrRecordingOwner
     bool RetainUse(VkNrUseId);
     void ReleaseUse(VkNrUseId);
     bool RecordingReleased(VkNrUseId) const;
+    // Authoritative scalar snapshot. Absence and a missing producer proof do not
+    // prove an unsubmitted use. The private producer serializes reset/submit.
+    struct UseRecordingSnapshot {
+        VkNrUseId use;
+        VkDevice device=VK_NULL_HANDLE;
+        VkCommandBuffer buffer=VK_NULL_HANDLE;
+        VkCommandPool pool=VK_NULL_HANDLE;
+        uint64_t generation=0,incarnation=0,currentIncarnation=0;
+        bool recordingKnown=false,recordingReference=false,recording=false,executable=false;
+        bool submitted=false,uncertain=false;
+        uint32_t pending=0,consumerHolds=0;
+        bool UnsubmittedRecording()const noexcept {
+            return use&&device&&buffer&&pool&&generation&&incarnation&&recordingKnown&&
+                recordingReference&&currentIncarnation==incarnation&&(recording||executable)&&
+                !submitted&&!uncertain&&!pending&&!consumerHolds;
+        }
+        bool DiscardedSameUse(const UseRecordingSnapshot& before)const noexcept {
+            return before.UnsubmittedRecording()&&use==before.use&&device==before.device&&
+                buffer==before.buffer&&pool==before.pool&&generation==before.generation&&
+                incarnation==before.incarnation&&recordingKnown&&!recordingReference&&
+                !currentIncarnation&&!recording&&!executable&&!submitted&&!uncertain&&
+                !pending&&!consumerHolds;
+        }
+    };
+    std::optional<UseRecordingSnapshot> InspectUseRecording(VkNrUseId)const;
     // Profile observation only: a wait still needs an accepted owned submission,
     // and reuse still needs actual completion plus release of every consumer.
     bool SingleUsePrimary(VkNrUseId) const;

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$GameExecutable,[string]$ProxyName,[switch]$FreshInstall,[switch]$Uninstall,
+param([string]$GameExecutable,[string]$ProxyName,[switch]$FreshInstall,[switch]$InstallInspector,[switch]$Uninstall,
  [string]$GameDirectory,[switch]$Installed,[switch]$CheckOnly,[switch]$ConfirmInstall,
  [switch]$ConfirmUninstall,[switch]$ContinueWithoutRuntime,[string]$ExistingProxyAction,
  [string]$FileDecisionsJson,[string]$HubRequestPath,[string]$HubResultPath,
@@ -30,12 +30,12 @@ try{
   if($Uninstall){$result=Invoke-NeuroticSimpleUninstall (Split-Path -Parent ([IO.Path]::GetFullPath($GameExecutable)))}
   else{
    $target=Get-HubTarget $GameExecutable
-   if($target.bitness -ne 64){throw 'A compatible in-game integration is unavailable for this architecture. Use NR Anything.'}
+   if($target.architecture -ne 'x64'){Write-Warning 'Executable and package architectures differ. If compatible in-game integration is unavailable, use NR Anything.'}
    if(-not $ProxyName){
     $read=Read-NeuroticInstallReceipt $target.directory;$ProxyName=Get-HubProperty $read.receipt 'proxy'
     if(-not $ProxyName){for($i=0;$i -lt $script:NeuroticSimpleProxies.Count;$i++){Write-Host (($i+1).ToString()+'. '+$script:NeuroticSimpleProxies[$i])};$choice=0;if(-not [int]::TryParse((Read-Host 'Proxy filename (0 cancels)'),[ref]$choice) -or $choice -lt 1 -or $choice -gt $script:NeuroticSimpleProxies.Count){return};$ProxyName=$script:NeuroticSimpleProxies[$choice-1]}
    }
-   $request=[pscustomobject]@{protocolVersion=1;kind='Plan';operation='Install';gameExecutable=$GameExecutable;packageId='flagship-approved';proxyName=$ProxyName;freshInstall=[bool]$FreshInstall;continueWithoutRuntime=[bool]$ContinueWithoutRuntime}
+   $request=[pscustomobject]@{protocolVersion=1;kind='Plan';operation='Install';gameExecutable=$GameExecutable;packageId='flagship-approved';proxyName=$ProxyName;freshInstall=[bool]$FreshInstall;installInspector=[bool]$InstallInspector;continueWithoutRuntime=[bool]$ContinueWithoutRuntime}
    if($ExistingProxyAction){$request|Add-Member -NotePropertyName existingProxyAction -NotePropertyValue $ExistingProxyAction}
    if($FileDecisionsJson){$request|Add-Member -NotePropertyName fileDecisions -NotePropertyValue @($FileDecisionsJson|ConvertFrom-Json)}
    $manualPackage=$null;if($HubPackageRoot){$manualPackage=Get-HubPackageAtRoot $HubPackageRoot 'flagship-approved'}elseif(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'PACKAGE-MANIFEST.json')){$manualPackage=Get-HubPackageAtRoot (Split-Path -Parent $PSScriptRoot) 'flagship-approved'}
@@ -48,8 +48,10 @@ try{
      Write-Host '1. Replace';Write-Host '2. Skip';Write-Host '0. Cancel'
      if($file.path -ieq 'dxgi.dll' -and $plan.canKeepReShade){Write-Host '3. Keep ReShade (rename dxgi.dll to ReShade64.dll)'}
      $answer=Read-Host 'Choose an option'
-     if($answer -eq '3' -and $file.path -ieq 'dxgi.dll' -and $plan.canKeepReShade){$request|Add-Member -NotePropertyName existingProxyAction -NotePropertyValue 'RenameReShade' -Force;$action='Replace'}else{$action=$(switch($answer){'1'{'Replace'}'2'{'Skip'}default{'Cancel'}});if($request.existingProxyAction -eq 'RenameReShade'){$request.PSObject.Properties.Remove('existingProxyAction')}}
-     $choices+=,[pscustomobject]@{path=$file.path;action=$action};if($action -eq 'Cancel'){Write-Output 'Cancelled. No files were changed.';return}
+     if($answer -eq '3' -and $file.path -ieq 'dxgi.dll' -and $plan.canKeepReShade){$request|Add-Member -NotePropertyName existingProxyAction -NotePropertyValue 'RenameReShade' -Force;$action='Replace'}else{$action=$(switch($answer){'1'{'Replace'}'2'{'Skip'}default{'Cancel'}});if($file.path -ieq 'dxgi.dll' -and $request.existingProxyAction -eq 'RenameReShade'){$request.PSObject.Properties.Remove('existingProxyAction')}}
+     # A repeat review replaces only this path, preserving unrelated choices.
+     $choices=@($choices|Where-Object{$_.path -ine $file.path})
+     $choices+=,[pscustomobject]@{path=$file.path;action=$action;reviewedIdentity=$file.reviewedIdentity};if($action -eq 'Cancel'){Write-Output 'Cancelled. No files were changed.';return}
     }
     $request|Add-Member -NotePropertyName fileDecisions -NotePropertyValue @($choices) -Force
    }

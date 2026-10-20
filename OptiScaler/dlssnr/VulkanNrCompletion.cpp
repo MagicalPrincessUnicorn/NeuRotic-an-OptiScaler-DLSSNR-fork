@@ -1,4 +1,5 @@
 #include "VulkanNrCompletion.h"
+#include <nr/diagnostics/VulkanHostCost.h>
 #include "VulkanNrFlightRecorder.h"
 #include "VulkanPresentRegistry.h"
 #include "VulkanPresentConsumer.h"
@@ -119,6 +120,9 @@ bool ObserveVkNrDeviceDestroy(VkDevice handle, const std::function<void()>& orig
     std::shared_ptr<Device> device; std::vector<std::shared_ptr<Fence>> owned;
     { std::lock_guard lock(stateMutex); const auto found = devices.find(handle); if (found != devices.end()) device = found->second; }
     if (!device) { original(); VulkanNrRecordings().OnDeviceDestroyed(handle); return true; }
+    // Wait owns polling while using a fence. Exclude actual destruction too,
+    // so a host fence wait need not block submissions on other device queues.
+    std::lock_guard polling(pollingMutex);
     std::lock_guard operation(device->operations);
     { std::lock_guard lock(stateMutex); device->alive = false;
       for (const auto& fence : fences) if (fence->device == device && fence->handle) owned.push_back(fence); }
@@ -149,6 +153,7 @@ bool ReserveVkNrCompletion(VkDevice handle, VkNrUseId use)
 }
 void PollVkNrCompletions()
 {
+    Neurotic::HostCost::VulkanScope nrCost(Neurotic::HostCost::Kind::VkCompletionPoll);
     std::unique_lock polling(pollingMutex,std::try_to_lock); if (!polling.owns_lock()) return;
     std::vector<std::shared_ptr<Fence>> snapshot;
     { std::lock_guard lock(stateMutex); snapshot = fences; }
@@ -172,6 +177,7 @@ void PollVkNrCompletions()
 }
 VkResult SubmitVkNrCheckpoint(VkQueue handle, VkFence fence)
 {
+    Neurotic::HostCost::VulkanScope nrCost(Neurotic::HostCost::Kind::VkCheckpoint);
     const auto queue = FindQueue(handle); if (!queue || queue->protectedQueue || !queue->device->alive || !fence) return VK_ERROR_INITIALIZATION_FAILED;
     std::lock_guard lock(queue->mutex);
     std::lock_guard operation(queue->device->operations);
@@ -185,13 +191,17 @@ VkResult WaitVkNrUse(VkNrUseId use,uint64_t timeoutNs){
     if(VulkanNrRecordings().GpuComplete(use))return VK_SUCCESS;
     std::lock_guard polling(pollingMutex);const auto proof=VulkanNrRecordings().ProducerProof(use);if(!proof)return VK_NOT_READY;
     std::shared_ptr<Fence> owned;{std::lock_guard lock(stateMutex);for(auto& f:fences)if(f->receipt==proof->submission&&f->submitted){owned=f;break;}}
-    if(!owned)return VK_NOT_READY;std::lock_guard operation(owned->device->operations);
-    if(!owned->device->alive)return VK_ERROR_DEVICE_LOST;
+    if(!owned)return VK_NOT_READY;
+    { std::lock_guard operation(owned->device->operations);
+      if(!owned->device->alive)return VK_ERROR_DEVICE_LOST; }
+    // polling excludes fence retirement and actual device destruction for the
+    // whole wait; operations must remain available for dependent queue submits.
     const auto result=owned->device->dispatch.waitForFences?VkFlight::Call(VkFlight::CallSite::FenceWait,0,[&]{return owned->device->dispatch.waitForFences(owned->device->handle,1,&owned->handle,VK_TRUE,timeoutNs);}):VK_NOT_READY;
     VulkanNrRecordings().ObserveFence(proof->submission,result);if(result==VK_ERROR_DEVICE_LOST)owned->device->alive=false;return result;
 }
 VkResult ObserveVkNrQueueSubmit(VkQueue handle, std::span<const VkCommandBuffer> buffers, const VkNrApplicationSubmit& original,std::span<const VkSemaphore> waits)
 {
+    Neurotic::HostCost::VulkanScope nrCost(Neurotic::HostCost::Kind::VkSubmitObservation);
     if (checkpointBypass) return original();
     const auto queue = FindQueue(handle);
     VkNrSubmission submission{handle,queue ? queue->device->generation : 0,{}};

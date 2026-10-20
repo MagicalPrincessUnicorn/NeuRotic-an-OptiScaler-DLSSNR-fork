@@ -1,0 +1,2690 @@
+{
+  "schema_version": "1.1",
+  "artifact_kind": "CORRECTED_AUTHORING_INVENTORY_NOT_TEST_RESULT",
+  "work_order": "NR-TEST-002",
+  "phase": "Pre-Codex 04B",
+  "counts": {
+    "authored_case_ids": 254,
+    "current_callable_case_ids": 231,
+    "fixture_precondition_case_ids": 1,
+    "later_owner_binding_case_ids": 22,
+    "static_check_ids": 10,
+    "framing_negative_obligations": 9,
+    "source_mutation_recipes": 32,
+    "retained_final_intents": 30,
+    "analytic_mutation_obligations": 8,
+    "executed_tests": 0,
+    "executed_static_guards": 0,
+    "executed_mutations": 0
+  },
+  "classification_counts": {
+    "CURRENT_CALLABLE": 231,
+    "LATER_OWNER_BINDING": 22,
+    "FIXTURE_PRECONDITION": 1
+  },
+  "test_family_counts": {
+    "T04": 24,
+    "T05": 15,
+    "T06": 39,
+    "T07": 50,
+    "T08": 19,
+    "T09": 30,
+    "T10": 4,
+    "T11": 24,
+    "T12": 13,
+    "T57": 36
+  },
+  "suite_metadata": {
+    "nr_test002_contracts": {
+      "emitted_suite": "canonical-contracts",
+      "source_files": [
+        "tests/nr/contracts/nr_test002_contracts.cpp"
+      ]
+    },
+    "nr_test002_schema": {
+      "emitted_suite": "schema-hostile",
+      "source_files": [
+        "tests/nr/contracts/nr_test002_schema.cpp"
+      ]
+    },
+    "nr_test002_identity": {
+      "emitted_suite": "identity-freshness",
+      "source_files": [
+        "tests/nr/contracts/nr_test002_identity.cpp"
+      ]
+    },
+    "nr_test002_analytics": {
+      "emitted_suite": "raster-input-oracles",
+      "source_files": [
+        "tests/nr/oracles/nr_test002_analytics.cpp",
+        "tests/nr/oracles/Test002AnalyticCases.h"
+      ]
+    }
+  },
+  "static_ids": [
+    "T11.static.expected-not-sut-input",
+    "T06.static.oracle-not-actual",
+    "T11.static.literal-oracles",
+    "T11.static.unbound-disclosed",
+    "T08.static.no-shared-projector",
+    "T06.static.canonical-verdict",
+    "T10.static.no-runtime-actions",
+    "T06.static.symbol-grammar",
+    "T06.static.case-run-correlation",
+    "T09.static.signature-negative-controls"
+  ],
+  "static_execution_state": "NOT_RUN",
+  "framing_negative_cases": [
+    {
+      "id": "FRAMING.case-transplant",
+      "intentional_defect": "Valid case-B C15 body placed under case A",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.previous-run",
+      "intentional_defect": "Valid previous-run record placed in the current wrapper",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.wrong-suite",
+      "intentional_defect": "Correct case and run with a wrong suite identity",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.missing-expected",
+      "intentional_defect": "Raw expected field or its digest omitted",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.missing-actual",
+      "intentional_defect": "Raw actual field or its digest omitted",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.missing-fixture",
+      "intentional_defect": "Raw fixture identity omitted",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.duplicate-embedded-case",
+      "intentional_defect": "Duplicate or mismatched embedded expected invariant/case identity",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.missing-pending-gap",
+      "intentional_defect": "Later-owner record lacks ProductionBindingUnavailable",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    },
+    {
+      "id": "FRAMING.misplaced-summary",
+      "intentional_defect": "Terminal summary is not the final record",
+      "execution_state": "NOT_RUN",
+      "verdict": null
+    }
+  ],
+  "suites": {
+    "nr_test002_contracts": [
+      {
+        "id": "T04.jitter.unknown",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 10,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.jitter.unknown\", !motion.currentJitter.IsKnown(), true, \"MotionDescription\");"
+      },
+      {
+        "id": "T04.exposure.unknown",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 11,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.exposure.unknown\", !exposure.preExposure.IsKnown(), true, \"ExposureDescription\");"
+      },
+      {
+        "id": "T04.boolean.unknown",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 12,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.boolean.unknown\", !C::OptionalFact<bool>{}.IsKnown(), true, \"OptionalFact<bool>\");"
+      },
+      {
+        "id": "T04.boolean.false-decode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 16,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.boolean.false-decode\", falseFact.error, C::Error::None, \"Codec::Decode<OptionalFact<bool>>\");"
+      },
+      {
+        "id": "T04.boolean.true-decode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 17,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.boolean.true-decode\", trueFact.error, C::Error::None, \"Codec::Decode<OptionalFact<bool>>\");"
+      },
+      {
+        "id": "T04.boolean.unknown-decode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 18,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.boolean.unknown-decode\", unknownBool.error, C::Error::None, \"Codec::Decode<OptionalFact<bool>>\");"
+      },
+      {
+        "id": "T04.boolean.known-false",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 19,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.boolean.known-false\", falseFact.record && falseFact.record->Value().IsKnown() &&"
+      },
+      {
+        "id": "T04.boolean.known-true",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 21,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.boolean.known-true\", trueFact.record && trueFact.record->Value().IsKnown() &&"
+      },
+      {
+        "id": "T04.boolean.false-not-unknown",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 23,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.boolean.false-not-unknown\", falseFact.record && unknownBool.record &&"
+      },
+      {
+        "id": "T04.boolean.false-encode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 28,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.boolean.false-encode\", falseEncoded.error, C::Error::None, \"Codec::Encode<OptionalFact<bool>>\");"
+      },
+      {
+        "id": "T04.boolean.false-wire",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 29,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.boolean.false-wire\", falseEncoded.text.find(\"\\\"value\\\":false\") != std::string::npos,"
+      },
+      {
+        "id": "T04.boolean.false-roundtrip",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 32,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.boolean.false-roundtrip\", falseRoundTrip.record && falseRoundTrip.record->Value().IsKnown() &&"
+      },
+      {
+        "id": "T04.jitter.encode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 38,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.jitter.encode\", m.error, C::Error::None, \"Codec::Encode<MotionDescription>\");"
+      },
+      {
+        "id": "T04.exposure.encode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 39,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.exposure.encode\", e.error, C::Error::None, \"Codec::Encode<ExposureDescription>\");"
+      },
+      {
+        "id": "T04.jitter.known-zero",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 42,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.jitter.known-zero\", md.record && md.record->Value().currentJitter.IsKnown() &&"
+      },
+      {
+        "id": "T04.exposure.known-neutral",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 45,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.exposure.known-neutral\", ed.record && ed.record->Value().preExposure.IsKnown() &&"
+      },
+      {
+        "id": "T04.exposure.no-cross-default",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 47,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.exposure.no-cross-default\", ed.record && !ed.record->Value().rawExposure.IsKnown(), true,"
+      },
+      {
+        "id": "T05.alias.retained",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 59,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T05.alias.retained\", evd.record && evd.record->Value().aliasOf.IsKnown() &&"
+      },
+      {
+        "id": "T05.score.not-freshness",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 61,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T05.score.not-freshness\", evd.record && evd.record->Value().ageInRealFrames.IsKnown() &&"
+      },
+      {
+        "id": "T05.score.not-rights",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 63,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T05.score.not-rights\", evd.record && !evd.record->Value().access.IsKnown(), true,"
+      },
+      {
+        "id": "T05.synthetic.not-native",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 65,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T05.synthetic.not-native\", evd.record && evd.record->Value().provenance.IsKnown() &&"
+      },
+      {
+        "id": "T05.conflict.two-claims",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 74,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T05.conflict.two-claims\", conflict.record && conflict.record->Value().claims.Size() == 2,"
+      },
+      {
+        "id": "T05.conflict.missing-second",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 78,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T05.conflict.missing-second\", incomplete.Check(), C::Error::MissingField, \"Contradiction::Check\");"
+      },
+      {
+        "id": "T04.c01.closed-encode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 92,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.c01.closed-encode\", aText.error, C::Error::None, \"Codec::EncodeWithMetadata<AcquisitionCandidate>\");"
+      },
+      {
+        "id": "T04.c01.payload-with-unknown-jitter",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 93,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.c01.payload-with-unknown-jitter\", aDecoded.record && aDecoded.record->Value().payload.IsKnown() &&"
+      },
+      {
+        "id": "T05.c01.observer-not-acquirer",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 97,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T05.c01.observer-not-acquirer\", a.Check(), C::Error::WrongOwner, \"AcquisitionCandidate::Check\");"
+      },
+      {
+        "id": "T04.c02.closed-encode",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 109,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T04.c02.closed-encode\", cText.error, C::Error::None, \"Codec::EncodeWithMetadata<CanonicalFrameContext>\");"
+      },
+      {
+        "id": "T04.c02.incomplete-stays-unknown",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 110,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.c02.incomplete-stays-unknown\", cDecoded.record && !cDecoded.record->Value().jitter.IsKnown() &&"
+      },
+      {
+        "id": "T05.c02.provider-not-context",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 113,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T05.c02.provider-not-context\", c.Check(), C::Error::WrongOwner, \"CanonicalFrameContext::Check\");"
+      },
+      {
+        "id": "T05.owner.operational",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 117,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T05.owner.operational\", receipt.Check(), C::Error::None, \"OwnerReceipt::Check\");"
+      },
+      {
+        "id": "T05.owner.mirror-not-owner",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 119,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T05.owner.mirror-not-owner\", receipt.Check(), C::Error::WrongOwner, \"OwnerReceipt::Check\");"
+      },
+      {
+        "id": "T05.observation.missing-owner-reference",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 123,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T05.observation.missing-owner-reference\", event.Check(), C::Error::None, \"DiagnosticEvent::Check\");"
+      },
+      {
+        "id": "T05.observation.no-fabricated-receipt",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 124,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T05.observation.no-fabricated-receipt\", !event.ownerReceipt.IsKnown(), true, \"DiagnosticEvent\");"
+      },
+      {
+        "id": "T10.pure.disabled",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 133,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T10.pure.disabled\", disabled, L::IdentityStatus::Ok, \"CompareIdentity\");"
+      },
+      {
+        "id": "T10.pure.dropped",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 134,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T10.pure.dropped\", dropped, L::IdentityStatus::Ok, \"CompareIdentity\");"
+      },
+      {
+        "id": "T10.pure.result-preserved",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 135,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T10.pure.result-preserved\", before == disabled && before == dropped, true, \"CompareIdentity\");"
+      },
+      {
+        "id": "T05.binding.credible-conflict",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 136,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "r.Pending(\"T05.binding.credible-conflict\", \"equal credible incompatible claims remain unresolved\", \"NR-CTX-001 qualification owner\");"
+      },
+      {
+        "id": "T05.binding.alias-dedup",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 137,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "r.Pending(\"T05.binding.alias-dedup\", \"one lineage contributes once; copy adds no credibility\", \"NR-CTX-001 qualification owner\");"
+      },
+      {
+        "id": "T05.binding.unequal-credibility",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 138,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "r.Pending(\"T05.binding.unequal-credibility\", \"stronger eligible evidence wins only under frozen purpose rule\", \"NR-CTX-001 qualification owner\");"
+      },
+      {
+        "id": "T10.binding.m0-transport",
+        "path": "tests/nr/contracts/nr_test002_contracts.cpp",
+        "source_line": 139,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "r.Pending(\"T10.binding.m0-transport\", \"disabled or dropped diagnostics do not alter owner execution\", \"NR-DIAG-001 transport and later runtime validation\");"
+      }
+    ],
+    "nr_test002_schema": [
+      {
+        "id": "T06.id.decode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 10,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T06.id.decode\", decoded.error, C::Error::None, \"Codec::Decode<StableIdentity>\");"
+      },
+      {
+        "id": "T06.id.present",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 11,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.id.present\", decoded.record.has_value(), true, \"Codec::Decode<StableIdentity>\");"
+      },
+      {
+        "id": "T06.id.exact64",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 14,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T06.id.exact64\", id.value, 9007199254740993ULL, \"Codec::Decode<StableIdentity>\");"
+      },
+      {
+        "id": "T06.id.scope",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 15,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.id.scope\", id.nameSpace.View() == \"wire.resource\" && id.issuer.View() == \"wire.owner\","
+      },
+      {
+        "id": "T06.id.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 18,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T06.id.encode\", encoded.error, C::Error::None, \"Codec::Encode<StableIdentity>\");"
+      },
+      {
+        "id": "T06.id.decimal-wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 19,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.id.decimal-wire\", encoded.text.find(\"\\\"9007199254740993\\\"\") != std::string::npos,"
+      },
+      {
+        "id": "T06.id.boundary.zero.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 27,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.zero.encode\", \"T06.id.boundary.zero.wire\", \"T06.id.boundary.zero.roundtrip\", 0ULL, \"0\"},"
+      },
+      {
+        "id": "T06.id.boundary.zero.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 27,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.zero.encode\", \"T06.id.boundary.zero.wire\", \"T06.id.boundary.zero.roundtrip\", 0ULL, \"0\"},"
+      },
+      {
+        "id": "T06.id.boundary.zero.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 27,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.zero.encode\", \"T06.id.boundary.zero.wire\", \"T06.id.boundary.zero.roundtrip\", 0ULL, \"0\"},"
+      },
+      {
+        "id": "T06.id.boundary.one.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 28,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.one.encode\", \"T06.id.boundary.one.wire\", \"T06.id.boundary.one.roundtrip\", 1ULL, \"1\"},"
+      },
+      {
+        "id": "T06.id.boundary.one.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 28,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.one.encode\", \"T06.id.boundary.one.wire\", \"T06.id.boundary.one.roundtrip\", 1ULL, \"1\"},"
+      },
+      {
+        "id": "T06.id.boundary.one.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 28,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.one.encode\", \"T06.id.boundary.one.wire\", \"T06.id.boundary.one.roundtrip\", 1ULL, \"1\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53m1.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 29,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53m1.encode\", \"T06.id.boundary.2p53m1.wire\", \"T06.id.boundary.2p53m1.roundtrip\", 9007199254740991ULL, \"9007199254740991\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53m1.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 29,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53m1.encode\", \"T06.id.boundary.2p53m1.wire\", \"T06.id.boundary.2p53m1.roundtrip\", 9007199254740991ULL, \"9007199254740991\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53m1.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 29,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53m1.encode\", \"T06.id.boundary.2p53m1.wire\", \"T06.id.boundary.2p53m1.roundtrip\", 9007199254740991ULL, \"9007199254740991\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 30,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53.encode\", \"T06.id.boundary.2p53.wire\", \"T06.id.boundary.2p53.roundtrip\", 9007199254740992ULL, \"9007199254740992\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 30,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53.encode\", \"T06.id.boundary.2p53.wire\", \"T06.id.boundary.2p53.roundtrip\", 9007199254740992ULL, \"9007199254740992\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 30,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53.encode\", \"T06.id.boundary.2p53.wire\", \"T06.id.boundary.2p53.roundtrip\", 9007199254740992ULL, \"9007199254740992\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53p1.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 31,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53p1.encode\", \"T06.id.boundary.2p53p1.wire\", \"T06.id.boundary.2p53p1.roundtrip\", 9007199254740993ULL, \"9007199254740993\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53p1.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 31,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53p1.encode\", \"T06.id.boundary.2p53p1.wire\", \"T06.id.boundary.2p53p1.roundtrip\", 9007199254740993ULL, \"9007199254740993\"},"
+      },
+      {
+        "id": "T06.id.boundary.2p53p1.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 31,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.2p53p1.encode\", \"T06.id.boundary.2p53p1.wire\", \"T06.id.boundary.2p53p1.roundtrip\", 9007199254740993ULL, \"9007199254740993\"},"
+      },
+      {
+        "id": "T06.id.boundary.maxm1.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 32,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.maxm1.encode\", \"T06.id.boundary.maxm1.wire\", \"T06.id.boundary.maxm1.roundtrip\", 18446744073709551614ULL, \"18446744073709551614\"},"
+      },
+      {
+        "id": "T06.id.boundary.maxm1.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 32,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.maxm1.encode\", \"T06.id.boundary.maxm1.wire\", \"T06.id.boundary.maxm1.roundtrip\", 18446744073709551614ULL, \"18446744073709551614\"},"
+      },
+      {
+        "id": "T06.id.boundary.maxm1.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 32,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.maxm1.encode\", \"T06.id.boundary.maxm1.wire\", \"T06.id.boundary.maxm1.roundtrip\", 18446744073709551614ULL, \"18446744073709551614\"},"
+      },
+      {
+        "id": "T06.id.boundary.max.encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 33,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.max.encode\", \"T06.id.boundary.max.wire\", \"T06.id.boundary.max.roundtrip\", 18446744073709551615ULL, \"18446744073709551615\"}"
+      },
+      {
+        "id": "T06.id.boundary.max.wire",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 33,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.max.encode\", \"T06.id.boundary.max.wire\", \"T06.id.boundary.max.roundtrip\", 18446744073709551615ULL, \"18446744073709551615\"}"
+      },
+      {
+        "id": "T06.id.boundary.max.roundtrip",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 33,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T06.id.boundary.max.encode\", \"T06.id.boundary.max.wire\", \"T06.id.boundary.max.roundtrip\", 18446744073709551615ULL, \"18446744073709551615\"}"
+      },
+      {
+        "id": "T04.wire.zero",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 49,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.wire.zero\", zero.record && zero.record->Value().IsKnown() &&"
+      },
+      {
+        "id": "T04.wire.unknown",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 51,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T04.wire.unknown\", missing.record && !missing.record->Value().IsKnown(), true,"
+      },
+      {
+        "id": "T06.decimal.maximum",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 54,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T06.decimal.maximum\", C::ParseDecimal(\"18446744073709551615\", number), C::Error::None, \"ParseDecimal\");"
+      },
+      {
+        "id": "T06.decimal.maximum-value",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 55,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T06.decimal.maximum-value\", number, 18446744073709551615ULL, \"ParseDecimal\");"
+      },
+      {
+        "id": "T57.decimal.overflow",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 58,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.overflow\", \"18446744073709551616\", C::Error::Overflow},"
+      },
+      {
+        "id": "T57.decimal.negative",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 59,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.negative\", \"-1\", C::Error::Malformed},"
+      },
+      {
+        "id": "T57.decimal.leading-zero",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 60,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.leading-zero\", \"01\", C::Error::Malformed},"
+      },
+      {
+        "id": "T57.decimal.hex",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 61,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.hex\", \"0x1234\", C::Error::Malformed},"
+      },
+      {
+        "id": "T57.decimal.exponent",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 62,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.exponent\", \"1e3\", C::Error::Malformed},"
+      },
+      {
+        "id": "T57.decimal.empty",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 63,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.empty\", \"\", C::Error::Malformed},"
+      },
+      {
+        "id": "T57.decimal.space",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 64,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.decimal.space\", \" 1\", C::Error::Malformed}};"
+      },
+      {
+        "id": "T57.major",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 73,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.major\", Envelope(\"StableIdentity\", Wire::ExactId, \"{}\", 3), C::Error::UnsupportedVersion},"
+      },
+      {
+        "id": "T57.required-enum",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 74,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.required-enum\", ReplaceUnique(wire, \"ResourceIncarnation\", \"FutureIncarnation\"), C::Error::UnknownEnum},"
+      },
+      {
+        "id": "T57.native-handle",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 75,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.native-handle\", ReplaceUnique(wire, \"\\\"value\\\":\\\"9007199254740993\\\"\", \"\\\"value\\\":\\\"9007199254740993\\\",\\\"handle\\\":\\\"1234\\\"\"), C::Error::UnknownField},"
+      },
+      {
+        "id": "T57.numeric-id",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 76,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.numeric-id\", ReplaceUnique(wire, \"\\\"9007199254740993\\\"\", \"9007199254740993\"), C::Error::WrongValueType},"
+      },
+      {
+        "id": "T57.unknown-member",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 77,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.unknown-member\", ReplaceUnique(wire, \"\\\"record\\\":{\", \"\\\"record\\\":{\\\"newRequired\\\":true,\"), C::Error::UnknownField},"
+      },
+      {
+        "id": "T57.missing-member",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 78,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.missing-member\", ReplaceUnique(wire, \"\\\"issuer\\\":\\\"wire.owner\\\",\", \"\"), C::Error::MissingField},"
+      },
+      {
+        "id": "T57.duplicate-member",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 79,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.duplicate-member\", ReplaceUnique(wire, \"\\\"issuer\\\":\\\"wire.owner\\\"\", \"\\\"issuer\\\":\\\"wire.owner\\\",\\\"issuer\\\":\\\"other\\\"\"), C::Error::DuplicateField},"
+      },
+      {
+        "id": "T57.traversal",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 80,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.traversal\", Envelope(\"StableIdentity\", Wire::ExactId, R\"({\"x-note\":\"../escape\"})\"), C::Error::UnsafeExtension},"
+      },
+      {
+        "id": "T57.absolute-path",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 81,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.absolute-path\", Envelope(\"StableIdentity\", Wire::ExactId, R\"({\"x-note\":\"C:\\\\outside\"})\"), C::Error::UnsafeExtension},"
+      },
+      {
+        "id": "T57.device-path",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 82,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.device-path\", Envelope(\"StableIdentity\", Wire::ExactId, R\"({\"x-note\":\"\\\\\\\\.\\\\PhysicalDrive0\"})\"), C::Error::UnsafeExtension},"
+      },
+      {
+        "id": "T57.dll-field",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 83,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.dll-field\", Envelope(\"StableIdentity\", Wire::ExactId, R\"({\"x-dll\":\"provider\"})\"), C::Error::UnsafeExtension},"
+      },
+      {
+        "id": "T57.executable-address",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 84,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.executable-address\", Envelope(\"StableIdentity\", Wire::ExactId, R\"({\"x-note\":\"0xABCDEF\"})\"), C::Error::UnsafeExtension},"
+      },
+      {
+        "id": "T57.symbol-path",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 85,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.symbol-path\", ReplaceUnique(wire, \"wire.resource\", \"../resource\"), C::Error::Malformed},"
+      },
+      {
+        "id": "T57.symbol-oversize",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 86,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.symbol-oversize\", ReplaceUnique(wire, \"wire.resource\", std::string(97, 'a')), C::Error::LimitExceeded},"
+      },
+      {
+        "id": "T57.document-oversize",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 87,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.document-oversize\", std::string(C::Codec::Limits::MaxBytes + 1, ' '), C::Error::LimitExceeded},"
+      },
+      {
+        "id": "T57.trailing-bytes",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 88,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "{\"T57.trailing-bytes\", wire + \"false\", C::Error::Malformed}};"
+      },
+      {
+        "id": "T06.future-minor",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 97,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.future-minor\", future.record && future.record->Value().value == 9007199254740993ULL,"
+      },
+      {
+        "id": "T06.generation.valid",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 101,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.generation.valid\", gv.record && gv.record->Value().Entries().Size() == 1, true,"
+      },
+      {
+        "id": "T57.generation.duplicate",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 103,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.generation.duplicate\", C::Codec::Decode<C::GenerationVector>(Envelope(\"GenerationVector\","
+      },
+      {
+        "id": "T57.generation.contradiction",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 106,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.generation.contradiction\", C::Codec::Decode<C::GenerationVector>(Envelope(\"GenerationVector\","
+      },
+      {
+        "id": "T57.generation.content-kind",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 109,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.generation.content-kind\", C::Codec::Decode<C::GenerationVector>(Envelope(\"GenerationVector\","
+      },
+      {
+        "id": "T57.generation.frame-kind",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 112,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.generation.frame-kind\", C::Codec::Decode<C::GenerationVector>(Envelope(\"GenerationVector\","
+      },
+      {
+        "id": "T57.generation.capacity",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 122,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.generation.capacity\", C::Codec::Decode<C::GenerationVector>(Envelope(\"GenerationVector\", tooMany)).error,"
+      },
+      {
+        "id": "T57.nan",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 124,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.nan\", C::Codec::Decode<C::Vec2>(Envelope(\"Vec2\", R\"({\"x\":NaN,\"y\":0})\")).error,"
+      },
+      {
+        "id": "T57.inf",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 126,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.inf\", C::Codec::Decode<C::Vec2>(Envelope(\"Vec2\", R\"({\"x\":1e999,\"y\":0})\")).error,"
+      },
+      {
+        "id": "T57.nonfinite-encode",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 128,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.nonfinite-encode\", C::Codec::Encode(C::Vec2{std::numeric_limits<double>::infinity(), 0}).error,"
+      },
+      {
+        "id": "T57.nesting",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 131,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.nesting\", C::Codec::InspectJson(nested), C::Error::LimitExceeded, \"Codec::InspectJson\");"
+      },
+      {
+        "id": "T57.nul",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 132,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.nul\", C::Codec::InspectJson(R\"(\"\\u0000\")\"), C::Error::Malformed, \"Codec::InspectJson\");"
+      },
+      {
+        "id": "T57.surrogate",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 133,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.surrogate\", C::Codec::InspectJson(R\"(\"\\ud800\")\"), C::Error::Malformed, \"Codec::InspectJson\");"
+      },
+      {
+        "id": "T57.utf8",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 135,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.utf8\", C::Codec::InspectJson(invalidUtf8), C::Error::Malformed, \"Codec::InspectJson\");"
+      },
+      {
+        "id": "T57.text-budget",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 136,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T57.text-budget\", C::Codec::InspectJson(\"\\\"\" + std::string(4097, 'a') + \"\\\"\"),"
+      },
+      {
+        "id": "T06.c15.default-verdict-unknown",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 139,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.c15.default-verdict-unknown\", !axis.verdict.IsKnown(), true, \"AxisResult\");"
+      },
+      {
+        "id": "T06.c15.not-run-pass-refused",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 141,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T06.c15.not-run-pass-refused\", axis.Check(), C::Error::Malformed, \"AxisResult::Check\");"
+      },
+      {
+        "id": "T06.c15.completed-explicit-pass",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 143,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T06.c15.completed-explicit-pass\", axis.Check(), C::Error::None, \"AxisResult::Check\");"
+      },
+      {
+        "id": "T06.c15.attempt-no-verdict",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 145,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.c15.attempt-no-verdict\", !axis.verdict.IsKnown(), true, \"AxisResult\");"
+      },
+      {
+        "id": "T06.c15.partial-no-verdict",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 147,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.c15.partial-no-verdict\", !axis.verdict.IsKnown(), true, \"AxisResult\");"
+      },
+      {
+        "id": "T06.c15.uppercase-state",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 149,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.c15.uppercase-state\", C::ParseEnum(\"BLOCKED_BY_ENVIRONMENT\", execution), true, \"ParseEnum<ExecutionState>\");"
+      },
+      {
+        "id": "T06.c15.retired-state",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 150,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.c15.retired-state\", C::ParseEnum(\"FailedToLaunch\", execution), false, \"ParseEnum<ExecutionState>\");"
+      },
+      {
+        "id": "T06.c15.no-sixth-verdict",
+        "path": "tests/nr/contracts/nr_test002_schema.cpp",
+        "source_line": 151,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T06.c15.no-sixth-verdict\", C::EnumTraits<C::Verdict>::Values.size() == 5, true, \"EnumTraits<Verdict>\");"
+      }
+    ],
+    "nr_test002_identity": [
+      {
+        "id": "T07.session",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 19,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.session\", session.status, L::IdentityStatus::Ok, \"HostIdentityDomain::OpenSession\");"
+      },
+      {
+        "id": "T07.bindings",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 23,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.bindings\", render.has_value() && evaluation.has_value() && present.has_value(), true,"
+      },
+      {
+        "id": "T07.base.first-status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 30,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.base.first-status\", base1.status, L::IdentityStatus::Ok, \"RenderIssuer::NewBase\");"
+      },
+      {
+        "id": "T07.base.first-known",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 31,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.base.first-known\", base1.value.IsKnown(), true, \"RenderIssuer::NewBase\");"
+      },
+      {
+        "id": "T07.render.first-known",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 32,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.render.first-known\", render1.value.IsKnown(), true, \"RenderIssuer::Render\");"
+      },
+      {
+        "id": "T07.base.first-value",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 34,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T07.base.first-value\", base1.value.KnownPart()->value.value, 1, \"RenderIssuer::NewBase\");"
+      },
+      {
+        "id": "T07.render.first-value",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 35,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T07.render.first-value\", render1.value.KnownPart()->value.value, 1, \"RenderIssuer::Render\");"
+      },
+      {
+        "id": "T07.events.known",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 42,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.events.known\", eval1.value.IsKnown() && eval2.value.IsKnown() && present1.value.IsKnown() &&"
+      },
+      {
+        "id": "T07.eval.second",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 47,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T07.eval.second\", eval2.value.KnownPart()->value.value, 2, \"EvaluationIssuer::Evaluation\");"
+      },
+      {
+        "id": "T07.present.second",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 48,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T07.present.second\", present2.value.KnownPart()->value.value, 2, \"PresentIssuer::Present\");"
+      },
+      {
+        "id": "T07.generated.no-base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 51,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.no-base\", render->NewBase({nextEvent, L::RenderObservation::GeneratedOutput}).status,"
+      },
+      {
+        "id": "T07.repeated.no-base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 53,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.repeated.no-base\", render->NewBase({nextEvent, L::RenderObservation::RepeatedContent}).status,"
+      },
+      {
+        "id": "T07.existing.no-base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 55,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.existing.no-base\", render->NewBase({nextEvent, L::RenderObservation::ExistingGameContent}).status,"
+      },
+      {
+        "id": "T07.unknown.no-base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 57,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.unknown.no-base\", render->NewBase({nextEvent, L::RenderObservation::Unknown}).status,"
+      },
+      {
+        "id": "T07.base.after-events-known",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 63,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.base.after-events-known\", base2.value.IsKnown(), true, \"RenderIssuer::NewBase\");"
+      },
+      {
+        "id": "T07.next-events-known",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 64,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.next-events-known\", render2.value.IsKnown() && eval3.value.IsKnown() && presentNext.value.IsKnown(),"
+      },
+      {
+        "id": "T07.base.only-two",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 68,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T07.base.only-two\", base2.value.KnownPart()->value.value, 2, \"RenderIssuer::NewBase\");"
+      },
+      {
+        "id": "T07.projection.render-base.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 78,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.projection.render-base.status\", renderBase1.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.projection.render-base.render",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 79,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.render-base.render\", renderBase1Value &&"
+      },
+      {
+        "id": "T07.projection.render-base.base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 81,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.render-base.base\", renderBase1Value &&"
+      },
+      {
+        "id": "T07.projection.eval-render.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 87,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.projection.eval-render.status\", evalRender.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.projection.eval-render.evaluation",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 88,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.eval-render.evaluation\", evalRenderValue &&"
+      },
+      {
+        "id": "T07.projection.eval-render.render",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 90,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.eval-render.render\", evalRenderValue &&"
+      },
+      {
+        "id": "T07.projection.eval1-base.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 99,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.projection.eval1-base.status\", evalBase1.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.projection.eval2-base.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 100,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.projection.eval2-base.status\", evalBase2.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.projection.eval1-base.evaluation",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 101,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.eval1-base.evaluation\", evalBase1Value &&"
+      },
+      {
+        "id": "T07.projection.eval2-base.evaluation",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 103,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.eval2-base.evaluation\", evalBase2Value &&"
+      },
+      {
+        "id": "T07.projection.eval1-base.base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 105,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.eval1-base.base\", evalBase1Value &&"
+      },
+      {
+        "id": "T07.projection.eval2-base.base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 107,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.eval2-base.base\", evalBase2Value &&"
+      },
+      {
+        "id": "T07.projection.evaluations-distinct",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 109,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.evaluations-distinct\", evalBase1Value && evalBase2Value &&"
+      },
+      {
+        "id": "T07.projection.present-base.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 117,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.projection.present-base.status\", presentBase1.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.projection.present-base.present",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 118,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.present-base.present\", presentBase1Value &&"
+      },
+      {
+        "id": "T07.projection.present-base.base",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 120,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.projection.present-base.base\", presentBase1Value &&"
+      },
+      {
+        "id": "T07.repeat.projection",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 126,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.repeat.projection\", repeatValue && exact(repeatValue->frame.presentId, present2.value.KnownPart()->value) &&"
+      },
+      {
+        "id": "T07.generated.import",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 139,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.import\", imported.status, L::IdentityStatus::Ok, \"ImportGeneratedIdentity\");"
+      },
+      {
+        "id": "T07.generated.wrong-owner",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 141,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.wrong-owner\", L::ImportGeneratedIdentity(badAuthority, gc).status,"
+      },
+      {
+        "id": "T07.generated.old-provider",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 144,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.old-provider\", L::ImportGeneratedIdentity(ga, stale).status,"
+      },
+      {
+        "id": "T07.generated.opaque",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 147,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.opaque\", L::ImportGeneratedIdentity(ga, unavailable).status,"
+      },
+      {
+        "id": "T07.generated.source.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 158,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.source.status\", generatedSource.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.generated.source.generated",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 159,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.generated.source.generated\", generatedSourceValue &&"
+      },
+      {
+        "id": "T07.generated.source.real",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 161,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.generated.source.real\", generatedSourceValue &&"
+      },
+      {
+        "id": "T07.generated.source.base-absent",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 163,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.generated.source.base-absent\", generatedSourceValue &&"
+      },
+      {
+        "id": "T07.generated.present.status",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 174,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T07.generated.present.status\", generatedPresent.status, L::IdentityStatus::Ok, \"MakeAssociation\");"
+      },
+      {
+        "id": "T07.generated.present.present",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 175,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.generated.present.present\", generatedPresentValue &&"
+      },
+      {
+        "id": "T07.generated.present.generated",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 177,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.generated.present.generated\", generatedPresentValue &&"
+      },
+      {
+        "id": "T07.generated.present.base-absent",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 179,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.generated.present.base-absent\", generatedPresentValue &&"
+      },
+      {
+        "id": "T07.next.render-lineage",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 192,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.next.render-lineage\", renderBase2Value &&"
+      },
+      {
+        "id": "T07.next.evaluation-lineage",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 195,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.next.evaluation-lineage\", evalBase3Value &&"
+      },
+      {
+        "id": "T07.next.present-lineage",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 200,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.next.present-lineage\", presentBase2Value &&"
+      },
+      {
+        "id": "T07.finalizer.supplied-seal",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 210,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T07.finalizer.supplied-seal\", finalEdge.value.IsKnown() &&"
+      },
+      {
+        "id": "T08.identity.namespace",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 215,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.namespace\", L::CompareIdentity(F::Known(value), F::Known(alternate)), L::IdentityStatus::Different, \"CompareIdentity\");"
+      },
+      {
+        "id": "T08.identity.issuer",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 217,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.issuer\", L::CompareIdentity(F::Known(value), F::Known(alternate)), L::IdentityStatus::Different, \"CompareIdentity\");"
+      },
+      {
+        "id": "T08.identity.kind",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 219,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.kind\", L::CompareIdentity(F::Known(value), F::Known(alternate)), L::IdentityStatus::Different, \"CompareIdentity\");"
+      },
+      {
+        "id": "T08.identity.unknown",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 220,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.unknown\", L::CompareIdentity(F::Known(value), {}), L::IdentityStatus::Unknown, \"CompareIdentity\");"
+      },
+      {
+        "id": "T08.identity.republication",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 221,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.republication\", L::CompareIdentity(F::Known(value, 1), F::Known(value, 99)), L::IdentityStatus::Ok, \"CompareIdentity\");"
+      },
+      {
+        "id": "T08.identity.zero-equals-zero",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 223,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.zero-equals-zero\", L::CompareIdentity(F::Known(zeroIdentity), F::Known(zeroIdentity)),"
+      },
+      {
+        "id": "T08.identity.zero-vs-unknown",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 225,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.identity.zero-vs-unknown\", L::CompareIdentity(F::Known(zeroIdentity), {}),"
+      },
+      {
+        "id": "T08.association.view",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 230,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.association.view\", L::MakeAssociation(evaluationAuthority, otherView).status,"
+      },
+      {
+        "id": "T08.association.stream",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 233,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.association.stream\", L::MakeAssociation(evaluationAuthority, otherStream).status,"
+      },
+      {
+        "id": "T08.association.incarnation",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 236,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.association.incarnation\", L::MakeAssociation(evaluationAuthority, oldScope).status,"
+      },
+      {
+        "id": "T08.association.evidence",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 242,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.association.evidence\", L::MakeAssociation(evaluationAuthority, noEvidence).status,"
+      },
+      {
+        "id": "T08.address-label.same",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 248,
+        "binding": "FIXTURE_PRECONDITION",
+        "execution_state": "NOT_RUN",
+        "axis": "fixtureValidity",
+        "evidence_scope": "FIXTURE_VALIDITY_ONLY",
+        "definition_line": "r.Precondition(\"T08.address-label.same\", addressLabelBefore == addressLabelAfter, true,"
+      },
+      {
+        "id": "T08.pointer-reuse.new-incarnation",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 250,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.pointer-reuse.new-incarnation\", L::CompareExactContent(resourceA, resourceB, {true, true}),"
+      },
+      {
+        "id": "T08.generation.wrong-slot",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 254,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T08.generation.wrong-slot\", invalidToken.Check(), C::Error::WrongIdentityKind, \"ResourceIdentityToken::Check\");"
+      },
+      {
+        "id": "T08.incarnation.generation-misplaced",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 258,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T08.incarnation.generation-misplaced\", generationInIncarnation.Check(), C::Error::WrongIdentityKind,"
+      },
+      {
+        "id": "T08.object.bound",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 261,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T08.object.bound\", objectIssuer.has_value(), true, \"HostIdentityDomain::BindObject\");"
+      },
+      {
+        "id": "T08.object.recreated",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 266,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T08.object.recreated\", first.value.IsKnown() && second.value.IsKnown() &&"
+      },
+      {
+        "id": "T09.channels",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 274,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.channels\", resource.has_value() && route.has_value() && history.has_value(), true,"
+      },
+      {
+        "id": "T09.initial.known",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 281,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.initial.known\", ri.value.IsKnown() && rg.value.IsKnown() && route1.value.IsKnown() && history1.value.IsKnown(),"
+      },
+      {
+        "id": "T09.content.explicit-writes",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 286,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.content.explicit-writes\", cr1.value.IsKnown() && cr2.value.IsKnown() &&"
+      },
+      {
+        "id": "T09.content.no-route-churn",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 292,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.content.no-route-churn\", route2.value.IsKnown() && route2.value.KnownPart()->value.value == 2,"
+      },
+      {
+        "id": "T09.content.no-history-churn",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 294,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.content.no-history-churn\", history2.value.IsKnown() && history2.value.KnownPart()->value.value == 2,"
+      },
+      {
+        "id": "T09.content.no-structure-churn",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 296,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.content.no-structure-churn\", structure2.value.IsKnown() && structure2.value.KnownPart()->value.value == 2,"
+      },
+      {
+        "id": "T09.signature.first",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 306,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.first\", L::BuildSignature(F::Generations(42, 7, 9, 1), selection, F::Publication(), *signature1),"
+      },
+      {
+        "id": "T09.signature.republished",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 308,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.republished\", L::BuildSignature(F::Generations(42, 7, 9, 2), selection, F::Publication(1002), *signatureRepublished),"
+      },
+      {
+        "id": "T09.signature.route-build",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 310,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.route-build\", L::BuildSignature(F::Generations(42, 7, 10, 1), selection, F::Publication(1003), *signatureRoute),"
+      },
+      {
+        "id": "T09.signature.resource-build",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 312,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.resource-build\", L::BuildSignature(F::Generations(43, 7, 9, 1), selection, F::Publication(1004), *signatureResource),"
+      },
+      {
+        "id": "T09.signature.representation-build",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 314,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.representation-build\", L::BuildSignature(F::Generations(42, 8, 9, 1), selection, F::Publication(1005), *signatureRepresentation),"
+      },
+      {
+        "id": "T09.signature.record-build",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 319,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.record-build\", L::BuildSignature(F::Generations(42, 7, 9, 1), recordSelection, F::Publication(1006), *signatureRecord),"
+      },
+      {
+        "id": "T09.signature.selected-only",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 321,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.selected-only\", L::CompareSignatures(*signature1, *signatureRepublished),"
+      },
+      {
+        "id": "T09.signature.selected-route-different",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 323,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.selected-route-different\", L::CompareSignatures(*signature1, *signatureRoute),"
+      },
+      {
+        "id": "T09.signature.selected-resource-different",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 325,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.selected-resource-different\", L::CompareSignatures(*signature1, *signatureResource),"
+      },
+      {
+        "id": "T09.signature.selected-representation-different",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 327,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.selected-representation-different\", L::CompareSignatures(*signature1, *signatureRepresentation),"
+      },
+      {
+        "id": "T09.signature.selected-record-different",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 329,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.selected-record-different\", L::CompareSignatures(*signature1, *signatureRecord),"
+      },
+      {
+        "id": "T09.signature.resource-token-exact",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 338,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.signature.resource-token-exact\", selectedMatches(C::IdentityKind::ResourceGeneration, \"resource.family\", 42),"
+      },
+      {
+        "id": "T09.signature.representation-token-exact",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 340,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.signature.representation-token-exact\", selectedMatches(C::IdentityKind::RepresentationGeneration, \"representation\", 7),"
+      },
+      {
+        "id": "T09.signature.route-token-exact",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 342,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.signature.route-token-exact\", selectedMatches(C::IdentityKind::RouteGeneration, \"route\", 9),"
+      },
+      {
+        "id": "T09.signature.three-axes",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 345,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T09.signature.three-axes\", signature1->generationBody->second.Entries().Size(), 3, \"BuildSignature\");"
+      },
+      {
+        "id": "T09.content.stale",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 348,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.content.stale\", L::CompareExactContent(resourceA, newContent, {true, true}),"
+      },
+      {
+        "id": "T09.content.unknown",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 351,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.content.unknown\", L::CompareExactContent(resourceA, newContent, {true, true}),"
+      },
+      {
+        "id": "T09.content.zero-equals-zero",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 355,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.content.zero-equals-zero\", L::CompareExactContent(zeroContent, zeroContent, {true, true}),"
+      },
+      {
+        "id": "T09.content.zero-vs-unknown",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 357,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.content.zero-vs-unknown\", L::CompareExactContent(zeroContent, unknownContent, {true, true}),"
+      },
+      {
+        "id": "T09.signature.content-independent",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 359,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.content-independent\", L::CompareSignatures(*signature1, *signatureRepublished),"
+      },
+      {
+        "id": "T09.history.compatible",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 365,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.history.compatible\", L::CompareHistoryDependencies(h, *signature1, h2, *signatureRepublished),"
+      },
+      {
+        "id": "T09.signature.unestablished",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 368,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.signature.unestablished\", L::CompareSignatures(*signature1, *absent),"
+      },
+      {
+        "id": "T09.reset.described-only",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 374,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T09.reset.described-only\", affected.value.IsKnown() && affected.value.KnownPart()->value, true, \"ChangeAffects\");"
+      },
+      {
+        "id": "T09.reset.absent-not-false",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 375,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T09.reset.absent-not-false\", L::ChangeAffects(*absent, axis, change, F::Ev(77)).status,"
+      },
+      {
+        "id": "T08.successor.exhausted",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 378,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Status(\"T08.successor.exhausted\", L::CheckedSuccessor(18446744073709551615ULL, 18446744073709551615ULL, next),"
+      },
+      {
+        "id": "T08.successor.no-wrap",
+        "path": "tests/nr/contracts/nr_test002_identity.cpp",
+        "source_line": 380,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T08.successor.no-wrap\", next, 88, \"CheckedSuccessor\");"
+      }
+    ],
+    "nr_test002_analytics": [
+      {
+        "id": "T11.scale.x",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 11,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Near(\"T11.scale.x\", scale.x, 1.0/3.0, 2e-7, \"DlssNrWorkingMotionScale\");"
+      },
+      {
+        "id": "T11.scale.y",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 12,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Near(\"T11.scale.y\", scale.y, 0.25, 2e-7, \"DlssNrWorkingMotionScale\");"
+      },
+      {
+        "id": "T11.scale.identity-x",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 14,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Near(\"T11.scale.identity-x\", identity.x, 1, 0, \"DlssNrWorkingMotionScale\");"
+      },
+      {
+        "id": "T11.legacy.zero-fallback",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 16,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Near(\"T11.legacy.zero-fallback\", zero.x, 1, 0, \"DlssNrWorkingMotionScale legacy-only behavior\");"
+      },
+      {
+        "id": "T11.fits.offset",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 17,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.fits.offset\", N::Fits({100, 50, 800, 400}, 1024, 512), true, \"NativeTemporalInputs::Fits\");"
+      },
+      {
+        "id": "T11.fits.outside",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 18,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.fits.outside\", N::Fits({300, 50, 800, 400}, 1024, 512), false, \"NativeTemporalInputs::Fits\");"
+      },
+      {
+        "id": "T11.fits.zero",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 19,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.fits.zero\", N::Fits({0, 0, 0, 400}, 1024, 512), false, \"NativeTemporalInputs::Fits\");"
+      },
+      {
+        "id": "T11.fits.overflow",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 20,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.fits.overflow\", N::Fits({4294967295U, 0, 2, 1}, 4294967295ULL, 1), false, \"NativeTemporalInputs::Fits\");"
+      },
+      {
+        "id": "T11.guide.low",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 23,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.guide.low\", low.x == 100 && low.y == 50 && low.width == 800 && low.height == 400, true, \"NativeTemporalInputs::GuideRect\");"
+      },
+      {
+        "id": "T11.guide.high",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 24,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.guide.high\", high.x == 100 && high.y == 50 && high.width == 1920 && high.height == 1080, true, \"NativeTemporalInputs::GuideRect\");"
+      },
+      {
+        "id": "T04.legacy.flag-precedence",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 25,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Equal(\"T04.legacy.flag-precedence\", N::ResolveFlags(0U, 7U), 0, \"NativeTemporalInputs::ResolveFlags legacy-only behavior\");"
+      },
+      {
+        "id": "T11.raster.valid",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 28,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T11.raster.valid\", raster.Check(), C::Error::None, \"RasterDescription::Check\");"
+      },
+      {
+        "id": "T11.raster.bounds",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 30,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T11.raster.bounds\", raster.Check(), C::Error::Malformed, \"RasterDescription::Check\");"
+      },
+      {
+        "id": "T11.raster.empty-descriptive",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 32,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Error(\"T11.raster.empty-descriptive\", raster.Check(), C::Error::None, \"RasterDescription::Check descriptive-only\");"
+      },
+      {
+        "id": "T11.raster.allocation-unknown",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 36,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T11.raster.allocation-unknown\", rasterRead.record && !rasterRead.record->Value().allocation.IsKnown(), true,"
+      },
+      {
+        "id": "T12.depth.no-guessed-projection",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 42,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T12.depth.no-guessed-projection\", depthRead.record && !depthRead.record->Value().projection.IsKnown() &&"
+      },
+      {
+        "id": "T12.depth.reversed-retained",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 45,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T12.depth.reversed-retained\", depthRead.record && depthRead.record->Value().reversed.IsKnown() &&"
+      },
+      {
+        "id": "T12.depth.radial-kind",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 48,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T12.depth.radial-kind\", C::ParseEnum(\"RadialDistance\", kind) && kind == C::DepthKind::RadialDistance, true, \"ParseEnum<DepthKind>\");"
+      },
+      {
+        "id": "T12.depth.proxy-kind",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 49,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T12.depth.proxy-kind\", C::ParseEnum(\"Proxy\", kind) && kind == C::DepthKind::Proxy, true, \"ParseEnum<DepthKind>\");"
+      },
+      {
+        "id": "T12.exposure.zero-vs-unknown",
+        "path": "tests/nr/oracles/nr_test002_analytics.cpp",
+        "source_line": 53,
+        "binding": "CURRENT_CALLABLE",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "CURRENT_CPU_CONTRACT_CALL",
+        "definition_line": "r.Check(\"T12.exposure.zero-vs-unknown\", exp.record && exp.record->Value().rawExposure.IsKnown() &&"
+      },
+      {
+        "id": "T11.oracle.pixel-to-uv",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 67,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.pixel-to-uv\", \"(8/800,-4/400)=(0.01,-0.01); allocation is not denominator\", in, {true, true, {0.01, -0.01}, 0}});"
+      },
+      {
+        "id": "T11.oracle.ndc-origin",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 71,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.ndc-origin\", \"declared NDC x-right y-up: (dx/2,-dy/2)\", in, {true, true, {0.01, -0.01}, 0}});"
+      },
+      {
+        "id": "T11.oracle.jitter-sign",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 76,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.jitter-sign\", \"m_u=m_j-(j_previous-j_current) in the same declared UV basis\", in, {true, true, {0.015, -0.005}, 0}});"
+      },
+      {
+        "id": "T11.oracle.no-double-jitter",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 78,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.no-double-jitter\", \"already unjittered displacement is unchanged\", in, {true, true, {0.015, -0.005}, 0}});"
+      },
+      {
+        "id": "T11.oracle.missing-jitter",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 80,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.missing-jitter\", \"required previous jitter is unavailable, not known zero\", in, {true, false, {}, 0}});"
+      },
+      {
+        "id": "T11.oracle.forward-not-negation",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 82,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.forward-not-negation\", \"no inverse correspondence provided; forward flow cannot simply be negated at current pixel\", in, {true, false, {}, 0}});"
+      },
+      {
+        "id": "T11.oracle.incompatible-pair",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 84,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.incompatible-pair\", \"independent stream without association is not the previous frame\", in, {true, false, {}, 0}});"
+      },
+      {
+        "id": "T11.oracle.dropped-pair",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 87,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.dropped-pair\", \"trusted explicit pair displacement 16/800; do not invent intermediate frames or divide by frame count\", in, {true, true, {0.02, 0}, 0}});"
+      },
+      {
+        "id": "T11.oracle.rect-offset",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 90,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.rect-offset\", \"continuous point coordinates: ((500-100)/800,(250-50)/400); no pixel-center addition\", in, {true, true, {0.5, 0.5}, 0}});"
+      },
+      {
+        "id": "T11.oracle.drs",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 92,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T11.oracle.drs\", \"changed active rect, unchanged allocation, center remains (0.5,0.5)\", in, {true, true, {0.5, 0.5}, 0}});"
+      },
+      {
+        "id": "T12.oracle.device-depth",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 102,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.device-depth\", \"declared projection d=1.25-2.5/z; d=.75 implies z=5\", in, {false, true, {}, 5}});"
+      },
+      {
+        "id": "T12.oracle.reversed-depth",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 108,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.reversed-depth\", \"declared reversed d=-.25+2.5/z; d=.25 implies z=5, not linearized 1-d\", in, {false, true, {}, 5}});"
+      },
+      {
+        "id": "T12.oracle.projection-unknown",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 110,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.projection-unknown\", \"reversed metadata alone cannot establish view depth\", in, {false, false, {}, 0}});"
+      },
+      {
+        "id": "T12.oracle.raw-depth-retained",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 112,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.raw-depth-retained\", \"raw-depth consumer can retain .25 without invented near/far or view distance\", in, {false, true, {}, 0.25}});"
+      },
+      {
+        "id": "T12.oracle.pre-exposure",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 117,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.pre-exposure\", \"stored=3*radiance; stored24 gives radiance8; calibration5 is not pre-exposure\", in, {false, true, {}, 8}});"
+      },
+      {
+        "id": "T12.oracle.exposure-distinct",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 119,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.exposure-distinct\", \"already radiance8 times effective exposure2 =16; no second division by pre-exposure\", in, {false, true, {}, 16}});"
+      },
+      {
+        "id": "T12.oracle.missing-pre-exposure",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 121,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.missing-pre-exposure\", \"missing multiplier is not neutral1\", in, {false, false, {}, 0}});"
+      },
+      {
+        "id": "T12.oracle.zero-pre-exposure",
+        "path": "tests/nr/oracles/Test002AnalyticCases.h",
+        "source_line": 123,
+        "binding": "LATER_OWNER_BINDING",
+        "execution_state": "NOT_RUN",
+        "axis": "protocolSemantic",
+        "evidence_scope": "MISSING_PRODUCTION_BINDING",
+        "definition_line": "cases.push_back({\"T12.oracle.zero-pre-exposure\", \"known zero is represented but cannot be a divisor\", in, {false, false, {}, 0}});"
+      }
+    ]
+  },
+  "not_proof": [
+    "Authored IDs are not invocation or result counts.",
+    "FIXTURE_PRECONDITION records cannot contribute to production semantic coverage.",
+    "LATER_OWNER_BINDING records remain NOT_RUN/Unknown with explicit missing protocol coverage.",
+    "Static guards are lexical source checks only and remain NOT_RUN in this preparation pass.",
+    "Artifact consistency is not compilation, execution, mutation sensitivity, GPU support, IQ, or performance evidence."
+  ]
+}

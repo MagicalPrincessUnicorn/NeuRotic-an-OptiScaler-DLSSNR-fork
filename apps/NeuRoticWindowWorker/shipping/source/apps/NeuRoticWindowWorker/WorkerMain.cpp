@@ -19,6 +19,12 @@ namespace nrw {
 HWND ControlFixtureForeground();
 #endif
 namespace {
+Json ColorJson(const color::Representation& value){
+    if(!color::Valid(value))return {{"known",false}};
+    return {{"known",true},{"storage",color::Hdr(value)?"rgba16-float":"bgra8-unorm"},
+        {"domain",color::Hdr(value)?"linear709-scrgb":"encoded-srgb709"},{"colorEpoch",value.epoch},
+        {"alpha","unspecified-preserved"},{"recipeRevision",value.recipe}};
+}
 std::atomic<bool> interrupted=false;
 uint64_t Qpc(){LARGE_INTEGER value{};QueryPerformanceCounter(&value);return uint64_t(value.QuadPart);}
 double QpcMs(uint64_t value){LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);return double(value)*1000./double(frequency.QuadPart);}
@@ -70,11 +76,27 @@ class Worker {
     DiagnosticTrace trace;
     Json lastFrame=nullptr,comparison={{"revision",0},{"publicationsAtApply",0},{"completedAtApply",0}};
     CaptureStatistics lastCapture;
+    color::Representation lastColor;uint64_t lastColorOutputEpoch=0;
     uint64_t gpuCompleted=0,processingRevision=0;
     NrProcessingOptions processingOptions;
     Json pendingProcessing,processing={{"state","idle"},{"appliedRevision",0}};
     int comparisonDirection=0;
     std::string stopTrigger,lastCommand;
+    adapters::Report adapterReport;
+    adapters::Identity captureAdapter,processingAdapter,outputAdapter;
+    uint64_t adapterSession=0;
+    std::string adapterPhase="not-started",adapterFailurePhase;
+    template<class Call>decltype(auto) AdapterCall(const char* stage,Call&& call){adapterPhase=stage;return call();}
+    Json AdapterStatus()const {
+        const auto value=[](adapters::Identity id){return id.known?Json(adapters::IdentityText(id)):Json(nullptr);};
+        auto attempts=Json::array();for(const auto& attempt:adapterReport.attempts)
+            attempts.push_back({{"luid",value(attempt.id)},{"phase",attempt.result.phase},{"hresult",attempt.result.code},{"supported",attempt.result.supported}});
+        return {{"session",adapterSession},{"ordering",adapterReport.ordering},{"selectedLuid",value(adapterReport.selected)},
+            {"captureLuid",value(captureAdapter)},{"processingLuid",value(processingAdapter)},{"outputLuid",value(outputAdapter)},
+            {"phase",adapterPhase},{"failurePhase",adapterFailurePhase.empty()?Json(nullptr):Json(adapterFailurePhase)},
+            {"selectionFailurePhase",adapterReport.failurePhase.empty()?Json(nullptr):Json(adapterReport.failurePhase)},
+            {"enumerationHresult",adapterReport.enumerationCode},{"attempts",attempts},{"transport","same-adapter"}};
+    }
     bool gpuTiming=true;uint32_t nrScalePercent=100;
     OptionalMs lastTraceMs;
     uint64_t waitCalls=0,frameWakes=0,commandWakes=0,messageWakes=0,maintenanceWakes=0,previousPublicationQpc=0;
@@ -116,8 +138,8 @@ public:
         const auto sample=timings.Last();auto measured=measurement.Status();if(measured["state"]=="complete")measured["modelSha256"]=ModelJson(model).value("sha256",std::string{});
         return {{"event",event},{"apiVersion",1},{"phase",phase},{"reason",reason},
             {"capabilities",{{"hostProcessExclusion",true},{"requestRevisionErrors",true},{"sourceFollowingOverlay",true},{"gpuOutputPublication",true},{"frameTimings",true},{"performanceTelemetry",true},{"nrResolutionScale",true},{"eventDrivenScheduling",true},{"comparisonStripes",true},{"comparisonDirections",true},{"liveProcessing",true},{"outputSnapshots",true},{"modelStyles",true},{"depthAnythingV2",false},{"depthPreviewWithoutNr",false},{"oneFrameMeasurement",true},{"spatialSuperResolution",false},{"optionalNeuralRendering",false},{"fsrFrameGeneration2x",false}}},
-            {"performance",Performance()},
-            {"outputMode",overlay?"overlay":"preview"},{"sourcePaused",capture.Paused()},
+            {"performance",Performance()},{"adapters",AdapterStatus()},
+            {"color",ColorJson(lastColor)},{"outputColorEpoch",lastColorOutputEpoch},{"outputMode",overlay?"overlay":"preview"},{"sourcePaused",capture.Paused()},
             {"interaction",{{"cursorCaptured",capture.CursorCaptured()},{"cursorMode",overlay?"native-source":"preview-capture"},{"disengageHotkey","Ctrl+Alt+F10"},{"disengageHotkeyAvailable",capture.DisengageHotkeyAvailable()}}},
             {"timing",{{"samples",timings.Count()},{"processedFps",timings.Fps()},{"lastCaptureMs",sample.captureMs},{"lastGuidanceMs",sample.guidanceMs},{"lastNrMs",sample.nrMs},{"lastPresentMs",sample.presentMs},{"lastTotalMs",sample.totalMs},{"sourceAgeKnown",sample.ageKnown&&timings.Count()>0},{"lastSourceAgeMs",sample.ageMs},{"p95SourceAgeMs",timings.P95Age()},{"clock","WGC compositor QPC to accepted Present host return; not media decode or scanout"},{"outputTransfer","shared-gpu"},{"capturePoolFrames",2},{"completedMediaBufferFrames",0}}},
             {"model",ModelJson(model)},{"requestedRevision",selection.Requested()},{"appliedRevision",applied},
@@ -130,22 +152,35 @@ public:
             {"nrSubmitted",submitted},{"nrCompleted",completed},{"presentAccepted",presented},
             {"nrMilliseconds",modelMs},{"comparisonSplit",split},{"comparisonStripes",stripes},{"comparisonDirection",comparisonDirection},{"snapshot",snapshot},{"processing",processing},{"measurement",std::move(measured)},
             {"depth",{{"provider",depthSettings.provider==depth::Provider::Dav2?"dav2":"off"},{"profile",depthSettings.profile==depth::Profile::Reference?"reference":"fast"},{"requestedHz",depthSettings.hz},{"preview",depthSettings.preview},{"ready",guidance.DepthReady()},{"freshCaptureEstimates",depthFresh},{"pendingSuperseded",depthDropped},{"presentations",depthPresentations},{"nrAdapterQualified",false},{"reason",depthReason}}},
-            {"guidance",{{"mode",guideMode==GuideMode::Off?"off":guideMode==GuideMode::Shadow?"shadow":"experimental"},
+            {"guidance",{{"analysisRecipe",lastGuides.analysisRecipe},{"analysisOwnedBytesPerSlot",lastGuides.analysisOwnedBytes},{"analysisCapacity",3},{"analysisHostMs",lastGuides.analysisHostMs},{"mode",guideMode==GuideMode::Off?"off":guideMode==GuideMode::Shadow?"shadow":"experimental"},
                 {"estimated",true},{"nativeQualified",false},{"consumed",guidesConsumed},{"depthReady",lastGuides.depthCompleted},
                 {"motionReady",lastGuides.motionCompleted},{"depthProvider",lastGuides.depthProvider},
                 {"motionProvider",lastGuides.motionProvider},{"reason",lastGuides.reason}}}};
     }
+    void RetireBackends() {
+        capture.Disengage();
+        guidance.Stop(); // may discover uncertainty while retiring a previously active guide
+        if(guidance.RequiresRestart()) {
+            nr.RetainSharedGeneration();capture.RetainSharedGeneration();
+            measurement.Unknown("Shared analysis completion unknown; diagnostic owners retained");
+            return; // no later provider/GPU shutdown, drain or diagnostic poll
+        }
+        nr.Stop();capture.Stop();
+        measurement.Poll();
+    }
     void Stop(const std::string& why,bool failure=false) {
+        if(failure&&adapterSession&&adapterSession==session&&adapterFailurePhase.empty())adapterFailurePhase=adapterPhase;
         if(measurement.RequestId())measurement.Invalidate("Session stopped");measurementDeadline=0;
         refresh.Clear();pendingProcessing=Json();processing["state"]="stopped";
         if(snapshotDeadline){snapshotDeadline=0;snapshot={{"state","canceled"},{"reason","Session stopped before snapshot completed"}};}
         if(active)lastCapture=capture.Statistics();
         stopTrigger=why=="Stopped by parent"?"command:stop":why=="Selection canceled"?"command:cancel":why;
         Trace({{"record_type","stop"},{"trigger",stopTrigger},{"session",session},{"sequence",lastSequence},{"capture",CaptureStatisticsJson(lastCapture)}});
-        depthFresh=guidance.DepthFresh();depthDropped=guidance.DepthDropped();selection.Cancel();capture.Disengage();nr.Stop();capture.Stop();guidance.Stop();measurement.Poll();active=false;
+        depthFresh=guidance.DepthFresh();depthDropped=guidance.DepthDropped();selection.Cancel();RetireBackends();active=false;
         const bool retained=measurement.Quarantined() || nr.RequiresRestart() || guidance.RequiresRestart() || capture.Device()!=nullptr;
         phase=retained?"RestartRequired":failure?"Error":model.valid?"Stopped":"Locked";
         reason=retained?why+"; GPU/provider retirement is unproved. Restart the worker process.":why;
+        adapterPhase=retained?"quarantined":"stopped";
     }
     void StartSession(const Json& request,const WindowIdentity& selected) {
         std::string error;
@@ -160,17 +195,24 @@ public:
         }
         // Repeat static file validation at the actual start; NrHost independently holds its file lease.
         depthSettings=ParseDepthSettings(request);
-        if(depth::NeedsNrModel(depthSettings)){model=VerifyModel(model.path);if(!model.valid)throw std::runtime_error("Please provide your DLSS NR file.");}
+        if(depth::NeedsNrModel(depthSettings)){model=VerifyModel(model.path);if(!model.valid)throw std::runtime_error(model.reason.empty()?"Please provide your DLSS NR file.":model.reason);}
         phase="Starting";
         target=selected;if(session==UINT64_MAX||targetGeneration==UINT64_MAX)throw std::runtime_error("Session generation exhausted");++session;++targetGeneration;
         sourceWidth=sourceHeight=workWidth=workHeight=0;lastSequence=0;
+        adapterSession=session;adapterReport={};captureAdapter=processingAdapter=outputAdapter={};adapterFailurePhase.clear();adapterPhase="device-selection";
         captured=recorded=submitted=completed=presented=gpuCompleted=reusedPublications=sourceReevaluations=0;modelMs=0;guidesConsumed=false;lastGuides={};timings.Clear();
         lastFrame=nullptr;lastCapture={};stopTrigger.clear();processingRevision=request["revision"].get<uint64_t>();
         waitCalls=frameWakes=commandWakes=messageWakes=maintenanceWakes=previousPublicationQpc=0;waitMilliseconds=waitSinceFrameMs=0;
         Emit(Status());
         CaptureOptions options;options.target=selected;options.session=session;options.controlHostPid=hostPid;options.cursor=request.value("cursor",true);overlay=options.overlay=request.value("outputMode",std::string("overlay"))=="overlay";
-        if(!capture.Start(options,error))throw std::runtime_error(error);
-        NrOptions settings;settings.modelPath=model.path;settings.gpuTiming=gpuTiming;
+        adapters::Binding binding;
+        if(!adapters::Select(session,selected.width,selected.height,depth::NeedsNrModel(depthSettings),binding,adapterReport,error))throw std::runtime_error(error);
+        options.processing=std::move(binding);
+        if(!AdapterCall("capture-start",[&]{return capture.Start(options,error);}))throw std::runtime_error(error);
+        const auto observedAdapters=capture.AdapterIdentity();captureAdapter=observedAdapters.capture;outputAdapter=observedAdapters.output;
+        if(!adapters::PinnedMatch(adapterReport.selected,captureAdapter,session,session)||!adapters::PinnedMatch(adapterReport.selected,outputAdapter,session,session))
+            throw std::runtime_error("Capture or output adapter differs from the selected processing session.");
+        NrOptions settings;settings.modelPath=model.path;settings.gpuTiming=gpuTiming;settings.processingAdapter=adapterReport.selected;settings.processingSession=session;
         settings.forwarderPath=Wide(request.value("forwarder",Utf8((std::filesystem::path(ExeFolder())/L"nvngx.dll_dlssnr.dll").wstring())));
         settings.modelStyle=request.value("modelStyle",0);settings.transferStrength=request.value("transferStrength",1.0f);settings.colourStrength=request.value("colourStrength",1.0f);
         nrScalePercent=settings.nrScalePercent=request.value("nrScalePercent",100u);
@@ -179,14 +221,19 @@ public:
         auto guides=request.value("guides",std::string("off"));
         guideMode=guides=="experimental"?GuideMode::Experimental:guides=="shadow"?GuideMode::Shadow:GuideMode::Off;
         settings.guides=guideMode;
-        if(depth::NeedsNrModel(depthSettings)&&!nr.Initialize(capture.Device(),capture.Context(),settings,error))throw std::runtime_error(error);
+        if(depth::NeedsNrModel(depthSettings)){
+            const bool initialized=AdapterCall("nr-initialize",[&]{return nr.Initialize(capture.Device(),capture.Context(),settings,error);});
+            processingAdapter=nr.ProcessingAdapter();
+            if(!initialized)throw std::runtime_error(error);
+            if(!adapters::PinnedMatch(adapterReport.selected,processingAdapter,session,session))throw std::runtime_error("Inference adapter differs from the selected processing session.");
+        }
         GuidanceOptions guidanceOptions;guidanceOptions.mode=guideMode;
         guidanceOptions.depthBundle=Wide(request.value("depthBundle",std::string{}));
         guidanceOptions.dav2=depthSettings;guidanceOptions.dav2Root=Wide(request.value("depthRoot",Utf8((std::filesystem::path(ExeFolder())/L"depth-anything-v2"/(depthSettings.profile==depth::Profile::Reference?L"reference":L"fast")).wstring())));
-        if(!guidance.Initialize(capture.Device(),capture.Context(),guidanceOptions,error))throw std::runtime_error(error);
+        if(!AdapterCall("guidance-initialize",[&]{return guidance.Initialize(capture.Device(),capture.Context(),guidanceOptions,error);}))throw std::runtime_error(error);
         lastGuides={};lastGuides.reason=error;depthReason=depthSettings.provider==depth::Provider::Dav2?error:"Depth off";depthPresentations=depthFresh=depthDropped=0;
-        Trace({{"record_type","session"},{"session",session},{"settingsRevision",processingRevision},{"modelSha256",ModelJson(model)["sha256"]},{"captureApi","WGC"},{"gpuTiming",gpuTiming},{"transferStrength",settings.transferStrength},{"colourStrength",settings.colourStrength},{"guides",guides},{"build",Performance()["build"]},{"compiled",Performance()["compiled"]}});
-        active=true;phase="Running";reason=depthSettings.preview?"Depth preview initialized; waiting for a completed estimate":"Capture and NR initialized; waiting for a completed frame";
+        Trace({{"record_type","session"},{"session",session},{"settingsRevision",processingRevision},{"modelSha256",ModelJson(model)["sha256"]},{"captureApi","WGC"},{"adapters",AdapterStatus()},{"gpuTiming",gpuTiming},{"transferStrength",settings.transferStrength},{"colourStrength",settings.colourStrength},{"guides",guides},{"build",Performance()["build"]},{"compiled",Performance()["compiled"]}});
+        adapterPhase="running";active=true;phase="Running";reason=depthSettings.preview?"Depth preview initialized; waiting for a completed estimate":"Capture and NR initialized; waiting for a completed frame";
         applied=std::max(applied,request["revision"].get<uint64_t>());split=request.value("split",split);stripes=request.value("stripes",0);comparisonDirection=request.value("comparisonDirection",0);Emit(Status("started"));
     }
     void Command(const std::string& line) {
@@ -211,7 +258,7 @@ public:
                 }
                 Emit({{"event","catalog"},{"windows",windows},{"maxCandidates",256}});return;
             }
-            if(command=="verify-model"){Emit({{"event","model"},{"model",ModelJson(VerifyModel(Wide(request["path"].get<std::string>())))}});return;}
+            if(command=="verify-model"){Emit({{"event","model"},{"model",ModelJson(VerifyModel(Wide(request["path"].get<std::string>()),true))}});return;}
             if(command=="quit"){Stop("Parent requested shutdown");quit=true;Emit(Status("shutdown"));return;}
             if(command=="measure-frame"){
                 const auto id=request["requestId"].get<uint64_t>();
@@ -227,7 +274,7 @@ public:
                 if(depth::NeedsNrModel(ParseDepthSettings(request))&&!model.valid)throw std::runtime_error("Please provide your DLSS NR file.");
                 if(request.value("mode",std::string("countdown"))=="countdown") {
                     if(!selection.Countdown(revision,request.value("seconds",5u),GetTickCount64(),true,error))throw std::runtime_error(error);
-                    if(active){if(measurement.RequestId())measurement.Invalidate("Target selection changed");refresh.Clear();capture.Disengage();nr.Stop();capture.Stop();guidance.Stop();measurement.Poll();active=false;
+                    if(active){if(measurement.RequestId())measurement.Invalidate("Target selection changed");refresh.Clear();RetireBackends();active=false;
                         if(nr.RequiresRestart() || guidance.RequiresRestart() || capture.Device()!=nullptr){Stop("Unable to retire the previous session",true);throw std::runtime_error(reason);}}
                     pending=request;phase="Countdown";reason="Switch to the window you want to process; Escape cancels";Emit(Status("countdown"));
                 } else {
@@ -257,7 +304,15 @@ public:
             if(command=="set-model" || command=="import-model") {
                 if(Retained())throw std::runtime_error("Restart the worker process before changing its model");
                 if(Active())throw std::runtime_error("Stop the current session before changing its model");
-                auto candidate=command=="import-model"?ImportModel(Wide(request["path"].get<std::string>()),Wide(request.value("modelsRoot",Utf8(DefaultModelsRoot())))):VerifyModel(Wide(request["path"].get<std::string>()));
+                const auto selectedPath=Wide(request["path"].get<std::string>());
+                const bool project=command=="import-model"||_wcsicmp(std::filesystem::path(selectedPath).filename().c_str(),L"nvngx_dlssnr.dll")!=0;
+                ExplicitModelUpdate modelUpdate;
+                if(request.contains("modelUpdateContext")) {
+                    const auto& update=request["modelUpdateContext"];
+                    modelUpdate.persistedModelPath=Wide(update["persistedModelPath"].get<std::string>());
+                    modelUpdate.managedModelsRoot=Wide(update["managedModelsRoot"].get<std::string>());
+                }
+                auto candidate=project?ImportModel(selectedPath,Wide(request.value("modelsRoot",Utf8(DefaultModelsRoot()))),modelUpdate):VerifyModel(selectedPath);
                 if(!candidate.valid){Emit({{"event","error"},{"reason",candidate.reason},{"model",ModelJson(candidate)},{"requestedRevision",selection.Requested()},{"appliedRevision",applied}});return;}
                 model=std::move(candidate);applied=revision;phase="Ready";reason="NR file verified; window selection is available";Emit(Status("model"));return;
             }
@@ -287,36 +342,38 @@ public:
                 lastCapture=observed;
                 if(measurement.RequestId()&&measurement.Identity().requestId==measurement.RequestId()) {
                     const auto current=capture.ObservedIdentity();const auto& id=measurement.Identity();
-                    if(id.frame.streamEpoch!=current.streamEpoch||id.frame.geometryEpoch!=current.geometryEpoch||id.outputEpoch!=capture.OutputEpoch()||id.targetGeneration!=targetGeneration||capture.Paused())measurement.Invalidate("Source, geometry or output epoch changed");
+                    if(id.frame.colorEpoch!=current.colorEpoch||id.frame.outputColorEpoch!=current.outputColorEpoch||id.frame.streamEpoch!=current.streamEpoch||id.frame.geometryEpoch!=current.geometryEpoch||id.outputEpoch!=capture.OutputEpoch()||id.targetGeneration!=targetGeneration||capture.Paused())measurement.Invalidate("Source, geometry or output epoch changed");
                 }
                 refresh.Validate(capture.ObservedIdentity(),targetGeneration,capture.OutputEpoch(),processingRevision,capture.Paused());
                 if(capture.Paused()){timings.Pause();previousPublicationQpc=0;waitSinceFrameMs=0;}
                 CapturedFrame frame;std::string error;
                 const auto captureBegin=Qpc();
-                const bool freshCapture=capture.Next(frame,error);
+                const bool freshCapture=AdapterCall("capture-next",[&]{return capture.Next(frame,error);});
                 if(freshCapture) {
+                    lastColor=frame.color;lastColorOutputEpoch=frame.stamp.outputColorEpoch;
                     refresh.DropPair();
                     const auto captureEnd=Qpc();
                     ++captured;frame.stamp.configEpoch=processingRevision;sourceWidth=frame.stamp.width;sourceHeight=frame.stamp.height;lastSequence=frame.stamp.sequence;
                     if(!pendingProcessing.is_null()){
-                        auto next=ProcessingOptions(pendingProcessing);if(!nr.Reconfigure(next,error))throw std::runtime_error(error);
+                        auto next=ProcessingOptions(pendingProcessing);if(!AdapterCall("nr-reconfigure",[&]{return nr.Reconfigure(next,error);}))throw std::runtime_error(error);
                         processingOptions=next;nrScalePercent=next.nrScalePercent;processingRevision=pendingProcessing["revision"].get<uint64_t>();pendingProcessing=Json();
                         frame.stamp.reset=true;frame.stamp.configEpoch=processingRevision;processing["state"]="awaiting-frame";
                     }
                     if(guidance.DepthReady())guidance.OfferDepth(frame,target.hwnd);
+                    if(guidance.RequiresRestart())throw std::runtime_error("Analysis completion unknown; shared generation requires worker restart");
                     if(!depthSettings.preview){
-                    lastGuides=guidance.Process(frame);
+                    lastGuides=AdapterCall("guidance-process",[&]{return guidance.Process(frame);});
                     const auto guidanceEnd=Qpc();
                     if(guidance.RequiresRestart())throw std::runtime_error(lastGuides.reason.empty()?"Guidance retirement is unproved":lastGuides.reason);
                     FrameProbe* frameProbe=nullptr;
                     if(measurement.Pending()&&measurement.Identity().requestId!=measurement.RequestId()&&pendingProcessing.is_null()&&processing.value("state",std::string{})=="applied"&&selection.Requested()==applied) {
                         ProbeIdentity id;id.requestId=measurement.RequestId();id.frame=frame.stamp;id.targetGeneration=targetGeneration;id.outputEpoch=capture.OutputEpoch();
                         id.requestedRevision=selection.Requested();id.appliedRevision=applied;id.processingRevision=processingRevision;id.comparisonRevision=comparison.value("revision",uint64_t(0));
-                        id.workWidth=workWidth;id.workHeight=workHeight;id.outputWidth=frame.stamp.width;id.outputHeight=frame.stamp.height;id.scalePercent=nrScalePercent;id.split=split;id.stripes=stripes;
+                        id.sdr=color::Valid(frame.color)&&!color::Hdr(frame.color);id.workWidth=workWidth;id.workHeight=workHeight;id.outputWidth=frame.stamp.width;id.outputHeight=frame.stamp.height;id.scalePercent=nrScalePercent;id.split=split;id.stripes=stripes;
                         id.transferStrength=processingOptions.transferStrength;id.colourStrength=processingOptions.colourStrength;id.modelStyle=processingOptions.modelStyle;id.comparisonDirection=comparisonDirection;
                         if(measurement.Bind(id))frameProbe=&measurement;
                     }
-                    auto result=nr.Process(frame,guideMode==GuideMode::Off?nullptr:&lastGuides,frameProbe);
+                    auto result=AdapterCall("nr-process",[&]{return nr.Process(frame,guideMode==GuideMode::Off?nullptr:&lastGuides,frameProbe);});
                     const auto nrEnd=Qpc();
                     recorded+=result.recorded;submitted+=result.submitted;completed+=result.completed;gpuCompleted+=result.measurements.gpuCompleted;modelMs=result.milliseconds;
                     workWidth=result.workWidth;workHeight=result.workHeight;guidesConsumed=result.estimatedGuidesUsed;
@@ -324,10 +381,10 @@ public:
                         lastFrame=PerformanceRecord(frame,result,processingRevision,ModelJson(model).value("sha256",std::string{}),QpcMs(captureEnd-captureBegin),QpcMs(guidanceEnd-captureEnd),{},{},false);FrameScheduling(nrEnd);Trace(lastFrame);
                         throw std::runtime_error(result.reason.empty()?"NR did not complete an output frame":result.reason);}
                     SnapshotResult saved;
-                    const bool accepted=capture.Present(frame,result.texture.Get(),split,error,stripes,snapshotDeadline?&saved:nullptr,comparisonDirection,result.ownership,frameProbe);
+                    const bool accepted=AdapterCall("output-present",[&]{return capture.Present(frame,result.texture.Get(),split,error,stripes,snapshotDeadline?&saved:nullptr,comparisonDirection,result.ownership,frameProbe,&result.color);});
                     if(frameProbe){measurement.Poll();Emit(Status("measurement-updated"));}
                     if(snapshotDeadline&&(!saved.path.empty()||!saved.error.empty())) {
-                        snapshotDeadline=0;snapshot={{"state",saved.path.empty()?"failed":"saved"},{"path",Utf8(saved.path)},{"reason",saved.error},{"session",session},{"sequence",frame.stamp.sequence}};Emit(Status("snapshot"));
+                        snapshotDeadline=0;snapshot={{"state",saved.path.empty()?"failed":"saved"},{"path",Utf8(saved.path)},{"reason",saved.error},{"encoding",saved.encoding},{"color",ColorJson(saved.color)},{"session",session},{"sequence",frame.stamp.sequence}};Emit(Status("snapshot"));
                     }
                     if(error.empty())refresh.Store(frame,result,targetGeneration,capture.OutputEpoch(),processingRevision);
                     if(accepted){++presented;refresh.AcceptedFresh();}
@@ -350,10 +407,10 @@ public:
                     if(!pendingProcessing.is_null()&&guideMode==GuideMode::Off&&!guidance.DepthReady()&&!depthSettings.preview&&
                        refresh.Validate(capture.ObservedIdentity(),targetGeneration,capture.OutputEpoch(),processingRevision,false)) {
                         auto held=refresh.TakeSource();
-                        auto next=ProcessingOptions(pendingProcessing);if(!nr.Reconfigure(next,error))throw std::runtime_error(error);
+                        auto next=ProcessingOptions(pendingProcessing);if(!AdapterCall("nr-reconfigure",[&]{return nr.Reconfigure(next,error);}))throw std::runtime_error(error);
                         processingOptions=next;nrScalePercent=next.nrScalePercent;processingRevision=pendingProcessing["revision"].get<uint64_t>();pendingProcessing=Json();
                         held->stamp.reset=true;held->stamp.configEpoch=processingRevision;processing["state"]="awaiting-frame";
-                        const auto result=nr.Process(*held,nullptr);++sourceReevaluations;
+                        const auto result=AdapterCall("nr-process",[&]{return nr.Process(*held,nullptr);});++sourceReevaluations;
                         recorded+=result.recorded;submitted+=result.submitted;completed+=result.completed;gpuCompleted+=result.measurements.gpuCompleted;
                         modelMs=result.milliseconds;workWidth=result.workWidth;workHeight=result.workHeight;guidesConsumed=false;
                         if(!result.completed||!result.texture)throw std::runtime_error(result.reason.empty()?"NR did not complete a held-source evaluation":result.reason);
@@ -362,7 +419,7 @@ public:
                     }
                     if(refresh.Validate(capture.ObservedIdentity(),targetGeneration,capture.OutputEpoch(),processingRevision,false)) {
                         const bool accepted=refresh.Try(GetTickCount64(),[&](const ComparisonRefresh::Pair& pair){
-                            return capture.Present(pair.source,pair.enhanced.texture.Get(),split,error,stripes,nullptr,comparisonDirection,pair.enhanced.ownership);
+                            return AdapterCall("output-present",[&]{return capture.Present(pair.source,pair.enhanced.texture.Get(),split,error,stripes,nullptr,comparisonDirection,pair.enhanced.ownership,nullptr,&pair.enhanced.color);});
                         });
                         if(accepted){
                             ++presented;++reusedPublications;
@@ -378,8 +435,8 @@ public:
                 guidance.ObserveDepthEpochs(capture.ObservedIdentity(),target.hwnd,processingRevision);
                 depth::DepthFrame depthFrame;std::string depthError;
                 if(guidance.PollDepth(depthFrame,depthError)){
-                    depthReason=depthFrame.reason;lastGuides.stamp=depthFrame.color.stamp;lastGuides.depthCompleted=true;lastGuides.depthProvider="depth-anything-v2-small-tensorrt-gpu-v1";lastGuides.reason=depthReason;
-                    if(depthSettings.preview&&!capture.Paused()){SnapshotResult saved;const bool accepted=capture.Present(depthFrame.color,depthFrame.preview.Get(),split,error,stripes,snapshotDeadline?&saved:nullptr,comparisonDirection);if(accepted){++presented;++depthPresentations;if(processing.value("state",std::string{})=="awaiting-frame"){processing["state"]="applied";processing["appliedRevision"]=processingRevision;processing["sequence"]=depthFrame.color.stamp.sequence;processing["mode"]="depth-preview";applied=std::max(applied,processingRevision);Emit(Status("processing-updated"));}}if(snapshotDeadline&&(!saved.path.empty()||!saved.error.empty())){snapshotDeadline=0;snapshot={{"state",saved.path.empty()?"failed":"saved"},{"path",Utf8(saved.path)},{"reason",saved.error},{"session",session},{"sequence",depthFrame.color.stamp.sequence}};Emit(Status("snapshot"));}if(!error.empty())throw std::runtime_error(error);reason=depthReason;}
+                    depthReason=depthFrame.reason;lastGuides.stamp=depthFrame.color.stamp;lastGuides.analysisRecipe=depthFrame.color.analysis?depthFrame.color.analysis->recipe:0;lastGuides.analysisOwnedBytes=depthFrame.color.analysis?depthFrame.color.analysis->ownedBytes:0;lastGuides.analysisHostMs=depthFrame.color.analysis?depthFrame.color.analysis->hostMilliseconds:0;lastGuides.depthCompleted=true;lastGuides.depthProvider="depth-anything-v2-small-tensorrt-gpu-v1";lastGuides.reason=depthReason;
+                    if(depthSettings.preview&&!capture.Paused()){SnapshotResult saved;const bool accepted=AdapterCall("output-present",[&]{return capture.Present(depthFrame.color,depthFrame.preview.Get(),split,error,stripes,snapshotDeadline?&saved:nullptr,comparisonDirection,{},nullptr,&depthFrame.previewColor);});if(accepted){++presented;++depthPresentations;if(processing.value("state",std::string{})=="awaiting-frame"){processing["state"]="applied";processing["appliedRevision"]=processingRevision;processing["sequence"]=depthFrame.color.stamp.sequence;processing["mode"]="depth-preview";applied=std::max(applied,processingRevision);Emit(Status("processing-updated"));}}if(snapshotDeadline&&(!saved.path.empty()||!saved.error.empty())){snapshotDeadline=0;snapshot={{"state",saved.path.empty()?"failed":"saved"},{"path",Utf8(saved.path)},{"reason",saved.error},{"encoding",saved.encoding},{"color",ColorJson(saved.color)},{"session",session},{"sequence",depthFrame.color.stamp.sequence}};Emit(Status("snapshot"));}if(!error.empty())throw std::runtime_error(error);reason=depthReason;}
                 }
                 if(!guidance.DepthReady()&&!depthError.empty()){depthReason=depthError;if(depthSettings.preview)throw std::runtime_error(depthError);}
                 depthFresh=guidance.DepthFresh();depthDropped=guidance.DepthDropped();
@@ -401,7 +458,7 @@ void Help() {
       "  --control   JSON lines on inherited stdin/stdout; no network listener\n"
       "  --host-pid PID   exclude hosting application from all window selection\n"
       "  --test-control\n"
-      "NR start requires the byte-pinned compatible user-provided nvngx_dlssnr.dll.\n"
+      "NR start uses the selected DLL, stored as nvngx_dlssnr.dll.\n"
       "See INTEGRATION.md for selection identities, revisions, commands and status.\n";
 }
 }
@@ -414,7 +471,7 @@ int WorkerMain(int argc,wchar_t** argv) {
     try {
         if(argc==1 || has(L"--help")){Help();return 0;}
         if(has(L"--test-control"))return RunControlTests();
-        if(has(L"--verify-model")){auto model=VerifyModel(argument(L"--verify-model"));Emit({{"event","model"},{"model",ModelJson(model)}});return model.valid?0:3;}
+        if(has(L"--verify-model")){auto model=VerifyModel(argument(L"--verify-model"),true);Emit({{"event","model"},{"model",ModelJson(model)}});return model.valid?0:3;}
         if(has(L"--import-model")){auto root=argument(L"--models-root");auto model=ImportModel(argument(L"--import-model"),root.empty()?DefaultModelsRoot():root);Emit({{"event","model"},{"model",ModelJson(model)}});return model.valid?0:3;}
         auto hostArgument=argument(L"--host-pid");uint32_t hostPid=0;
         if(!hostArgument.empty()){size_t used=0;auto value=std::stoull(hostArgument,&used);if(used!=hostArgument.size()||value==0||value>UINT32_MAX)throw std::runtime_error("Invalid hosting application PID");hostPid=static_cast<uint32_t>(value);}

@@ -122,24 +122,24 @@ static std::string Section(const std::string& text, const char* from, const char
 static void StaticSafety()
 {
     const auto source = Read("OptiScaler/dlssnr/DlssNrFeature_Vk.cpp");
-    const auto evaluation = Section(source, "void EvaluateAfterUpscaleVk(", "static void ShutdownVkLocked(bool deviceAlive)\n{");
-    for (const char* forbidden : {"vkDeviceWaitIdle(", "g_vk.release(", "DestroyImage(",
+    const auto evaluation = Section(source, "static void EvaluateAfterUpscaleVkInternal(", "VkRecordResult EvaluateAfterUpscaleVk(");
+    for (const char* forbidden : {"vkDeviceWaitIdle(", "g_vkRuntime.Exports().release(", "DestroyImage(",
                                "DestroyParameters(", "superUp.reset(", "superDown.reset("})
         Check(evaluation.find(forbidden) == std::string::npos, forbidden);
-    Check(evaluation.find("output or working-size contract changed; restart required") != std::string::npos,
-          "physical change bypass retained");
-    Check(evaluation.find("g_vk.models.changed)\n    {\n        g_vk.reset = true;") != std::string::npos,
-          "cache switching wired to history reset");
+    Check(evaluation.find("state.generations->Prepare(key,request.use,") != std::string::npos &&
+          evaluation.find("state.generations->CanApply(key)") != std::string::npos,
+          "replacement admission uses compatible transactional generations");
     const auto shutdown = Section(source, "static void ShutdownVkLocked(bool deviceAlive)\n{", "void ShutdownVk(bool deviceAlive)");
-    Check(shutdown.find("const int result = g_vk.release ? g_vk.release(entry.feature) : -1;") != std::string::npos &&
-          shutdown.find("shutdown release failed") != std::string::npos, "shutdown checks release result");
+    Check(shutdown.find("generations->DrainReleased()") != std::string::npos &&
+          source.find("generation release failed") != std::string::npos,
+          "shutdown and generation retirement check vendor release results");
     const auto native = Read("OptiScaler/inputs/NVNGX_DLSS_Vk.cpp");
     const auto passThrough = Section(native, "// SR/RR are owned contexts below.", "else");
     Check(passThrough.find("EvaluateAfterUpscaleVk") == std::string::npos &&
           passThrough.find("return result;") != std::string::npos, "native FG/unknown returns without NR");
-    Check(native.find("RegisterNativeFeature(result, OutHandle, InFeatureID, InDevice)") != std::string::npos,
+    Check(native.find("RegisterNativeFeature(result, OutHandle, InFeatureID, InDevice, InParameters)") != std::string::npos,
           "CreateFeature1 tracks native identity");
-    Check(native.find("RegisterNativeFeature(result, OutHandle, InFeatureID, vkDevice)") != std::string::npos,
+    Check(native.find("RegisterNativeFeature(result, OutHandle, InFeatureID, vkDevice, InParameters)") != std::string::npos,
           "legacy CreateFeature tracks native identity");
     const auto forwarder = Read("OptiScaler/dlssnr/forwarder/dlssnr_forwarder.cpp");
     const auto v2 = Section(forwarder, "int dlssnr_vk_create_v2(", "__declspec(dllexport) void dlssnr_vk_release(");

@@ -197,7 +197,7 @@ std::optional<VkNrRecordedOutput> PrepareVkNrFinalColor(VkCommandBuffer cb,uint6
     request.colorLayout=VK_IMAGE_LAYOUT_GENERAL;request.gameHdr=(source.observation.frame.temporal->featureFlags&NVSDK_NGX_DLSS_Feature_Flags_IsHDR)!=0;
     lock.unlock();
     auto result=g_presentSession.Record(request,[&](const VkFrameRequest& recording,bool reset){
-        if(reset){std::lock_guard stateLock(g_vkMutex);g_presentVk.reset=true;++g_presentVk.resetRevision;}
+        if(reset){std::lock_guard stateLock(g_vkMutex);g_presentVk.resetState.Request();}
         {std::lock_guard stateLock(g_vkMutex);if(!g_finalColorCarriers->Retain(prepared.generation,recording.use))return VkRecordResult{VkRecordStatus::NoWork,"Pre-FG carrier lifetime unavailable"};}
         return EvaluateVkChain(recording,nullptr,*current);});
     lock.lock();

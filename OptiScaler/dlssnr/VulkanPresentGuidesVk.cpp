@@ -306,6 +306,12 @@ std::optional<VkNrGuideLease> SelectVulkanPresentGuides(const VkNrFrameContract&
     }
     return selected;
 }
+bool CurrentVulkanPresentGuideLease(const VkNrFrameContract& frame,const VkNrGuideSelection* selection,
+    VkImage image,const VkNrGuideLease& lease)
+{
+    std::lock_guard lock(guideMutex);
+    return Guides().SelectedLeaseCurrent(frame,selection,image,lease);
+}
 bool BindVulkanPresentGuides(const VkNrGuideLease& lease,VkNrUseId use,VkQueue queue)
 {
     std::lock_guard lock(guideMutex);

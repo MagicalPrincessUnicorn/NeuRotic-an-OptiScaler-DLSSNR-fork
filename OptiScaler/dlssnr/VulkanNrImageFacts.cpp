@@ -19,6 +19,14 @@ bool ResolveRange(VkImageSubresourceRange& range,uint32_t mips,uint32_t layers)
 }
 std::optional<VkNrObservedImage> VkNrImageFacts::Image(VkDevice device,VkImage image) const
 {std::lock_guard lock(mutex_);auto i=images_.find({device,image});return i!=images_.end()&&i->second.device==device?std::optional<VkNrObservedImage>(i->second):std::nullopt;}
+std::optional<VkNrObservedImageView> VkNrImageFacts::ImageView(VkDevice device,VkImage image,VkImageView view) const
+{
+    std::lock_guard lock(mutex_);
+    const auto i=images_.find({device,image});const auto v=views_.find({device,view});
+    if(i==images_.end()||v==views_.end()||i->second.device!=device||v->second.device!=device||
+       v->second.image!=image||v->second.imageGeneration!=i->second.generation)return {};
+    return VkNrObservedImageView{i->second,v->second};
+}
 void VkNrImageFacts::Created(VkDevice device,const VkImageCreateInfo& c,VkImage image,VkResult result)
 {
     if(result!=VK_SUCCESS||!device||!image)return;
@@ -87,10 +95,17 @@ void VkNrImageFacts::DeviceDestroyed(VkDevice device)
     std::lock_guard lock(mutex_);
     for(auto i=images_.begin();i!=images_.end();)if(i->second.device==device){ForgetImageViews(i->first);i=images_.erase(i);}else ++i;
 }
-std::optional<VkNrImageRights> VkNrImageFacts::Rights(VkDevice device,const NVSDK_NGX_Resource_VK& resource,VkImageUsageFlags required,bool depth,const char** unavailable) const
+std::optional<VkNrImageRights> VkNrImageFacts::Rights(VkDevice device,const NVSDK_NGX_Resource_VK& resource,VkImageUsageFlags required,bool depth,const char** unavailable,std::string* diagnostic) const
 {
     if(unavailable)*unavailable=nullptr;
-    const auto reject=[&](const char* reason)->std::optional<VkNrImageRights>{if(unavailable)*unavailable=reason;return {};};
+    if(diagnostic)diagnostic->clear();
+    const auto reject=[&](const char* reason)->std::optional<VkNrImageRights>{
+        if(unavailable)*unavailable=reason;
+        // This snapshot uses the same locked generation as the actual refusal.
+        // Diagnostic allocation cannot change the resource eligibility result.
+        if(diagnostic)try{*diagnostic=DescribeLocked(device,resource);}catch(...){diagnostic->clear();}
+        return {};
+    };
     if(resource.Type!=NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW)return reject("source is not an image view");
     std::lock_guard lock(mutex_);const auto& w=resource.Resource.ImageViewInfo;
     const auto image=images_.find({device,w.Image});const auto view=views_.find({device,w.ImageView});
@@ -182,21 +197,26 @@ std::optional<VkNrImageRights> VkNrImageFacts::NgxDepthRights(VkDevice device,
 std::string VkNrImageFacts::Describe(VkDevice device,const NVSDK_NGX_Resource_VK& resource) const
 {
     if(resource.Type!=NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW)return "wrapper is not an image view";
-    std::lock_guard lock(mutex_);const auto& w=resource.Resource.ImageViewInfo;
+    std::lock_guard lock(mutex_);return DescribeLocked(device,resource);
+}
+std::string VkNrImageFacts::DescribeLocked(VkDevice device,const NVSDK_NGX_Resource_VK& resource) const
+{
+    if(resource.Type!=NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW)return "wrapper is not an image view";
+    const auto& w=resource.Resource.ImageViewInfo;
     std::ostringstream out;
     const auto range=[&](const VkImageSubresourceRange& r){out<<r.aspectMask<<','<<r.baseMipLevel<<','<<r.levelCount<<','<<r.baseArrayLayer<<','<<r.layerCount;};
     out<<"wrapper{format="<<w.Format<<" extent="<<w.Width<<'x'<<w.Height<<" range=";range(w.SubresourceRange);out<<'}';
     const auto image=images_.find({device,w.Image});const auto view=views_.find({device,w.ImageView});
     if(image!=images_.end()) {
         const auto& i=image->second;
-        out<<" image{deviceMatch="<<(i.device==device)<<" type="<<i.type<<" format="<<i.format
+        out<<" image{generation="<<i.generation<<" deviceMatch="<<(i.device==device)<<" type="<<i.type<<" format="<<i.format
            <<" extent="<<i.extent.width<<'x'<<i.extent.height<<'x'<<i.extent.depth
            <<" mips="<<i.mips<<" layers="<<i.layers<<" samples="<<i.samples<<" tiling="<<i.tiling
            <<" usage="<<i.usage<<" flags="<<i.flags<<" chainKnown="<<i.chainKnown<<'}';
     }else out<<" image{unobserved}";
     if(view!=views_.end()) {
         const auto& v=view->second;
-        out<<" view{deviceMatch="<<(v.device==device)<<" imageMatch="<<(v.image==w.Image)
+        out<<" view{generation="<<v.generation<<" imageGeneration="<<v.imageGeneration<<" deviceMatch="<<(v.device==device)<<" imageMatch="<<(v.image==w.Image)
            <<" generationMatch="<<(image!=images_.end()&&v.imageGeneration==image->second.generation)
            <<" type="<<v.type<<" format="<<v.format<<" range=";range(v.range);
         out<<" swizzle="<<v.components.r<<','<<v.components.g<<','<<v.components.b<<','<<v.components.a

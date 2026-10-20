@@ -236,6 +236,28 @@ bool XeSSFeature_Dx11::InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Pa
     return true;
 }
 
+bool XeSSFeature_Dx11::PrepareEvaluation(NVSDK_NGX_Parameter* InParameters)
+{
+    ID3D11Resource* responsive = nullptr;
+    if ((_xessInitFlags & XESS_INIT_FLAG_RESPONSIVE_PIXEL_MASK) > 0)
+    {
+        // Match the backend's selected input, including its disable/version policy.
+        if (!Config::Instance()->DisableReactiveMask.value_or(true) && Version() >= feature_version {2, 0, 1})
+        {
+            if (InParameters->Get(NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask, &responsive) !=
+                NVSDK_NGX_Result_Success)
+                InParameters->Get(NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask, (void**) &responsive);
+        }
+        if (!responsive)
+        {
+            Config::Instance()->DisableReactiveMask = true;
+            State::Instance().changeBackend[_handle->Id] = true;
+            return false;
+        }
+    }
+    return true;
+}
+
 bool XeSSFeature_Dx11::EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Parameter* InParameters)
 {
     LOG_FUNC();

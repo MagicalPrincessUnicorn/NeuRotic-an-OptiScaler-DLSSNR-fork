@@ -86,6 +86,10 @@ DlssNr::Canonical::Package g_canonical{DlssNr::Canonical::VerificationScope::Dir
 std::mutex g_canonicalMutex;
 std::string g_admissionJson,g_admissionSignature;
 bool g_initEntered=false,g_createEntered=false;
+// Last returned provider calls remain readable after later readiness probes.
+// Their observed flags prevent default zero/false values becoming verdicts.
+bool g_lastInitObserved=false,g_lastCreateObserved=false,g_lastCreateFeatureReturned=false;
+int g_lastInitResult=0,g_lastCreateResult=0;
 
 unsigned SnippetExportMask() noexcept {
     return (g_snip.init?1u:0u)|(g_snip.create?2u:0u)|(g_snip.evaluate?4u:0u)|
@@ -99,11 +103,17 @@ void ReportAdmission(const char* stage,const wchar_t* requested,DWORD error=0,
                      int nativeResult=0,bool featureReturned=false) noexcept {
     const auto savedError=GetLastError();
     try {
+        if(std::strcmp(stage,"INIT_RETURNED")==0){g_lastInitObserved=true;g_lastInitResult=nativeResult;}
+        if(std::strcmp(stage,"CREATE_RETURNED")==0){g_lastCreateObserved=true;g_lastCreateResult=nativeResult;g_lastCreateFeatureReturned=featureReturned;}
         const auto provider=DlssNr::Canonical::Utf8(requested?requested:L"");
         const auto mask=SnippetExportMask();
+        std::string identityError;
+        {std::lock_guard<std::mutex> lock(g_canonicalMutex);identityError=g_canonical.Error();}
         const auto signature=std::string(stage)+provider+std::to_string(error)+":"+
             std::to_string(mask)+":"+std::to_string(nativeResult)+":"+
-            std::to_string(g_initEntered)+std::to_string(g_createEntered)+std::to_string(featureReturned);
+            std::to_string(g_initEntered)+std::to_string(g_createEntered)+std::to_string(featureReturned)+":"+
+            std::to_string(g_lastInitObserved)+":"+std::to_string(g_lastInitResult)+":"+
+            std::to_string(g_lastCreateObserved)+":"+std::to_string(g_lastCreateResult)+":"+std::to_string(g_lastCreateFeatureReturned)+":"+identityError;
         if(signature==g_admissionSignature){SetLastError(savedError);return;}
         HMODULE self=nullptr;DWORD selfError=0;
         std::wstring selfPath(32768,L'\0');
@@ -116,7 +126,7 @@ void ReportAdmission(const char* stage,const wchar_t* requested,DWORD error=0,
             else selfPath.resize(length);
         }
         // Optional enrichment must never suppress the primary refusal.
-        std::string identity="null",identityError;
+        std::string identity="null";
         {std::lock_guard<std::mutex> lock(g_canonicalMutex);
          identityError=g_canonical.Error();
          try {identity=g_canonical.Json();}catch(...) {identityError+=";IDENTITY_JSON_UNAVAILABLE";}}
@@ -132,6 +142,11 @@ void ReportAdmission(const char* stage,const wchar_t* requested,DWORD error=0,
             ",\"create_entered\":"+(g_createEntered?"true":"false")+
             ",\"native_result\":"+std::to_string(nativeResult)+
             ",\"feature_returned\":"+(featureReturned?"true":"false")+
+            ",\"last_init\":{\"observed\":"+(g_lastInitObserved?"true":"false")+
+            ",\"native_result\":"+std::to_string(g_lastInitResult)+"}"+
+            ",\"last_create\":{\"observed\":"+(g_lastCreateObserved?"true":"false")+
+            ",\"native_result\":"+std::to_string(g_lastCreateResult)+
+            ",\"feature_returned\":"+(g_lastCreateFeatureReturned?"true":"false")+"}"+
             ",\"identity\":"+identity+"}";
         g_admissionSignature=signature;
         OutputDebugStringA(("NeuRotic NR admission "+g_admissionJson).c_str());
@@ -181,13 +196,24 @@ bool canonicalObserved(HMODULE module) noexcept {
 #endif
 }
 
+void resolveSnippetExports() {
+    g_snip.init = (PFN_NrInitExt) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_Init_Ext");
+    g_snip.create = (PFN_NrCreate) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_CreateFeature");
+    g_snip.evaluate = (PFN_NrEvaluate) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_EvaluateFeature");
+    g_snip.release = (PFN_NrRelease) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_ReleaseFeature");
+    g_snip.shutdown = (PFN_NrShutdown) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_Shutdown");
+}
+
 bool loadSnippet(const wchar_t *path) {
     if(g_admissionJson.empty())ReportAdmission("ADMISSION_ENTERED",path);
     if (!canonicalBeforeLoad(path)) {ReportAdmission("PROVIDER_IDENTITY_REFUSED",path);return false;}
     if (g_snip.module) {
         if(!canonicalObserved(g_snip.module)){ReportAdmission("LOADED_IDENTITY_REFUSED",path);return false;}
+        // A previous post-load observation may have refused before binding.
+        // Only bind after the new complete identity observation succeeds.
+        if(SnippetExportMask()==0)resolveSnippetExports();
         ReportAdmission(SnippetExportMask()==31?"EXPORTS_READY":"REQUIRED_EXPORTS_MISSING",path);
-        return g_snip.create != nullptr;
+        return g_snip.create != nullptr && g_snip.evaluate != nullptr;
     }
     HMODULE observed=nullptr;
     {std::lock_guard<std::mutex> lock(g_canonicalMutex);observed=g_canonical.ObservedProviderModule();}
@@ -205,11 +231,7 @@ bool loadSnippet(const wchar_t *path) {
     }
     // Refusal never unloads a module or releases possible provider/GPU work.
     if (!canonicalObserved(g_snip.module)) {ReportAdmission("LOADED_IDENTITY_REFUSED",path);return false;}
-    g_snip.init = (PFN_NrInitExt) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_Init_Ext");
-    g_snip.create = (PFN_NrCreate) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_CreateFeature");
-    g_snip.evaluate = (PFN_NrEvaluate) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_EvaluateFeature");
-    g_snip.release = (PFN_NrRelease) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_ReleaseFeature");
-    g_snip.shutdown = (PFN_NrShutdown) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_Shutdown");
+    resolveSnippetExports();
 
 
     ReportAdmission(SnippetExportMask()==31?"EXPORTS_READY":"REQUIRED_EXPORTS_MISSING",path);
@@ -969,6 +991,10 @@ __declspec(dllexport) void *dlssnr_call_create(const wchar_t *snippetPath, const
                                                float skinStructure, int useAutoMask,
                                                int uiCorrection) {
     std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
+    // These result words describe this attempt. Historical returned results
+    // remain available separately in the admission record.
+    dlssnr_call_last_init=dlssnr_call_last_create=0;
+    g_initEntered=g_createEntered=false;
     if (!loadSnippet(snippetPath))return nullptr;
     if (!capabilityParams || !device) {
         ReportAdmission("CREATE_ARGUMENTS_INVALID",snippetPath);
@@ -1172,17 +1198,12 @@ __declspec(dllexport) int dlssnr_call_evaluate_guides_v3(ID3D12GraphicsCommandLi
         structure, tone, skin, mask, mvX, mvY, jitterX, jitterY, origins, callbacks);
 }
 
-// Versioned adapter handshake: observation checks canonical loaded bytes.
-// No legacy export or caller-supplied Boolean establishes this authority.
+// Host-policy handshake for the actual selected DLL, independent of provider
+// version/hash/cohort. Export presence is not proof of provider compatibility.
 __declspec(dllexport) const char* dlssnr_call_host_recorded_contract_v1() {
     std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
-    if(!g_snip.evaluate||!g_snip.release||!canonicalObserved(g_snip.module))return nullptr;
-#ifdef NR_FORWARDER_CONTRACT_TEST
-    return g_contractTestIdentity?DlssNr::Feature18HostContractIdentity:nullptr;
-#else
-    std::lock_guard<std::mutex> identityLock(g_canonicalMutex);
-    return g_canonical.MatchesReviewedProvider()?DlssNr::Feature18HostContractIdentity:nullptr;
-#endif
+    if(SnippetExportMask()!=31||!canonicalObserved(g_snip.module))return nullptr;
+    return DlssNr::Feature18HostContractIdentity;
 }
 __declspec(dllexport) int dlssnr_call_evaluate_guides_v4(ID3D12GraphicsCommandList* cmd, void* feature,
     void* params, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,

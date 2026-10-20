@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "CapabilityQualification.h"
 #include "PreparedViewValidation.h"
 
@@ -104,16 +105,17 @@ inline bool FieldForKind(std::string_view field,C::SemanticKind kind)
 }
 // Reader.ResolveCandidate dereferences only the exact C01 reference already admitted by
 // C02. It cannot discover providers, pick alternatives, or turn raw claims into meaning.
-template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::CanonicalFrameContext& context,
+template<class Reader> std::unique_ptr<PreparationDecision> DeriveRepresentationPlanOwned(const C::CanonicalFrameContext& context,
     const C::QualificationCertificate& certificate,const SemanticProfile& profile,const RepresentationRequirement& req,
     const SourceRepresentationFacts& facts,std::span<const PreparedViewEvidence> prepared,const Reader& reader,
     bool structuralOnly=false)
 {
-    PreparationDecision out;
+    auto outStorage=std::make_unique<PreparationDecision>();
+    auto& out=*outStorage;
     auto finish=[&](PreparationPath path){
         if(structuralOnly&&path!=PreparationPath::Unavailable&&path!=PreparationPath::NoWork)
         {out.plannedPath=path;path=PreparationPath::StructuralOnly;}
-        out.path=path;out.evidence.path=path;if(path!=PreparationPath::Unavailable)out.evidence.refusal={};return out;};
+        out.path=path;out.evidence.path=path;if(path!=PreparationPath::Unavailable)out.evidence.refusal={};return std::move(outStorage);};
     if(!req.requested){out.evidence.optionalNoWork=true;return finish(PreparationPath::NoWork);}
     out.evidence.refusal=Missing("CTX.RepresentationUnavailable");
     C::Symbol contextType,certificateType;contextType.Assign(C::CanonicalFrameContext::WireName);certificateType.Assign(C::QualificationCertificate::WireName);
@@ -123,20 +125,20 @@ template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::Can
        (req.intent!=RepresentationIntent::ConsumeSource&&req.intent!=RepresentationIntent::AllocateTarget)||
        (req.intent==RepresentationIntent::ConsumeSource&&req.targetAccess)||
        !CertificateMatches(certificate,context,profile,reader)||certificate.eligibility!=C::Eligibility::Eligible||
-       !FieldForKind(req.field.View(),req.kind))return out;
+       !FieldForKind(req.field.View(),req.kind))return outStorage;
     bool declared=false;for(const auto& field:profile.requirements)if(field.field==req.field&&(!req.required||field.required))declared=true;
-    bool supported=false;if(!declared||!FieldEstablished(req.field.View(),context,reader,supported)||!supported)return out;
+    bool supported=false;if(!declared||!FieldEstablished(req.field.View(),context,reader,supported)||!supported)return outStorage;
     const C::BoundedList<C::ContractRef<C::ContractId::C01>,64>* coherent=nullptr;
     const C::BoundedList<C::GuideDescription,8>* guides=nullptr;
-    if(!ResolveList(context.coherentCandidates,reader,coherent)||!coherent||!ResolveList(context.guides,reader,guides)||!guides)return out;
+    if(!ResolveList(context.coherentCandidates,reader,coherent)||!coherent||!ResolveList(context.guides,reader,guides)||!guides)return outStorage;
     bool member=false;for(const auto& ref:*coherent)if(ref==req.selected)member=true;
     const C::GuideDescription* guide=nullptr;for(const auto& item:*guides)
         if(Established(item.candidate)&&item.candidate.KnownPart()->value==req.selected&&item.kind==req.kind)guide=&item;
-    if(!member||!guide)return out;
+    if(!member||!guide)return outStorage;
     const auto* candidate=reader.ResolveCandidate(req.selected);
     if(!candidate||!ValidValues(*candidate)||req.selected.recordType.View()!=C::AcquisitionCandidate::WireName||
        candidate->header.record!=req.selected.record||candidate->header.revision!=req.selected.revision||candidate->semantic!=req.kind||
-       !Established(candidate->payload))return out;
+       !Established(candidate->payload))return outStorage;
     const auto* resourceRef=std::get_if<C::MetadataRef<C::ResourceView>>(&candidate->payload.KnownPart()->value);
     const auto* source=resourceRef?ResolveMetadata(*resourceRef,reader):nullptr;
     const auto* frame=ResolveMetadata(context.frame,reader);const auto* sourceFrame=ResolveMetadata(candidate->frame,reader);
@@ -145,31 +147,36 @@ template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::Can
        (!structuralOnly&&!CompleteContent(*source))||
        !SemanticEqual(guide->raster,source->raster)||!SemanticEqual(facts.source,source->identity)||
        !ValidValues(facts.precision)||!Established(facts.precision)||!ValidValues(facts.capabilities)||!Established(facts.capabilities)||
-       !ValidMapping(req.mapping)||!SemanticEqual(req.mapping.source,source->raster)||!CompleteDescriptor(req.output)||req.precision.Empty())return out;
+       !ValidMapping(req.mapping)||!SemanticEqual(req.mapping.source,source->raster)||!CompleteDescriptor(req.output)||req.precision.Empty())return outStorage;
     if(frame->nativeSample)
     {
         const auto* evidence=ResolveMetadata(candidate->evidence,reader);
         if(!evidence||!NativeEvidenceFresh(*evidence,*frame,reader)||
             !Established(candidate->descriptiveLifetime.callbackScope)||
-            candidate->descriptiveLifetime.callbackScope.KnownPart()->value!=evidence->nativeFreshness->callback)return out;
+            candidate->descriptiveLifetime.callbackScope.KnownPart()->value!=evidence->nativeFreshness->callback)return outStorage;
     }
-    const TransformLineage* applied=nullptr;if(!ResolveList(facts.applied,reader,applied))return out;
-    const TransformLineage empty;const auto comparison=CompareLineage(applied?*applied:empty,req.transforms,reader);
-    if(!comparison.compatible)return out;
+    const TransformLineage* applied=nullptr;if(!ResolveList(facts.applied,reader,applied))return outStorage;
+    auto emptyStorage=std::make_unique<TransformLineage>();
+    const auto& empty=*emptyStorage;
+    // Own this result across planning; nested comparison scratch remains bounded.
+    const auto comparisonStorage=std::unique_ptr<LineageComparison>(
+        new LineageComparison(CompareLineage(applied?*applied:empty,req.transforms,reader)));
+    const auto& comparison=*comparisonStorage;
+    if(!comparison.compatible)return outStorage;
     out.source=*resourceRef;out.sourceIdentity=source->identity;out.access=candidate->descriptiveLifetime;out.delta=comparison.delta;
     C::GenerationVector dependencies;
-    if(!SelectGenerations(context,profile,reader,dependencies))return out;
-    const auto semantic=BuildSemanticKey(*meaning,req.kind,context.boundary,*frame,*source,applied?*applied:empty,reader);
-    if(!semantic)return out;
-    out.key=BuildRepresentationPlanKey(*semantic,*source,profile.key,req.consumerPurpose.value_or(profile.purpose),req.mapping,req.output,req.precision,req.capabilities,req.transforms,reader,dependencies,profile.publication);
-    if(!out.key)return out;++out.evidence.planKeys;out.key->intent=req.intent;
+    if(!SelectGenerations(context,profile,reader,dependencies))return outStorage;
+    const auto semantic=BuildSemanticKeyOwned(*meaning,req.kind,context.boundary,*frame,*source,applied?*applied:empty,reader);
+    if(!semantic)return outStorage;
+    const auto key=BuildRepresentationPlanKeyOwned(*semantic,*source,profile.key,req.consumerPurpose.value_or(profile.purpose),req.mapping,req.output,req.precision,req.capabilities,req.transforms,reader,dependencies,profile.publication);
+    if(!key)return outStorage;out.key.emplace(*key);++out.evidence.planKeys;out.key->intent=req.intent;
     if(req.intent==RepresentationIntent::AllocateTarget)
     {
         // Bounded descriptive ModelTarget operation, not a source conversion.
         // Its expected capabilities say nothing about the actual source object.
         if(!structuralOnly||!req.consumerPurpose||req.consumerPurpose->View()!="OutputModelTarget"||
            !req.targetAccess||!ValidValues(*req.targetAccess)||req.pairRequired||req.previous||
-           req.transforms.Size()!=0||(applied&&applied->Size()!=0)||req.consumerTransform||req.metadataOnly.IsKnown())return out;
+           req.transforms.Size()!=0||(applied&&applied->Size()!=0)||req.consumerTransform||req.metadataOnly.IsKnown())return outStorage;
         const auto& access=*req.targetAccess;
         bool storage=false;for(const auto cap:req.capabilities)if(cap==C::ResourceCapability::Storage)storage=true;
         if(!storage||access.uses.Size()!=1||*access.uses.Get(0)!=C::UsageKind::WriteExclusive||
@@ -177,9 +184,9 @@ template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::Can
            !Established(access.callbackScope)||!SameFact(access.callbackScope,candidate->descriptiveLifetime.callbackScope)||
            !SemanticEqual(access.queue,candidate->descriptiveLifetime.queue)||
            !Established(access.requiresExactContent)||access.requiresExactContent.KnownPart()->value||
-           !Established(access.retirementContract)||access.retirementContract.KnownPart()->value.Empty())return out;
+           !Established(access.retirementContract)||access.retirementContract.KnownPart()->value.Empty())return outStorage;
         out.allocation=BuildAllocationRequirementKey(*frame,source->device,req.output,req.capabilities,req.allocationClass);
-        if(!out.allocation)return out;
+        if(!out.allocation)return outStorage;
         out.access=access;++out.evidence.allocationKeys;
         return finish(PreparationPath::TargetAllocation);
     }
@@ -202,7 +209,7 @@ template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::Can
     // Structural planning never selects a content-bearing PreparedView. Exact
     // content planning remains a separate fresh operation, even with known data.
     if(structuralOnly)prepared={};
-    if(prepared.size()>32)return out;
+    if(prepared.size()>32)return outStorage;
     // Input order cannot choose among compatible prepared outputs. Use the exact owner key order.
     const C::PreparedView* chosen=nullptr;
     for(const auto& item:prepared)
@@ -218,11 +225,27 @@ template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::Can
         out.access=chosen->requiredAccess;return finish(PreparationPath::ExistingPreparedView);
     }
     // A descriptor/precision/capability mismatch is not itself an executable recipe.
-    if(out.delta.Size()==0)return out;
+    if(out.delta.Size()==0)return outStorage;
     out.allocation=BuildAllocationRequirementKey(*frame,source->device,req.output,req.capabilities,req.allocationClass);
-    if(!out.allocation)return out;++out.evidence.allocationKeys;++out.evidence.conversions;
+    if(!out.allocation)return outStorage;++out.evidence.allocationKeys;++out.evidence.conversions;
     return finish(PreparationPath::NewConversion);
 }
+template<class Reader> std::unique_ptr<PreparationDecision> DeriveStructuralRepresentationPlanOwned(const C::CanonicalFrameContext& context,
+    const C::QualificationCertificate& certificate,const SemanticProfile& profile,const RepresentationRequirement& req,
+    const SourceRepresentationFacts& facts,const Reader& reader)
+{return DeriveRepresentationPlanOwned(context,certificate,profile,req,facts,{},reader,true);}
+
+// Preserve the existing value-returning interface for compatibility. The native
+// path retains owned results through both wrappers and never calls these APIs.
+template<class Reader> PreparationDecision DeriveRepresentationPlan(const C::CanonicalFrameContext& context,
+    const C::QualificationCertificate& certificate,const SemanticProfile& profile,const RepresentationRequirement& req,
+    const SourceRepresentationFacts& facts,std::span<const PreparedViewEvidence> prepared,const Reader& reader,
+    bool structuralOnly=false)
+{
+    const auto result=DeriveRepresentationPlanOwned(context,certificate,profile,req,facts,prepared,reader,structuralOnly);
+    return *result;
+}
+
 template<class Reader> PreparationDecision DeriveStructuralRepresentationPlan(const C::CanonicalFrameContext& context,
     const C::QualificationCertificate& certificate,const SemanticProfile& profile,const RepresentationRequirement& req,
     const SourceRepresentationFacts& facts,const Reader& reader)

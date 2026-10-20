@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <atomic>
 #include "FinalFallbackControl.h"
 #include "VulkanNrStreamline.h"
 #include "VulkanNrPassRecorder.h"
@@ -23,6 +24,7 @@
 #include "VulkanNrGeneration.h"
 #include "VulkanNrMemoryBudget.h"
 #include "VulkanNrPreSr.h"
+#include "VulkanNrColorInput.h"
 #include "VulkanNrFlightRecorder.h"
 #include "NrExperimentalPolicy.h"
 #include "VulkanNrCompletion.h"
@@ -32,6 +34,7 @@
 #include "VulkanNrSession.h"
 #include "VulkanPresentExecutor.h"
 #include "VulkanPresentStatus.h"
+#include "VulkanNrSignalReceipts.h"
 
 #include <Config.h>
 #include <State.h>
@@ -54,7 +57,45 @@
 
 namespace DlssNr
 {
-static void ShutdownVkLocked(bool deviceAlive);
+static std::atomic<uint32_t> vkGenerationLossReceipts{0};
+static bool VkGenerationLossTraceEnabled() noexcept
+{
+    return !loggerClosed.load(std::memory_order_relaxed)&&spdlog::should_log(spdlog::level::trace)&&
+        vkGenerationLossReceipts.load(std::memory_order_relaxed)<32;
+}
+static std::optional<VkNrGenerationLoss> VkGenerationLossTrace(const char* caller)
+{
+    if(!VkGenerationLossTraceEnabled())return {};
+    VkNrGenerationLoss observation;observation.caller=caller;observation.thread=GetCurrentThreadId();return observation;
+}
+static void TraceVkGenerationLoss(const VkNrGenerationOwner& owner,const VkNrGenerationLoss& loss) noexcept
+{
+    if(loss.cause==VkNrGenerationLossCause::None||!VkGenerationLossTraceEnabled())return;
+    auto receipt=vkGenerationLossReceipts.load(std::memory_order_relaxed);
+    while(receipt<32&&!vkGenerationLossReceipts.compare_exchange_weak(receipt,receipt+1,std::memory_order_relaxed)){}
+    if(receipt>=32)return;
+    try{
+        const auto& post=loss.postPredicate;
+        LOG_TRACE("Vulkan Present generation first-loss: receipt={} decisionThread={} caller={} origin={} cause={} route={} pass={} deviceGeneration={} routeEpoch={} resume={} swapchainGeneration={} oldGeneration={} nextUnallocatedCandidate={} allocatedReplacement={} appliedAfterOperation={} keyField={} oldBits={} newBits={} use={} reusableObserved={} reusable={} gpuCompleteObserved={} gpuComplete={} postPredicateKnown={} postIncarnation={} postSubmitted={} postPending={} postRecordingReference={} snapshotUnavailable={}",
+            receipt+1,loss.thread,loss.caller?loss.caller:"unspecified",loss.origin?loss.origin:"unspecified",static_cast<unsigned>(loss.cause),
+            static_cast<unsigned>(loss.route),loss.pass,loss.deviceGeneration,loss.routeEpoch,loss.resumeGeneration,loss.swapchainGeneration,
+            loss.oldGeneration,loss.nextCandidate,loss.allocatedReplacement,owner.AppliedGeneration(),loss.difference.field?loss.difference.field:"none",
+            loss.difference.before,loss.difference.after,loss.use.value,loss.reusableObserved,loss.reusable,loss.gpuCompleteObserved,loss.gpuComplete,
+            post.has_value(),post?post->incarnation:0,post?post->submitted:false,post?post->pending:0,post?post->recordingReference:false,loss.snapshotUnavailable);
+    }catch(...){/* Observation never changes generation/recording ownership. */}
+}
+
+static void TraceVkGenerationRefusal(const VkNrGenerationResult& result,const VkNrGenerationKey& key)
+{
+    if(result.diagnostic.empty())return;
+    try{
+        LOG_INFO("Vulkan NR owned-completion refusal: route={} placement={} pass={} resume={} output={}x{} work={}x{} firstFailure={} diagnostic={}",
+            static_cast<unsigned>(key.frame.route),static_cast<unsigned>(key.frame.placement),key.passIndex,
+            key.frame.resumeGeneration,key.frame.output.width,key.frame.output.height,key.frame.work.width,key.frame.work.height,
+            result.reason,result.diagnostic);
+    }catch(...){/* Diagnostics never grant or withhold execution rights. */}
+}
+static void ShutdownVkLocked(bool deviceAlive,std::optional<uint64_t> sourceRetirementGeneration=std::nullopt);
 
 namespace
 {
@@ -101,12 +142,8 @@ struct VkResources final : VkNrGenerationPayload
 
 struct VkState
 {
-    NrPreflightSignals::NativeInputs nativeInputs;
-    VkExtent2D nativeRender{},nativeOutput{};
-    bool observedRr=false;
-    bool nativeDeliveryAccepted=false;
-    std::optional<NrConfigSnapshot<Config>> nativeObservedSettings;
-    std::string nativeWaitingReason;
+    VkNrNativeSelectedStatus<NrConfigSnapshot<Config>> nativeStatus;
+    VkNrSignalDiagnostics<VkNrRecordingOwner> signalDiagnostics;
     bool failed = false;
     const char* reason = "";
     bool modelRecordedCurrent = false;
@@ -137,7 +174,10 @@ struct VkState
     std::optional<VkNrRecordedOutput> candidate;
     VkFrameRequest recordingFrame;
     std::optional<VkNrFinalColorSource> finalColorSource;VkFrameRequest finalColorRequest;std::optional<NVSDK_NGX_Resource_VK> finalColorExposure;VkNrFinalColorAttempt finalColorAttempt;
-    std::optional<NVSDK_NGX_Resource_VK> performanceSource;VkNrUseId performanceUse;uint64_t performanceSerial=0;
+    std::optional<NVSDK_NGX_Resource_VK> performanceSource,performanceOriginalSource;
+    std::function<bool()> performanceSourceCurrent,performanceRawSourceCurrent;
+    const void* performanceParams=nullptr;bool performanceCaptureOnly=false;
+    VkNrUseId performanceUse;uint64_t performanceSerial=0;
     VkNrEvaluationIdentity performanceEvaluation;
     DlssNrConstants diagnosticConstants{};
     VkImageView diagnosticProxy=VK_NULL_HANDLE,diagnosticAnswer=VK_NULL_HANDLE;
@@ -153,8 +193,7 @@ struct VkState
     uint64_t gameExposureSequence=0;
     VkNrPassHistory passHistory;
 
-    bool reset = true;
-    uint64_t resetRevision = 1;
+    VkNrResetRevision resetState{1};uint64_t diagnosticResetEpoch=1;
     uint64_t resumeGeneration = 0, inputInterruptionEpoch = 0;
     uint64_t reportedEncodingGeneration = 0;
     uint64_t pixelProbeGeneration = 0;
@@ -170,6 +209,11 @@ struct VkState
     float timestampPeriod = 0.0f;
     uint32_t timestampBits=0;uint64_t lastQueryUse=0;
     std::array<VkNrFrameContract,VkNrReservationPool::HardCap> queryFrames{};
+    std::array<VkNrSignalContext,VkNrReservationPool::HardCap> queryContexts{};
+    std::array<uint64_t,VkNrReservationPool::HardCap> queryTimes{};
+    std::array<double,VkNrReservationPool::HardCap> queryClocks{};
+    VkNrSignalContext lastGpuContext{};
+    uint64_t lastGpuAt=0;VkNrCompletedTimings timing;
     unsigned long long timedFrames = 0;
     VkNrReservationPool querySlots;
     std::array<VkNrUseId,VkNrReservationPool::HardCap> queryUses{};
@@ -341,20 +385,23 @@ bool ReleaseVkResources(VkNrGenerationPayload& payload)
 // The caller serializes model recording with g_nativeRecordMutex. Provider
 // release may temporarily unlock the state mutex, but must retain its owning
 // route/pass/device context until every child resource has been released.
-static void RetireVkPassGenerationsLocked(VkNrRoute route,uint32_t pass,std::unique_lock<std::mutex>& lock)
+static void RetireVkPassGenerationsLocked(VkNrRoute route,uint32_t pass,std::unique_lock<std::mutex>& lock,const char* origin)
 {
     ScopedVkSession active(route,pass);
     auto& state=ActiveVk();
+    state.signalDiagnostics.Clear();state.timing.Clear();
     if(!state.generations)return;
     struct ControlScope {
         VkState& state;std::unique_lock<std::mutex>* previous;
         ~ControlScope(){state.controlLock=previous;}
     } control{state,state.controlLock};
     state.controlLock=&lock;
-    if(state.generations->AppliedGeneration()){state.reset=true;++state.resetRevision;}
+    if(state.generations->AppliedGeneration()){state.resetState.Request();}
     state.resources=nullptr;
-    state.generations->Disable();
-    state.generations->RetireCompleted(VulkanNrRecordings());
+    auto diagnostic=route==VkNrRoute::Present?VkGenerationLossTrace(origin):std::nullopt;
+    state.generations->Disable(origin,diagnostic?&*diagnostic:nullptr);
+    state.generations->RetireCompleted(VulkanNrRecordings(),diagnostic?&*diagnostic:nullptr);
+    if(diagnostic)TraceVkGenerationLoss(*state.generations,*diagnostic);
 }
 // End pass generation retirement
 
@@ -368,7 +415,7 @@ static bool PrepareVkRouteTransitionLocked(VkDevice device,VkNrRoute selected,st
     for(uint32_t pass=0;pass<10;++pass) {
         auto& state=PassStateVk(previous,pass);
         if(state.device!=device)continue;
-        RetireVkPassGenerationsLocked(previous,pass,lock);
+        RetireVkPassGenerationsLocked(previous,pass,lock,"opposite_route_transition");
         if(state.generations&&state.generations->Count())drained=false;
     }
     return drained;
@@ -674,6 +721,7 @@ VkNrGenerationCreation CreateVkResources(const VkNrGenerationKey& key,VkNrUseId 
         r.privateBytes+=r.heldImages.bytes;
         auto held=ActiveVk().recordingFrame;
         held.color=&r.heldImages.resources[0];held.depth=&r.heldImages.resources[1];held.motion=&r.heldImages.resources[2];held.colorLayout=VK_IMAGE_LAYOUT_GENERAL;
+        ClearVkNrColorInput(held);
         r.held.Capture(held,0); // The first encode locks its actual selected white point below.
     }
     auto* lock = ActiveVk().controlLock;
@@ -836,6 +884,8 @@ std::optional<std::filesystem::path> FindSnippet()
 
 // ---------------------------------------------------------------------------------------------
 
+static VkNrNativeRawStatus g_nativeRawVk;
+
 static bool NativeRunningVkLocked(const NrConfigSnapshot<Config>& cfg)
 {
     const auto runtime = cfg.GetDlssNrRuntimeSnapshot();
@@ -844,14 +894,13 @@ static bool NativeRunningVkLocked(const NrConfigSnapshot<Config>& cfg)
     const bool placed = key && (key->frame.placement == VkNrPlacement::AfterRR ||
         (requestedBefore ? key->frame.placement == VkNrPlacement::BeforeSR && g_nativeVk.preSrDelivered :
                            key->frame.placement == VkNrPlacement::AfterSR));
-    return placed && g_nativeVk.nativeDeliveryAccepted && g_nativeVk.nativeWaitingReason.empty() && runtime.enabled && cfg.DlssNrRoute.value_or_default() == 0 &&
-           g_nativeVk.nativeObservedSettings && g_nativeVk.nativeObservedSettings->SameConfiguration(cfg) &&
-           g_nativeVk.workload.appliedWork.width==g_nativeVk.workload.requestedWork.width &&
-           g_nativeVk.workload.appliedWork.height==g_nativeVk.workload.requestedWork.height &&
+    return placed && g_nativeVk.nativeStatus.Matches(cfg,VkNrCompletionDeviceGeneration(g_nativeVk.device),
+               g_vkRuntime.Epoch(),g_nativeVk.generations?g_nativeVk.generations->AppliedGeneration():0,
+               FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst)) && g_nativeVk.nativeStatus.workload.reason.empty() && runtime.enabled && cfg.DlssNrRoute.value_or_default() == 0 &&
            !g_vkSessionClosed && !g_vkShutdownFailed &&
-           g_nativeVk.resources && g_nativeVk.resources->feature != nullptr && !g_nativeVk.failed && g_nativeVk.frames != 0 && !g_nativeVk.reset &&
+           g_nativeVk.resources && g_nativeVk.resources->feature != nullptr && !g_nativeVk.failed && g_nativeVk.frames != 0 && !g_nativeVk.resetState.Pending() &&
            runtime.resumeGeneration == g_nativeVk.resumeGeneration&&
-           FinalFallback::CurrentInputEpoch()==g_nativeVk.inputInterruptionEpoch;
+           FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst)==g_nativeVk.inputInterruptionEpoch;
 }
 
 bool IsRunningVk()
@@ -860,77 +909,100 @@ bool IsRunningVk()
     std::lock_guard lock(g_vkMutex);return NativeRunningVkLocked(*cfg);
 }
 
-void ObserveNativeVk(NVSDK_NGX_Parameter* params,const VkNrTemporalMetadata* temporal,
-                     const NrConfigSnapshot<Config>& cfg,bool rr)
+void ObserveNativeResultVk(const VkNrNativeObservation& observation,const NrConfigSnapshot<Config>& cfg,
+                           const VkRecordResult& result,bool before,bool bound,bool succeeded,bool selected)
 {
     std::lock_guard lock(g_vkMutex);
+    const auto inputEpoch=FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst);
+    g_nativeRawVk.Publish(observation,succeeded,inputEpoch);
     auto& state=g_nativeVk;
-    VkFrame::ObserveNativeInputs(state.nativeInputs,params);
-    state.nativeRender=temporal?VkExtent2D{temporal->color.width,temporal->color.height}:VkExtent2D{};
-    NVSDK_NGX_Resource_VK* output=nullptr;VkFrame::Failure failure;
-    state.nativeOutput={};
-    if(params&&params->Get(NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&output))==NVSDK_NGX_Result_Success&&
-       VkFrame::ValidateImage("SR.Output",output,true,failure))
-        state.nativeOutput={output->Resource.ImageViewInfo.Width,output->Resource.ImageViewInfo.Height};
-    state.observedRr=rr;state.nativeObservedSettings=cfg;
-    if(cfg.DlssNrRoute.value_or_default()!=0)return;
-    VkNrFrameContract frame;frame.placement=rr?VkNrPlacement::AfterRR:
-        cfg.DlssNrRunBeforeSr.value_or_default()?VkNrPlacement::BeforeSR:VkNrPlacement::AfterSR;
-    frame.output=frame.placement==VkNrPlacement::BeforeSR?state.nativeRender:state.nativeOutput;
-    const auto work=ResolveVkNrWorkload(cfg,frame,temporal?std::optional<VkNrTemporalMetadata>(*temporal):std::nullopt);
-    state.workload.requestedOutput=frame.output;
-    state.workload.requestedWork={work.width,work.height};state.workload.pending=true;
-    state.workload.policy=VkNrResolutionPolicy(cfg,frame);
-    if(work.reason)state.nativeWaitingReason=work.reason;
+    // Failed SR still requests authentic history recovery even if its status is stale.
+    if(state.nativeStatus.Publish(observation,cfg,result,before,bound,succeeded,selected,inputEpoch)) {
+        if(result.nativeRecording)state.signalDiagnostics.Select(result.nativeRecording->use,
+            observation.frame.evaluation,state.nativeStatus.accepted,GetTickCount64());
+        if(!state.nativeStatus.accepted)state.resetState.Request();
+    } else if(!succeeded&&cfg.GetDlssNrRuntimeSnapshot().enabled&&cfg.DlssNrRoute.value_or_default()==0)
+        state.resetState.Request();
 }
 
-void ObserveNativeResultVk(const VkRecordResult& result,bool before,bool bound,bool succeeded,bool selected)
-{
-    if(!selected&&succeeded)return;
-    std::lock_guard lock(g_vkMutex);auto& state=g_nativeVk;
-    state.nativeDeliveryAccepted=VkNrNativeDeliveryAccepted(result,before,bound,succeeded);
-    // Selected SR can fail before an NR recorder is entered. Such a gap must
-    // invalidate history just like a declined or partially delivered NR pass.
-    if(!state.nativeDeliveryAccepted){state.reset=true;++state.resetRevision;}
-    if(!succeeded)state.nativeWaitingReason="Selected Vulkan SR evaluation failed";
-    else if(!result.reason.empty())state.nativeWaitingReason=result.reason;
-    else if(before&&!bound)state.nativeWaitingReason="Native Performance carrier is not ready for the selected SR call";
-    else if(!state.nativeDeliveryAccepted)state.nativeWaitingReason="Waiting for a qualified Vulkan NR recording";
-    else state.nativeWaitingReason.clear();
-    state.workload.pending=!state.nativeDeliveryAccepted;
-    state.workload.reason=state.nativeWaitingReason;
-}
-
-static std::optional<double> NativeGpuTimeVkLocked();
+static std::optional<double> NativeGpuTimeVkLocked(const NrConfigSnapshot<Config>&);
 
 static TelemetrySnapshot NativeTelemetryVkLocked(const std::optional<NrConfigSnapshot<Config>>& cfg)
 {
     TelemetrySnapshot result;auto& state=g_nativeVk;
-    result.nativeInputs=state.nativeInputs;result.frames=state.frames;
+    const auto inputEpoch=FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst);
+    const bool rawCurrent=g_nativeRawVk.Current(inputEpoch);
+    if(rawCurrent) {
+        result.nativeInputs=g_nativeRawVk.observation->inputs;
+        result.nativeInputs.observations=g_nativeRawVk.observations;
+        result.nativeInputGeneration=g_nativeRawVk.generation;
+    }
+    result.frames=state.frames;
+    result.enabled=cfg&&cfg->GetDlssNrRuntimeSnapshot().enabled&&cfg->DlssNrRoute.value_or_default()==0;
+    const auto* observation=result.enabled?
+        (state.nativeStatus.observation?&*state.nativeStatus.observation:nullptr):
+        (rawCurrent?&*g_nativeRawVk.observation:nullptr);
+    if(observation&&!observation->Current(inputEpoch))observation=nullptr;
+    result.selectedNativeObservations=observation&&result.enabled?state.nativeStatus.observations:0;
+    const bool selectedCurrent=result.enabled&&observation&&state.nativeStatus.settings&&
+        cfg&&state.nativeStatus.settings->SameConfiguration(*cfg);
+    const auto now=GetTickCount64();const auto policy=Connections::SignalPreferences();
+    if(selectedCurrent&&state.resources&&state.generations) {
+        VkNrSignalContext current{state.device,state.recordingFrame.contract,state.generations->AppliedGeneration(),state.resetState.Capture(),0};
+        current.resetEpoch=state.diagnosticResetEpoch;current.policyRevision=policy.revision;
+        current.frame.settingsRevision=cfg->ObservationRevision().value_or(0);
+        current.frame.deviceGeneration=VkNrCompletionDeviceGeneration(state.device);
+        current.frame.routeEpoch=g_vkRuntime.Epoch();current.frame.inputInterruptionEpoch=inputEpoch;
+        current.frame.resumeGeneration=cfg->GetDlssNrRuntimeSnapshot().resumeGeneration;
+        state.signalDiagnostics.Match(current);state.signalDiagnostics.Poll(VulkanNrRecordings(),now);
+        for(size_t i=0;i<result.signalReceipts.size();++i)
+            result.signalReceipts[i]=state.signalDiagnostics.Read(static_cast<SignalReceipts::Signal>(i),now);
+        const auto& color=result.signalReceipts[size_t(SignalReceipts::Signal::Color)];
+        const auto& depth=result.signalReceipts[size_t(SignalReceipts::Signal::Depth)];
+        const auto& motion=result.signalReceipts[size_t(SignalReceipts::Signal::Motion)];
+        auto& wire=result.inputSignals.status;wire.revision=policy.revision;wire.capture=color.sequence;
+        wire.generation=current.applied;
+        const auto source=[](const auto& r){return uint32_t(r.fact.admitted?Connections::Source::Native:Connections::Source::None);};
+        const auto reason=[](const auto& r){return uint32_t(r.fact.admitted?Connections::Mixed::Reason::Ready:Connections::Mixed::Reason::Unavailable);};
+        wire.color=source(color);wire.depth=source(depth);wire.motion=source(motion);
+        wire.colorReason=reason(color);wire.depthReason=reason(depth);wire.motionReason=reason(motion);
+        result.inputSignals.fresh=color.sequence&&color.age<=2000&&color.state!=SignalReceipts::State::Stale;
+        // A used selection is one completed observation, never a union of session totals.
+        if(color.sequence&&color.sequence==depth.sequence&&color.sequence==motion.sequence&&
+           color.state==SignalReceipts::State::Consumed&&depth.state==SignalReceipts::State::Consumed&&
+           motion.state==SignalReceipts::State::Consumed) {
+            result.inputSignals.used=wire;result.inputSignals.used.consumed=1;result.inputSignals.usedFresh=true;
+        }
+    } else {
+        state.signalDiagnostics.Clear();
+        for(auto& r:result.signalReceipts){r.state=result.enabled?SignalReceipts::State::Pending:SignalReceipts::State::Off;
+            r.fact.reason=result.enabled?"Waiting for a current selected Vulkan evaluation":"Native NR is off";}
+    }
     result.lifecycleOpen=!g_vkSessionClosed&&!g_vkShutdownFailed;
     result.lifecycleGeneration=g_vkRuntime.Epoch();
-    result.nativeRayReconstructionActive=state.observedRr;
-    result.runBeforeSr=cfg&&cfg->DlssNrRunBeforeSr.value_or_default()&&!state.observedRr;
-    const auto frame=result.runBeforeSr?state.nativeRender:state.nativeOutput;
+    result.nativeRayReconstructionActive=observation&&observation->rayReconstruction;
+    result.runBeforeSr=observation&&observation->frame.placement==VkNrPlacement::BeforeSR;
+    const auto frame=!observation?VkExtent2D{}:result.runBeforeSr?observation->render:observation->output;
     result.frameWidth=frame.width;result.frameHeight=frame.height;
-    result.guideWidth=state.nativeRender.width;result.guideHeight=state.nativeRender.height;
-    result.workWidth=state.workload.appliedWork.width;result.workHeight=state.workload.appliedWork.height;
-    result.enabled=cfg&&cfg->GetDlssNrRuntimeSnapshot().enabled&&cfg->DlssNrRoute.value_or_default()==0;
+    result.guideWidth=observation?observation->render.width:0;result.guideHeight=observation?observation->render.height:0;
+    result.workWidth=result.enabled&&observation?state.nativeStatus.workload.appliedWork.width:0;
+    result.workHeight=result.enabled&&observation?state.nativeStatus.workload.appliedWork.height:0;
     result.modelLoaded=state.resources&&state.resources->feature;
-    result.failed=state.failed||g_vkShutdownFailed;
-    result.resetPending=state.reset;result.historyResetRequested=state.reset;
+    result.failed=(selectedCurrent&&state.failed)||g_vkShutdownFailed;
+    result.resetPending=result.enabled&&state.resetState.Pending();result.historyResetRequested=result.resetPending;
     result.seedEvaluationCompleted=state.resources&&state.resources->nrSeed.Ready();
     result.completedPipelineEvaluations=result.seedEvaluationCompleted?g_nativeSession.CompletedCount():0;
-    result.gpuCompletedOutputEvaluations=result.seedEvaluationCompleted&&state.nativeDeliveryAccepted?
+    result.gpuCompletedOutputEvaluations=result.seedEvaluationCompleted&&state.nativeStatus.accepted?
         g_nativeSession.CompletedCount():0;
     result.preSrDisplayReady=state.preSrDelivered&&result.seedEvaluationCompleted;
     result.running=cfg&&NativeRunningVkLocked(*cfg);
-    result.transitionPending=!result.running;result.layerCount=state.chain.completed;
-    if(result.running)result.totalGpuMs=NativeGpuTimeVkLocked();
+    result.transitionPending=result.enabled&&!result.running;result.layerCount=result.enabled?state.nativeStatus.completedPasses:0;
+    if(result.running)result.totalGpuMs=NativeGpuTimeVkLocked(*cfg);
     static thread_local std::string reason;
     reason=g_vkShutdownFailed?"Vulkan shutdown could not safely complete; restart the process":
-        state.failed?state.reason:state.nativeWaitingReason;
-    result.failureReason=reason.c_str();return result;
+        !result.enabled?"":!selectedCurrent?"Waiting for a selected Vulkan Native evaluation":
+        state.failed?state.reason:state.nativeStatus.workload.reason;
+    result.failureReason=reason.c_str();result.failureText=reason;return result;
 }
 
 TelemetrySnapshot NativeTelemetryVk()
@@ -968,18 +1040,26 @@ Capability::NativeObservation CopyCapabilityObservationVk(const Capability::Writ
 
 const char* FailureReasonVk()
 {
+    const auto cfg=TryNrConfigSnapshot(*Config::Instance());
     std::lock_guard<std::mutex> lock(g_vkMutex);
     static thread_local std::string reason;
+    // The diagnostics fallback getter must not revive an old Native failure on another route.
+    if(!cfg||!cfg->GetDlssNrRuntimeSnapshot().enabled||cfg->DlssNrRoute.value_or_default()!=0) {
+        reason.clear();return reason.c_str();
+    }
+    const bool current=g_nativeVk.nativeStatus.observation&&g_nativeVk.nativeStatus.settings&&
+        g_nativeVk.nativeStatus.settings->SameConfiguration(*cfg)&&
+        g_nativeVk.nativeStatus.observation->Current(FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst));
     reason=g_vkShutdownFailed ? "Vulkan shutdown could not safely complete; restart the process" :
-        g_nativeVk.failed?g_nativeVk.reason:g_nativeVk.nativeWaitingReason.empty()?g_nativeVk.reason:g_nativeVk.nativeWaitingReason;
+        !current?"Waiting for a selected Vulkan Native evaluation":
+        g_nativeVk.failed?g_nativeVk.reason:g_nativeVk.nativeStatus.workload.reason.empty()?g_nativeVk.reason:g_nativeVk.nativeStatus.workload.reason;
     return reason.c_str();
 }
 
 void RequestHistoryResetVk()
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
-    g_nativeVk.reset = true;
-    ++g_nativeVk.resetRevision;
+    g_nativeVk.resetState.Request();
 }
 
 unsigned long long FramesVk()
@@ -1000,29 +1080,99 @@ bool ExposureOfferedVk()
     return g_nativeVk.exposureOffered;
 }
 
-static std::optional<double> NativeGpuTimeVkLocked()
+static std::optional<double> GpuTimeVkLocked(VkNrRoute route,uint32_t productRoute,
+    const std::array<VkNrGpuStageSample,10>& stages,const NrConfigSnapshot<Config>* cfg=nullptr)
 {
-    const auto stages=GetVulkanPresentStatus().Snapshot().nativeGpuStages;
-    const auto passes=g_nativeVk.chain.requested;
-    if(!passes||passes>10||!stages[0].use)return {};
-    double total=0;
+    const auto& root=PassStateVk(route,0);const auto passes=root.chain.requested;
+    if(!passes||passes>10)return {};
+    std::array<VkNrTimingView,10> views{};const auto now=GetTickCount64();
     for(uint32_t pass=0;pass<passes;++pass) {
-        const auto& state=PassStateVk(VkNrRoute::Native,pass);
-        const auto key=state.generations?state.generations->AppliedKey():std::nullopt;
-        if(!key||!state.lastGpuTime||!state.lastGpuFrame||
-           !SameVkNrDiagnosticContext(*state.lastGpuFrame,state.recordingFrame.contract)||
-           stages[pass].use!=stages[0].use||
-           !SameVkNrDiagnosticContext(stages[pass].frame,state.recordingFrame.contract))return {};
-        for(double ms:stages[pass].milliseconds)total+=ms;
+        const auto& state=PassStateVk(route,pass);const auto& sample=stages[pass];
+        auto& view=views[pass];view.ready=state.resources&&state.generations&&state.generations->AppliedKey()&&
+            state.lastGpuTime&&state.lastGpuFrame&&sample.pass==pass;
+        view.use=sample.use.value;view.lastQueryUse=state.lastQueryUse;view.at=sample.at;
+        view.productRoute=sample.productRoute;view.ms=sample.milliseconds;
+        view.sample={sample.device,sample.frame,sample.applied,sample.reset,sample.productRoute};
+        view.current={state.device,state.recordingFrame.contract,
+            state.generations?state.generations->AppliedGeneration():0,state.resetState.Capture(),productRoute};
+        view.sample.resetEpoch=sample.resetEpoch;view.current.resetEpoch=state.diagnosticResetEpoch;
+        view.current.frame.deviceGeneration=VkNrCompletionDeviceGeneration(state.device);
+        view.current.frame.routeEpoch=g_vkRuntime.Epoch();
+        view.current.frame.inputInterruptionEpoch=FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst);
+        if(cfg){view.current.frame.settingsRevision=cfg->ObservationRevision().value_or(0);
+            view.current.frame.resumeGeneration=cfg->GetDlssNrRuntimeSnapshot().resumeGeneration;}
+        if(!SameVkNrSignalContext(state.lastGpuContext,view.sample)||state.lastGpuAt!=sample.at)return {};
     }
-    return total;
+    const auto aggregate=AggregateVkNrTiming(std::span(views.data(),passes),productRoute,now);
+    if(!aggregate)return {};
+    return aggregate->milliseconds;
+}
+// Query completion already holds g_vkMutex. No status/model callback is made
+// here: all current pass identities are copied directly from the owned states.
+static void PublishCompletedGpuTimeVkLocked(const VkNrRecordingOwner& owner,
+    const VkNrGpuStageSample& sample,const NrConfigSnapshot<Config>& cfg)
+{
+    const auto route=sample.frame.route;const auto selected=uint32_t(cfg.DlssNrRoute.value_or_default());
+    if(!cfg.GetDlssNrRuntimeSnapshot().enabled||g_vkSessionClosed||g_vkShutdownFailed||
+       !g_vkRuntime.IsActive(route)||sample.productRoute!=selected||
+       (route==VkNrRoute::Native?selected!=0:(selected!=1&&selected!=2))||
+       !owner.GpuComplete(sample.use)||!owner.RecordingReleased(sample.use))return;
+    auto& root=PassStateVk(route,0);const auto requested=root.chain.requested;
+    if(!requested||requested>10||sample.pass>=requested)return;
+    std::array<VkNrSignalContext,10> current{};
+    for(uint32_t pass=0;pass<requested;++pass){
+        const auto& state=PassStateVk(route,pass);
+        if(state.failed||!state.resources||!state.generations||!state.generations->AppliedKey())return;
+        current[pass]={state.device,state.recordingFrame.contract,state.generations->AppliedGeneration(),
+            state.resetState.Capture(),selected};
+        current[pass].resetEpoch=state.diagnosticResetEpoch;
+        current[pass].frame.deviceGeneration=VkNrCompletionDeviceGeneration(state.device);
+        current[pass].frame.routeEpoch=g_vkRuntime.Epoch();
+        current[pass].frame.settingsRevision=cfg.ObservationRevision().value_or(0);
+        current[pass].frame.resumeGeneration=cfg.GetDlssNrRuntimeSnapshot().resumeGeneration;
+        current[pass].frame.inputInterruptionEpoch=FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst);
+    }
+    VkNrTimingView completed;completed.ready=true;completed.use=sample.use.value;
+    // This is this immutable completed query slot's use, independent of the
+    // latest per-pass display slot, which may already contain a newer use.
+    completed.lastQueryUse=sample.use.value;completed.at=sample.at;completed.productRoute=sample.productRoute;
+    completed.sample={sample.device,sample.frame,sample.applied,sample.reset,sample.productRoute};
+    completed.sample.resetEpoch=sample.resetEpoch;completed.ms=sample.milliseconds;
+    try {root.timing.Record(sample.pass,requested,selected,completed,std::span(current.data(),requested),GetTickCount64());}
+    catch(...) { /* Optional scalar diagnostics never interrupt rendering. */ }
+}
+static std::optional<double> NativeGpuTimeVkLocked(const NrConfigSnapshot<Config>& cfg)
+{
+    return GpuTimeVkLocked(VkNrRoute::Native,0,GetVulkanPresentStatus().NativeGpuStages(),&cfg);
 }
 
+VkPresentStatusSnapshot PresentTelemetryVk(const NrConfigSnapshot<Config>& cfg)
+{
+    std::lock_guard recording(g_nativeRecordMutex);std::lock_guard lock(g_vkMutex);
+    auto result=GetVulkanPresentStatus().TimingSnapshot();
+    const auto route=uint32_t(cfg.DlssNrRoute.value_or_default());
+    const auto& runtime=cfg.GetDlssNrRuntimeSnapshot();auto& state=g_presentVk;
+    const auto policy=Connections::SignalPreferences();result.requestedSources=policy;
+    // This copy has no owner callbacks. Keep source receipts conservative until
+    // their independent source owner validates its current policy and lifetime.
+    result.sources.fresh=false;result.sources.usedFresh=false;
+    const auto& frame=state.recordingFrame.contract;
+    const bool current=runtime.enabled&&(route==1||route==2)&&result.route==route&&
+        g_vkRuntime.IsActive(VkNrRoute::Present)&&!state.failed&&
+        result.timingDevice==state.device&&result.timingQueue==frame.queue&&
+        result.timingSwapchain==frame.swapchain&&result.generation==frame.swapchainGeneration&&
+        result.timingDeviceGeneration==frame.deviceGeneration;
+    if(current)if(const auto time=GpuTimeVkLocked(VkNrRoute::Present,route,result.gpuStages,&cfg)){
+        result.gpuTimeValid=true;result.gpuTimeMs=*time;result.gpuTimeSamples=state.timing.Samples();
+    }
+    if(!current){result.active=false;result.gpuTimeValid=false;}
+    return result;
+}
 std::optional<double> LastGpuTimeVk()
 {
     const auto cfg=TryNrConfigSnapshot(*Config::Instance());if(!cfg)return {};
     std::lock_guard lock(g_vkMutex);
-    return NativeRunningVkLocked(*cfg)?NativeGpuTimeVkLocked():std::nullopt;
+    return NativeRunningVkLocked(*cfg)?NativeGpuTimeVkLocked(*cfg):std::nullopt;
 }
 
 std::string TuningStatusVk()
@@ -1030,6 +1180,32 @@ std::string TuningStatusVk()
     std::lock_guard<std::mutex> lock(g_vkMutex);
     return g_nativeVk.tuningMessage + " (" + std::to_string(g_nativeVk.generations ? g_nativeVk.generations->Count() : 0) + "/8 retained generations)";
 }
+std::optional<VkNrPresentModelLifetime> CurrentVulkanPresentModelLifetimeVk(VkNrPresentLifetimeRead* projection)
+{
+    const auto unavailable=[&](VkNrPresentLifetimeRead reason)->std::optional<VkNrPresentModelLifetime>{
+        if(projection)*projection=reason;return {};
+    };
+    const auto cfg=TryNrConfigSnapshot(*Config::Instance());
+    if(!cfg)return unavailable(VkNrPresentLifetimeRead::ConfigUnavailable);
+    if(!cfg->GetDlssNrRuntimeSnapshot().enabled)return unavailable(VkNrPresentLifetimeRead::Disabled);
+    const auto route=cfg->DlssNrRoute.value_or_default();if(route!=1&&route!=2)return unavailable(VkNrPresentLifetimeRead::WrongRoute);
+    std::unique_lock recording(g_nativeRecordMutex,std::try_to_lock);
+    if(!recording.owns_lock())return unavailable(VkNrPresentLifetimeRead::BusyRecording);
+    std::unique_lock lock(g_vkMutex,std::try_to_lock);
+    if(!lock.owns_lock())return unavailable(VkNrPresentLifetimeRead::BusyState);
+    if(!g_vkRuntime.Initialized())return unavailable(VkNrPresentLifetimeRead::Uninitialized);
+    if(!g_vkRuntime.IsActive(VkNrRoute::Present))return unavailable(VkNrPresentLifetimeRead::Inactive);
+    const auto device=g_vkRuntime.Device();
+    if(!device)return unavailable(VkNrPresentLifetimeRead::NoDevice);
+    // Live global interruption identity must reject a tail admitted before a switch.
+    if(projection)*projection=VkNrPresentLifetimeRead::ReturnedTuple;
+    return VkNrPresentModelLifetime{reinterpret_cast<uintptr_t>(device),VkNrCompletionDeviceGeneration(device),
+        g_vkRuntime.Epoch(),cfg->GetDlssNrRuntimeSnapshot().resumeGeneration,
+        FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst)};
+}
+std::optional<VkNrPresentModelLifetime> CurrentVulkanPresentModelLifetimeVk()
+{return CurrentVulkanPresentModelLifetimeVk(nullptr);}
+
 uint64_t PresentGenerationPrivateBytesVk()
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
@@ -1081,7 +1257,60 @@ std::optional<VkNrRecordedOutput> RecordedVkNrOutput(VkNrRoute route,VkCommandBu
 VkNrWorkloadStatus WorkloadStatusVk(VkNrRoute route)
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
-    return route==VkNrRoute::Native ? g_nativeVk.workload : g_presentVk.workload;
+    if(route!=VkNrRoute::Native)return g_presentVk.workload;
+    if(g_nativeVk.nativeStatus.observation&&g_nativeVk.nativeStatus.observation->Current(FinalFallback::inputInterruptionEpoch.load(std::memory_order_seq_cst)))
+        return g_nativeVk.nativeStatus.workload;
+    VkNrWorkloadStatus result;result.pending=true;result.reason="Waiting for a selected Vulkan Native evaluation";
+    return result;
+}
+
+static bool EnsureVkProviderDeviceLocked(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device,
+                                         std::unique_lock<std::mutex>& lock)
+{
+    if (!LoadForwarder(lock))
+        return false;
+
+    // Initialise NGX on this device, once. The snippet path is the model itself; the forwarder loads
+    // it so the caller gate sees a module named nvngx.dll.
+    return g_vkRuntime.EnsureDevice(device, [&] {
+        auto snippet = FindSnippet();
+
+        if (!snippet.has_value())
+        {
+            Fail("nvngx_dlssnr.dll was not found beside OptiScaler or the game");
+            return false;
+        }
+
+        lock.unlock();
+        const int probe = g_vkRuntime.Exports().probe != nullptr ? g_vkRuntime.Exports().probe(snippet->wstring().c_str()) : 0;
+        lock.lock();
+
+        // Four bits, one per entry point. Anything short of fifteen means the model's Vulkan surface
+        // is not entirely reachable and there is no point going further.
+        if (probe != 15)
+        {
+            LOG_ERROR("DLSS-NR Vulkan: the model's Vulkan surface is incomplete (probe {})", probe);
+            Fail("the model does not expose a complete Vulkan surface");
+            return false;
+        }
+
+        const auto applicationData = State::Instance().NVNGX_ApplicationDataPath;
+        lock.unlock();
+        const int result =
+            g_vkRuntime.Exports().init(snippet->wstring().c_str(), applicationData.c_str(),
+                      (void*) instance, (void*) physicalDevice, (void*) device, 0x0000015);
+        lock.lock();
+
+        if (result != 1)
+        {
+            LOG_ERROR("DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned {}", result);
+            Fail("the model would not initialise on this Vulkan device");
+            return false;
+        }
+
+        LOG_INFO("DLSS-NR Vulkan: the model initialised on this device");
+        return true;
+    });
 }
 
 static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_NGX_Parameter* params,
@@ -1110,6 +1339,9 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
             if (!state.workload.pending) state.workload.reason.clear();
             else if (state.workload.reason.empty()) state.workload.reason = state.reason[0] ? state.reason : state.tuningMessage;
             if (&state == &g_presentVk) GetVulkanPresentStatus().ObserveWorkload(state.workload);
+            state.recordingFrame.color=nullptr;state.recordingFrame.targetColor=nullptr;
+            state.recordingFrame.depth=nullptr;state.recordingFrame.motion=nullptr;state.recordingFrame.exposure=nullptr;
+            ClearVkNrColorInput(state.recordingFrame);
             state.controlLock = nullptr; state.recordingCommand = VK_NULL_HANDLE;
         }
     } context {ActiveVk()};
@@ -1163,23 +1395,32 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     {
         ActiveVk().resumeGeneration = runtime.resumeGeneration;
         ActiveVk().inputInterruptionEpoch = FinalFallback::CurrentInputEpoch();
-        ActiveVk().reset = true;
+        ++ActiveVk().diagnosticResetEpoch;ActiveVk().resetState.MarkPending();
         LOG_INFO("DLSS-NR Vulkan: enable transition {} applied at the render boundary; temporal reset requested",
                  runtime.resumeGeneration);
     }
 
     // The game's own resources, already wrapped: NGX hands Vulkan resources over as
     // NVSDK_NGX_Resource_VK, so only this pass's own images need building.
-    NVSDK_NGX_Resource_VK* colour = request.color;
+    auto selectedInput=request;
+    NVSDK_NGX_Resource_VK* colour = selectedInput.color;
     NVSDK_NGX_Resource_VK* targetColour = request.targetColor;
     NVSDK_NGX_Resource_VK* depth = request.depth;
     NVSDK_NGX_Resource_VK* motion = request.motion;
     if (params != nullptr)
     {
-        params->Get(beforeSr ? NVSDK_NGX_Parameter_Color : NVSDK_NGX_Parameter_Output, (void**) &colour);
+        if(beforeSr) {
+            std::string reason;
+            if(!SelectVkNrPreSrColor(selectedInput,params,VulkanNrImageFacts(),VulkanNrRecordings(),
+                VkNrCompletionDeviceGeneration(device),true,reason)) {ActiveVk().tuningMessage=reason;ActiveVk().reason=ActiveVk().tuningMessage.c_str();return;}
+            colour=selectedInput.color;
+        } else params->Get(NVSDK_NGX_Parameter_Output, (void**) &colour);
         params->Get(NVSDK_NGX_Parameter_Depth, (void**) &depth);
         params->Get(NVSDK_NGX_Parameter_MotionVectors, (void**) &motion);
         targetColour = beforeSr ? nullptr : colour;
+    }
+    if(const auto reason=VkNrAdaptedDlaaRefusal(beforeSr,selectedInput.qualifiedColor&&selectedInput.qualifiedColor->Adapted(),cfg.DlssNrPreDlaa.value_or_default())) {
+        ActiveVk().reason=reason;return;
     }
     if (beforeSr) {
         const auto& temporal = request.contract.temporal;
@@ -1190,7 +1431,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
             ExperimentalPolicy::Capture(cfg).active && cfg.DlssNrPreSrSoftReset.value_or_default());
         if (reset.conservativeTransition) {
             ++ActiveVk().preSrEpoch; ActiveVk().preSrDelivered = false;
-            ActiveVk().reset = true; ++ActiveVk().resetRevision;
+            ActiveVk().resetState.Request();
         }
         if (temporal->reset && !reset.softResetForBurst) {
             ActiveVk().reason = "Native Performance waits for the game's conservative reset transition"; return;
@@ -1249,20 +1490,33 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
         }
         if (ActiveVk().queryPool && !ActiveVk().queryPublished[slot] &&
             recordingOwner.GpuComplete(ActiveVk().queryUses[slot])&&recordingOwner.RecordingReleased(ActiveVk().queryUses[slot])) {
-            uint64_t ticks[5]{};
-            const bool available = vkGetQueryPoolResults(device,ActiveVk().queryPool,slot*5,5,sizeof(ticks),ticks,sizeof(uint64_t),VK_QUERY_RESULT_64_BIT) == VK_SUCCESS;
-            if (VkNrReadbackReady(recordingOwner,ActiveVk().queryUses[slot],available,true,false)) {
-                const auto bits=ActiveVk().timestampBits;
-                const uint64_t mask=bits==64?UINT64_MAX:(uint64_t(1)<<bits)-1;
-                VkNrGpuStageSample sample;sample.use=ActiveVk().queryUses[slot];sample.frame=ActiveVk().queryFrames[slot];sample.pass=request.passIndex;
-                double total=0;
-                for(uint32_t stage=0;stage<4;++stage){sample.milliseconds[stage]=double((ticks[stage+1]-ticks[stage])&mask)*ActiveVk().timestampPeriod/1e6;total+=sample.milliseconds[stage];}
-                if(total>=0&&total<1000&&sample.use.value>ActiveVk().lastQueryUse&&ActiveVk().generations&&ActiveVk().generations->AppliedKey()&&
-                   SameVkNrDiagnosticContext(sample.frame,ActiveVk().recordingFrame.contract)) {
-                    ActiveVk().lastQueryUse=sample.use.value;ActiveVk().lastGpuTime=total;ActiveVk().lastGpuFrame=sample.frame;
-                    GetVulkanPresentStatus().ObserveGpuStages(recordingOwner,sample);
+            // No WAIT flag: owned completion and each timestamp's availability are independent checks.
+            uint64_t values[5][2]{};
+            const bool available=vkGetQueryPoolResults(device,ActiveVk().queryPool,slot*5,5,sizeof(values),values,
+                sizeof(values[0]),VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT)==VK_SUCCESS&&
+                std::all_of(std::begin(values),std::end(values),[](const auto& v){return v[1]!=0;});
+            if(VkNrReadbackReady(recordingOwner,ActiveVk().queryUses[slot],available,true,false)) {
+                uint64_t ticks[5]{};for(size_t i=0;i<5;++i)ticks[i]=values[i][0];
+                const auto stages=VkNrTimestampStages(ticks,ActiveVk().timestampBits,ActiveVk().timestampPeriod,
+                    VkNrDiagnosticMilliseconds()-ActiveVk().queryClocks[slot]);
+                const auto& captured=ActiveVk().queryContexts[slot];
+                VkNrSignalContext current{device,ActiveVk().recordingFrame.contract,
+                    ActiveVk().generations?ActiveVk().generations->AppliedGeneration():0,
+                    ActiveVk().resetState.Capture(),uint32_t(cfg.DlssNrRoute.value_or_default())};
+                current.resetEpoch=ActiveVk().diagnosticResetEpoch;
+                if(stages&&SameVkNrSignalContext(captured,current)) {
+                    VkNrGpuStageSample sample;sample.use=ActiveVk().queryUses[slot];sample.frame=captured.frame;
+                    sample.pass=request.passIndex;sample.device=captured.device;sample.applied=captured.applied;
+                    sample.reset=captured.reset;sample.resetEpoch=captured.resetEpoch;sample.productRoute=captured.productRoute;sample.at=ActiveVk().queryTimes[slot];
+                    sample.milliseconds=*stages;double total=0;for(auto ms:*stages)total+=ms;
+                    if(sample.use.value>ActiveVk().lastQueryUse){
+                        ActiveVk().lastQueryUse=sample.use.value;ActiveVk().lastGpuTime=total;ActiveVk().lastGpuFrame=sample.frame;
+                        ActiveVk().lastGpuContext=captured;ActiveVk().lastGpuAt=sample.at;
+                        GetVulkanPresentStatus().ObserveGpuStages(recordingOwner,sample);
+                    }
+                    PublishCompletedGpuTimeVkLocked(recordingOwner,sample,cfg);
                 }
-                ActiveVk().queryPublished[slot] = true;
+                ActiveVk().queryPublished[slot]=true;
             }
         }
     }
@@ -1292,7 +1546,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
         return;
     }
 
-    const auto sourceRect=VkFrame::SourceRect(colour,request.contract.temporal,beforeSr,inputFailure);
+    auto sourceRect=VkFrame::SourceRect(colour,request.contract.temporal,beforeSr,inputFailure,request.postSrOutput);
     if(!sourceRect){ActiveVk().reason="Native active color rectangle is outside its allocation";return;}
     const uint32_t width = sourceRect->width;
     const uint32_t height = sourceRect->height;
@@ -1321,51 +1575,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     if (width == 0 || height == 0)
         return;
 
-    if (!LoadForwarder(lock))
-        return;
-
-    // Initialise NGX on this device, once. The snippet path is the model itself; the forwarder loads
-    // it so the caller gate sees a module named nvngx.dll.
-    if (!g_vkRuntime.EnsureDevice(device, [&] {
-        auto snippet = FindSnippet();
-
-        if (!snippet.has_value())
-        {
-            Fail("nvngx_dlssnr.dll was not found beside OptiScaler or the game");
-            return false;
-        }
-
-        lock.unlock();
-        const int probe = g_vkRuntime.Exports().probe != nullptr ? g_vkRuntime.Exports().probe(snippet->wstring().c_str()) : 0;
-        lock.lock();
-
-        // Four bits, one per entry point. Anything short of fifteen means the model's Vulkan surface
-        // is not entirely reachable and there is no point going further.
-        if (probe != 15)
-        {
-            LOG_ERROR("DLSS-NR Vulkan: the model's Vulkan surface is incomplete (probe {})", probe);
-            Fail("the model does not expose a complete Vulkan surface");
-            return false;
-        }
-
-        const auto applicationData = State::Instance().NVNGX_ApplicationDataPath;
-        lock.unlock();
-        const int result =
-            g_vkRuntime.Exports().init(snippet->wstring().c_str(), applicationData.c_str(),
-                      (void*) instance, (void*) physicalDevice, (void*) device, 0x0000015);
-        lock.lock();
-
-        if (result != 1)
-        {
-            LOG_ERROR("DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned {}", result);
-            Fail("the model would not initialise on this Vulkan device");
-            return false;
-        }
-
-        LOG_INFO("DLSS-NR Vulkan: the model initialised on this device");
-        return true;
-    }))
-        return;
+    if (!EnsureVkProviderDeviceLocked(instance,physicalDevice,device,lock)) return;
 
     VkNrFrameContract workloadFrame = request.contract;
     workloadFrame.route = request.route;
@@ -1487,6 +1697,9 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     key.passIndex = request.passIndex;
     key.tuning = requested;
     key.upFilter = key.downFilter = static_cast<uint32_t>(cfg.DlssNrScalingDownscaler.value_or_default());
+    if(request.route==VkNrRoute::Present)
+        CompleteVkPresentGenerationKey(key,colour->Resource.ImageViewInfo.Format,targetColour->Resource.ImageViewInfo.Format,
+            depth->Resource.ImageViewInfo.Format,motion->Resource.ImageViewInfo.Format,gameSaysHdr);
     auto& state = ActiveVk();
     if (!state.generations) state.generations = std::make_unique<VkNrGenerationOwner>(VulkanNrRecordings(),
         [](const auto& desired,VkNrUseId use,uint64_t budget) { return CreateVkResources(desired,use,budget); },
@@ -1500,7 +1713,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     if(state.lastGpuFrame&&!SameVkNrDiagnosticContext(*state.lastGpuFrame,key.frame)) {
         state.lastGpuTime.reset();state.lastGpuFrame.reset();
     }
-    state.recordingFrame=request;state.recordingFrame.contract=key.frame;
+    state.recordingFrame=selectedInput;state.recordingFrame.contract=key.frame;
     state.recordingFrame.color=colour;state.recordingFrame.depth=depth;state.recordingFrame.motion=motion;
     if(!SameVkNrDiagnosticContext(state.exposureContext,key.frame)){
         const auto n=++state.automaticContextChanges;
@@ -1518,10 +1731,13 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     state.automaticWhitePoint.Configure(key.frame);
     state.scan.Configure(key.frame,cfg.DlssNrScanAnchors.value_or_default(),cfg.DlssNrScanInverted.value_or_default(),cfg.DlssNrScanTrim.value_or_default());
     const auto scannedWhite=state.scan.CompletedWhitePoint(recordingOwner);
+    auto diagnostic=request.route==VkNrRoute::Present?VkGenerationLossTrace("present_chain_prepare"):std::nullopt;
     const auto generation = state.generations->Prepare(key,request.use,[&](VkNrUseId old) {
         const auto remaining=request.waitBudget?request.waitBudget->RemainingNs():0;if(!remaining)return;
         lock.unlock();WaitVkNrUse(old,remaining);lock.lock();
-    },preparationOnly,!preparationOnly);
+    },preparationOnly,!preparationOnly,diagnostic?&*diagnostic:nullptr);
+    if(diagnostic)TraceVkGenerationLoss(*state.generations,*diagnostic);
+    TraceVkGenerationRefusal(generation,key);
     state.workload.requestedGeneration = generation.generation;
     if (!state.generations->AppliedKey()) {
         state.workload.appliedGeneration = 0;
@@ -1530,7 +1746,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     const auto previous = state.generations->AppliedGeneration();
     if (generation.ready && state.generations->Commit(generation.generation)) {
         if (previous != generation.generation) {
-            state.reset = true; ++state.resetRevision; state.lastGpuTime.reset(); state.lastGpuFrame.reset();
+            state.resetState.Request(); state.lastGpuTime.reset(); state.lastGpuFrame.reset();
             LOG_INFO("Vulkan NR generation applied: route={} pass={} generation={} previous={} resume={} "
                      "work={}x{} retainedGenerations={} trackedPrivateBytes={} providerPrivateBytes=unknown",
                      static_cast<unsigned>(request.route),request.passIndex,generation.generation,previous,
@@ -1637,7 +1853,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
         if ((params != nullptr && params->Get(NVSDK_NGX_Parameter_Reset, &gameReset) == NVSDK_NGX_Result_Success &&
             gameReset != 0) || request.gameReset)
         {
-            ActiveVk().reset = true;
+            ++ActiveVk().diagnosticResetEpoch;ActiveVk().resetState.MarkPending();
 
             static unsigned long long resets = 0;
             ++resets;
@@ -1660,7 +1876,8 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     // bounding it in the menu would leave the picture wrong for a reason the menu no longer showed.
     // Their value stays in the config untouched, so switching back to manual restores it.
     const auto presentRecipe=SelectVkPresentColorRecipe(request.contract.representation.format,request.contract.representation.colorSpace);
-    float whitePoint = request.route==VkNrRoute::Present ? presentRecipe.whitePoint : cfg.DlssNrWhitePointScale.value_or_default();
+    const auto selectedPresentColor=presentRecipe.Operation();
+    float whitePoint = request.route==VkNrRoute::Present ? selectedPresentColor.modelWhitePoint : cfg.DlssNrWhitePointScale.value_or_default();
 
     const auto automaticWhitePoint=PassStateVk(request.route,0).automaticWhitePoint.Value();
     if(request.route!=VkNrRoute::Present)whitePoint=ResolveVkNrWhitePoint(cfg.DlssNrWhitePointSource.value_or_default(),whitePoint,
@@ -1680,7 +1897,7 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
         cfg.DlssNrWhitePointSource.value_or_default()==1&&!state.exposureHold.HasValue()&&automaticWhitePoint.has_value();
     if(derivedWhitePoint&&!state.reportedAutomaticWhitePoint) {
         state.reportedAutomaticWhitePoint=true;
-        state.reset=true;++state.resetRevision;
+        state.resetState.Request();
         LOG_INFO("DLSS-NR Vulkan normalization: origin=completed-scene-grid whitePoint={} gameExposureAvailable=false; derived normalization is not game exposure",whitePoint);
     }
     auto temporal=request.contract.temporal;
@@ -1688,9 +1905,32 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
         const auto held=state.resources->held.Select(key.frame);
         if(!held){state.reason="Hold generation no longer matches the route/raster/recipe";return;}
         colour=held->color;depth=held->depth;motion=held->motion;temporal=held->contract.temporal;
+        sourceRect=VkFrame::SourceRect(colour,temporal,beforeSr,inputFailure,held->postSrOutput);
+        if(!sourceRect||sourceRect->width!=width||sourceRect->height!=height){
+            state.reason="Held source rectangle no longer matches its private raster";return;
+        }
         if(state.resources->held.WhitePoint()>0)whitePoint=state.resources->held.WhitePoint();
         else state.resources->held.LockWhitePoint(whitePoint);
     }
+    VkNrSignalPayload signals;
+    signals.context={device,key.frame,state.generations->AppliedGeneration(),state.resetState.Capture(),0};
+    signals.context.resetEpoch=state.diagnosticResetEpoch;
+    signals.context.policyRevision=Connections::SignalPreferences().revision;
+    signals.use=request.use;signals.sourceEvaluation=request.contract.evaluation;
+    signals.time=GetTickCount64();signals.held=key.hold;
+    const auto signalStage=beforeSr?SignalReceipts::Stage::PreSr:
+        request.contract.placement==VkNrPlacement::AfterRR?SignalReceipts::Stage::PostRr:SignalReceipts::Stage::PostSr;
+    const auto signalDomain=linearHdr?SignalReceipts::Domain::LinearHdr:SignalReceipts::Domain::EncodedDisplay;
+    const auto fact=[&](NVSDK_NGX_Resource_VK* resource,VkNrRect rect,const char* reason){
+        SignalReceipts::Fact f;f.present=resource!=nullptr;f.admitted=f.present;
+        f.width=rect.width;f.height=rect.height;f.originX=rect.x;f.originY=rect.y;
+        f.format=resource?uint32_t(resource->Resource.ImageViewInfo.Format):0;
+        f.stage=signalStage;f.domain=signalDomain;f.reason=reason;return f;};
+    const auto publishSignals=[&] {
+        if(request.route!=VkNrRoute::Native||request.passIndex)return;
+        // Diagnostics never change a successful rendering result on allocation failure.
+        try {state.signalDiagnostics.Store(signals,VulkanNrRecordings());} catch(...) {}
+    };
     const auto encodingGeneration=state.generations->AppliedGeneration();
     if (state.reportedEncodingGeneration!=encodingGeneration)
     {
@@ -1709,15 +1949,16 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
                  state.exposureHold.HasValue()?std::to_string(state.exposureHold.Value()):std::string("unavailable"),whitePoint);
     }
 
+    const Neurotic::Context::ModelColorOperation modelColorOperation {
+        linearHdr ? 0u : 1u, whitePoint,
+        request.route==VkNrRoute::Present&&selectedPresentColor.signedOriginal ? 1u : 0u,
+        0u, 0.0f, cfg.DlssNrReversibleMode.value_or_default()};
     DlssNrConstants encode {};
     encode.Mode = DlssNrMode_Encode;
-    encode.SignedPresent = request.route==VkNrRoute::Present&&presentRecipe.signedOriginal?1u:0u;
+    Neurotic::Context::ApplyModelColor(modelColorOperation, encode);
     encode.Width = width;
     encode.Height = height;
-    if(beforeSr&&!key.privateDlaa){encode.SourceX=sourceRect->x;encode.SourceY=sourceRect->y;}
-    encode.WhitePoint = whitePoint;
-    encode.Passthrough = linearHdr ? 0u : 1u;
-    encode.ReversibleMode = cfg.DlssNrReversibleMode.value_or_default();
+    if(!key.privateDlaa){encode.SourceX=sourceRect->x;encode.SourceY=sourceRect->y;}
     encode.ApplyModel = cfg.DlssNrApplyModel.value_or_default() ? 1u : 0u;
     encode.TransferStrength = cfg.DlssNrTransferStrength.value_or_default();
     encode.ColourStrength = cfg.DlssNrColourStrength.value_or_default();
@@ -1734,6 +1975,11 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     const uint32_t timingSlot = timing ? timing->slots.front() : 0;
     if (timing) {
         ActiveVk().queryFrames[timingSlot]=key.frame;
+        ActiveVk().queryContexts[timingSlot]={device,key.frame,state.generations->AppliedGeneration(),
+            state.resetState.Capture(),uint32_t(cfg.DlssNrRoute.value_or_default())};
+        ActiveVk().queryContexts[timingSlot].resetEpoch=state.diagnosticResetEpoch;
+        ActiveVk().queryTimes[timingSlot]=GetTickCount64();
+        ActiveVk().queryClocks[timingSlot]=VkNrDiagnosticMilliseconds();
         ActiveVk().queryUses[timingSlot] = request.use; ActiveVk().queryPublished[timingSlot] = false;
         vkCmdResetQueryPool(cmdBuffer,ActiveVk().queryPool,timingSlot*5,5);
         vkCmdWriteTimestamp(cmdBuffer,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,ActiveVk().queryPool,timingSlot*5);
@@ -1759,6 +2005,9 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
         return;
     }
 
+    signals.facts[size_t(SignalReceipts::Signal::Color)]=fact(colour,{encode.SourceX,encode.SourceY,width,height},key.hold?
+        "Held color actually read by encode":"Color actually read by encode");
+    signals.recorded|=SignalReceipts::Bit(SignalReceipts::Signal::Color);publishSignals();
     if(timing)vkCmdWriteTimestamp(cmdBuffer,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,ActiveVk().queryPool,timingSlot*5+1);
 
     // The model's input: the full proxy, or a downsampled copy of it when the working scale is below
@@ -1852,6 +2101,11 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
                                     VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                     gridRequested?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:exposureLayout))
             {
+                if(!gridRequested) {
+                    signals.facts[size_t(SignalReceipts::Signal::Exposure)]=fact(exposure,{0,0,1,1},"Exposure texture read by metering dispatch; not a model binding");
+                    signals.facts[size_t(SignalReceipts::Signal::Exposure)].domain=SignalReceipts::Domain::Unknown;
+                    signals.recorded|=SignalReceipts::Bit(SignalReceipts::Signal::Exposure);publishSignals();
+                }
                 Transition(cmdBuffer, ActiveVk().resources->meter, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
                 VkBufferImageCopy region {};
@@ -1911,11 +2165,11 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     // Each model owns this block. Pointer/scalar readbacks gate the vendor call.
     auto* modelParams = ActiveVk().resources->capabilityParams;
     const VkFrame::Inputs frame { &modelInput->ngx, depth, motion, &ActiveVk().resources->output.ngx,
-        workWidth, workHeight, guideWidth, guideHeight, depthInverted, ActiveVk().reset,
+        workWidth, workHeight, guideWidth, guideHeight, depthInverted, ActiveVk().resetState.Pending(),
         temporal ? std::optional<VkNrTemporalMetadata>(
             ScaleVkNrTemporal(*temporal, {width,height}, {workWidth,workHeight})) : std::nullopt };
     int evaluated = 0;
-    const auto resetRevision = ActiveVk().resetRevision;
+    const auto resetRevision = ActiveVk().resetState.Capture();
     const auto evaluationDevice = ActiveVk().device;
     const auto evaluationFeature = ActiveVk().resources->feature;
     const auto evaluate = g_vkRuntime.Exports().evaluate;
@@ -1949,8 +2203,34 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
     }
 
     if(timing)vkCmdWriteTimestamp(cmdBuffer,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,ActiveVk().queryPool,timingSlot*5+3);
+    // These are the validated bindings after held substitution and model-space scaling.
+    const auto bindings=frame.Bindings();
+    const SignalReceipts::Signal names[]={SignalReceipts::Signal::Color,SignalReceipts::Signal::Depth,
+        SignalReceipts::Signal::Motion,SignalReceipts::Signal::Output};
+    for(size_t i=0;i<bindings.size();++i){const auto& b=bindings[i];
+        signals.facts[size_t(names[i])]=fact(b.resource,{b.x,b.y,b.width,b.height},key.hold?
+            "Actual model binding from held inputs":"Actual verified model binding");
+        signals.facts[size_t(names[i])].domain=(i==0||i==3)?
+            SignalReceipts::Domain::EncodedDisplay:SignalReceipts::Domain::Unknown;
+        signals.recorded|=SignalReceipts::Bit(names[i]);}
+    auto& mv=signals.facts[size_t(SignalReceipts::Signal::Motion)];mv.valuesKnown=true;
+    mv.x=frame.temporal?frame.temporal->motionScaleX:1.f;mv.y=frame.temporal?frame.temporal->motionScaleY:1.f;
+    auto& jitter=signals.facts[size_t(SignalReceipts::Signal::Jitter)];
+    jitter=fact(nullptr,{},"No temporal jitter binding supplied");jitter.domain=SignalReceipts::Domain::Unknown;
+    if(frame.temporal){jitter.present=jitter.admitted=jitter.valuesKnown=true;
+        jitter.x=frame.temporal->jitterX;jitter.y=frame.temporal->jitterY;
+        jitter.reason=key.hold?"Actual scaled held jitter":"Actual scaled model jitter";
+        signals.recorded|=SignalReceipts::Bit(SignalReceipts::Signal::Jitter);}
+    auto& evaluation=signals.facts[size_t(SignalReceipts::Signal::Evaluation)];
+    evaluation=fact(frame.output,{0,0,frame.width,frame.height},"Verified model evaluation recorded; GPU completion still required");
+    evaluation.domain=SignalReceipts::Domain::EncodedDisplay;
+    signals.recorded|=SignalReceipts::Bit(SignalReceipts::Signal::Evaluation);
+    signals.facts[size_t(SignalReceipts::Signal::Delivery)]=fact(frame.output,{0,0,width,height},"Final selected delivery has not completed");
+    signals.facts[size_t(SignalReceipts::Signal::PreExposure)].reason="Not a model binding; normalization use is not separately instrumented";
+    signals.facts[size_t(SignalReceipts::Signal::History)].reason="Model internal history is not externally observable";
+    publishSignals();
     ActiveVk().modelRecordedCurrent = true;
-    if (ActiveVk().resetRevision == resetRevision) ActiveVk().reset = false;
+    ActiveVk().resetState.Acknowledge(resetRevision);
 
     // -----------------------------------------------------------------------------------------
     // Resolve: proxy + the model's answer + the untouched copy -> the frame
@@ -1958,6 +2238,33 @@ static void EvaluateAfterUpscaleVkInternal(const VkFrameRequest& request, NVSDK_
 
     DlssNrConstants resolve = encode;
     resolve.Mode = DlssNrMode_Resolve;
+    resolve.FinalLuminanceGuard = beforeSr ? 0u : 1u;
+    // The exact image view supplied to the resolve below determines storage
+    // range. This does not admit formats or infer range from a saved route.
+    resolve.OutputIsUnorm = 0;
+    switch (targetColour->Resource.ImageViewInfo.Format)
+    {
+    case VK_FORMAT_R8G8B8_UNORM:
+    case VK_FORMAT_B8G8R8_UNORM:
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+    case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+    case VK_FORMAT_R16G16B16_UNORM:
+    case VK_FORMAT_R16G16B16A16_UNORM:
+    case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
+    case VK_FORMAT_B4G4R4A4_UNORM_PACK16:
+    case VK_FORMAT_R5G6B5_UNORM_PACK16:
+    case VK_FORMAT_B5G6R5_UNORM_PACK16:
+    case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
+    case VK_FORMAT_B5G5R5A1_UNORM_PACK16:
+    case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+        resolve.OutputIsUnorm = 1;
+        break;
+    default:
+        break; // Do not conflate float, SNORM, sRGB or integer image views.
+    }
 
     // Supersampling down-leg (Vulkan). Average the Nx model answer back to native with the chosen
     // filter so the resolve composites a native answer against the native proxy 1:1 -- not the single
@@ -2052,9 +2359,10 @@ static bool PrepareVkQueueTransitionLocked(VkNrRoute route,const VkNrQueueContex
     if(!changed)return true;
     for(uint32_t pass=0;pass<10;++pass) {
         auto& state=PassStateVk(route,pass);
+        state.signalDiagnostics.Clear();state.timing.Clear();
         state.resources=nullptr;ClearFinalSource(state);state.candidate.reset();state.performanceSource.reset();
         state.performanceUse={};state.performanceEvaluation={};state.performanceSerial=0;
-        state.preSrDelivered=false;state.nativeDeliveryAccepted=false;
+        state.preSrDelivered=false;state.nativeStatus.accepted=false;
     }
     PollVkNrCompletions();
     bool drained=true;
@@ -2081,8 +2389,8 @@ static bool PrepareVkQueueTransitionLocked(VkNrRoute route,const VkNrQueueContex
         state.queryUses.fill({});state.queryPublished.fill(true);state.queryFrames.fill({});
         state.lastGpuTime.reset();state.lastGpuFrame.reset();state.timedFrames=0;
         state.modelQueue=next.queue;state.modelQueueFamily=next.family;
-        state.admittedWorkload.reset();state.preSrDelivered=false;state.nativeDeliveryAccepted=false;
-        state.chain={};state.reset=true;++state.resetRevision;
+        state.admittedWorkload.reset();state.preSrDelivered=false;state.nativeStatus.accepted=false;
+        state.chain={};state.resetState.Request();
         // Keep all model/image generations. Prepare selects a distinct queue/family
         // key and retires old payloads through its existing vendor/lifetime owner.
     }
@@ -2101,7 +2409,11 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
     if(base.contract.temporal)base.gameReset=base.contract.temporal->reset;
     const bool before=base.contract.placement==VkNrPlacement::BeforeSR;
     if(params) {
-        params->Get(before?NVSDK_NGX_Parameter_Color:NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&base.color));
+        if(before) {
+            std::string reason;
+            if(!SelectVkNrPreSrColor(base,params,VulkanNrImageFacts(),VulkanNrRecordings(),
+                VkNrCompletionDeviceGeneration(base.device),true,reason))return {VkRecordStatus::NoWork,reason};
+        } else params->Get(NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&base.color));
         params->Get(NVSDK_NGX_Parameter_Depth,reinterpret_cast<void**>(&base.depth));
         params->Get(NVSDK_NGX_Parameter_MotionVectors,reinterpret_cast<void**>(&base.motion));
         params->Get(NVSDK_NGX_Parameter_ExposureTexture,reinterpret_cast<void**>(&base.exposure));
@@ -2111,11 +2423,13 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
         base.gameHdr=(flags&NVSDK_NGX_DLSS_Feature_Flags_IsHDR)!=0;
         base.depthInverted=(flags&NVSDK_NGX_DLSS_Feature_Flags_DepthInverted)!=0;
     }
+    if(const auto reason=VkNrAdaptedDlaaRefusal(before,base.qualifiedColor&&base.qualifiedColor->Adapted(),cfg.DlssNrPreDlaa.value_or_default()))
+        return {VkRecordStatus::NoWork,reason};
     VkFrame::Failure failure;
     if(!VkFrame::ValidateImage("Chain.Color",base.color,false,failure)||!base.depth||!base.motion)
         return {VkRecordStatus::NoWork,"Vulkan chain input resources unavailable"};
     const auto& color=base.color->Resource.ImageViewInfo;
-    const auto activeRect=VkFrame::SourceRect(base.color,base.contract.temporal,before,failure);
+    const auto activeRect=VkFrame::SourceRect(base.color,base.contract.temporal,before,failure,base.postSrOutput);
     if(!activeRect)return {VkRecordStatus::NoWork,failure.reason};
     base.contract.output={activeRect->width,activeRect->height};base.width=activeRect->width;base.height=activeRect->height;
     base.contract.route=base.route;
@@ -2164,7 +2478,7 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
             }
         }
         for(uint32_t pass=static_cast<uint32_t>(plan.passes.size());pass<10;++pass)
-            RetireVkPassGenerationsLocked(base.route,pass,lock);
+            RetireVkPassGenerationsLocked(base.route,pass,lock,"unused_pass");
         if(!root.pass)root.pass=std::make_unique<DlssNr_Vk>("Neural Rendering",base.device,base.physicalDevice,
             GetVulkanPresentRegistry().StorageWriteWithoutFormatEnabled(base.device));
         if(!root.pass->IsInit())return {VkRecordStatus::NoWork,"Vulkan chain composition unavailable"};
@@ -2181,6 +2495,8 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
         if(pass)settings.DlssNrHoldFrame=false;
         if(pass) {
             frame.contract.placement=VkNrPlacement::AfterSR;frame.colorLayout=VK_IMAGE_LAYOUT_GENERAL;
+            frame.postSrOutput.reset(); // The preceding composed image is a local carrier.
+            ClearVkNrColorInput(frame);
             frame.targetColor=base.targetColor?base.targetColor:base.color;
             frame.presentInput.reset();frame.effectiveResolutionMode.reset();
             std::lock_guard lock(g_vkMutex);
@@ -2191,10 +2507,10 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
             std::vector<VkNrHistoryIdentity> prefix;
             for(uint32_t previous=0;previous<pass;++previous) {
                 const auto& source=PassStateVk(base.route,previous);
-                prefix.push_back({source.generations?source.generations->AppliedGeneration():0,source.resetRevision});
+                prefix.push_back({source.generations?source.generations->AppliedGeneration():0,source.resetState.Capture()});
             }
             if(PassStateVk(base.route,0).passHistory.Observe(pass,prefix)) {
-                auto& child=PassStateVk(base.route,pass);child.reset=true;++child.resetRevision;
+                auto& child=PassStateVk(base.route,pass);child.resetState.Request();
             }
         }
         // Only the selected first SR invocation can ask for private DLAA.
@@ -2233,6 +2549,9 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
         const bool diagnostic=display.DebugView!=0;
         if(diagnostic){auto debugView=display.DebugView;auto debugScale=display.DebugScale;display=last.diagnosticConstants;
             display.DebugView=debugView;display.DebugScale=debugScale;display.CompareMode=0;}
+        // Apply after diagnostic constants replacement; all sampled private images remain local.
+        display.TargetX=before?0u:base.postSrOutput.value_or(VkNrRect{}).x;
+        display.TargetY=before?0u:base.postSrOutput.value_or(VkNrRect{}).y;
         Transition(base.commandBuffer,root.resources->keep,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         const bool deliverySkipped=((base.captureOnly&&!base.ownedPresentInputs)||base.finalColorOnly)&&!before;
         bool delivered=deliverySkipped||root.pass->Dispatch(base.commandBuffer,base.use,slot,display,base.width,base.height,
@@ -2289,21 +2608,62 @@ static VkRecordResult EvaluateVkChain(const VkFrameRequest& request,NVSDK_NGX_Pa
             capture.images.push_back(image("model",last.resources->output,0));
             RecordVulkanNrCapture(capture,base.commandBuffer,base.physicalDevice,base.device);
         }
+        if(base.route==VkNrRoute::Native) {
+            SignalReceipts::Fact actual{true,true,base.width,base.height,uint32_t(target->Resource.ImageViewInfo.Format),
+                before?SignalReceipts::Stage::PreSr:base.contract.placement==VkNrPlacement::AfterRR?
+                    SignalReceipts::Stage::PostRr:SignalReceipts::Stage::PostSr,
+                diagnostic?SignalReceipts::Domain::Unknown:root.diagnosticConstants.Passthrough?
+                    SignalReceipts::Domain::EncodedDisplay:SignalReceipts::Domain::LinearHdr,
+                "Final copy recorded; selected SR result and GPU completion still required"};
+            actual.originX=display.TargetX;actual.originY=display.TargetY;
+            root.signalDiagnostics.Delivery(base.use,base.contract.evaluation,
+                delivered&&!deliverySkipped&&!base.captureOnly&&!base.finalColorOnly,actual);
+        }
         if(delivered&&!before&&!base.captureOnly){++root.frames;root.preSrDelivered=false;}
         return delivered;
     };
     auto chain=RecordVkNrPassChain(base,plan,*reservation,callbacks);
     auto result=chain.recording;
+    if(base.route==VkNrRoute::Present&&result.modelRecorded)
+        result.modelLifetime=VkNrPresentModelLifetime{reinterpret_cast<uintptr_t>(base.device),
+            base.contract.deviceGeneration,base.contract.routeEpoch,base.contract.resumeGeneration,
+            base.contract.inputInterruptionEpoch};
     result.requestedPasses=chain.requested;result.completedPasses=chain.completed;
     result.outputVersion=chain.outputVersion;result.chainDeliverable=chain.deliverable;
-    if(before){std::lock_guard lock(g_vkMutex);auto& root=g_nativeVk;root.performanceSource.reset();root.performanceUse={};root.performanceEvaluation={};
-        if(chain.deliverable&&chain.completed==chain.requested){root.performanceSource=*base.color;root.performanceUse=base.use;root.performanceEvaluation=base.contract.evaluation;root.performanceSerial=VulkanNrRecordings().CommandSerial(base.commandBuffer);}}
+    if(before) {
+        result.preSrSourceCurrent=[base,params]() mutable {
+            std::string reason;
+            return SelectVkNrPreSrColor(base,params,VulkanNrImageFacts(),VulkanNrRecordings(),
+                VkNrCompletionDeviceGeneration(base.device),true,reason);
+        };
+        if(!result.preSrSourceCurrent()) {
+            // Commands already recorded remain owned; only delivery is withdrawn.
+            chain.deliverable=false;result.chainDeliverable=false;result.outputWriteRecorded=false;
+            result.status=result.modelRecorded?VkRecordStatus::Partial:VkRecordStatus::NoWork;
+            result.reason="Native original source changed before carrier publication";
+        }
+        std::lock_guard lock(g_vkMutex);auto& root=g_nativeVk;
+        root.performanceSource.reset();root.performanceOriginalSource.reset();root.performanceSourceCurrent={};
+        root.performanceRawSourceCurrent={};root.performanceParams=nullptr;root.performanceCaptureOnly=false;
+        root.performanceUse={};root.performanceEvaluation={};
+        if(chain.deliverable&&chain.completed==chain.requested) {
+            root.performanceSource=*base.color;
+            root.performanceOriginalSource=base.colorIngress->Original();
+            root.performanceRawSourceCurrent=result.preSrSourceCurrent;
+            root.performanceParams=params;root.performanceCaptureOnly=base.captureOnly;
+            root.performanceSourceCurrent=[color=base.qualifiedColor] {return color->StorageCurrent(VulkanNrImageFacts());};
+            root.performanceUse=base.use;root.performanceEvaluation=base.contract.evaluation;
+            root.performanceSerial=VulkanNrRecordings().CommandSerial(base.commandBuffer);
+        }
+    }
 
     {std::unique_lock lock(g_vkMutex);for(uint32_t pass=static_cast<uint32_t>(plan.passes.size());pass<10;++pass)
-        RetireVkPassGenerationsLocked(base.route,pass,lock);}
+        RetireVkPassGenerationsLocked(base.route,pass,lock,"unused_pass");}
     {
         std::lock_guard lock(g_vkMutex);ScopedVkSession active(base.route);auto& root=ActiveVk();root.chain=chain;
         root.modelRecordedCurrent=result.modelRecorded;root.outputWriteRecordedCurrent=result.outputWriteRecorded;
+        if(base.route==VkNrRoute::Native&&root.generations)
+            result.nativeRecording=VkNrNativeRecordingReceipt{base.contract,base.use,root.generations->AppliedGeneration()};
         if(!base.captureOnly&&!before&&chain.deliverable&&root.resources&&(base.contract.temporal||base.providerTemporal)&&cfg.DlssNrApplyModel.value_or_default()&&
            !cfg.DlssNrHoldFrame.value_or_default()&&!cfg.DlssNrDebugView.value_or_default()&&!cfg.DlssNrCompare.value_or_default()) {
             auto& last=PassStateVk(base.route,chain.completed-1);
@@ -2340,7 +2700,8 @@ struct SelectedNativeAttempt {
 VkRecordResult EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
                                       VkPhysicalDevice physicalDevice, VkDevice device,
                                       const NrConfigSnapshot<Config>* settings,
-                                      const VkNrTemporalMetadata* temporal, bool rayReconstruction,const VkNrEvaluationIdentity* evaluation)
+                                      const VkNrTemporalMetadata* temporal, bool rayReconstruction,const VkNrEvaluationIdentity* evaluation,
+                                      const VkFrame::PostSrOutputObservation* output)
 {
     FinalFallback::RenderScope renderAdmission;
     if (!renderAdmission.Admitted()) return {VkRecordStatus::NoWork,"Output handoff is active"};
@@ -2351,6 +2712,11 @@ VkRecordResult EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Param
     if (!cfg.GetDlssNrRuntimeSnapshot().enabled || cfg.DlssNrRoute.value_or_default() != 0)
         return {VkRecordStatus::NoWork,"Native Temporal is not selected"};
     SelectedNativeAttempt attempt;
+    if(!output)return {VkRecordStatus::NoWork,"Selected Native output geometry unavailable"};
+    NVSDK_NGX_Resource_VK* restoredOutput=nullptr;VkFrame::Failure outputFailure;
+    if(!params||params->Get(NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&restoredOutput))!=NVSDK_NGX_Result_Success||
+       !VkFrame::RestoredPostSrOutput(*output,restoredOutput,outputFailure))
+        return {VkRecordStatus::NoWork,"Selected Native output view or rectangle was not restored after SR"};
     auto& tracker=Vulkan_wDx12::cmdBufferStateTracker;vk_state::CommandBufferState saved;
     if(!tracker.CaptureNrState(cmdBuffer,saved)||!saved.Recording||saved.InRenderPass)return {VkRecordStatus::NoWork,"Native Temporal command bindings are unproved"};
     struct RestoreNrBindings {vk_state::CommandBufferStateTracker& tracker;VkCommandBuffer cb;vk_state::CommandBufferState& state;
@@ -2371,6 +2737,7 @@ VkRecordResult EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Param
     request.contract.placement = rayReconstruction ? VkNrPlacement::AfterRR : VkNrPlacement::AfterSR;
     if(evaluation)request.contract.evaluation=*evaluation;
     if (temporal) request.contract.temporal = *temporal;
+    request.postSrOutput=output->rect;
     auto result=g_nativeSession.Record(request, [&](const VkFrameRequest& frame, bool reset) {
         if (reset) RequestHistoryResetVk();
         return EvaluateVkChain(frame,params,cfg);
@@ -2400,22 +2767,24 @@ VkRecordResult EvaluateBeforeUpscaleVk(const VkFrameRequest& request,NVSDK_NGX_P
 #ifndef LOW_PRECISION_TRACKING
     const auto layout = saved.ImageLayouts.find(input->Resource.ImageViewInfo.Image);
     const auto range = saved.ImageLayoutRanges.find(input->Resource.ImageViewInfo.Image);
-    const char* rightsReason=nullptr;
-    const auto rights = VulkanNrImageFacts().Rights(request.device,*input,VK_IMAGE_USAGE_SAMPLED_BIT,false,&rightsReason);
-    if(saved.InRenderPass)return {VkRecordStatus::NoWork,"Native Performance requires recording outside a render pass"};
-    if(!rights){
-        // Preserve the refusal, but include the actual creation facts so a stale
-        // wrapper and an equivalent view range can be distinguished in a normal log.
-        static std::atomic<ULONGLONG> lastFacts{0};
-        const auto now=GetTickCount64();auto previous=lastFacts.load(std::memory_order_relaxed);
-        if(now-previous>=2000&&lastFacts.compare_exchange_strong(previous,now,std::memory_order_relaxed)){
-            const auto rect=request.contract.temporal?request.contract.temporal->color:VkNrRect{};
-            LOG_INFO("Vulkan Native input refused: reason=[{}] activeRect={},{},{}x{} facts=[{}]",
-                rightsReason?rightsReason:"source image rights are unproved",rect.x,rect.y,rect.width,rect.height,
-                VulkanNrImageFacts().Describe(request.device,*input));
+    static std::atomic<unsigned> preColorRefusalReceipts{0};
+    std::string colorReason,colorDiagnostic;
+    auto* diagnostic=preColorRefusalReceipts.load(std::memory_order_relaxed)<64?&colorDiagnostic:nullptr;
+    qualified.qualifiedColor=VkNrQualifiedColor::Qualify(VulkanNrImageFacts(),qualified.colorIngress,colorReason,diagnostic);
+    if(!qualified.qualifiedColor){
+        if(!colorDiagnostic.empty()){
+            auto used=preColorRefusalReceipts.load(std::memory_order_relaxed);
+            while(used<64&&!preColorRefusalReceipts.compare_exchange_weak(used,used+1,std::memory_order_relaxed)){}
+            if(used<64)try{
+                LOG_INFO("Vulkan Native Pre-SR image refusal: role=SceneColor firstFailure={} observed={}",colorReason,colorDiagnostic);
+            }catch(...){/* Diagnostics never change image admission. */}
         }
-        return {VkRecordStatus::NoWork,std::string("Native Performance: ")+(rightsReason?rightsReason:"source image rights are unproved")};
+        return {VkRecordStatus::NoWork,colorReason};
     }
+    if(!SelectVkNrPreSrColor(qualified,params,VulkanNrImageFacts(),VulkanNrRecordings(),
+        VkNrCompletionDeviceGeneration(request.device),false,colorReason))return {VkRecordStatus::NoWork,colorReason};
+    const auto rights=std::optional{qualified.qualifiedColor->Rights()};
+    if(saved.InRenderPass)return {VkRecordStatus::NoWork,"Native Performance requires recording outside a render pass"};
     const auto inputLayout = ResolveVkNrInputLayout(request.ngxSrInputContract,
         rights->view.range,
         layout==saved.ImageLayouts.end()?std::nullopt:std::optional{layout->second},
@@ -2425,6 +2794,8 @@ VkRecordResult EvaluateBeforeUpscaleVk(const VkFrameRequest& request,NVSDK_NGX_P
 #else
     return {VkRecordStatus::NoWork,"Native Performance requires full recording layout observations"};
 #endif
+    if(const auto reason=VkNrAdaptedDlaaRefusal(true,qualified.qualifiedColor->Adapted(),cfg.DlssNrPreDlaa.value_or_default()))
+        return {VkRecordStatus::NoWork,reason};
     struct RestoreBindings {
         vk_state::CommandBufferStateTracker& tracker;VkCommandBuffer command;vk_state::CommandBufferState& saved;
         ~RestoreBindings() noexcept {
@@ -2435,7 +2806,12 @@ VkRecordResult EvaluateBeforeUpscaleVk(const VkFrameRequest& request,NVSDK_NGX_P
         }
     } restore {tracker,request.commandBuffer,saved};
     std::lock_guard<std::mutex> recordLock(g_nativeRecordMutex);
-    auto result = g_nativeSession.Record(qualified,[&](const VkFrameRequest& frame,bool reset) {
+    auto result = g_nativeSession.Record(qualified,[&](const VkFrameRequest& frame,bool reset) -> VkRecordResult {
+        auto selected=frame;std::string reason;
+        if(!SelectVkNrPreSrColor(selected,params,VulkanNrImageFacts(),VulkanNrRecordings(),
+            VkNrCompletionDeviceGeneration(frame.device),true,reason))return {VkRecordStatus::NoWork,reason};
+        if(const auto refusal=VkNrAdaptedDlaaRefusal(true,selected.qualifiedColor->Adapted(),cfg.DlssNrPreDlaa.value_or_default()))
+            return {VkRecordStatus::NoWork,refusal};
         if (reset) RequestHistoryResetVk();
     // Extend the producer's availability to our compute read without transitioning
     // the borrowed game input. Original NGX queue ownership/semaphore waits apply.
@@ -2445,7 +2821,7 @@ VkRecordResult EvaluateBeforeUpscaleVk(const VkFrameRequest& request,NVSDK_NGX_P
     vkCmdPipelineBarrier(request.commandBuffer,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&inputRead,0,nullptr,0,nullptr);
 
-        return EvaluateVkChain(frame,params,cfg);
+        return EvaluateVkChain(selected,params,cfg);
     });
 #ifndef LOW_PRECISION_TRACKING
     result.inputLayoutBasis=inputLayout.basis;
@@ -2458,9 +2834,9 @@ void CompletePreSrVk(const VkRecordResult& recorded,bool bound,bool succeeded)
 {
     std::lock_guard<std::mutex> lock(g_vkMutex);
     auto& state = g_nativeVk;
-    if (!bound) { state.preSrDelivered = false; state.reset=true; ++state.resetRevision; return; }
+    if (!bound) { state.preSrDelivered = false; state.resetState.Request(); return; }
     if (!succeeded) {
-        state.preSrDelivered = false; state.reset = true; ++state.resetRevision;
+        state.preSrDelivered = false; state.resetState.Request();
         auto* failed = state.generations ? static_cast<VkResources*>(state.generations->Payload(recorded.preSrGeneration)) : nullptr;
         if (failed) { failed->nrSeed.Reset(); failed->srReset = true; }
         state.reason = "Native Performance SR call failed; private history must be seeded again";
@@ -2470,6 +2846,143 @@ void CompletePreSrVk(const VkRecordResult& recorded,bool bound,bool succeeded)
         SameVkNrPreSrRaster(state.generations->AppliedKey()->frame,recorded.preSrContract) && state.resources) {
         state.resources->srReset = false; state.preSrDelivered = true; ++state.frames;
     }
+}
+
+void PollPresentInitializationVk()
+{
+    std::lock_guard recording(g_nativeRecordMutex);
+    std::unique_lock lock(g_vkMutex);
+    PollVkNrCompletions();
+    for(uint32_t pass=0;pass<10;++pass) {
+        ScopedVkSession active(VkNrRoute::Present,pass);
+        auto& state=ActiveVk();
+        struct Control { VkState& state;std::unique_lock<std::mutex>* prior;
+            ~Control(){state.controlLock=prior;} } control{state,state.controlLock};
+        state.controlLock=&lock;
+        if(state.generations) {
+            state.resources=nullptr;
+            auto diagnostic=VkGenerationLossTrace("poll_present_initialization");
+            state.generations->RetireCompleted(VulkanNrRecordings(),diagnostic?&*diagnostic:nullptr);
+            if(diagnostic)TraceVkGenerationLoss(*state.generations,*diagnostic);
+            state.resources=static_cast<VkResources*>(state.generations->Payload(state.generations->AppliedGeneration()));
+        }
+    }
+}
+
+VkPresentInitializationStep PreparePresentModelsVk(const VkPresentInitializationRequest& request,
+    VkCommandBuffer command,VkNrUseId use)
+{
+    VkPresentInitializationStep result;
+    const auto refuse=[&](const char* reason) {result.reason=reason;return result;};
+    FinalFallback::RenderScope admission;
+    if(!admission.Admitted()||!request.settings||!request.waitBudget)
+        return refuse("Vulkan initialization admission unavailable");
+    const auto& cfg=*request.settings;
+    const auto runtime=cfg.GetDlssNrRuntimeSnapshot();
+    const auto route=cfg.DlssNrRoute.value_or_default();
+    if(!runtime.enabled||(route!=1&&route!=2)||!VkPresentInitializationEligible(
+        cfg.DlssNrVulkanPresentSameFrameInit.value_or_default(),request.frame.route,request.frame.placement,
+        PresentResolution::Selected(cfg).mode,request.input.resolution.mode,cfg.DlssNrHoldFrame.value_or_default(),
+        false,cfg.IsPrivateDiagnostic()))return refuse("Vulkan same-frame initialization is not eligible");
+    if(!command||!use||!request.device||!request.physicalDevice||!request.instance||
+        request.colorFormat!=VK_FORMAT_R16G16B16A16_SFLOAT||request.targetFormat!=VK_FORMAT_R16G16B16A16_SFLOAT||
+        request.depthFormat==VK_FORMAT_UNDEFINED||request.motionFormat==VK_FORMAT_UNDEFINED)
+        return refuse("Vulkan initialization metadata is incomplete");
+    std::lock_guard recording(g_nativeRecordMutex);
+    std::unique_lock lock(g_vkMutex);
+    ScopedVkSession rootScope(VkNrRoute::Present);
+    if(!PrepareVkPassDeviceLocked(request.device))return refuse("Vulkan initialization device is unavailable");
+    const auto queue=VkNrRecordingQueueContext(request.device,VulkanNrRecordings().UseFamily(use),request.frame.queue);
+    if(!queue||queue->queue!=request.frame.queue||queue->family!=request.frame.queueFamily||
+        VulkanNrRecordings().UseDevice(use)!=request.device||!VulkanNrRecordings().UseOnRecording(use,command)||
+        request.frame.deviceGeneration!=VkNrCompletionDeviceGeneration(request.device))
+        return refuse("Vulkan initialization queue/use identity is unproved");
+    auto& root=ActiveVk();root.instance=request.instance;root.physicalDevice=request.physicalDevice;
+    if(root.failed)return refuse(root.reason);
+    if(!EnsureVkProviderDeviceLocked(request.instance,request.physicalDevice,request.device,lock))
+        return refuse("Vulkan initialization provider unavailable");
+    auto frame=request.frame;
+    frame.routeEpoch=g_vkRuntime.IsActive(VkNrRoute::Present)?g_vkRuntime.Epoch():g_vkRuntime.Epoch()+1;
+    frame.resumeGeneration=runtime.resumeGeneration;
+    frame.inputInterruptionEpoch=FinalFallback::CurrentInputEpoch();
+    frame.settingsRevision=cfg.ObservationRevision().value_or(0);
+    if(frame.temporal)frame.guideGeneration=frame.temporal->featureGeneration;
+    if(!PrepareVkRouteTransitionLocked(request.device,VkNrRoute::Present,lock,frame.routeEpoch)||
+        !PrepareVkQueueTransitionLocked(VkNrRoute::Present,*queue)) {
+        result.status=VkPresentInitializationStatus::Pending;
+        return refuse("Vulkan initialization awaits previous route/queue owners");
+    }
+    const auto work=ResolveVkNrPresentWorkload(request.input,frame,request.resolutionMetadata?request.resolutionMetadata:frame.temporal,
+        root.admittedWorkload,request.observedRenderSize);
+    if(work.reason||!work.width||!work.height)return refuse(work.reason?work.reason:"Vulkan initialization work size unavailable");
+    frame.work={work.width,work.height};
+    if(!ValidateVkNrFrameContract(frame))return refuse("Vulkan initialization frame contract invalid");
+    const auto plan=BuildVkNrPassPlan(cfg,frame);
+    if(plan.passes.empty()||plan.passes.size()>10)return refuse("Vulkan initialization pass plan unavailable");
+    result.requestedPasses=static_cast<uint32_t>(plan.passes.size());
+    if(root.preparationPlan!=plan.passes) {
+        root.preparationPlan=plan.passes;
+        for(uint32_t pass=0;pass<10;++pass)if(auto& owner=PassStateVk(VkNrRoute::Present,pass).generations;owner)
+            owner->RetryPreparation();
+    }
+    for(uint32_t pass=result.requestedPasses;pass<10;++pass)RetireVkPassGenerationsLocked(VkNrRoute::Present,pass,lock,"initializer_unused_pass");
+    const auto lifetime=[&] {
+        if(g_vkRuntime.IsActive(VkNrRoute::Present))result.modelLifetime=VkNrPresentModelLifetime{
+            reinterpret_cast<uintptr_t>(request.device),frame.deviceGeneration,g_vkRuntime.Epoch(),
+            frame.resumeGeneration,frame.inputInterruptionEpoch};
+    };
+    for(uint32_t pass=0;pass<result.requestedPasses;++pass) {
+        if(!request.waitBudget->RemainingNs()) {
+            result.status=VkPresentInitializationStatus::Pending;
+            lifetime();return refuse("Vulkan initialization deadline exhausted before creation");
+        }
+        ScopedVkSession active(VkNrRoute::Present,pass);auto& state=ActiveVk();
+        if(!PrepareVkPassDeviceLocked(request.device))return refuse("Vulkan initialization pass device unavailable");
+        state.instance=request.instance;state.physicalDevice=request.physicalDevice;
+        state.modelQueue=queue->queue;state.modelQueueFamily=queue->family;
+        if(state.failed)return refuse(state.reason);
+        struct Control {VkState& state;std::unique_lock<std::mutex>* prior;VkCommandBuffer command;
+            ~Control(){state.controlLock=prior;state.recordingCommand=command;}}
+            control{state,state.controlLock,state.recordingCommand};
+        state.controlLock=&lock;state.recordingCommand=command;state.modelRecordedCurrent=false;
+        auto key=plan.passes[pass];
+        CompleteVkPresentGenerationKey(key,request.colorFormat,request.targetFormat,request.depthFormat,request.motionFormat,request.gameHdr);
+        if(!state.generations)state.generations=std::make_unique<VkNrGenerationOwner>(VulkanNrRecordings(),
+            [](const auto& desired,VkNrUseId id,uint64_t budget){return CreateVkResources(desired,id,budget);},ReleaseVkResources);
+        const auto others=GenerationBytesVk()-state.generations->PrivateBytes();
+        if(others>request.privateAllocationBudget)return refuse("Vulkan initialization private allocation budget exhausted");
+        state.generations->SetPrivateBudget(request.privateAllocationBudget-others);
+        const auto previous=state.generations->AppliedGeneration();
+        state.resources=nullptr;
+        auto diagnostic=VkGenerationLossTrace("prepare_present_models");
+        const auto generation=state.generations->Prepare(key,use,[&](VkNrUseId old) {
+            const auto remaining=request.waitBudget->RemainingNs();if(!remaining)return;
+            lock.unlock();WaitVkNrUse(old,remaining);lock.lock();
+        },true,false,diagnostic?&*diagnostic:nullptr);
+        if(diagnostic)TraceVkGenerationLoss(*state.generations,*diagnostic);
+        TraceVkGenerationRefusal(generation,key);
+        result.recorded=state.modelRecordedCurrent;
+        if(result.recorded) {g_vkRuntime.Activate(VkNrRoute::Present);g_presentSession.RequestReset();}
+        lifetime();
+        if(!generation.ready||!state.generations->Commit(generation.generation)) {
+            state.generationReason=generation.reason;state.reason=state.generationReason.c_str();
+            result.status=generation.pending?VkPresentInitializationStatus::Pending:VkPresentInitializationStatus::Refused;
+            result.reason=generation.reason;return result;
+        }
+        state.resources=static_cast<VkResources*>(state.generations->Payload(generation.generation));
+        if(previous!=generation.generation) {
+            state.resetState.Request();state.lastGpuTime.reset();state.lastGpuFrame.reset();
+        }
+        state.resumeGeneration=frame.resumeGeneration;state.inputInterruptionEpoch=frame.inputInterruptionEpoch;
+        state.workload.requestedGeneration=state.workload.appliedGeneration=generation.generation;
+        state.workload.requestedOutput=state.workload.appliedOutput=key.frame.output;
+        state.workload.requestedWork=state.workload.appliedWork=key.frame.work;
+        state.workload.pending=false;
+        if(result.recorded) {result.status=VkPresentInitializationStatus::Recorded;return result;}
+    }
+    lifetime();
+    result.status=VkPresentInitializationStatus::Ready;
+    return result;
 }
 
 VkRecordResult EvaluatePresentImageVk(const VkFrameRequest& request)
@@ -2492,8 +3005,7 @@ VkRecordResult EvaluatePresentImageVk(const VkFrameRequest& request)
         if (reset)
         {
             std::lock_guard<std::mutex> lock(g_vkMutex);
-            g_presentVk.reset = true;
-            ++g_presentVk.resetRevision;
+            g_presentVk.resetState.Request();
         }
         return EvaluateVkChain(frame,nullptr,*settings);
     });
@@ -2504,9 +3016,25 @@ void AbandonPresentRecordingVk(bool currentCounted)
     std::lock_guard<std::mutex> recordLock(g_nativeRecordMutex);
     std::lock_guard<std::mutex> lock(g_vkMutex);
     g_presentSession.AbandonLatestRecording(currentCounted);
-    g_presentVk.reset = true;
-    ++g_presentVk.resetRevision;
+    g_presentVk.resetState.Request();
     g_presentVk.reason = "Present recording discarded; waiting for a safe model generation";
+}
+
+bool BeginAbandonPresentRecordingVk(VkNrUseId use,const VkNrRecordingOwner::UseRecordingSnapshot& beforeReset)
+{
+    std::lock_guard<std::mutex> recordLock(g_nativeRecordMutex);
+    std::lock_guard<std::mutex> lock(g_vkMutex);
+    return g_presentSession.BeginAbandonRecording(use,beforeReset);
+}
+
+bool AbandonPresentRecordingVk(VkNrUseId use,const VkNrRecordingOwner::UseRecordingSnapshot& beforeReset)
+{
+    std::lock_guard<std::mutex> recordLock(g_nativeRecordMutex);
+    std::lock_guard<std::mutex> lock(g_vkMutex);
+    if(!g_presentSession.AbandonRecording(use,beforeReset))return false;
+    g_presentVk.resetState.Request();
+    g_presentVk.reason="Present recording discarded; waiting for a safe model generation";
+    return true;
 }
 
 void MarkPresentRuntimeUncertainVk(const char* reason)
@@ -2514,17 +3042,21 @@ void MarkPresentRuntimeUncertainVk(const char* reason)
     std::lock_guard<std::mutex> recordLock(g_nativeRecordMutex);
     std::lock_guard<std::mutex> lock(g_vkMutex);
     g_presentSession.RequestReset();
-    g_presentVk.reset = true;
+    ++g_presentVk.diagnosticResetEpoch;g_presentVk.resetState.MarkPending();
     g_presentVk.failed = true;
     g_presentVk.reason = reason != nullptr ? reason : "Present GPU or presentation state uncertain";
 }
 
-static void ShutdownVkLocked(bool deviceAlive)
+static void ShutdownVkLocked(bool deviceAlive,std::optional<uint64_t> sourceRetirementGeneration)
 {
+    ActiveVk().signalDiagnostics.Clear();ActiveVk().timing.Clear();
     if(ActiveVk().device==VK_NULL_HANDLE)return;
-    ActiveVk().nativeInputs={};ActiveVk().nativeRender={};ActiveVk().nativeOutput={};
-    ActiveVk().observedRr=false;ActiveVk().nativeObservedSettings.reset();
-    ActiveVk().nativeWaitingReason.clear();ActiveVk().nativeDeliveryAccepted=false;
+    // Device destruction may finish after a newer source publishes. This
+    // cutoff fences CPU diagnostics only; resource teardown always continues.
+    if(!sourceRetirementGeneration||!ActiveVk().nativeStatus.observation||
+       (ActiveVk().nativeStatus.observation->device==ActiveVk().device&&
+        ActiveVk().nativeStatus.observation->frame.evaluation.featureGeneration<=*sourceRetirementGeneration))
+        ActiveVk().nativeStatus={};
     ActiveVk().lastGpuFrame.reset();
     ClearFinalSource(ActiveVk());
     VulkanNrFgContributions().RevokeNewContributions(g_vkRuntime.Epoch()+1);
@@ -2569,7 +3101,7 @@ static void ShutdownVkLocked(bool deviceAlive)
         ActiveVk().lastGpuTime.reset();
         if (&ActiveVk() == &g_nativeVk)
             g_vkRuntime.ResetDevice();
-        ActiveVk().reset = true;
+        ++ActiveVk().diagnosticResetEpoch;ActiveVk().resetState.MarkPending();
         ActiveVk().failed = false;
         ActiveVk().reason = "";
         return;
@@ -2595,7 +3127,10 @@ static void ShutdownVkLocked(bool deviceAlive)
     }
     if(&ActiveVk()==&g_nativeVk&&g_finalColorCarriers){if(!g_finalColorCarriers->DrainReleased()){g_vkShutdownFailed=true;return;}g_finalColorCarriers.reset();}
     if(&ActiveVk()==&g_nativeVk&&g_performancePairs){if(!g_performancePairs->DrainReleased()){g_vkShutdownFailed=true;return;}g_performancePairs.reset();}
-    if (ActiveVk().generations && !ActiveVk().generations->DrainReleased()) {
+    auto diagnostic=VkGenerationLossTrace("shutdown_drain");
+    const bool generationsDrained=!ActiveVk().generations||ActiveVk().generations->DrainReleased(diagnostic?&*diagnostic:nullptr);
+    if(diagnostic&&ActiveVk().generations)TraceVkGenerationLoss(*ActiveVk().generations,*diagnostic);
+    if (!generationsDrained) {
         g_vkShutdownFailed = true;
         LOG_WARN("VK-NR shutdown retains {} generations ({} tracked private bytes); recording references or vendor release unresolved; opaque vendor bytes unknown",
                  ActiveVk().generations->Count(),ActiveVk().generations->PrivateBytes());
@@ -2641,13 +3176,13 @@ static void ShutdownVkLocked(bool deviceAlive)
     ActiveVk().physicalDevice = VK_NULL_HANDLE;
     if (&ActiveVk() == &g_nativeVk)
         g_vkRuntime.ResetDevice();
-    ActiveVk().reset = true;
+    ++ActiveVk().diagnosticResetEpoch;ActiveVk().resetState.MarkPending();
     ActiveVk().failed = false;
     ActiveVk().reason = "";
     ActiveVk().frames = 0;
 }
 
-static void ShutdownVkSessionsLocked(bool deviceAlive,VkDevice device,std::unique_lock<std::mutex>& lock)
+static void ShutdownVkSessionsLocked(bool deviceAlive,VkDevice device,std::unique_lock<std::mutex>& lock,std::optional<uint64_t> sourceRetirementGeneration=std::nullopt)
 {
     g_vkCleanupActive=true;
     // Present can initialize the shared provider before Native has ever rendered.
@@ -2657,7 +3192,7 @@ static void ShutdownVkSessionsLocked(bool deviceAlive,VkDevice device,std::uniqu
     for(auto route:{VkNrRoute::Present,VkNrRoute::Native})for(uint32_t pass=9;pass>0;--pass) {
         if(device&&PassStateVk(route,pass).device!=device)continue;
         ScopedVkSession child(route,pass);ActiveVk().controlLock=&lock;
-        ShutdownVkLocked(deviceAlive);ActiveVk().controlLock=nullptr;ActiveVk().borrowedPass=nullptr;
+        ShutdownVkLocked(deviceAlive,sourceRetirementGeneration);ActiveVk().controlLock=nullptr;ActiveVk().borrowedPass=nullptr;
     }
     for(auto route:{VkNrRoute::Present,VkNrRoute::Native}) {
         if(device&&PassStateVk(route,0).device!=device)continue;
@@ -2669,7 +3204,7 @@ static void ShutdownVkSessionsLocked(bool deviceAlive,VkDevice device,std::uniqu
         }
         if(dependent){g_vkShutdownFailed=true;continue;}
         ScopedVkSession session(route);ActiveVk().controlLock=&lock;
-        ShutdownVkLocked(deviceAlive);ActiveVk().controlLock=nullptr;
+        ShutdownVkLocked(deviceAlive,sourceRetirementGeneration);ActiveVk().controlLock=nullptr;
     }
     bool retained=false;
     for(auto route:{VkNrRoute::Present,VkNrRoute::Native})for(uint32_t pass=0;pass<10;++pass)
@@ -2740,11 +3275,11 @@ void RetireInactiveVk(VkDevice device,bool enabled,uint32_t selectedRoute)
         auto& root=PassStateVk(route,0);
         if(root.device!=device)continue;
         ClearFinalSource(root);root.candidate.reset();root.performanceSource.reset();root.performanceUse={};
-        root.nativeDeliveryAccepted=false;root.preSrDelivered=false;
+        root.nativeStatus.accepted=false;root.preSrDelivered=false;
         for(uint32_t pass=0;pass<10;++pass) {
             auto& state=PassStateVk(route,pass);
             if(state.device!=device)continue;
-            RetireVkPassGenerationsLocked(route,pass,lock);
+            RetireVkPassGenerationsLocked(route,pass,lock,"inactive_or_disabled_route");
             state.workload.appliedGeneration=0;state.workload.appliedOutput={};state.workload.appliedWork={};
             state.lastGpuTime.reset();state.lastGpuFrame.reset();
         }
@@ -2763,17 +3298,25 @@ void RetireInactiveVk(VkDevice device,bool enabled,uint32_t selectedRoute)
     if(!enabled&&g_vkRuntime.Device()==device&&g_finalColorCarriers)g_finalColorCarriers->DrainReleased();
 }
 
-void DeviceDestroyedVk(VkDevice device)
+void DeviceDestroyedVk(VkDevice device,uint64_t sourceRetirementGeneration)
 {
     GetVulkanPresentExecutor().DeviceDestroyed(device);
     std::lock_guard recordLock(g_nativeRecordMutex);
     std::unique_lock lock(g_vkMutex);
+    // The source registry was revoked before actual destruction. Preserve a
+    // replacement registered at the same address while that call returned.
+    if(g_nativeRawVk.observation&&
+       g_nativeRawVk.observation->frame.evaluation.featureGeneration<=sourceRetirementGeneration)
+        g_nativeRawVk.InvalidateDevice(device);
+    if(g_nativeVk.nativeStatus.observation&&g_nativeVk.nativeStatus.observation->device==device&&
+       g_nativeVk.nativeStatus.observation->frame.evaluation.featureGeneration<=sourceRetirementGeneration)
+        g_nativeVk.nativeStatus={};
     bool matches=false;
     for(auto route:{VkNrRoute::Present,VkNrRoute::Native})for(uint32_t pass=0;pass<10;++pass)
         matches|=PassStateVk(route,pass).device==device;
     if(!matches)return;
     g_vkSessionClosed=true;
-    ShutdownVkSessionsLocked(false,device,lock);
+    ShutdownVkSessionsLocked(false,device,lock,sourceRetirementGeneration);
 }
 
 void NotifyDeviceInitVk()

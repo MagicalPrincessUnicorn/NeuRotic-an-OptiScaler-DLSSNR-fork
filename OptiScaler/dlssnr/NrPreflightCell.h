@@ -1,3 +1,4 @@
+#include <menu/ItemHelp.h>
 #pragma once
 
 #include <imgui/imgui.h>
@@ -22,7 +23,7 @@ inline void Draw(std::string_view value)
     draw->PushClipRect(pos, {pos.x + size.x, pos.y + size.y}, true);
     draw->AddText(pos, ImGui::GetColorU32(ImGuiCol_Text), visible.c_str());
     draw->PopClipRect();
-    if (clipped && ImGui::IsItemHovered())
+    if (clipped && Neurotic::ItemHelpHovered())
     {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);

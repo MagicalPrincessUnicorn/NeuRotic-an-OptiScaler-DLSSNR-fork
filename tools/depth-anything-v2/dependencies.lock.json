@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "official_source": {
+    "url": "https://github.com/DepthAnything/Depth-Anything-V2.git",
+    "commit": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf",
+    "license": "Apache-2.0; retain inherited file notices"
+  },
+  "reference_only_source": {
+    "url": "https://github.com/spacewalk01/depth-anything-tensorrt.git",
+    "commit": "a5715a72b4ea3320795499a9e0740ff6fe16a180",
+    "license": "MIT; not a blanket license for inherited model source or weights"
+  },
+  "checkpoint": {
+    "model": "Depth Anything V2 Small relative",
+    "filename": "depth_anything_v2_vits.pth",
+    "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Small/resolve/05bbaec5306c04f1fa00a8c376c7dcf4153e7fe8/depth_anything_v2_vits.pth",
+    "revision": "05bbaec5306c04f1fa00a8c376c7dcf4153e7fe8",
+    "sha256": "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378",
+    "license": "Apache-2.0",
+    "bundled_in_this_packet": false,
+    "max_download_bytes": 125829120
+  },
+  "runtime_proposed_baseline": {
+    "tensorrt": "10.13.3",
+    "cuda": "12.9 Update 1",
+    "platform": "Windows x64",
+    "status": "qualification target; not installed or tested here",
+    "end_user_python_required": false
+  },
+  "model_contract": {
+    "encoder": "vits",
+    "features": 64,
+    "out_channels": [
+      48,
+      96,
+      192,
+      384
+    ],
+    "input": "image",
+    "input_type": "float32",
+    "output": "relative_depth",
+    "output_type": "float32",
+    "layout": "NCHW",
+    "batch": 1,
+    "normalization_mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "normalization_std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "profiles": [
+      {
+        "id": "square_reference",
+        "width": 518,
+        "height": 518
+      },
+      {
+        "id": "widescreen_fast",
+        "width": 518,
+        "height": 294
+      },
+      {
+        "id": "widescreen_quality",
+        "width": 924,
+        "height": 518
+      }
+    ]
+  }
+}

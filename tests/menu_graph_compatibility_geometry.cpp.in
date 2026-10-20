@@ -1,0 +1,128 @@
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
+#include "dlssnr/NrStatusPanel.h"
+#include "mfg/MfgSetup.h"
+#include "mfg/ExperimentalMfgRuntime.h"
+#include <array>
+#include <optional>
+#include <vector>
+#include <string>
+#include <cmath>
+#include <cstdio>
+#include <cfloat>
+
+static int failures=0, checks=0;
+static void Check(bool value,const char* message) { ++checks;if(!value){++failures;std::printf("FAIL: %s\n",message);} }
+static ImVec4 toneMapColor(ImVec4 color) { return color; }
+template<class... A> std::string StrFmt(const char* format,A... args) { return DlssNr::StatusPanel::Format(format,args...); }
+constexpr int plotWidth=8;
+template<class T,int N> struct RingBuffer { float At(int index) const { return float(index+1); } };
+RingBuffer<float,plotWidth> gFrameTimes,gUpscalerTimes;
+struct State { bool timing=true;std::array<float,1> upscaleTimes{1.25f}; };
+static bool HasUpscalerGpuTiming(const State& state) { return state.timing; }
+struct Feature { bool frozen=false;bool IsFrozen() const { return frozen; } };
+struct RenderMenuContext { State state;Feature* currentFeature;float frameTime=16.67f,frameRate=60; };
+struct MenuCommon { static inline bool _showMainMenuGraphs=true;static void RenderMainMenuGraphs(RenderMenuContext&); };
+struct Plot { ImRect bounds;int samples;std::string label;ImGuiID id; };
+static std::vector<Plot> plots;
+static std::vector<std::string> headers;
+static void MeasuredGraphLine(const char* id,std::string_view text,const ImVec4& color) {
+    DlssNr::StatusPanel::Line(id,text,color);headers.emplace_back(text);
+}
+template<class... A> void MeasuredGraphLinef(const char* id,const ImVec4& color,const char* format,A... args) {
+    MeasuredGraphLine(id,DlssNr::StatusPanel::Format(format,args...),color);
+}
+static void MeasuredPlotLines(const char* label,float(*getter)(void*,int),void* data,int count,int offset=0,
+    const char* overlay=nullptr,float lo=FLT_MAX,float hi=FLT_MAX,ImVec2 size={0,0}) {
+    ImGui::PlotLines(label,getter,data,count,offset,overlay,lo,hi,size);
+    plots.push_back({{ImGui::GetItemRectMin(),ImGui::GetItemRectMax()},count,label,GImGui->LastItemData.ID});
+}
+@@GRAPHS@@
+struct Row { std::string text;float height; };
+static std::vector<Row> rows;
+static void MeasuredLine(const char* id,std::string_view text,const ImVec4& color) {
+    DlssNr::StatusPanel::Line(id,text,color);rows.push_back({std::string(text),ImGui::GetItemRectSize().y});
+}
+template<class... A> void MeasuredLinef(const char* id,const ImVec4& color,const char* format,A... args) {
+    MeasuredLine(id,DlssNr::StatusPanel::Format(format,args...),color);
+}
+namespace StreamlineHooks { static std::optional<unsigned> mfgRequestReceipt() { return 2; } }
+namespace Neurotic::Mfg { static std::optional<unsigned> AcceptedMfgMultiplier(std::optional<unsigned> value) { return value; } }
+namespace EM=Neurotic::Mfg::Experimental;
+static bool nativeRecoveryRequired=false,nativeSelected=false,nativeRoutePending=false,nativeEnabled=false,rtx30=false,rtx20=false;
+static Neurotic::Mfg::MfgSetupStatus nativeSetup=Neurotic::Mfg::MfgSetupStatus::Off;
+static Neurotic::Mfg::MfgRuntimeSnapshot nativePublication;
+static struct { bool blocked=false; } nativeRefusal;
+static EM::Snapshot experimental;
+static void RenderStatuses() {
+@@STATUSES@@
+}
+int main() {
+    ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=io.LogFilename=nullptr;
+    io.DisplaySize={2000,1500};io.DeltaTime=1.f/60;io.BackendFlags|=ImGuiBackendFlags_RendererHasTextures;io.Fonts->AddFontDefault();
+    Feature feature;RenderMenuContext ctx;ctx.currentFeature=&feature;
+    ImGuiID frameGraphId=0,upscalerGraphId=0;
+    for(float width:{500.f,801.f,1200.f})for(float scale:{0.8f,1.f,1.5f}) {
+        for(int state=0;state<4;++state) {
+            ctx.state.timing=state==0;feature.frozen=state==2;ctx.currentFeature=state==3?nullptr:&feature;
+            float contentWidth=0;
+            for(int pass=0;pass<3;++pass) {
+                plots.clear();headers.clear();ImGui::NewFrame();ImGui::PushFont(nullptr,16.f*scale);
+                ImGui::SetNextWindowPos({0,0});ImGui::SetNextWindowSize({width,600});ImGui::Begin("Graph geometry",nullptr,ImGuiWindowFlags_NoSavedSettings);
+                contentWidth=ImGui::GetContentRegionAvail().x;MenuCommon::RenderMainMenuGraphs(ctx);
+                ImGui::End();ImGui::PopFont();ImGui::Render();
+            }
+            Check(plots.size()==2,"both graph frames exist in observed, unavailable, frozen and absent-feature states");
+            Check(headers.size()==2,"both readouts occupy their own header cells outside the plot frames");
+            if(headers.size()==2) {
+                Check(headers[0].find("16.67")!=std::string::npos && headers[0].find("60.0")!=std::string::npos,"frame time and frame rate readouts retain their observed values");
+                Check(state==0?headers[1].find("1.25")!=std::string::npos:
+                    state==1?headers[1].find("unavailable")!=std::string::npos:headers[1].find("inactive")!=std::string::npos,
+                    "upscaler readout distinguishes measurement, missing GPU timing, and inactive feature");
+            }
+            if(plots.size()==2) {
+                const auto a=plots[0].bounds,b=plots[1].bounds;
+                Check(std::abs(a.GetWidth()-b.GetWidth())<.01f,"graph frames have exactly equal widths");
+                Check(std::abs(a.GetHeight()-b.GetHeight())<.01f,"graph frames have exactly equal heights");
+                Check(b.Min.x-a.Max.x>=4.f,"graph panels have a visible gap");
+                Check(a.GetWidth()+b.GetWidth()+(b.Min.x-a.Max.x)<=contentWidth+.1f,"graphs and gap fit available content width");
+                Check(std::abs(a.Min.y-b.Min.y)<.01f,"graph tops align");
+                Check(plots[1].samples==(state==0?plotWidth:0),"unavailable graph does not draw old or invented timing samples");
+                if(!frameGraphId){frameGraphId=plots[0].id;upscalerGraphId=plots[1].id;}
+                Check(plots[0].id==frameGraphId && plots[1].id==upscalerGraphId,"graph identities remain stable across readout and availability changes");
+            }
+        }
+    }
+    MenuCommon::_showMainMenuGraphs=false;ImGui::NewFrame();ImGui::Begin("Hidden graphs");plots.clear();MenuCommon::RenderMainMenuGraphs(ctx);Check(plots.empty(),"hidden graphs remain hidden");ImGui::End();ImGui::Render();
+    for(float width:{450.f,800.f})for(float scale:{.8f,1.f,1.5f}) {
+        float baselineHeight=0;
+        for(int state=0;state<6;++state) {
+            experimental={};nativeSetup=Neurotic::Mfg::MfgSetupStatus::Off;nativeSelected=false;nativeRecoveryRequired=false;nativeRefusal.blocked=false;rtx30=rtx20=nativeEnabled=false;
+            if(state==1){nativeSelected=true;nativeRecoveryRequired=true;nativeRefusal.blocked=true;}
+            if(state==2)experimental.saveFailed=true;
+            if(state==3){nativeEnabled=true;rtx30=true;}
+            if(state==4){experimental.optionsObserved=true;experimental.original=3;experimental.forwarded=1;experimental.result=-1;}
+            if(state==5){experimental.requested=true;experimental.saved.rtx30=true;rtx30=true;}
+            float height=0,lineHeight=0;
+            for(int pass=0;pass<2;++pass) {
+                rows.clear();ImGui::NewFrame();ImGui::PushFont(nullptr,16.f*scale);ImGui::SetNextWindowSize({width,600});ImGui::Begin("GPU status geometry");
+                const float y=ImGui::GetCursorPosY();lineHeight=ImGui::GetTextLineHeightWithSpacing();RenderStatuses();height=ImGui::GetCursorPosY()-y;
+                ImGui::End();ImGui::PopFont();ImGui::Render();
+            }
+            if(state==0)baselineHeight=height;
+            Check(rows.size()<=4,"GPU compatibility readout fits at most four compact status slots");
+            for(const auto& row:rows)Check(!row.text.empty(),"every reserved compatibility row contains meaningful text");
+            Check(height<=lineHeight*4+.1f,"compatibility block has no large blank-row padding");
+            Check(std::abs(height-baselineHeight)<.01f,"compatibility control positions stay stable across status changes");
+            std::string all;for(const auto& row:rows)all+=row.text+"\n";
+            Check(all.find("Current session:")!=std::string::npos && all.find("Next launch:")!=std::string::npos,"current session and saved next-launch facts both remain visible");
+            if(state==1)Check(all.find("NR Reset cannot clear")!=std::string::npos && all.find("Current FG: 2X.")!=std::string::npos,"recovery and effective FG facts remain truthful");
+            if(state==2)Check(all.find("could not be saved")!=std::string::npos,"save failure retained");
+            if(state==3)Check(all.find("Turn off the RTX 40")!=std::string::npos,"conflicting selection warning retained");
+            if(state==4)Check(all.find("forwarded: 1")!=std::string::npos && all.find("Displayed delivery unknown")!=std::string::npos,"observed request facts do not claim displayed delivery");
+            if(state==5)Check(all.find("qualification pending")!=std::string::npos,"experimental qualification remains explicit");
+        }
+    }
+    ImGui::DestroyContext();std::printf("%s: %d checks; %d failures. Real ImGui UI only; no GPU, game, or provider executed.\n",failures?"FAIL":"PASS",checks,failures);
+    return failures?1:0;
+}

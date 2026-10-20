@@ -20,7 +20,7 @@ bool Version(const std::string& raw,std::array<int,3>& parts){
 struct Internet {HINTERNET h=nullptr;~Internet(){if(h)WinHttpCloseHandle(h);}};
 UpdateStatus Fetch(){
  if(stopRequested)return {};
- Internet session{WinHttpOpen(L"NeuRotic-Hub/0.9.8",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,nullptr,nullptr,0)};if(!session.h)return {};
+ Internet session{WinHttpOpen(L"NeuRotic-Hub/0.9.9-development",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,nullptr,nullptr,0)};if(!session.h)return {};
  WinHttpSetTimeouts(session.h,2000,2000,3000,3000);
  Internet connection{WinHttpConnect(session.h,L"api.github.com",443,0)};if(!connection.h)return {};
  Internet request{WinHttpOpenRequest(connection.h,L"GET",L"/repos/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/latest",nullptr,nullptr,nullptr,WINHTTP_FLAG_SECURE)};if(!request.h)return {};
@@ -32,7 +32,7 @@ UpdateStatus Fetch(){
  return EvaluateRelease(result["tag_name"].get<std::string>());
 }
 }
-UpdateStatus EvaluateRelease(const std::string& tag){std::array<int,3> latest,current{0,9,8};if(!Version(tag,latest))return {};return {latest>current?UpdateState::Available:UpdateState::Current,tag,latest>current?Neurotic::UiMessage("desktop.updatestatus.update_available_fcd24c16", "Update available"):Neurotic::UiMessage("desktop.updatestatus.up_to_date_77a5b882", "Up to date")};}
+UpdateStatus EvaluateRelease(const std::string& tag){std::array<int,3> latest,current{0,9,9};if(!Version(tag,latest))return {};return {latest>current?UpdateState::Available:UpdateState::Current,tag,latest>current?Neurotic::UiMessage("desktop.updatestatus.update_available_fcd24c16", "Update available"):Neurotic::UiMessage("desktop.updatestatus.up_to_date_77a5b882", "Up to date")};}
 void StartUpdateCheck(){if(worker.joinable())return;stopRequested=false;{std::lock_guard lock(gate);status={UpdateState::Checking,"",Neurotic::UiMessage("desktop.updatestatus.checking_for_updates_fc997e19", "Checking for updates")};}worker=std::thread([]{UpdateStatus result;try{result=Fetch();}catch(...){}std::lock_guard lock(gate);status=std::move(result);});}
 UpdateStatus GetUpdateStatus(){
  UpdateStatus result;{std::lock_guard lock(gate);result=status;}

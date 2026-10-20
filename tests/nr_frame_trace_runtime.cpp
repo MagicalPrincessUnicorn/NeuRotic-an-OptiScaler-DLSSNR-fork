@@ -28,7 +28,7 @@ int main(int argc, char** argv)
     const std::string_view mode(argv[1]);
     const bool association = mode == "association";
     const bool delayed = mode == "delayed" || association;
-    const bool enabled = mode == "on" || delayed;
+    const bool enabled = mode == "on" || mode == "prepared-depth" || delayed;
     SetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_PROFILE", association ? "frame-association" :
         mode == "invalid-profile" ? "unknown-profile" : nullptr);
     SetEnvironmentVariableA("NEUROTIC_FRAME_TRACE_SESSION", enabled || mode == "invalid-trigger" || mode == "invalid-profile" ?
@@ -39,6 +39,12 @@ int main(int argc, char** argv)
     spdlog::set_default_logger(std::make_shared<spdlog::logger>("frame-trace-test", sink));
     assert(DlssNr::FrameTrace::Armed() == (enabled && !delayed));
     int evaluated = 0;
+    int preparedEvaluated = 0;
+    if(!enabled || delayed)
+    {
+        NR_FRAME_TRACE("nr-prepared-depth-observation", "guideVersion=1 value={}", ++preparedEvaluated);
+        assert(preparedEvaluated == 0);
+    }
     if (delayed)
     {
         assert(sink->count == 1 && sink->controls == 1);
@@ -64,6 +70,13 @@ int main(int argc, char** argv)
         assert(DlssNr::FrameTrace::Armed() && sink->starts == 1);
     }
     NR_FRAME_TRACE("probe", "value={}", ++evaluated);
+    if(mode=="prepared-depth")
+    {
+        NR_FRAME_TRACE("nr-prepared-depth-decision", "guideVersion=1 generation=2 id=3 decision=1 reason=mip-zero-copy-recorded allocated=true copyRecorded=true");
+        assert(sink->last.find("kind=nr-prepared-depth-decision classification=unknown guideVersion=1 generation=2 id=3")!=std::string::npos);
+        NR_FRAME_TRACE("nr-prepared-depth-model", "guideVersion=1 generation=2 id=3 stage=wrapper-result callableSelected=true result=1");
+        assert(sink->last.find("stage=wrapper-result callableSelected=true result=1")!=std::string::npos);
+    }
     if (association)
     {
         assert(evaluated == 0 && sink->count == 2); // filtered arguments are not evaluated

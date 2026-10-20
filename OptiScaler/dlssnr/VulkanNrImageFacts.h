@@ -34,6 +34,8 @@ struct VkNrObservedView
 // Returned view ranges use explicit counts resolved against the observed image.
 // The stored creation facts remain raw for diagnostic descriptions.
 struct VkNrImageRights { VkNrObservedImage image;VkNrObservedView view;VkImageAspectFlags copyAspect=0,barrierAspect=0; };
+// Paired creation evidence only, not access rights or a borrowed-resource lease.
+struct VkNrObservedImageView { VkNrObservedImage image;VkNrObservedView view; };
 class VkNrImageFacts
 {
   public:
@@ -43,16 +45,20 @@ class VkNrImageFacts
     void ViewDestroyed(VkDevice,VkImageView);
     void DeviceDestroyed(VkDevice);
     std::optional<VkNrObservedImage> Image(VkDevice,VkImage) const;
+    // Copies one linked image/view generation under the same observation lock.
+    std::optional<VkNrObservedImageView> ImageView(VkDevice,VkImage,VkImageView) const;
     // Bounded, handle-free creation facts for a rejected input; never grants access.
     std::string Describe(VkDevice,const NVSDK_NGX_Resource_VK&) const;
     std::optional<VkNrImageRights> Rights(VkDevice,const NVSDK_NGX_Resource_VK&,VkImageUsageFlags required,bool depth,
-                                        const char** unavailable=nullptr) const;
+                                        const char** unavailable=nullptr,std::string* diagnostic=nullptr) const;
     // Streamline's omitted SubresourceRange becomes a generic COLOR/all-remaining
     // NGX wrapper, even for depth. At that input boundary only, validate the
     // depth interpretation against the complete observed image/view facts.
     std::optional<VkNrImageRights> NgxDepthRights(VkDevice,const NVSDK_NGX_Resource_VK&,bool authenticatedInput,
                                                 const char** unavailable=nullptr) const;
   private:
+    // Caller owns mutex_, or the wrapper is not an image view and no maps are read.
+    std::string DescribeLocked(VkDevice,const NVSDK_NGX_Resource_VK&) const;
     // Non-dispatchable handles are only unique within their parent device.
     template<class Handle> struct ObjectKey
     {

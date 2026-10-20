@@ -25,6 +25,7 @@ class XeSSFeature_Dx11 : public virtual IFeature_Dx11
     }
 
     bool InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Parameter* InParameters) override;
+    bool PrepareEvaluation(NVSDK_NGX_Parameter* InParameters) override;
     bool EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Parameter* InParameters) override;
     Upscaler GetUpscalerType() const final { return Upscaler::XeSS; }
     API Api() const override { return IFeature_Dx11::Api(); }

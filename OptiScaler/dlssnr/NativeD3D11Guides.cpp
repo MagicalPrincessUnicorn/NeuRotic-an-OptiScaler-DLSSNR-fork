@@ -7,6 +7,12 @@
 #include "connections/D3D11Connection.h"
 #include "connections/GpuBudget.h"
 #include <cstring>
+#ifndef NR_D3D11_OBSERVER_TEST
+#include <Config.h>
+#include <NrConfigSnapshot.h>
+#include "DlssNr_PresentInputPolicy.h"
+#include "PresentSourcePolicy.h"
+#endif
 
 #include <d3d11_4.h>
 #include <detours/detours.h>
@@ -315,9 +321,15 @@ void TestConsumeInterval(ID3D11DeviceContext*c){ApiScope api(c);std::lock_guard 
 #else
 void Present(IDXGISwapChain* swapchain,ID3D11Device* device,bool nrEnabled){
  if(!device||!swapchain||!Enabled())return;
+ const auto settings=TryNrConfigSnapshot(*Config::Instance());
+ const auto sourcePolicy=Connections::SignalPreferences();
+ const auto inputPolicy=settings?PresentInput::Selected(*settings):PresentInput::Policy::Invalid;
+ const bool captureRequested=settings&&
+  (inputPolicy==PresentInput::Policy::RequireGuides||inputPolicy==PresentInput::Policy::AutoGuides)&&
+  PresentSources::AllowsGuidedSource(sourcePolicy,Connections::Source::BuiltIn);
  ComPtr<ID3D11DeviceContext> context;device->GetImmediateContext(&context);ApiScope api(context.Get());std::lock_guard lock(mutex);Guard guard;
  auto* state=PresentContext(context.Get());if(!state)return;
- nrEnabled=nrEnabled&&(NativeGuides::SelectedSource()==0||NativeGuides::SelectedSource()==2);
+ nrEnabled=nrEnabled&&captureRequested&&(NativeGuides::SelectedSource()==0||NativeGuides::SelectedSource()==2);
  const bool wasActive=captureActive.exchange(nrEnabled);
  status.guideReady=status.outputValid=status.modelPreparing=0;status.stage=PreparedGuides::Stage::Waiting;
  bool sourceCompleted=false,historyAccepted=false,episodeClaimed=false,captureRetired=true;

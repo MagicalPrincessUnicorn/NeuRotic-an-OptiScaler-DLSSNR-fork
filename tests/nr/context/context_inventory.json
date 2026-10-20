@@ -1,0 +1,497 @@
+{
+  "work_order": "NR-CTX-001",
+  "suites": {
+    "ctx-analytic": [
+      {
+        "id": "T11.nonfinite-motion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.dropped-pair",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.drs",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.forward-not-negation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.incompatible-pair",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.jitter-sign",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.missing-jitter",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.ndc-origin",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.no-double-jitter",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.pixel-to-uv",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.oracle.rect-offset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.scale-exactly-once",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.unjitter-missing-basis",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.unjitter-opposed-basis",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.zero-active-extent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.device-depth",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.exposure-distinct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.missing-pre-exposure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.pre-exposure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.projection-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.raw-depth-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.reversed-depth",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.oracle.zero-pre-exposure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.production-projection-convention",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "ctx-evidence": [
+      {
+        "id": "T04.known-zero",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T04.no-default",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T04.unknown-reason-scope-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.alias-single",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.equal-conflict",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.equal-conflict-permuted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.independence-not-inferred",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.lineage-alias-deduplicated",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.owner-contradiction-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.qualified-dominates-claim",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.same-record-conflict",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.same-record-deduplicated",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.source-disappeared",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.stale-cannot-dominate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.unknown-conflict-not-erased",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.nonfinite-fact-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T07.present-cannot-repair",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T07.present-not-base",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T07.same-base",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T08.namespace-not-number",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T08.reincarnation-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T08.view-separate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T09.content-not-structure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T09.exact-content-refused",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "ctx-metadata": [
+      {
+        "id": "T04.unknown-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.alias-category",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.conflict-category",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.count-body-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.exact-body",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.exact-list",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.explicit-empty",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.future-category",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.future-schema",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.malformed-category",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.missing-body",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.missing-known-provenance",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.namespace-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.nonfinite-nested-value",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.owner-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.stale-revision",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "ctx-context": [
+      {
+        "id": "T04.context-known-false",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T04.context-known-zero",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T04.context-missing-exposure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T04.incomplete-observation-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T04.raw-effective-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.alpha-conflict-keeps-domain",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.description-conflict-permuted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.description-conflict-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.equivalent-description-provenance",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T05.owner-descriptor-conflict-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.candidate-revision-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.evidence-disappeared",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.missing-optional-body-keeps-context",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T06.missing-resource-body-no-guide",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T07.unproven-scope-no-admission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T08.unrelated-view-cannot-poison",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.guide-raster-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.jitter-missing-basis-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T11.jitter-pixels-normalized",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.same-subject-description-combined",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.typed-mask-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T12.unrelated-resource-projection-not-combined",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "ctx-capability": [
+      {
+        "id": "C04.all-observations-keep-conflict",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.canonical-motion-eligible",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.context-revision-invalidates",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.declared-one-frame-retention",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.dominated-source-not-veto",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.fixture-context",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.future-source-schema",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.known-zero-eligible",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.motion-context-raster-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.motion-current-frame-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.motion-noncanonical-axis-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.optional-exposure-keeps-eligibility",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.original-unknown-reason",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.profile-version-invalidates",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.purpose-context-excludes-stale-conflict",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.raw-depth-without-projection",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.required-exposure-unqualified",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.source-disappearance-refuses",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.source-fact-binding",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.source-revision-invalidates",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.stale-reason-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.stale-source-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.unknown-age-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.unknown-exact-content-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.unknown-rule-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.unused-stale-source-not-veto",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C04.view-depth-needs-projection",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T09.content-keeps-structural-signature",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "ctx-stack": [
+      {
+        "id": "T06.default-stack-context",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "ctx-analytic": {
+      "emitted_suite": "ctx-analytic"
+    },
+    "ctx-evidence": {
+      "emitted_suite": "ctx-evidence"
+    },
+    "ctx-metadata": {
+      "emitted_suite": "ctx-metadata"
+    },
+    "ctx-context": {
+      "emitted_suite": "ctx-context"
+    },
+    "ctx-capability": {
+      "emitted_suite": "ctx-capability"
+    },
+    "ctx-stack": {
+      "emitted_suite": "ctx-stack"
+    }
+  }
+}

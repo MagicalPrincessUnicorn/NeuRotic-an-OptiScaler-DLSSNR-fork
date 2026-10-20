@@ -21,7 +21,10 @@ public:
  size_t Count()const{return files.size();}size_t Index()const{return index;}
  bool Choose(const std::string& action){
   if(action!=Neurotic::UiLiteral("desktop.hubshell.replace_79226e10", "Replace")&&action!=Neurotic::UiLiteral("desktop.hubshell.skip_9e5fb0c9", "Skip"))throw std::runtime_error(Neurotic::UiMessage("desktop.fileconflictreview.unknown_file_decision_513b8e69", "Unknown file decision"));
-  decisions.push_back(Json{{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),Current().at(Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"))},{"action",action}});++index;return !Active();
+  Json choice{{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),Current().at(Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"))},{"action",action}};
+  // Echo the backend observation unchanged; it validates current file identity.
+  if(Current().contains("reviewedIdentity"))choice["reviewedIdentity"]=Current().at("reviewedIdentity");
+  decisions.push_back(std::move(choice));++index;return !Active();
  }
  void Cancel(){files=Json::array();decisions=Json::array();index=0;}
 };

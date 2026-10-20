@@ -1,3 +1,4 @@
+#include <menu/ItemHelp.h>
 #include <menu/Localization.h>
 #pragma once
 #include "imgui.h"
@@ -87,9 +88,9 @@ inline bool ThemeButton(bool& light,float requestedSide=0){
  // The two arc tips already belong to the outer arc. Duplicate tips can
  // prevent the concave triangulator from filling the hollow correctly.
  for(int i=1;i<24;i++){float angle=innerBegin+(innerEnd-innerBegin)*i/24;draw->PathLineTo({c.x+(cutX+cosf(angle)*cutRadius)*f,c.y+(cutY+sinf(angle)*cutRadius)*f});}draw->PathFillConcave(ImGui::GetColorU32(moon));
- if(ImGui::IsItemHovered())ImGui::SetTooltip(light?Neurotic::UiLiteral("desktop.sleekwidgets.switch_to_dark_theme_7f3a4ce3", "Switch to dark theme"):Neurotic::UiLiteral("desktop.sleekwidgets.switch_to_light_theme_2e77768d", "Switch to light theme"));return pressed;
+ if(Neurotic::ItemHelpHovered())ImGui::SetTooltip(light?Neurotic::UiLiteral("desktop.sleekwidgets.switch_to_dark_theme_7f3a4ce3", "Switch to dark theme"):Neurotic::UiLiteral("desktop.sleekwidgets.switch_to_light_theme_2e77768d", "Switch to light theme"));return pressed;
 }
-inline bool CopyButton(){float side=ImGui::GetFrameHeight();bool pressed=Button("##Copy",{side,side});auto p=ImGui::GetItemRectMin();auto draw=ImGui::GetWindowDrawList();auto color=ImGui::GetColorU32(ImGuiCol_Text);draw->AddRect({p.x+side*.24f,p.y+side*.2f},{p.x+side*.64f,p.y+side*.68f},color,2,0,1.5f);draw->AddRect({p.x+side*.36f,p.y+side*.32f},{p.x+side*.76f,p.y+side*.8f},color,2,0,1.5f);if(ImGui::IsItemHovered())ImGui::SetTooltip(Neurotic::UiLiteral("desktop.sleekwidgets.copy_log_5919e0c4", "Copy log"));return pressed;}
+inline bool CopyButton(){float side=ImGui::GetFrameHeight();bool pressed=Button("##Copy",{side,side});auto p=ImGui::GetItemRectMin();auto draw=ImGui::GetWindowDrawList();auto color=ImGui::GetColorU32(ImGuiCol_Text);draw->AddRect({p.x+side*.24f,p.y+side*.2f},{p.x+side*.64f,p.y+side*.68f},color,2,0,1.5f);draw->AddRect({p.x+side*.36f,p.y+side*.32f},{p.x+side*.76f,p.y+side*.8f},color,2,0,1.5f);if(Neurotic::ItemHelpHovered())ImGui::SetTooltip(Neurotic::UiLiteral("desktop.sleekwidgets.copy_log_5919e0c4", "Copy log"));return pressed;}
 inline bool Toggle(const char* label,bool* value){
  auto id=ImGui::GetID(label);float h=ImGui::GetFrameHeight(),w=h*1.72f,gap=ImGui::GetStyle().ItemSpacing.x;auto pos=ImGui::GetCursorScreenPos();
  ImGui::PushStyleColor(ImGuiCol_Button,{0,0,0,0});ImGui::PushStyleColor(ImGuiCol_ButtonHovered,{0,0,0,0});ImGui::PushStyleColor(ImGuiCol_ButtonActive,{0,0,0,0});ImGui::PushStyleColor(ImGuiCol_Text,{0,0,0,0});

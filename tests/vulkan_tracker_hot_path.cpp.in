@@ -1,0 +1,70 @@
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <new>
+#include <thread>
+#include <dlssnr/VulkanNrImageFacts.h>
+
+static std::atomic<unsigned> logs=0;
+static thread_local bool countAllocations=false;
+static thread_local unsigned allocations=0;
+void* operator new(std::size_t n) {
+    if(countAllocations)++allocations;
+    if(void* p=std::malloc(n ? n : 1))return p;
+    throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept {std::free(p);}
+void operator delete(void* p,std::size_t) noexcept {std::free(p);}
+#define LOG_DEBUG(...) (++logs)
+#define LOG_WARN(...) (++logs)
+#define LOG_ERROR(...) (++logs)
+struct Feature {bool IsWithDx12()const{return false;}};
+struct State {Feature* currentFeature=nullptr;static State& Instance(){static State s;return s;}};
+// PRODUCTION_TRACKER
+
+static void Check(bool value,const char* message){if(!value){std::fprintf(stderr,"FAIL: %s\n",message);std::exit(1);}}
+int main(){
+    vk_state::CommandBufferStateTracker tracker;tracker.EnableNativeObservations();
+    const auto cmd=reinterpret_cast<VkCommandBuffer>(1);
+    const auto pipeline=reinterpret_cast<VkPipeline>(2);
+    const auto layout=reinterpret_cast<VkPipelineLayout>(3);
+    const auto set=reinterpret_cast<VkDescriptorSet>(4);
+    const uint32_t offset=24,constant=99;
+    countAllocations=true;
+    const auto started=std::chrono::steady_clock::now();
+    for(unsigned i=0;i<100000;++i){
+        tracker.OnBindPipeline(cmd,VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,pipeline);
+        tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,layout,0,1,&set,1,&offset);
+        tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,layout,VK_SHADER_STAGE_RAYGEN_BIT_KHR,0,4,&constant);
+    }
+    countAllocations=false;
+    const auto ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+    std::printf("Unsupported calls=300000 logs=%u allocations=%u host_ms=%.3f (counting sink; not game timing)\n",logs.load(),allocations,ms);
+    Check(logs<=1,"unsupported ray bindings must not flood the synchronous log sink");
+    Check(allocations==0,"unsupported bind points must exit before allocating tracker state");
+    std::vector<std::thread> threads;
+    for(unsigned i=0;i<8;++i)threads.emplace_back([&]{for(unsigned j=0;j<10000;++j){
+        Check(!vk_state::ToIndex(static_cast<VkPipelineBindPoint>(0x7777)),"unknown bind point remains unsupported");
+        Check(!vk_state::ToIndex(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR),"ray bind point remains unsupported");
+    }});
+    for(auto& thread:threads)thread.join();
+    Check(logs<=2,"unsupported diagnostics remain bounded across threads");
+    const auto pool=reinterpret_cast<VkCommandPool>(5);
+    tracker.OnAllocateCommandBuffers(reinterpret_cast<VkDevice>(1),pool,1,&cmd,0);
+    vk_state::VulkanCmdFns fns{};tracker.SetFunctionTable(fns);
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    tracker.OnBegin(cmd,&begin);
+    tracker.OnBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline);
+    tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,&set,1,&offset);
+    tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,&constant);
+    tracker.OnBindPipeline(cmd,VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,reinterpret_cast<VkPipeline>(99));
+    vk_state::CommandBufferState saved;
+    Check(tracker.CaptureNrState(cmd,saved),"supported command state remains available");
+    Check(saved.BP[0].Pipeline==pipeline,"ray command cannot overwrite graphics pipeline");
+    Check(saved.BP[1].DescriptorBindCalls.size()==1&&saved.BP[1].Sets[0].Set==set&&
+          saved.BP[1].DescriptorBindCalls[0].DynamicOffsets[0]==24,"compute descriptors and dynamic offsets preserved");
+    Check(saved.PushConstantHistory.size()==1&&saved.PushConstantHistory[0].Data[0]==99,"compute constants preserved");
+    std::puts("PASS actual tracker hot path: bounded concurrent diagnostics, zero unsupported state allocation, supported bindings intact");
+}

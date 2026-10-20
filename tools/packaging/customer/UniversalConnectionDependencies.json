@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "policy": "Historical optional-wrapper validation metadata; not an end-user recommendation or implementation goal. Integrate compatibility natively in NeuRotic; recommend NR Anything when in-game integration is unavailable. No bundled wrapper binaries or downloads.",
+  "roles": [
+    {"identity":"DXVK","outputApi":"Vulkan","inputApis":["D3D8-x86","D3D9-x86","D3D9-x64"],"qualification":"experimental-unqualified","pins":[]},
+    {"identity":"dgVoodoo2","outputApi":"D3D11","inputApis":["D3D8-x86","D3D9-x86","D3D9-x64"],"qualification":"experimental-unqualified","pins":[]}
+  ],
+  "manifestFields": ["schema","identity","version","licenseStatus=user-supplied","bitness","inputApi","outputApi","files[path,sha256]"]
+}

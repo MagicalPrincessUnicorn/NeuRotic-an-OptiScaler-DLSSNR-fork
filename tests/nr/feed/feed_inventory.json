@@ -1,0 +1,196 @@
+{
+  "work_order": "NR-FEED-001",
+  "suites": {
+    "feed-observations": [
+      {
+        "id": "T10.bounded-callback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T10.delivery-throw-contained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T10.expired-registration",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T10.off-no-publication",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T10.owner-receipt",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T10.owner-throw-contained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T10.unregister-off",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.creation-reincarnated",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.creation-same-incarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.creation-unknown-incarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.effective-separate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.fsr-native-scale",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.lexical-alias-ended",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.missing-not-default",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.ngx-get-presence",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.ngx-incomplete-jitter-pair",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.ngx-missing-flags",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.ngx-vanished",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.no-resource-query-on-null",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.present-default-not-raw",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.provider-version-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.raw-not-overwritten",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.raw-reset-false",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.streamline-before-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.streamline-invalid-boolean",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.streamline-invalid-float",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.streamline-invalid-jitter-pair",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.translation-alias",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.translation-derived",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.translation-not-provider-raw",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.vanished-is-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.xess-carried-scale-not-current-raw",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.xess-formula-not-empty",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.xess-raw-jitter",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T20.xess-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.callback-expired",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.coherent-missing-right",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.coherent-valid-right",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.incoherent-missing-right",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.incoherent-valid-right",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.no-right-still-publishes",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.other-source-survives",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.raw-publication-not-qualified",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.unknown-association",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.wrong-base-frame",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T21.wrong-episode",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "feed-observations": {
+      "emitted_suite": "feed-observations"
+    }
+  }
+}

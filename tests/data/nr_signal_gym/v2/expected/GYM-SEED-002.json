@@ -1,0 +1,106 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-002",
+  "case_input_sha256": "5713d038b63765a477dff381db7fe0a7820d41e507575e5367d31b1b1e7af6a0",
+  "revision": 1,
+  "transport_checks": [
+    {
+      "check_id": "T-STALE-FRAME",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/stale-signal-frame/signals/0/producer_frame_id",
+      "comparison": "exact",
+      "expected": {
+        "state": "known",
+        "value": "frame-99"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    },
+    {
+      "check_id": "T-STALE-OBS",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/stale-signal-frame/signals/0/freshness_observation",
+      "comparison": "exact",
+      "expected": "reported_stale",
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    }
+  ],
+  "qualifications": [
+    {
+      "check_id": "Q-FITS",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/operations/stale-signal-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "fits": true
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "qualification",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-native-inputs-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+        }
+      },
+      "dimension": "geometry"
+    }
+  ],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

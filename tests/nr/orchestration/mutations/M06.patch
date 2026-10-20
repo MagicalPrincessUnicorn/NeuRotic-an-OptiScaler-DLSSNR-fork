@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -359,7 +359,7 @@
+ {
+     // Inspect owner snapshot outside the slot lock; no virtual calls inside it.
+     const auto& current=guard.Current();auto& p=*impl_;std::lock_guard lock(p.mutex);auto* op=p.Find(slot,serial);
+-    if(!op||!op->handle||p.state.phase!=RoutePhase::Active||
++    if(!op||!op->handle||
+         !Protocol::SameNativeInvocation(*op->snapshot,current))return false;
+     return p.root.execution_.StartModel(op->attempt);
+ }

@@ -23,8 +23,10 @@ template<class Reader> bool LineageMatches(const RepresentationUse& use,const C:
     const S::TransformLineage *applied=nullptr,*required=nullptr,*deferred=nullptr,*planned=nullptr;
     if(!S::ResolveList(use.applied,reader,applied)||!S::ResolveList(use.required,reader,required)||
        !S::ResolveList(use.consumerDeferred,reader,deferred)||!S::ResolveList(plan.transforms,reader,planned))return false;
-    const S::TransformLineage empty;
-    const auto delta=S::CompareLineage(applied?*applied:empty,required?*required:empty,reader);
+    struct LineageScratch { S::TransformLineage empty;S::LineageComparison comparison; };
+    const auto scratch=std::make_unique<LineageScratch>();
+    const auto& empty=scratch->empty;auto& delta=scratch->comparison;
+    if(!S::Detail::CompareLineageInto(applied?*applied:empty,required?*required:empty,reader,delta))return false;
     // Every remaining operation is an exact, explicitly declared consumer operation.
     // Material preparation must already be represented by an owner-published PreparedView.
     if(!delta.compatible||!S::SemanticEqual(delta.delta,deferred?*deferred:empty))return false;

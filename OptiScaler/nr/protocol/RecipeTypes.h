@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "ProfileRegistry.h"
 #include <nr/contracts/C02_Context.h>
 #include <nr/contracts/C05_Routing.h>
@@ -126,6 +127,12 @@ struct RecipeProduct
 struct RecipeBuildResult
 {
     std::optional<C::ImmutableRecord<RecipeProduct>> product;
+    C::Symbol reason;
+};
+// Native invocation keeps the complete immutable product off its call stack.
+struct OwnedRecipeBuildResult
+{
+    std::unique_ptr<C::ImmutableRecord<RecipeProduct>> product;
     C::Symbol reason;
 };
 #undef NR_PROTOCOL_FIELD

@@ -1863,8 +1863,17 @@ static bool StartVulkanHookDiagnostic(HMODULE hModule)
 }
 #endif
 
+#if defined(NR_ADAPTIVE_PUBLIC_PROVIDER_FIXTURE)
+#include "../tests/nr/adaptive/public_product_initialize.inc"
+#endif
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
+#if !(defined(NR_DIAG_FORWARD_ONLY) && NR_DIAG_FORWARD_ONLY) || \
+    (defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY)
+    // A missing/truncated root must fail before pinning, config or hook ownership.
+    if (ul_reason_for_call == DLL_PROCESS_ATTACH && !Util::InitializeModulePaths(hModule)) return FALSE;
+#endif
     // Installed detours and detached callbacks require process lifetime.
     if (ul_reason_for_call == DLL_PROCESS_ATTACH && !Neurotic::Runtime::PinRuntime(hModule)) return FALSE;
     if (ul_reason_for_call == DLL_PROCESS_DETACH)
@@ -1874,6 +1883,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         if (runtimeState) runtimeState->isShuttingDown = true;
         return TRUE;
     }
+#if defined(NR_ADAPTIVE_PUBLIC_PROVIDER_FIXTURE)
+#include "../tests/nr/adaptive/public_product_startup.inc"
+#endif
 #if (defined(NR_DIAG_FORWARD_ONLY) && NR_DIAG_FORWARD_ONLY) || \
     (defined(NR_DIAG_VULKAN_ONLY) && NR_DIAG_VULKAN_ONLY)
     // Diagnostic entry: WinMM forwarding, with the selected diagnostic bootstrap
@@ -1974,12 +1986,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         }
 
 #ifdef _DEBUG // VER_PRE_RELEASE
-        // Enable file logging for pre builds
-        Config::Instance()->LogToFile.set_volatile_value(true);
-
-        // Set log level to debug
-        if (Config::Instance()->LogLevel.value_or_default() > 1)
-            Config::Instance()->LogLevel.set_volatile_value(1);
+        // Automatic developer defaults must not override explicit file/level choices.
+        if (!Config::Instance()->LogToFile.has_value())
+            Config::Instance()->LogToFile.set_volatile_value(true);
+        // AUTO already means Trace. Preserve it for normal and armed startup.
 #endif
 
         // An explicitly armed bounded frame trace must be self-recording. Keep these
@@ -1992,7 +2002,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             Config::Instance()->LogSingleFile.set_volatile_value(true);
             Config::Instance()->LogFileName.set_volatile_value(
                 (Util::DllPath().parent_path() / L"OptiScaler.log").wstring());
-            Config::Instance()->LogLevel.set_volatile_value(1);
+            // Bounded capture may increase verbosity, but never reduce Trace.
+            if (Neurotic::Logging::RuntimeLevel(Config::Instance()->LogLevel.value_or_default()) != spdlog::level::trace)
+                Config::Instance()->LogLevel.set_volatile_value(1);
         }
 
         PrepareLogger();

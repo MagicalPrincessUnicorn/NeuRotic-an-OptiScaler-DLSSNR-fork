@@ -1,4 +1,5 @@
 #pragma once
+#include "../../nr/context/PreparedRasterBounds.h"
 #include <d3d12.h>
 #include <atomic>
 #include <cstdint>
@@ -32,6 +33,6 @@ inline std::uint64_t ImageBytes(ID3D12Device* device,std::uint32_t w,std::uint32
     return TextureBytes(device,d);
 }
 inline bool AdmitRaster(std::uint32_t w,std::uint32_t h,bool derive=false){
-    return w&&h&&w<=4096&&h<=2160&&std::uint64_t(w)*h<=8388608&&(!derive||(w>=256&&h>=64));
+    return Neurotic::PreparedRaster::Admit(w,h,derive);
 }
 }

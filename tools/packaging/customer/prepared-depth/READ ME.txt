@@ -1,0 +1,72 @@
+NeuRotic Prepared Depth - EXPERIMENTAL COMPARISON PACKAGE
+
+This is the prepared-depth candidate based on committed flagship 6aee2794,
+including its Native MFG/UI merge. It excludes later uncommitted flagship work.
+The exact locally verified Release DLL identity is in support\BUILD-MANIFEST.json.
+Depth compatibility (Experimental) is available in Neural Rendering's Experimental
+Overrides section, off by default. It might help with unusual depth textures.
+Leave it off unless testing a depth compatibility problem. Select it and save
+experimental settings to apply it. No eligible game or real-model benefit has
+been verified yet. It does nothing for single-mip depth and does not improve
+image quality or performance by itself. It does not add OBS/Elgato capture support.
+
+INSTALL
+1. Extract the complete ZIP outside the game folder. Close the game.
+2. Run NeuRotic-Manual-Setup.cmd and select the actual game EXE and its proxy name.
+   Setup backs up occupied files and records ownership for restoration.
+   Existing settings and your private NR model are preserved. The private
+   nvngx_dlssnr.dll model is not bundled; use your existing model.
+3. Enable Info file logging in Diagnostics. Use Native D3D12 NR for this test.
+   The experiment supports the legacy Native path. Fresh settings use
+   NativeProtocol=false; existing INIs are not changed. If your existing INI
+   enables NativeProtocol, the unenrolled prepared representation is refused.
+   Present, DX11 and Vulkan do not exercise this feature.
+
+BASELINE, THEN ENABLED
+For a Steam game, use one of these Launch Options, with the full path to the
+extracted launcher. Keep %command% exactly as written:
+  "C:\path\to\extracted\Launch-Baseline.cmd" %command%
+  "C:\path\to\extracted\Launch-PreparedDepth.cmd" %command%
+For another launcher, pass its complete game EXE command to the CMD launcher.
+These test launchers override the saved menu choice: Baseline forces it off,
+Prepared forces it on. Launch normally when using the saved menu setting.
+
+1. Do not buy or install games just to look for a qualifying input. For a
+   willing tester's existing game, one Prepared eligibility run is sufficient: enter
+   gameplay with NR off, enable Native NR, move the camera for 30-60 seconds,
+   then close normally. Keep settings fixed. Zip the new prepared-* folder
+   under reviews and return it. Baseline comparison remains available below.
+2. For an A/B comparison, run the baseline first. Enter the same repeatable gameplay scene with NR off,
+   then enable Native NR. Close the game normally when finished.
+3. Switch Launch Options to Launch-PreparedDepth.cmd and restart. Repeat the
+   same scene/settings, then camera movement, NR toggles and resolution changes.
+4. Each launcher verifies the installed candidate and forwarder hashes, passes
+   process-local flags, and saves a SESSION.json, log and settings under reviews.
+   It does not change INIs, launch the private provider itself, kill the game,
+   or set permanent environment variables. A log capture is limited to 65536
+   events. The NR-enable trigger preserves the budget until you enable NR.
+   Both modes also enable separate descriptor diagnostics (first observation
+   and changes, at most 64 records). These continue after the trace fills up,
+   recording actual policy, depth format/mips and bypass/refusal reason in
+   the log and SESSION.json. Info file logging is required.
+5. The feature needs supported R32_FLOAT/R16_FLOAT/R16_UNORM multi-mip depth.
+   "CopyRecorded" means the preparation copy was recorded, not that a model
+   or GPU execution succeeded. "NotExercised" means the log has no matching
+   recorded copy. Descriptor decision=direct reason=single-mip explains a
+   bypass; decision=candidate only establishes descriptor eligibility, not
+   recorded preparation. Unsupported formats may be refused. No observation
+   still means unknown: logging or the selected route may not have reached it.
+6. For an A/B review, return both reviews session folders and the ZIP produced by
+   Collect-NR-Review.cmd after closing the game. Note the scene, settings,
+   visual result, game/API and any failure. Do not infer activation from FPS.
+
+RESTORE
+Remove the test Launch Options. Close the game and run NeuRotic-Manual-Uninstall.cmd
+or the installed Uninstall NeuRotic.cmd. Keep the backup folder until restoration
+completes. Select Full restoration when returning exactly to the earlier install.
+
+STATUS
+Automated prepared-depth and related ownership/trace tests passed. Release x64
+build passed. The broad robustness suite has a reproduced pre-existing Present
+static assertion failure. Real model/game/IQ/performance qualification remains
+pending. support\BUILD-MANIFEST.json records scope and exact binary identity.

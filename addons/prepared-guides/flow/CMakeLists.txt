@@ -14,6 +14,14 @@ set(FFX_COMPONENTS_PATH "${NR_FLOW_FFX_SDK}/sdk/src/components")
 set(FFX_HOST_BACKENDS_PATH "${FFX_HOST_PATH}/backends")
 set(FFX_SRC_BACKENDS_PATH "${NR_FLOW_FFX_SDK}/sdk/src/backends")
 set(FFX_SC_EXECUTABLE "${NR_FLOW_FFX_SDK}/sdk/tools/binary_store/FidelityFX_SC.exe")
+# Local evidence capture: SDK COMMAND expands this semicolon list as argv.
+# These controls are owned by Build-Core; no shared SDK source modification.
+if(NR_CAPTURE_SESSION)
+  if(NOT NR_CAPTURE_PYTHON OR NOT NR_CAPTURE_SCRIPT)
+    message(FATAL_ERROR "Capture session requires its frozen Python host and adapter")
+  endif()
+  set(FFX_SC_EXECUTABLE "${NR_CAPTURE_PYTHON};-B;${NR_CAPTURE_SCRIPT};--session;${NR_CAPTURE_SESSION};--ffx;--;${FFX_SC_EXECUTABLE}")
+endif()
 set(FFX_PLATFORM_NAME x64)
 foreach(effect ALL FSR1 FSR2 FSR3 FSR3UPSCALER FI SPD CACAO LPM BLUR VRS CAS DOF LENS PARALLEL_SORT
     DENOISER SSSR BREADCRUMBS BRIXELIZER BRIXELIZER_GI CLASSIFIER)
@@ -87,6 +95,13 @@ list(APPEND NR_FLOW_PRIVATE_SYMBOLS
   registerStaticTextureSrv registerStaticTextureUav pixBeginEventOnCommandList pixEndEventOnCommandList
   FrameInterpolationSwapChainDX12 Dx12Commands SimpleMovingAverage)
 foreach(target neurotic_prepared_flow ffx_opticalflow_x64 ffx_backend_dx12_x64)
+  if(NR_CAPTURE_SESSION)
+    set_property(TARGET ${target} PROPERTY CXX_COMPILER_LAUNCHER
+      "${NR_CAPTURE_PYTHON};-B;${NR_CAPTURE_SCRIPT};--session;${NR_CAPTURE_SESSION};--auto;--")
+    set_property(TARGET ${target} PROPERTY RULE_LAUNCH_LINK
+      "\"${NR_CAPTURE_PYTHON}\" -B \"${NR_CAPTURE_SCRIPT}\" --session \"${NR_CAPTURE_SESSION}\" --auto --")
+    target_compile_options(${target} PRIVATE /showIncludes)
+  endif()
   if(MSVC)
     # Games may preload an older app-local MSVCP140. Match the core's runtime
     # mutex initialization on every independently compiled flow participant,
@@ -98,7 +113,7 @@ foreach(target neurotic_prepared_flow ffx_opticalflow_x64 ffx_backend_dx12_x64)
   endforeach()
 endforeach()
 if(MSVC)
-  target_compile_options(neurotic_prepared_flow PRIVATE /W4 /WX /permissive-)
+  target_compile_options(neurotic_prepared_flow PRIVATE /W4 /WX /permissive- /EHsc)
 endif()
 add_executable(prepared_flow_backends "${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/prepared_flow_backends.cpp")
 target_compile_features(prepared_flow_backends PRIVATE cxx_std_20)

@@ -13,19 +13,28 @@ inline void ApplyLibraryLayoutLongLabels(bool japanese){
   {"desktop.hubshell.add_game_9dca998e",japanese?"ゲーム実行ファイルを追加":"+ Add selected game executable"},
   {"desktop.hubshell.add_directory_476e2098",japanese?"ゲームを含むディレクトリを追加":"Add directory containing installed games"},
   {"desktop.hubshell.scan_c58dc649",japanese?"インストール済みライブラリーを検索":"Search available installation libraries"},
-  {"desktop.hubshell.scanning_35a6c735",japanese?"インストール済みライブラリーを検索中...":"Searching available installation libraries..."}};
+  {"desktop.hubshell.scanning_35a6c735",japanese?"インストール済みライブラリーを検索中...":"Searching available installation libraries..."},
+  {"desktop.hubshell.open_game_folder_9d093510",japanese?"選択したゲームのインストールフォルダーを開く":"Open the selected game's installation folder"},
+  {"desktop.hubshell.open_screenshots_6b9d871c",japanese?"選択したゲームのスクリーンショットフォルダーを開く":"Open the selected game's screenshots folder"},
+  {"desktop.hubshell.open_ini_file_b892f0d6",japanese?"選択したゲームの設定ファイルを開く":"Open the selected game's saved configuration file"},
+  {"desktop.hubshell.refresh_d284aefe",japanese?"選択したゲームの保存状態を再確認":"Refresh the selected game's saved status"},
+  {"desktop.library.show_game",japanese?"選択したゲームをライブラリーに表示":"Show the selected game in the library"},
+  {"desktop.library.hide_game",japanese?"選択したゲームをライブラリーで非表示":"Hide the selected game in the library"}};
  for(auto [id,text]:labels)pack.entries[id]={text,"",CanonicalEnglish().at(id).revision};SetSharedCatalog(std::move(pack));
  for(auto [id,text]:labels)if(SharedText(id).text!=text)throw std::runtime_error("Library long-label fixture catalog was not applied");
 }
 inline void PrepareLibraryLayoutFixture(HubModel& model,int frames,const std::filesystem::path& output){
  model.loaded=false;model.page=1;model.onlineArtwork=false;
  if(model.games.empty()&&frames==0){
-  for(int i=0;i<24;++i){Game game;game.id="layout-"+std::to_string(i);game.title="Fixture game "+std::to_string(i);game.store="Steam";game.root=Utf8((output/L"inert-games").wstring());game.steamRoot=Utf8((output/L"steam").wstring());game.storeId=std::to_string(730+i);game.target={game.root+"/Fixture.exe","Fixture",true,"",64};game.favorite=i==1;model.games.push_back(game);}
+  for(int i=0;i<24;++i){Game game;game.id="layout-"+std::to_string(i);game.title="Fixture game "+std::to_string(i);game.store="Steam";game.root=Utf8((output/L"inert-games").wstring());game.steamRoot=Utf8((output/L"steam").wstring());game.storeId=std::to_string(730+i);game.target={game.root+"/Fixture.exe","Fixture",true,"",64,IMAGE_FILE_MACHINE_AMD64};game.favorite=i==1;model.games.push_back(game);}
   model.selected=0;model.inspection={{"state",nullptr},{"settings",Json::array()}};model.preflight={{"runtime",{{"ready",true}}},{"components",Json::object()}};
  }
  if(frames==20)model.selected=1;
  if(frames==40)model.selected=2;
  if(frames==60)model.selected=3;
+ if(frames==20){model.games[1].title="A very long fixture title wrapping over multiple words and lines";model.inspection["state"]={{"status","Partial"}};model.inspectionCached=true;}
+ if(frames==40){model.games[2].title=std::string(140,'W')+" Ω";model.inspection["state"]={{"status","Installed"}};model.inspectionCached=false;}
+ if(frames==60)model.inspection["state"]={{"status","unrecognized"}};
  if(frames==80){model.selected=0;model.games[0].title="Monster Hunter Wilds";model.games[0].target.suitable=false;model.inspectionCached=true;}
  model.discovery.busy=frames>=100&&frames<120;model.discovery.progress=.4f;model.discovery.started=GetTickCount64()-12000;
  if(frames==120){model.inspectionCached=false;model.message="Fixture scan failed. Previous library retained.";}

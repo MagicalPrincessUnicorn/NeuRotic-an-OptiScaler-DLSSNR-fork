@@ -1,0 +1,22 @@
+{
+  "fidelityFx": {
+    "usage": "read-only opticalflow and DX12 backend source",
+    "commit": "c6efa6bf7f2027b3ec94f28578bb5965eabb9e55",
+    "version": "1.1.2",
+    "workingTree": "clean",
+    "path": "C:/NeuRotic/external/FidelityFX-SDK"
+  },
+  "nvidiaApiHeaders": [
+    {
+      "path": "addons/prepared-guides/flow/vendor/nvof/nvOpticalFlowCommon.h",
+      "sha256": "fb96fc6061c01ec2c5970ecebebacac7535c033717ff39810cada1f197c8ec9f"
+    },
+    {
+      "path": "addons/prepared-guides/flow/vendor/nvof/nvOpticalFlowD3D12.h",
+      "sha256": "d1952d0946a26f1b77e76c320b4dfe9077d946fdc1a6195e01f0460362026305"
+    }
+  ],
+  "reshade": "external/reshade/SOURCE_MANIFEST.json",
+  "feederArchiveSha256": "6491e50d4eba56cd742c52bb996473d7ea140484e0b164b61bf1f01e0a2e9eb5",
+  "runtimePolicy": "NVIDIA runtime loaded from installed System32; public NGX and NR models explicitly supplied, not bundled"
+}

@@ -2,6 +2,8 @@
 
 #include "VulkanPresentRegistry.h"
 #include "VulkanPresentSubmission.h"
+#include "VulkanPresentSourcePlan.h"
+#include "VulkanPresentProviderPreparation.h"
 
 #include <memory>
 #include <mutex>
@@ -21,6 +23,8 @@ struct VkPresentExecution
     uint64_t ticket = 0;
     std::string reason;
     bool capturedCompletionObserved = false;
+    VkPresentSources::Receipt sources;
+    VkPresentProviderPreparation providerPreparation;
 };
 
 class VulkanPresentExecutor
@@ -32,7 +36,7 @@ class VulkanPresentExecutor
                                      std::shared_ptr<const NrConfigSnapshot<Config>> settings = {},
                                      std::shared_ptr<const VkNrGuideSelection> guideSelection = {},
                                      std::shared_ptr<const VkNrWaitBudget> waitBudget = {},
-                                     const std::function<bool()>& prepareProvider = {},
+                                      const std::function<VkPresentProviderPreparation(uint64_t,const VkNrPresentModelLifetime&)>& prepareProvider = {},
                                      std::shared_ptr<const VkCapturedGuideInput> capturedGuides = {});
     bool CompleteCapturedGuides(uint64_t ticket);
     void OriginalPresentReturned(uint64_t ticket, VkResult result, uint64_t registryPresentSerial = 0);
@@ -66,6 +70,7 @@ class VulkanPresentExecutor
         uint64_t presentSerial = 0;
         uint64_t registryPresentSerial = 0;
         uint64_t acquisition = 0;
+        VkPresentSources::Receipt sources;
         std::shared_ptr<const VkNrAcquireProof> acquireProof;
         std::unique_ptr<VkPresentPrivateFrame> frame;
         uint64_t estimatedBytes = 0;
@@ -73,18 +78,24 @@ class VulkanPresentExecutor
     Slot* Find(const VkObservedPresent& observed);
     Slot* Create(const VkObservedPresent& observed, VkInstance instance);
     void Destroy(Slot& slot, bool deviceAlive);
+    void ObserveSlotCompletion(Slot&,bool countCompletion=true);
+    void InvalidateSourceHistory();
     void ReleaseCompletedSupersededFrames(const VkObservedPresent&);
     void RetirePredecessors(const VkObservedPresent&, uint64_t successorPresentSerial);
 
     std::mutex mutex_;
     std::vector<std::unique_ptr<Slot>> slots_;
     uint64_t nextTicket_ = 0;
+    uint64_t nextSourceCapture_ = 0,sourcePolicyRevision_ = 0;
+    std::optional<VkPresentSources::Context> sourceContext_;
+    PresentInputDecision::InputClass lastSourceInput_ = PresentInputDecision::InputClass::Refused;
     uint64_t nextPresentSerial_ = 0;
     uint64_t retainedBytes_ = 0;
     bool closed_ = false;
     std::optional<bool> lastApplicationFacing_;
     VkQueue modelQueue_ = VK_NULL_HANDLE;
     VkPresentCompositionGate compositionGate_;
+    VkPresentInitializationOwner initialization_;
     const char* createRefusal_ = "Vulkan Present private frame allocation or format features unavailable";
 };
 

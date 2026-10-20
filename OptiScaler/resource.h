@@ -6,8 +6,8 @@
 #define VER_BUILD_DATE "Debug Build"
 #define VER_BUILD_COMMIT "Debug"
 #else
-#include "resource_build_date.h"
-#include "resource_build_commit.h"
+#include <resource_build_date.h>
+#include <resource_build_commit.h>
 #endif // !_DEBUG
 
 #define VS_VERSION_INFO 1
@@ -35,7 +35,7 @@
 // published GitHub release tags and deliberately does not follow upstream's DLL version.
 #define NEUROTIC_VERSION_MAJOR 0
 #define NEUROTIC_VERSION_MINOR 9
-#define NEUROTIC_VERSION_PATCH 8
+#define NEUROTIC_VERSION_PATCH 9
 
 #define VER_DEV_RELEASE
 // #define VER_PRE_RELEASE
@@ -76,4 +76,4 @@
 
 // NeuRotic public PE identity; genuine upstream VER_* identity remains separate.
 #define NEUROTIC_FILE_VERSION NEUROTIC_VERSION_MAJOR, NEUROTIC_VERSION_MINOR, NEUROTIC_VERSION_PATCH, 0
-#define NEUROTIC_FILE_VERSION_STR STRINGIZE(NEUROTIC_VERSION_MAJOR) "." STRINGIZE(NEUROTIC_VERSION_MINOR) "." STRINGIZE(NEUROTIC_VERSION_PATCH)
+#define NEUROTIC_FILE_VERSION_STR STRINGIZE(NEUROTIC_VERSION_MAJOR) "." STRINGIZE(NEUROTIC_VERSION_MINOR) "." STRINGIZE(NEUROTIC_VERSION_PATCH) " (" VER_BUILD_COMMIT ")"

@@ -1,5 +1,6 @@
 #pragma once
 #include "IFeature.h"
+#include <dlssnr/DlssNr_Dx11.h>
 
 #include <menu/menu_dx11.h>
 #include <shaders/rcas/RCAS_Dx11.h>
@@ -25,6 +26,10 @@ class IFeature_Dx11 : public virtual IFeature
     };
 
   protected:
+    DlssNr::NativeDx11::Feature _nrDx11;
+    DlssNr::NativeDx11::CreationValues _nrCallerCreation;
+    bool _nativeTemporalSuperSampling = false;
+
     ID3D11Device* Device = nullptr;
     ID3D11DeviceContext* DeviceContext = nullptr;
     inline static std::unique_ptr<Menu_Dx11> Imgui = nullptr;
@@ -37,8 +42,13 @@ class IFeature_Dx11 : public virtual IFeature
 
     virtual bool InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Parameter* InParameters) = 0;
     virtual bool EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Parameter* InParameters) = 0;
+    // A backend may request reinitialization without submitting an evaluation.
+    // Resolve such skips before Native Pre-SR can consume the temporal input.
+    virtual bool PrepareEvaluation(NVSDK_NGX_Parameter* InParameters) { return true; }
 
   public:
+    void SetNativeTemporalSuperSampling(bool value) { _nativeTemporalSuperSampling = value; }
+    void RevokeNativeTemporal() { _nrDx11.Revoke(); }
     // Only DX11 w/DX12 should be overriding those
     virtual bool Init(ID3D11Device* InDevice, ID3D11DeviceContext* InContext, NVSDK_NGX_Parameter* InParameters);
     virtual bool Evaluate(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Parameter* InParameters);
@@ -47,7 +57,9 @@ class IFeature_Dx11 : public virtual IFeature
     std::optional<double> ReadUpscalerTime(void* deviceContextVoid) override;
     void ReadDetailedGpuTimes(void* deviceContextVoid, std::vector<DetailedGpuTime>& detailedGpuTimes) override;
 
-    IFeature_Dx11(unsigned int InHandleId, NVSDK_NGX_Parameter* InParameters) : IFeature(InHandleId, InParameters) {}
+    IFeature_Dx11(unsigned int InHandleId, NVSDK_NGX_Parameter* InParameters)
+        : IFeature(InHandleId, InParameters),
+          _nrCallerCreation(DlssNr::NativeDx11::CreationValues::Read(InParameters)) {}
 
     ~IFeature_Dx11();
 };

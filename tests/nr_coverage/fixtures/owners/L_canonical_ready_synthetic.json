@@ -1,0 +1,4620 @@
+{
+  "schema_version": "2.0",
+  "candidate_id": "NPF-BUILD-002",
+  "source_mode": "SYNTHETIC_FIXTURE",
+  "snapshot_id": "fixture:canonical-ready",
+  "session_id": "fixture:session",
+  "build_identity": null,
+  "selected_scope_id": "fixture:scope",
+  "sampled_at_us": "1000000",
+  "current_observation_epoch": "7",
+  "current_config_revision": "7",
+  "frozen": false,
+  "scope_identity": {
+    "observation_id": "100",
+    "frame_id": {
+      "namespace": "fixture.frame",
+      "value": "7"
+    },
+    "view_id": {
+      "namespace": "fixture.view",
+      "value": "7"
+    },
+    "pass_id": {
+      "namespace": "fixture.pass",
+      "value": "7"
+    },
+    "generations": {
+      "lifecycle": {
+        "namespace": "fixture.lifecycle",
+        "value": "7"
+      },
+      "provider": {
+        "namespace": "fixture.provider",
+        "value": "7"
+      },
+      "device": {
+        "namespace": "fixture.device",
+        "value": "7"
+      },
+      "swapchain": {
+        "namespace": "fixture.swapchain",
+        "value": "7"
+      },
+      "configuration": {
+        "namespace": "fixture.configuration",
+        "value": "7"
+      },
+      "resource": {
+        "namespace": "fixture.resource",
+        "value": "7"
+      },
+      "route": {
+        "namespace": "fixture.route",
+        "value": "7"
+      },
+      "frame_context": {
+        "namespace": "fixture.frame_context",
+        "value": "7"
+      },
+      "model": {
+        "namespace": "fixture.model",
+        "value": "7"
+      },
+      "history": {
+        "namespace": "fixture.history",
+        "value": "7"
+      },
+      "hdr_descriptor": {
+        "namespace": "fixture.hdr_descriptor",
+        "value": "7"
+      },
+      "diagnostic_config_revision": {
+        "namespace": "fixture.diagnostic_config_revision",
+        "value": "7"
+      }
+    }
+  },
+  "health": {
+    "has_sample": true,
+    "stale": false,
+    "telemetry_gap": false,
+    "clock_anomaly": false,
+    "ambiguous_scope": false,
+    "transition_active": false,
+    "coverage_partial": false,
+    "dropped_packets": "0",
+    "evicted_scopes": "0"
+  },
+  "route": {
+    "owner_report": "ACTIVE",
+    "enabled": true,
+    "decision": "ACCEPTED",
+    "canonical_receipt_id": "fixture:b-decision",
+    "identity": {
+      "observation_id": "100",
+      "frame_id": {
+        "namespace": "fixture.frame",
+        "value": "7"
+      },
+      "view_id": {
+        "namespace": "fixture.view",
+        "value": "7"
+      },
+      "pass_id": {
+        "namespace": "fixture.pass",
+        "value": "7"
+      },
+      "generations": {
+        "lifecycle": {
+          "namespace": "fixture.lifecycle",
+          "value": "7"
+        },
+        "provider": {
+          "namespace": "fixture.provider",
+          "value": "7"
+        },
+        "device": {
+          "namespace": "fixture.device",
+          "value": "7"
+        },
+        "swapchain": {
+          "namespace": "fixture.swapchain",
+          "value": "7"
+        },
+        "configuration": {
+          "namespace": "fixture.configuration",
+          "value": "7"
+        },
+        "resource": {
+          "namespace": "fixture.resource",
+          "value": "7"
+        },
+        "route": {
+          "namespace": "fixture.route",
+          "value": "7"
+        },
+        "frame_context": {
+          "namespace": "fixture.frame_context",
+          "value": "7"
+        },
+        "model": {
+          "namespace": "fixture.model",
+          "value": "7"
+        },
+        "history": {
+          "namespace": "fixture.history",
+          "value": "7"
+        },
+        "hdr_descriptor": {
+          "namespace": "fixture.hdr_descriptor",
+          "value": "7"
+        },
+        "diagnostic_config_revision": {
+          "namespace": "fixture.diagnostic_config_revision",
+          "value": "7"
+        }
+      }
+    },
+    "required_domains": [
+      "frame_id",
+      "view_id",
+      "provider",
+      "device",
+      "configuration",
+      "resource",
+      "route"
+    ],
+    "requirements_complete": true,
+    "required_nodes": [
+      "color.reconstructed",
+      "depth.game",
+      "motion.game"
+    ],
+    "effective_consumer_id": "fixture:nr-native",
+    "effective_eligible": true,
+    "degraded": false,
+    "reason_codes": []
+  },
+  "nodes": [
+    {
+      "node_id": "frame.identity",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S07",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.view",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S13",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.pass",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.render_extent",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.output_extent",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S04",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.delta_time",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.reset",
+      "canonical_signal_id": null,
+      "kind": "FRAME",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "frame.history",
+      "canonical_signal_id": null,
+      "kind": "LIFECYCLE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S04",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "color.game_input",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "color.reconstructed",
+      "canonical_signal_id": "fixture:d:color.reconstructed",
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "PRESENT",
+      "validity": "VALID",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": "fixture.v1"
+      },
+      "provenance": {
+        "class": "DIRECT_CONTRACT",
+        "canonical_provenance_id": "fixture:provenance:color.reconstructed",
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": "100",
+        "frame_id": {
+          "namespace": "fixture.frame",
+          "value": "7"
+        },
+        "view_id": {
+          "namespace": "fixture.view",
+          "value": "7"
+        },
+        "pass_id": {
+          "namespace": "fixture.pass",
+          "value": "7"
+        },
+        "generations": {
+          "lifecycle": {
+            "namespace": "fixture.lifecycle",
+            "value": "7"
+          },
+          "provider": {
+            "namespace": "fixture.provider",
+            "value": "7"
+          },
+          "device": {
+            "namespace": "fixture.device",
+            "value": "7"
+          },
+          "swapchain": {
+            "namespace": "fixture.swapchain",
+            "value": "7"
+          },
+          "configuration": {
+            "namespace": "fixture.configuration",
+            "value": "7"
+          },
+          "resource": {
+            "namespace": "fixture.resource",
+            "value": "7"
+          },
+          "route": {
+            "namespace": "fixture.route",
+            "value": "7"
+          },
+          "frame_context": {
+            "namespace": "fixture.frame_context",
+            "value": "7"
+          },
+          "model": {
+            "namespace": "fixture.model",
+            "value": "7"
+          },
+          "history": {
+            "namespace": "fixture.history",
+            "value": "7"
+          },
+          "hdr_descriptor": {
+            "namespace": "fixture.hdr_descriptor",
+            "value": "7"
+          },
+          "diagnostic_config_revision": {
+            "namespace": "fixture.diagnostic_config_revision",
+            "value": "7"
+          }
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "CURRENT",
+        "observed_at_us": "900000",
+        "published_at_us": "910000",
+        "origin_frame": {
+          "namespace": "fixture.frame",
+          "value": "7"
+        },
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": {
+          "width": 2560,
+          "height": 1440
+        },
+        "allocation_method": "OWNER_REPORTED",
+        "active_subrect": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080
+        },
+        "subrect_method": "OWNER_REPORTED"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "CONSUMER_QUALIFIED",
+        "receipt_id": "fixture:q:color.reconstructed",
+        "checks": [
+          {
+            "id": "fixture:owner-qualification",
+            "owner_id": "D_SEMANTICS",
+            "result": "PASS",
+            "scope": "fixture:complete-contract",
+            "reason_code": null
+          }
+        ]
+      },
+      "consumers": [
+        {
+          "consumer_id": "fixture:nr-native",
+          "owner_id": "B_ORCHESTRATION",
+          "requirement": "REQUIRED",
+          "eligibility": "ELIGIBLE",
+          "binding": "HOST_BOUND",
+          "consumption": "UNKNOWN",
+          "receipt_id": "fixture:b:color.reconstructed",
+          "qualification_receipt_id": "fixture:q:color.reconstructed",
+          "required_domains": [
+            "frame_id",
+            "view_id",
+            "provider",
+            "device",
+            "configuration",
+            "resource",
+            "route"
+          ],
+          "identity": {
+            "observation_id": "100",
+            "frame_id": {
+              "namespace": "fixture.frame",
+              "value": "7"
+            },
+            "view_id": {
+              "namespace": "fixture.view",
+              "value": "7"
+            },
+            "pass_id": {
+              "namespace": "fixture.pass",
+              "value": "7"
+            },
+            "generations": {
+              "lifecycle": {
+                "namespace": "fixture.lifecycle",
+                "value": "7"
+              },
+              "provider": {
+                "namespace": "fixture.provider",
+                "value": "7"
+              },
+              "device": {
+                "namespace": "fixture.device",
+                "value": "7"
+              },
+              "swapchain": {
+                "namespace": "fixture.swapchain",
+                "value": "7"
+              },
+              "configuration": {
+                "namespace": "fixture.configuration",
+                "value": "7"
+              },
+              "resource": {
+                "namespace": "fixture.resource",
+                "value": "7"
+              },
+              "route": {
+                "namespace": "fixture.route",
+                "value": "7"
+              },
+              "frame_context": {
+                "namespace": "fixture.frame_context",
+                "value": "7"
+              },
+              "model": {
+                "namespace": "fixture.model",
+                "value": "7"
+              },
+              "history": {
+                "namespace": "fixture.history",
+                "value": "7"
+              },
+              "hdr_descriptor": {
+                "namespace": "fixture.hdr_descriptor",
+                "value": "7"
+              },
+              "diagnostic_config_revision": {
+                "namespace": "fixture.diagnostic_config_revision",
+                "value": "7"
+              }
+            }
+          },
+          "reason_codes": []
+        }
+      ],
+      "reasons": [],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "color.model_input",
+      "canonical_signal_id": null,
+      "kind": "DERIVED",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "color.nr_output",
+      "canonical_signal_id": null,
+      "kind": "DERIVED",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "depth.game",
+      "canonical_signal_id": "fixture:d:depth.game",
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "PRESENT",
+      "validity": "VALID",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": "fixture.v1"
+      },
+      "provenance": {
+        "class": "DIRECT_CONTRACT",
+        "canonical_provenance_id": "fixture:provenance:depth.game",
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": "100",
+        "frame_id": {
+          "namespace": "fixture.frame",
+          "value": "7"
+        },
+        "view_id": {
+          "namespace": "fixture.view",
+          "value": "7"
+        },
+        "pass_id": {
+          "namespace": "fixture.pass",
+          "value": "7"
+        },
+        "generations": {
+          "lifecycle": {
+            "namespace": "fixture.lifecycle",
+            "value": "7"
+          },
+          "provider": {
+            "namespace": "fixture.provider",
+            "value": "7"
+          },
+          "device": {
+            "namespace": "fixture.device",
+            "value": "7"
+          },
+          "swapchain": {
+            "namespace": "fixture.swapchain",
+            "value": "7"
+          },
+          "configuration": {
+            "namespace": "fixture.configuration",
+            "value": "7"
+          },
+          "resource": {
+            "namespace": "fixture.resource",
+            "value": "7"
+          },
+          "route": {
+            "namespace": "fixture.route",
+            "value": "7"
+          },
+          "frame_context": {
+            "namespace": "fixture.frame_context",
+            "value": "7"
+          },
+          "model": {
+            "namespace": "fixture.model",
+            "value": "7"
+          },
+          "history": {
+            "namespace": "fixture.history",
+            "value": "7"
+          },
+          "hdr_descriptor": {
+            "namespace": "fixture.hdr_descriptor",
+            "value": "7"
+          },
+          "diagnostic_config_revision": {
+            "namespace": "fixture.diagnostic_config_revision",
+            "value": "7"
+          }
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "CURRENT",
+        "observed_at_us": "900000",
+        "published_at_us": "910000",
+        "origin_frame": {
+          "namespace": "fixture.frame",
+          "value": "7"
+        },
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": {
+          "width": 2560,
+          "height": 1440
+        },
+        "allocation_method": "OWNER_REPORTED",
+        "active_subrect": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080
+        },
+        "subrect_method": "OWNER_REPORTED"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "CONSUMER_QUALIFIED",
+        "receipt_id": "fixture:q:depth.game",
+        "checks": [
+          {
+            "id": "fixture:owner-qualification",
+            "owner_id": "D_SEMANTICS",
+            "result": "PASS",
+            "scope": "fixture:complete-contract",
+            "reason_code": null
+          }
+        ]
+      },
+      "consumers": [
+        {
+          "consumer_id": "fixture:nr-native",
+          "owner_id": "B_ORCHESTRATION",
+          "requirement": "REQUIRED",
+          "eligibility": "ELIGIBLE",
+          "binding": "HOST_BOUND",
+          "consumption": "UNKNOWN",
+          "receipt_id": "fixture:b:depth.game",
+          "qualification_receipt_id": "fixture:q:depth.game",
+          "required_domains": [
+            "frame_id",
+            "view_id",
+            "provider",
+            "device",
+            "configuration",
+            "resource",
+            "route"
+          ],
+          "identity": {
+            "observation_id": "100",
+            "frame_id": {
+              "namespace": "fixture.frame",
+              "value": "7"
+            },
+            "view_id": {
+              "namespace": "fixture.view",
+              "value": "7"
+            },
+            "pass_id": {
+              "namespace": "fixture.pass",
+              "value": "7"
+            },
+            "generations": {
+              "lifecycle": {
+                "namespace": "fixture.lifecycle",
+                "value": "7"
+              },
+              "provider": {
+                "namespace": "fixture.provider",
+                "value": "7"
+              },
+              "device": {
+                "namespace": "fixture.device",
+                "value": "7"
+              },
+              "swapchain": {
+                "namespace": "fixture.swapchain",
+                "value": "7"
+              },
+              "configuration": {
+                "namespace": "fixture.configuration",
+                "value": "7"
+              },
+              "resource": {
+                "namespace": "fixture.resource",
+                "value": "7"
+              },
+              "route": {
+                "namespace": "fixture.route",
+                "value": "7"
+              },
+              "frame_context": {
+                "namespace": "fixture.frame_context",
+                "value": "7"
+              },
+              "model": {
+                "namespace": "fixture.model",
+                "value": "7"
+              },
+              "history": {
+                "namespace": "fixture.history",
+                "value": "7"
+              },
+              "hdr_descriptor": {
+                "namespace": "fixture.hdr_descriptor",
+                "value": "7"
+              },
+              "diagnostic_config_revision": {
+                "namespace": "fixture.diagnostic_config_revision",
+                "value": "7"
+              }
+            }
+          },
+          "reason_codes": []
+        }
+      ],
+      "reasons": [],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "motion.game",
+      "canonical_signal_id": "fixture:d:motion.game",
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "PRESENT",
+      "validity": "VALID",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": "fixture.v1"
+      },
+      "provenance": {
+        "class": "DIRECT_CONTRACT",
+        "canonical_provenance_id": "fixture:provenance:motion.game",
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": "100",
+        "frame_id": {
+          "namespace": "fixture.frame",
+          "value": "7"
+        },
+        "view_id": {
+          "namespace": "fixture.view",
+          "value": "7"
+        },
+        "pass_id": {
+          "namespace": "fixture.pass",
+          "value": "7"
+        },
+        "generations": {
+          "lifecycle": {
+            "namespace": "fixture.lifecycle",
+            "value": "7"
+          },
+          "provider": {
+            "namespace": "fixture.provider",
+            "value": "7"
+          },
+          "device": {
+            "namespace": "fixture.device",
+            "value": "7"
+          },
+          "swapchain": {
+            "namespace": "fixture.swapchain",
+            "value": "7"
+          },
+          "configuration": {
+            "namespace": "fixture.configuration",
+            "value": "7"
+          },
+          "resource": {
+            "namespace": "fixture.resource",
+            "value": "7"
+          },
+          "route": {
+            "namespace": "fixture.route",
+            "value": "7"
+          },
+          "frame_context": {
+            "namespace": "fixture.frame_context",
+            "value": "7"
+          },
+          "model": {
+            "namespace": "fixture.model",
+            "value": "7"
+          },
+          "history": {
+            "namespace": "fixture.history",
+            "value": "7"
+          },
+          "hdr_descriptor": {
+            "namespace": "fixture.hdr_descriptor",
+            "value": "7"
+          },
+          "diagnostic_config_revision": {
+            "namespace": "fixture.diagnostic_config_revision",
+            "value": "7"
+          }
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "CURRENT",
+        "observed_at_us": "900000",
+        "published_at_us": "910000",
+        "origin_frame": {
+          "namespace": "fixture.frame",
+          "value": "7"
+        },
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": {
+          "width": 2560,
+          "height": 1440
+        },
+        "allocation_method": "OWNER_REPORTED",
+        "active_subrect": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080
+        },
+        "subrect_method": "OWNER_REPORTED"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "CONSUMER_QUALIFIED",
+        "receipt_id": "fixture:q:motion.game",
+        "checks": [
+          {
+            "id": "fixture:owner-qualification",
+            "owner_id": "D_SEMANTICS",
+            "result": "PASS",
+            "scope": "fixture:complete-contract",
+            "reason_code": null
+          }
+        ]
+      },
+      "consumers": [
+        {
+          "consumer_id": "fixture:nr-native",
+          "owner_id": "B_ORCHESTRATION",
+          "requirement": "REQUIRED",
+          "eligibility": "ELIGIBLE",
+          "binding": "HOST_BOUND",
+          "consumption": "UNKNOWN",
+          "receipt_id": "fixture:b:motion.game",
+          "qualification_receipt_id": "fixture:q:motion.game",
+          "required_domains": [
+            "frame_id",
+            "view_id",
+            "provider",
+            "device",
+            "configuration",
+            "resource",
+            "route"
+          ],
+          "identity": {
+            "observation_id": "100",
+            "frame_id": {
+              "namespace": "fixture.frame",
+              "value": "7"
+            },
+            "view_id": {
+              "namespace": "fixture.view",
+              "value": "7"
+            },
+            "pass_id": {
+              "namespace": "fixture.pass",
+              "value": "7"
+            },
+            "generations": {
+              "lifecycle": {
+                "namespace": "fixture.lifecycle",
+                "value": "7"
+              },
+              "provider": {
+                "namespace": "fixture.provider",
+                "value": "7"
+              },
+              "device": {
+                "namespace": "fixture.device",
+                "value": "7"
+              },
+              "swapchain": {
+                "namespace": "fixture.swapchain",
+                "value": "7"
+              },
+              "configuration": {
+                "namespace": "fixture.configuration",
+                "value": "7"
+              },
+              "resource": {
+                "namespace": "fixture.resource",
+                "value": "7"
+              },
+              "route": {
+                "namespace": "fixture.route",
+                "value": "7"
+              },
+              "frame_context": {
+                "namespace": "fixture.frame_context",
+                "value": "7"
+              },
+              "model": {
+                "namespace": "fixture.model",
+                "value": "7"
+              },
+              "history": {
+                "namespace": "fixture.history",
+                "value": "7"
+              },
+              "hdr_descriptor": {
+                "namespace": "fixture.hdr_descriptor",
+                "value": "7"
+              },
+              "diagnostic_config_revision": {
+                "namespace": "fixture.diagnostic_config_revision",
+                "value": "7"
+              }
+            }
+          },
+          "reason_codes": []
+        }
+      ],
+      "reasons": [],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "jitter.game",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "motion.scale",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "motion.convention",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "depth.convention",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "exposure.texture",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S04",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "exposure.pre_exposure",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "exposure.readback",
+      "canonical_signal_id": null,
+      "kind": "DIAGNOSTIC",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S04",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "HISTORICAL",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "mask.reactive",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "mask.transparency",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "material.normals",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "material.roughness",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "material.diffuse_albedo",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "material.specular_albedo",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "material.metallic",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "lighting.hit_distance",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "D_SEMANTICS",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "hdr.input_encoding",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "hdr.swapchain_color",
+      "canonical_signal_id": null,
+      "kind": "LIFECYCLE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "HDR",
+        "surface_id": "S10",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "GENERATION",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "hdr.metadata",
+      "canonical_signal_id": null,
+      "kind": "LIFECYCLE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "HDR",
+        "surface_id": "S12",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "GENERATION",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "hdr.descriptor",
+      "canonical_signal_id": null,
+      "kind": "LIFECYCLE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "HDR",
+        "surface_id": "S10",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "GENERATION",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "aux.ui",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "H_AUXILIARY",
+        "surface_id": "S06",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "aux.ui_alpha",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "H_AUXILIARY",
+        "surface_id": "S06",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "aux.backbuffer",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "H_AUXILIARY",
+        "surface_id": "S06",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "aux.ui_correction",
+      "canonical_signal_id": null,
+      "kind": "DIAGNOSTIC",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_VULKAN",
+        "surface_id": "S06",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "aux.hudless",
+      "canonical_signal_id": null,
+      "kind": "SIGNAL",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "H_AUXILIARY",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "derived.depth_constant",
+      "canonical_signal_id": null,
+      "kind": "DERIVED",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "PRESENT",
+        "surface_id": "S09",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "derived.motion_zero",
+      "canonical_signal_id": null,
+      "kind": "DERIVED",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "PRESENT",
+        "surface_id": "S09",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "derived.present_depth",
+      "canonical_signal_id": null,
+      "kind": "DERIVED",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "PRESENT",
+        "surface_id": "S09",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "derived.present_motion",
+      "canonical_signal_id": null,
+      "kind": "DERIVED",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "PRESENT",
+        "surface_id": "S09",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "route.requested",
+      "canonical_signal_id": null,
+      "kind": "ROUTE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "CONFIG",
+        "surface_id": "S20",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "GENERATION",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "route.effective",
+      "canonical_signal_id": null,
+      "kind": "ROUTE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S04",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "lifecycle.nr",
+      "canonical_signal_id": null,
+      "kind": "LIFECYCLE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S04",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "GENERATION",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "model.evaluation",
+      "canonical_signal_id": null,
+      "kind": "DIAGNOSTIC",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX12",
+        "surface_id": "S05",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "provider.fg",
+      "canonical_signal_id": null,
+      "kind": "LIFECYCLE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "PREFG",
+        "surface_id": "S13",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "GENERATION",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "present.status",
+      "canonical_signal_id": null,
+      "kind": "ROUTE",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "PRESENT",
+        "surface_id": "S09",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "bridge.dx11",
+      "canonical_signal_id": null,
+      "kind": "DIAGNOSTIC",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "NATIVE_DX11",
+        "surface_id": "S16",
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    },
+    {
+      "node_id": "scheduler.nr",
+      "canonical_signal_id": null,
+      "kind": "DIAGNOSTIC",
+      "scope_id": "fixture:scope",
+      "presence": "NOT_OBSERVED",
+      "validity": "UNKNOWN",
+      "source": {
+        "owner_id": "K_SCHEDULER",
+        "surface_id": null,
+        "api": null,
+        "original_semantic_name": null,
+        "contract_version": null
+      },
+      "provenance": {
+        "class": "UNKNOWN",
+        "canonical_provenance_id": null,
+        "upstream_node_refs": [],
+        "notes": "Synthetic registry fixture; not a game observation."
+      },
+      "identity": {
+        "observation_id": null,
+        "frame_id": null,
+        "view_id": null,
+        "pass_id": null,
+        "generations": {
+          "lifecycle": null,
+          "provider": null,
+          "device": null,
+          "swapchain": null,
+          "configuration": null,
+          "resource": null,
+          "route": null,
+          "frame_context": null,
+          "model": null,
+          "history": null,
+          "hdr_descriptor": null,
+          "diagnostic_config_revision": null
+        }
+      },
+      "freshness": {
+        "scope": "FRAME",
+        "state": "UNKNOWN",
+        "observed_at_us": null,
+        "published_at_us": null,
+        "origin_frame": null,
+        "observation_epoch": "7"
+      },
+      "geometry": {
+        "allocation": null,
+        "allocation_method": "UNKNOWN",
+        "active_subrect": null,
+        "subrect_method": "UNKNOWN"
+      },
+      "format": null,
+      "color_space": null,
+      "coordinates": [],
+      "conversion": {
+        "state": "UNKNOWN",
+        "chain": [],
+        "owner_receipt_id": null
+      },
+      "qualification": {
+        "level": "UNKNOWN",
+        "receipt_id": null,
+        "checks": []
+      },
+      "consumers": [],
+      "reasons": [
+        {
+          "code": "npf.not_observed",
+          "issuer": "NPF",
+          "severity": "UNKNOWN",
+          "text": "No bound owner observation in this synthetic fixture.",
+          "impact": null
+        }
+      ],
+      "raw_values": [],
+      "effective_values": []
+    }
+  ],
+  "capabilities": [],
+  "candidates": [],
+  "projection": {
+    "label": "READY",
+    "reason_codes": [],
+    "consumer_id": "fixture:nr-native",
+    "required_total": 3,
+    "required_qualified": 3
+  },
+  "runtime_qualification": "NOT_RUN",
+  "sample_observed_at_us": "900000",
+  "sample_epoch": "7",
+  "sample_config_revision": "7"
+}

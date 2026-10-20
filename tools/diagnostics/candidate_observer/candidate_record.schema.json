@@ -1,0 +1,1206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:neurotic:observer:candidate:2.0",
+  "title": "NeuRotic G create-only candidate evidence record",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "profile_id": {
+      "const": "OBS-CLOSURE-1"
+    },
+    "candidate_key": {
+      "$ref": "#/$defs/candidate_key"
+    },
+    "observation_incarnation": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,19})$",
+      "maxLength": 20
+    },
+    "api": {
+      "const": "D3D12"
+    },
+    "descriptor": {
+      "$ref": "#/$defs/descriptor"
+    },
+    "descriptor_fingerprint": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "local_stage": {
+      "enum": [
+        "OBSERVED",
+        "CANDIDATE"
+      ]
+    },
+    "admission_authority": {
+      "const": "none"
+    },
+    "may_admit": {
+      "const": false
+    },
+    "external_qualification": {
+      "const": "unavailable"
+    },
+    "resource_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/owner_ref"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "device_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/owner_ref"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "heap_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/owner_ref"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "content_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/owner_ref"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "frame_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/owner_ref"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "view_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/owner_ref"
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "owner_resource_generation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "owner_device_generation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "owner_heap_generation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "owner_content_version": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "state",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/unknown"
+        }
+      ]
+    },
+    "correlation": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "previous_candidate": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/candidate_key"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prior_address_history": {
+          "enum": [
+            "not_seen_in_retained_map",
+            "reappearance",
+            "unavailable"
+          ]
+        },
+        "meaning": {
+          "const": "observation_only_not_resource_identity"
+        }
+      },
+      "required": [
+        "token",
+        "previous_candidate",
+        "prior_address_history",
+        "meaning"
+      ],
+      "additionalProperties": false
+    },
+    "observation_source": {
+      "type": "object",
+      "properties": {
+        "seam_id": {
+          "enum": [
+            "S03"
+          ]
+        },
+        "callsite": {
+          "enum": [
+            "D3D12_COMMITTED_NORMAL",
+            "D3D12_PLACED_NORMAL"
+          ]
+        },
+        "outcome": {
+          "const": "object_observed"
+        },
+        "descriptor_basis": {
+          "const": "call_arguments"
+        },
+        "creation_sequence": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "heap_offset": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,19})$",
+                  "maxLength": 20
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        }
+      },
+      "required": [
+        "seam_id",
+        "callsite",
+        "outcome",
+        "descriptor_basis",
+        "creation_sequence",
+        "heap_offset"
+      ],
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "lifecycle_coverage": {
+          "const": "create_only"
+        },
+        "creation_family": {
+          "enum": [
+            "installed",
+            "not_installed",
+            "unknown",
+            "unsupported"
+          ]
+        },
+        "complete_transport": {
+          "type": "boolean"
+        },
+        "loss_observed": {
+          "type": "boolean"
+        },
+        "drop_count": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "drop_count_exact": {
+          "type": "boolean"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 96
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "lifecycle_coverage",
+        "creation_family",
+        "complete_transport",
+        "loss_observed",
+        "drop_count",
+        "drop_count_exact",
+        "limitations"
+      ],
+      "additionalProperties": false
+    },
+    "lifetime": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "const": "unknown"
+        },
+        "reason": {
+          "const": "creation_is_not_liveness"
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "temporal": {
+      "type": "object",
+      "properties": {
+        "first_sequence": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "last_sequence": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "first_window": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "last_window": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "first_elapsed_ms": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,19})$",
+                  "maxLength": 20
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "last_elapsed_ms": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,19})$",
+                  "maxLength": 20
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "time_basis": {
+          "const": "worker_published_collection_clock"
+        },
+        "observation_count": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "frame_budget_basis": {
+          "enum": [
+            "unknown",
+            "owner_monotonic_frame"
+          ]
+        },
+        "update_cadence": {
+          "$ref": "#/$defs/unknown"
+        },
+        "content_stability": {
+          "$ref": "#/$defs/unknown"
+        }
+      },
+      "required": [
+        "first_sequence",
+        "last_sequence",
+        "first_window",
+        "last_window",
+        "first_elapsed_ms",
+        "last_elapsed_ms",
+        "time_basis",
+        "observation_count",
+        "frame_budget_basis",
+        "update_cadence",
+        "content_stability"
+      ],
+      "additionalProperties": false
+    },
+    "retention": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "RETAINED",
+            "STALE",
+            "SUPERSEDED_FOR_CORRELATION",
+            "CONFLICTED",
+            "EVICTED"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hypothesis"
+      },
+      "maxItems": 4
+    },
+    "factor_ledger": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/factor"
+      },
+      "maxItems": 16
+    },
+    "ranking": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "const": "OBS-RANK-001"
+        },
+        "profile": {
+          "const": "create-only-1"
+        },
+        "tier": {
+          "enum": [
+            "unranked",
+            "candidate_low"
+          ]
+        },
+        "score_as_probability": {
+          "const": false
+        }
+      },
+      "required": [
+        "model",
+        "profile",
+        "tier",
+        "score_as_probability"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "profile_id",
+    "candidate_key",
+    "observation_incarnation",
+    "api",
+    "descriptor",
+    "descriptor_fingerprint",
+    "local_stage",
+    "admission_authority",
+    "may_admit",
+    "external_qualification",
+    "resource_ref",
+    "device_ref",
+    "heap_ref",
+    "content_ref",
+    "frame_ref",
+    "view_ref",
+    "owner_resource_generation",
+    "owner_device_generation",
+    "owner_heap_generation",
+    "owner_content_version",
+    "correlation",
+    "observation_source",
+    "coverage",
+    "lifetime",
+    "temporal",
+    "retention",
+    "hypotheses",
+    "factor_ledger",
+    "ranking"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "unknown": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "unknown",
+            "unavailable",
+            "not_applicable"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "candidate_key": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "birth_epoch": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "api": {
+          "enum": [
+            "D3D12"
+          ]
+        },
+        "creation_sequence": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        }
+      },
+      "required": [
+        "session",
+        "birth_epoch",
+        "api",
+        "creation_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "owner_ref": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "contract": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,19})$",
+          "maxLength": 20
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "owner",
+        "contract",
+        "version",
+        "evidence_id",
+        "revision",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "descriptor": {
+      "type": "object",
+      "properties": {
+        "api": {
+          "const": "D3D12"
+        },
+        "dimension": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "enum": [
+                    "buffer",
+                    "texture1d",
+                    "texture2d",
+                    "texture3d",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "alignment": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,19})$",
+                  "maxLength": 20
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "width": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,19})$",
+                  "maxLength": 20
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "height": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "depth_or_array_size": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "mip_levels": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "format": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "layout": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "resource_flags": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "sample_count": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "sample_quality": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        },
+        "initial_state": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "known"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "state",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "$ref": "#/$defs/unknown"
+            }
+          ]
+        }
+      },
+      "required": [
+        "api",
+        "dimension",
+        "alignment",
+        "width",
+        "height",
+        "depth_or_array_size",
+        "mip_levels",
+        "format",
+        "layout",
+        "resource_flags",
+        "sample_count",
+        "sample_quality",
+        "initial_state"
+      ],
+      "additionalProperties": false
+    },
+    "factor": {
+      "type": "object",
+      "properties": {
+        "factor_id": {
+          "type": "string",
+          "pattern": "^OBS-F-[A-Z0-9-]+$",
+          "maxLength": 80
+        },
+        "role": {
+          "enum": [
+            "support",
+            "contradiction",
+            "hard_gate",
+            "search_prior"
+          ]
+        },
+        "strength": {
+          "enum": [
+            "weak",
+            "moderate",
+            "strong",
+            "decisive"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "supports",
+            "contradicts",
+            "passes",
+            "fails",
+            "unknown",
+            "not_observed",
+            "not_applicable",
+            "refused",
+            "caution"
+          ]
+        },
+        "evidence_sequences": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "maxLength": 20
+          },
+          "maxItems": 8
+        },
+        "explanation_code": {
+          "type": "string",
+          "maxLength": 96
+        }
+      },
+      "required": [
+        "factor_id",
+        "role",
+        "strength",
+        "outcome",
+        "evidence_sequences",
+        "explanation_code"
+      ],
+      "additionalProperties": false
+    },
+    "hypothesis": {
+      "type": "object",
+      "properties": {
+        "signal_kind": {
+          "enum": [
+            "hardware_depth",
+            "linear_depth",
+            "motion_vectors",
+            "exposure",
+            "ui_color",
+            "ui_alpha",
+            "hudless_color",
+            "normals"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "verification": {
+          "const": "unqualified"
+        },
+        "evidence_sequences": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "maxLength": 20
+          },
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "signal_kind",
+        "method",
+        "version",
+        "verification",
+        "evidence_sequences"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

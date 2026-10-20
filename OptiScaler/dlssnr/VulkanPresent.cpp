@@ -29,8 +29,9 @@ VkPresentRecordResult RecordVkPresentImage(const VkPresentImageRequest& request,
             commands.Discard();
             return {VkRecordStatus::Partial,"model preparation command buffer could not be sealed",true};
         }
-        return {VkRecordStatus::Complete,chain.reason,true,false,chain.requestedPasses,0,
+        VkPresentRecordResult result{VkRecordStatus::Complete,chain.reason,true,false,chain.requestedPasses,0,
             0,false,chain.use,false,true};
+        result.modelLifetime=chain.modelLifetime;return result;
     }
     if (!evaluated)
     {
@@ -54,8 +55,9 @@ VkPresentRecordResult RecordVkPresentImage(const VkPresentImageRequest& request,
         commands.Discard();
         return { VkRecordStatus::Partial, "private command buffer could not be sealed", true, true };
     }
-    return { VkRecordStatus::Complete, "", true, !request.captureOnly,chain.requestedPasses,chain.completedPasses,
+    VkPresentRecordResult result{VkRecordStatus::Complete, "", true, !request.captureOnly,chain.requestedPasses,chain.completedPasses,
              chain.outputVersion,chain.chainDeliverable,chain.use,request.captureOnly };
+    result.modelLifetime=chain.modelLifetime;return result;
 }
 
 } // namespace DlssNr

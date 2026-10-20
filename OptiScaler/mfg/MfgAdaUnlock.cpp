@@ -26,9 +26,24 @@
 #include <new>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace Neurotic::Mfg
 {
+struct MfgWrapperResolutionAccess
+{
+    using Input = MfgWrapperResolution::PreparedInput;
+    static Input& Prepared(MfgWrapperResolution& r) noexcept { return r.prepared; }
+    static MfgWrapperRoleLease*& Retired(MfgWrapperResolution& r, size_t i) noexcept { return r.retired[i]; }
+};
+struct MfgWrapperRoleLease
+{
+    MfgWrapperResolutionAccess::Input input;
+    // Like existing provider/wrapper/temporal receipts, published or
+    // indeterminate ownership survives input retirement and CRT teardown.
+    bool processRetained = false;
+};
+
 namespace
 {
 struct Runtime
@@ -36,6 +51,9 @@ struct Runtime
     struct TextReceipt { uintptr_t address = 0; size_t size = 0; uint64_t fingerprint = 0; };
     std::mutex mutex;
     MfgRuntimeSnapshot snapshot;
+    // Completed invalidation is authoritative even before the first receipt.
+    // Protected by mutex; never move the accepted generation backwards.
+    uint64_t invalidationGeneration = 0;
     MfgPublicationLatch latch;
     MfgPublicationReceipt receipt;
     HMODULE heldWrapper = nullptr;
@@ -43,6 +61,9 @@ struct Runtime
     void* temporalAllocation = nullptr;
     LUID adapterLuid {};
     bool adapterObserved = false;
+    // Immutable while the retained provider/patch receipt exists. Later device
+    // observations must never stand in for the adapter that owns publication.
+    LUID ownedAdapterLuid {};
     std::atomic<uint64_t> unloadEpoch {1};
     TextReceipt providerText, wrapperText, temporalData;
     std::array<HMODULE, 512> failedDiscoveryModules {};
@@ -51,17 +72,182 @@ struct Runtime
     uint64_t failedDiscoveryEpoch = 0;
     HMODULE reportedWrapper = nullptr;
     bool providerConflict = false;
+    uint64_t wrapperSelectionEpoch = 0;
+    const std::atomic<uint64_t>* wrapperHookClock = nullptr;
+    uint8_t wrapperTrackingFailed = 0;
+    std::array<void*, 2> untrackedWrapperCallbacks {};
+    std::array<MfgWrapperRoleLease*, 2> wrapperInputs {};
+    // Raw retained receipts intentionally have no CRT-time destructor.
+    std::array<MfgWrapperRoleLease*, 2> ownedWrapperInputs {};
+    std::array<std::atomic<HMODULE>, 6> wrapperReleaseHints {};
+    std::atomic<HMODULE> observedWrapper {nullptr};
 };
 Runtime runtime;
 std::mutex resolutionMutex;
 MfgResolutionDiagnostics resolutionDiagnostics;
 
+using WrapperInput = MfgWrapperResolutionAccess::Input;
+void ReleaseWrapperInput(WrapperInput& input) noexcept
+{
+    if (input.callbackOwner) FreeLibrary(input.callbackOwner);
+    if (input.resolverOwner) FreeLibrary(input.resolverOwner);
+    if (input.sourcePlugin) FreeLibrary(input.sourcePlugin);
+    input = {};
+}
+void ReleaseWrapperLease(MfgWrapperRoleLease* lease) noexcept
+{
+    if (!lease || lease->processRetained) return;
+    ReleaseWrapperInput(lease->input);
+    delete lease;
+}
+int WrapperCallbackKind(const char* name) noexcept
+{
+    if (reinterpret_cast<uintptr_t>(name) <= 0xffff) return -1;
+    if (std::strcmp(name, "slDLSSGSetOptions") == 0) return 0;
+    if (std::strcmp(name, "slDLSSGGetState") == 0) return 1;
+    return -1;
+}
+bool HoldWrapperAddress(const void* address, HMODULE& owner) noexcept
+{
+    return address && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        reinterpret_cast<LPCWSTR>(address), &owner) != 0;
+}
+bool ExecutableWrapperAddress(const void* address, HMODULE owner) noexcept
+{
+    MEMORY_BASIC_INFORMATION memory {};
+    if (!address || !owner || !VirtualQuery(address, &memory, sizeof(memory)) ||
+        memory.State != MEM_COMMIT || memory.Type != MEM_IMAGE || memory.AllocationBase != owner) return false;
+    const DWORD protection = memory.Protect & 0xff;
+    return protection == PAGE_EXECUTE || protection == PAGE_EXECUTE_READ ||
+        protection == PAGE_EXECUTE_READWRITE || protection == PAGE_EXECUTE_WRITECOPY;
+}
+HMODULE CommonWrapperTargetLocked(bool& ambiguous) noexcept
+{
+    HMODULE target = nullptr;
+    ambiguous = false;
+    for (const auto* lease : runtime.wrapperInputs)
+    {
+        if (!lease || !lease->input.ready) continue;
+        if (target && target != lease->input.callbackOwner) ambiguous = true;
+        target = lease->input.callbackOwner;
+    }
+    return ambiguous || runtime.wrapperTrackingFailed ? nullptr : target;
+}
+bool CurrentWrapperRoleLocked(HMODULE module) noexcept
+{
+    bool ambiguous = false;
+    if (!module || !runtime.wrapperHookClock ||
+        runtime.wrapperHookClock->load(std::memory_order_acquire) != runtime.wrapperSelectionEpoch ||
+        CommonWrapperTargetLocked(ambiguous) != module) return false;
+    for (const auto* lease : runtime.wrapperInputs)
+        if (lease && !ExecutableWrapperAddress(lease->input.callback, lease->input.callbackOwner)) return false;
+    return true;
+}
+MfgRuntimeReason WrapperRoleReasonLocked() noexcept
+{
+    if (!runtime.wrapperHookClock || runtime.wrapperHookClock->load(std::memory_order_acquire) != runtime.wrapperSelectionEpoch)
+        return MfgRuntimeReason::WrapperRoleUnobserved;
+    bool ambiguous = false;
+    (void)CommonWrapperTargetLocked(ambiguous);
+    if (runtime.wrapperTrackingFailed) return MfgRuntimeReason::WrapperTrackingUnavailable;
+    for (const auto* lease : runtime.wrapperInputs)
+        if (lease && !ExecutableWrapperAddress(lease->input.callback, lease->input.callbackOwner))
+            return MfgRuntimeReason::WrapperTrackingUnavailable;
+    return ambiguous ? MfgRuntimeReason::WrapperTargetAmbiguous : MfgRuntimeReason::WrapperRoleUnobserved;
+}
+bool ObservedWrapperFamily(HMODULE module) noexcept
+{
+    if (!module) return false;
+    for (const auto& hint : runtime.wrapperReleaseHints)
+        if (hint.load(std::memory_order_acquire) == module) return true;
+    return false;
+}
+void RefreshWrapperRoleLocked() noexcept
+{
+    auto& snapshot = runtime.snapshot.wrapperRole;
+    snapshot.selectionEpoch = runtime.wrapperSelectionEpoch;
+    HMODULE target = nullptr;
+    bool ambiguous = false;
+    for (size_t i = 0; i < runtime.wrapperInputs.size(); ++i)
+    {
+        const auto* lease = runtime.wrapperInputs[i];
+        auto& observation = snapshot.callbacks[i];
+        observation = {};
+        if (lease)
+        {
+            const auto& input = lease->input;
+            observation = {true, input.source, reinterpret_cast<uintptr_t>(input.sourcePlugin),
+                reinterpret_cast<uintptr_t>(input.resolverOwner), reinterpret_cast<uintptr_t>(input.callbackOwner),
+                reinterpret_cast<uintptr_t>(input.callback)};
+            if (target && target != input.callbackOwner) ambiguous = true;
+            target = input.callbackOwner;
+        }
+        runtime.wrapperReleaseHints[i * 3].store(lease ? lease->input.sourcePlugin : nullptr, std::memory_order_release);
+        runtime.wrapperReleaseHints[i * 3 + 1].store(lease ? lease->input.resolverOwner : nullptr, std::memory_order_release);
+        runtime.wrapperReleaseHints[i * 3 + 2].store(lease ? lease->input.callbackOwner : nullptr, std::memory_order_release);
+    }
+    snapshot.trackingFailedMask = runtime.wrapperTrackingFailed;
+    for (size_t i = 0; i < 2; ++i)
+        snapshot.untrackedCallbacks[i] = reinterpret_cast<uintptr_t>(runtime.untrackedWrapperCallbacks[i]);
+    snapshot.status = runtime.wrapperTrackingFailed ? MfgWrapperRoleStatus::TrackingUnavailable :
+        ambiguous ? MfgWrapperRoleStatus::Ambiguous : target ?
+        MfgWrapperRoleStatus::Observed : MfgWrapperRoleStatus::Unobserved;
+    snapshot.selectedWrapper = ambiguous || runtime.wrapperTrackingFailed ? 0 : reinterpret_cast<uintptr_t>(target);
+    runtime.observedWrapper.store(ambiguous || runtime.wrapperTrackingFailed ? nullptr : target, std::memory_order_release);
+}
+void TraceWrapperRoleLocked() noexcept
+{
+    try
+    {
+        const auto& s = runtime.snapshot.wrapperRole;
+        const auto& a = s.callbacks[0];
+        const auto& b = s.callbacks[1];
+#ifdef NR_MFG_RUNTIME_TEST
+        std::printf("Native Ada MFG wrapper role: epoch=%llu status=%u target=%llu trackingFailed=%u untrackedOptions=%llu untrackedState=%llu "
+            "optionsKnown=%u optionsPlugin=%llu optionsResolver=%llu optionsOwner=%llu optionsCallback=%llu "
+            "stateKnown=%u statePlugin=%llu stateResolver=%llu stateOwner=%llu stateCallback=%llu\n",
+            static_cast<unsigned long long>(s.selectionEpoch), unsigned(s.status),
+            static_cast<unsigned long long>(s.selectedWrapper), unsigned(s.trackingFailedMask),
+            static_cast<unsigned long long>(s.untrackedCallbacks[0]), static_cast<unsigned long long>(s.untrackedCallbacks[1]), unsigned(a.observed),
+            static_cast<unsigned long long>(a.sourcePlugin), static_cast<unsigned long long>(a.resolverOwner),
+            static_cast<unsigned long long>(a.callbackOwner), static_cast<unsigned long long>(a.callback), unsigned(b.observed),
+            static_cast<unsigned long long>(b.sourcePlugin), static_cast<unsigned long long>(b.resolverOwner),
+            static_cast<unsigned long long>(b.callbackOwner), static_cast<unsigned long long>(b.callback));
+#else
+        LOG_INFO("Native Ada MFG wrapper role: epoch={} status={} target={} trackingFailed={} untrackedOptions={} untrackedState={} "
+            "optionsKnown={} optionsPlugin={} optionsResolver={} optionsOwner={} optionsCallback={} "
+            "stateKnown={} statePlugin={} stateResolver={} stateOwner={} stateCallback={}",
+            s.selectionEpoch, unsigned(s.status), s.selectedWrapper, s.trackingFailedMask,
+            s.untrackedCallbacks[0], s.untrackedCallbacks[1],
+            a.observed, a.sourcePlugin, a.resolverOwner, a.callbackOwner, a.callback,
+            b.observed, b.sourcePlugin, b.resolverOwner, b.callbackOwner, b.callback);
+#endif
+    }
+    catch (...) {} // Metadata formatting never grants or revokes eligibility.
+}
+
+
+struct PreparationContext
+{
+    MfgPreparationObservation observation;
+    // Captured while the wrapper is retained. Exception reporting must not
+    // dereference a module after PendingPublication has released its reference.
+    std::wstring selectedWrapperPath;
+    MfgProviderVersion selectedWrapperVersion;
+};
+void TracePreparation(const PreparationContext& context, uint64_t generation) noexcept;
+
 bool Report(MfgRuntimeReason reason, uint64_t generation,
-    MfgRuntimeStatus status = MfgRuntimeStatus::Unavailable) noexcept
+    MfgRuntimeStatus status = MfgRuntimeStatus::Unavailable,
+    const PreparationContext* preparation = nullptr) noexcept
 {
     if (runtime.snapshot.reason != reason || runtime.snapshot.generation != generation ||
         runtime.snapshot.status != status)
     {
+        try
+        {
+        if (preparation && status != MfgRuntimeStatus::Published)
+            TracePreparation(*preparation, generation);
 #ifdef NR_MFG_RUNTIME_TEST
         std::printf("Native Ada MFG: generation=%llu reason=%s\n",
             static_cast<unsigned long long>(generation), MfgRuntimeReasonName(reason));
@@ -69,11 +255,49 @@ bool Report(MfgRuntimeReason reason, uint64_t generation,
         LOG_INFO("Native Ada MFG: generation={} status={} reason={}", generation,
             static_cast<unsigned>(status), MfgRuntimeReasonName(reason));
 #endif
+        }
+        catch (...) {} // Reporting cannot interrupt upstream resolution or publication.
     }
+    runtime.snapshot.preparation = preparation ? preparation->observation : MfgPreparationObservation {};
     runtime.snapshot.reason = reason;
     runtime.snapshot.generation = generation;
     runtime.snapshot.status = status;
     return status == MfgRuntimeStatus::Published;
+}
+
+bool ObserveCreateOwnerLocked(HMODULE enteredProvider, const LUID* enteredAdapter,
+    uint64_t generation) noexcept
+{
+    if (!enteredProvider || runtime.latch.indeterminate || runtime.providerConflict) return false;
+    // A retired unowned call cannot replace the newer startup's device input.
+    // With retained resources, genuine ownership conflicts still revoke
+    // eligibility regardless of the caller's generation.
+    if (!runtime.heldProvider && generation < runtime.invalidationGeneration) return false;
+    if (!enteredAdapter)
+    {
+        if (!runtime.heldProvider)
+            return runtime.snapshot.status == MfgRuntimeStatus::Unavailable ?
+                Report(MfgRuntimeReason::WaitingAdapter, generation) : false;
+        runtime.providerConflict = true;
+        return Report(MfgRuntimeReason::AdapterChanged, generation, MfgRuntimeStatus::Stale);
+    }
+    const bool adapterChanged = runtime.heldProvider &&
+        (runtime.ownedAdapterLuid.HighPart != enteredAdapter->HighPart ||
+         runtime.ownedAdapterLuid.LowPart != enteredAdapter->LowPart);
+    const bool providerChanged = runtime.heldProvider && runtime.heldProvider != enteredProvider;
+    if (adapterChanged || providerChanged)
+    {
+        // Compare retained ownership BEFORE updating the observed device.
+        // Keep all provider/temporal resources alive after revoking eligibility.
+        runtime.providerConflict = true;
+        runtime.adapterLuid = *enteredAdapter;
+        runtime.adapterObserved = true;
+        return Report(adapterChanged ? MfgRuntimeReason::AdapterChanged : MfgRuntimeReason::ProviderChanged,
+            generation, MfgRuntimeStatus::Stale);
+    }
+    runtime.adapterLuid = *enteredAdapter;
+    runtime.adapterObserved = true;
+    return true;
 }
 
 // These functions run inside loader/export hooks, sometimes recursively on a
@@ -109,6 +333,42 @@ void TraceModule(const char* role, HMODULE module, const MfgProviderVersion& ver
 #endif
     }
     catch (...) {} // A diagnostic allocation must not interrupt capability startup.
+}
+
+// Best-effort metadata only; diagnostic allocation/format failures cannot
+// alter admission, currentness, ownership, or the existing refusal latch.
+void TracePreparation(const PreparationContext& context, uint64_t generation) noexcept
+{
+    try
+    {
+        const auto& o = context.observation;
+        const auto& v = context.selectedWrapperVersion;
+#ifdef NR_MFG_RUNTIME_TEST
+        std::printf("Native Ada MFG preparation: generation=%llu stage=%s wrapper=%llu provider=%llu abi=%u exception=%u "
+            "pathKnown=%u versionKnown=%u temporalKnown=%u profile=%u descriptors=%u "
+            "qualificationKnown=%u qualificationStatus=%u gateCountsKnown=%u architectureSites=%u wrapperSites=%u\n",
+            static_cast<unsigned long long>(generation), MfgPreparationStageName(o.stage),
+            static_cast<unsigned long long>(o.selectedWrapperIdentity),
+            static_cast<unsigned long long>(o.selectedProviderIdentity), o.callerAbi, unsigned(o.readOnlyException),
+            unsigned(o.wrapperPathKnown), unsigned(o.wrapperVersionKnown), unsigned(o.temporalKnown), o.temporalProfile,
+            o.temporalDescriptors, unsigned(o.qualificationKnown), o.qualificationStatus, unsigned(o.gateCountsKnown),
+            o.architectureSites, o.wrapperSites);
+        std::printf("Native Ada MFG selected wrapper metadata: path=%ls version=%u.%u.%u.%u\n",
+            o.wrapperPathKnown ? context.selectedWrapperPath.c_str() : L"<unobserved>", v.major, v.minor, v.patch, v.build);
+#else
+        LOG_INFO("Native Ada MFG preparation: generation={} stage={} wrapper={} provider={} abi={} exception={} "
+            "pathKnown={} versionKnown={} temporalKnown={} profile={} descriptors={} "
+            "qualificationKnown={} qualificationStatus={} gateCountsKnown={} architectureSites={} wrapperSites={}",
+            generation, MfgPreparationStageName(o.stage), o.selectedWrapperIdentity, o.selectedProviderIdentity,
+            o.callerAbi, o.readOnlyException, o.wrapperPathKnown, o.wrapperVersionKnown, o.temporalKnown,
+            o.temporalProfile, o.temporalDescriptors, o.qualificationKnown, o.qualificationStatus,
+            o.gateCountsKnown, o.architectureSites, o.wrapperSites);
+        LOG_INFO("Native Ada MFG selected wrapper metadata: path={} version={}.{}.{}.{}",
+            o.wrapperPathKnown ? wstring_to_string(context.selectedWrapperPath) : "<unobserved>",
+            v.major, v.minor, v.patch, v.build);
+#endif
+    }
+    catch (...) {}
 }
 
 class Win32MutationOps final : public MfgMutationOps
@@ -258,12 +518,11 @@ bool QualifyLoadedProvider(HMODULE module, HMODULE& held, MfgProviderVersion& ve
 {
     if (!module || !HoldModule(module, held)) return false;
     if (!GetProcAddress(held, "NVSDK_NGX_D3D12_PopulateDeviceParameters_Impl") ||
-        !GetProcAddress(held, "NVSDK_NGX_GetGPUArchitecture") ||
-        !ReadModuleVersion(held, version) || !MfgProviderTemporalProfile(version))
+        !GetProcAddress(held, "NVSDK_NGX_GetGPUArchitecture"))
     { FreeLibrary(held); held = nullptr; return false; }
+    ReadModuleVersion(held, version); // Best-effort diagnostics, never admission.
     bool matched = false;
-    try { matched = FindTemporalDescriptors(reinterpret_cast<const uint8_t*>(held), temporal) &&
-        temporal.profile == MfgProviderTemporalProfile(version); }
+    try { matched = FindTemporalDescriptors(reinterpret_cast<const uint8_t*>(held), temporal); }
     catch (...) { FreeLibrary(held); held = nullptr; throw; }
     TraceModule(matched ? "provider" : "provider profile mismatch", held,
         version, temporal.profile, temporal.count);
@@ -328,14 +587,19 @@ bool FindSoleProvider(HMODULE& chosen, MfgProviderVersion& version,
     return false;
 }
 
-bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t callerAbi, HMODULE enteredProvider)
+bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t callerAbi, HMODULE enteredProvider,
+    PreparationContext& context)
 {
+    auto& observed = context.observation;
     PendingPublication pending;
-    if (!HoldModule(selectedWrapper, pending.wrapper)) return Report(MfgRuntimeReason::WaitingWrapper, generation);
-    MfgProviderVersion wrapperVersion;
-    if (!IsWrapperModule(pending.wrapper) ||
-        !ReadModuleVersion(pending.wrapper, wrapperVersion) || !IsMfgWrapperVersionSupported(wrapperVersion))
-        return Report(MfgRuntimeReason::WrapperVersion, generation, MfgRuntimeStatus::Refused);
+    observed.stage = MfgPreparationStage::HoldWrapper;
+    if (!HoldModule(selectedWrapper, pending.wrapper)) return Report(MfgRuntimeReason::WaitingWrapper, generation, MfgRuntimeStatus::Unavailable, &context);
+    observed.wrapperPathKnown = ReadModulePath(pending.wrapper, context.selectedWrapperPath);
+    observed.wrapperVersionKnown = ReadModuleVersion(pending.wrapper, context.selectedWrapperVersion);
+    observed.stage = MfgPreparationStage::WrapperRole;
+    const auto wrapperVersion = context.selectedWrapperVersion;
+    if (!CurrentWrapperRoleLocked(pending.wrapper))
+        return Report(WrapperRoleReasonLocked(), generation, MfgRuntimeStatus::Unavailable, &context);
     if (runtime.reportedWrapper != pending.wrapper)
     {
         TraceModule("active wrapper", pending.wrapper, wrapperVersion);
@@ -344,17 +608,26 @@ bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t ca
     MfgProviderVersion providerVersion;
     MfgTemporalDescriptors temporal;
     MfgRuntimeReason reason = MfgRuntimeReason::ProviderMissing;
+    observed.stage = MfgPreparationStage::ProviderDiscovery;
     if (!(enteredProvider ? QualifyLoadedProvider(enteredProvider, pending.provider, providerVersion, temporal, reason) :
         FindSoleProvider(pending.provider, providerVersion, temporal, reason)))
-        return Report(reason, generation);
+        return Report(reason, generation, MfgRuntimeStatus::Unavailable, &context);
+    observed.selectedProviderIdentity = reinterpret_cast<uintptr_t>(pending.provider);
+    observed.temporalKnown = true;
+    observed.temporalProfile = temporal.profile;
+    observed.temporalDescriptors = static_cast<uint32_t>(temporal.count);
     if (enteredProvider) TraceModule("FG creation selected provider", pending.provider, providerVersion, temporal.profile, temporal.count);
     const auto providerPe = ReadMfgMappedPe(reinterpret_cast<const uint8_t*>(pending.provider));
     const auto wrapperPe = ReadMfgMappedPe(reinterpret_cast<const uint8_t*>(pending.wrapper));
     const auto providerText = providerPe.ExecutableText();
     const auto wrapperText = wrapperPe.ExecutableText();
     MfgSectionSnapshot providerCopy, wrapperCopy;
-    if (!providerCopy.Capture(providerText) || !wrapperCopy.Capture(wrapperText))
-        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused);
+    observed.stage = MfgPreparationStage::ProviderTextSnapshot;
+    if (!providerCopy.Capture(providerText))
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
+    observed.stage = MfgPreparationStage::WrapperTextSnapshot;
+    if (!wrapperCopy.Capture(wrapperText))
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
     MfgProviderImages images;
     images.provider = {providerCopy.bytes.data(), providerCopy.bytes.size(),
         reinterpret_cast<uintptr_t>(pending.provider), generation, true, 1,
@@ -366,27 +639,45 @@ bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t ca
         FingerprintMfgImage(wrapperCopy.bytes.data(), wrapperCopy.bytes.size())};
     images.boundProviderIdentity = reinterpret_cast<uintptr_t>(pending.provider);
     images.boundWrapperIdentity = reinterpret_cast<uintptr_t>(pending.wrapper);
+    observed.stage = MfgPreparationStage::ProviderQualification;
     const auto qualification = QualifyMfgProvider(images, {true, true}, generation);
+    observed.qualificationKnown = true;
+    observed.qualificationStatus = static_cast<uint32_t>(qualification.status);
+    // The reducer counts only after both computed fingerprints match the
+    // captured inputs. Earlier refusal leaves counts unvisited, not zero.
+    observed.gateCountsKnown = qualification.providerFingerprint && qualification.wrapperFingerprint &&
+        qualification.providerFingerprint == images.provider.snapshotFingerprint &&
+        qualification.wrapperFingerprint == images.wrapper.snapshotFingerprint;
+    observed.architectureSites = static_cast<uint32_t>(qualification.architectureSites);
+    observed.wrapperSites = static_cast<uint32_t>(qualification.wrapperSites);
     MfgPatchPlan plan;
-    if (!BuildAdaGatePlan(images, qualification, plan) ||
-        plan.count + temporal.count > plan.sites.size())
-        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused);
+    if (qualification.status == MfgQualificationStatus::ReadyForExperiment)
+        observed.stage = MfgPreparationStage::GatePlan;
+    if (!BuildAdaGatePlan(images, qualification, plan))
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
+    observed.stage = MfgPreparationStage::PatchCapacity;
+    if (plan.count + temporal.count > plan.sites.size())
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
+    observed.stage = MfgPreparationStage::GateAddressMapping;
     for (size_t i = 0; i < plan.count; ++i)
     {
         auto& address = plan.sites[i].address;
         const auto providerAddress = providerCopy.OriginalAddress(address);
         const auto wrapperAddress = wrapperCopy.OriginalAddress(address);
         if ((!providerAddress && !wrapperAddress) || (providerAddress && wrapperAddress))
-            return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused);
+            return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
         address = providerAddress ? providerAddress : wrapperAddress;
     }
+    observed.stage = MfgPreparationStage::TemporalAllocation;
     pending.allocation = VirtualAlloc(nullptr, temporal.rebuilt.size(), MEM_COMMIT | MEM_RESERVE,
         PAGE_READWRITE);
-    if (!pending.allocation) return Report(MfgRuntimeReason::Allocation, generation, MfgRuntimeStatus::Refused);
+    if (!pending.allocation) return Report(MfgRuntimeReason::Allocation, generation, MfgRuntimeStatus::Refused, &context);
     std::memcpy(pending.allocation, temporal.rebuilt.data(), temporal.rebuilt.size());
     DWORD ignored = 0;
+    observed.stage = MfgPreparationStage::TemporalProtection;
     if (!VirtualProtect(pending.allocation, temporal.rebuilt.size(), PAGE_READONLY, &ignored))
-        return Report(MfgRuntimeReason::Allocation, generation, MfgRuntimeStatus::Refused);
+        return Report(MfgRuntimeReason::Allocation, generation, MfgRuntimeStatus::Refused, &context);
+    observed.stage = MfgPreparationStage::TemporalSlotRead;
     for (size_t i = 0; i < temporal.count; ++i)
     {
         MfgPatchSite& site = plan.sites[plan.count++];
@@ -395,7 +686,7 @@ bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t ca
         uint8_t current[8] {};
         Win32MutationOps ops;
         if ((site.address & 7) || !ops.Read(site.address, current, 8))
-            return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused);
+            return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
         std::memcpy(site.expected.data(), current, 8);
         const uint64_t replacement = reinterpret_cast<uintptr_t>(pending.allocation);
         std::memcpy(site.replacement.data(), &replacement, 8);
@@ -403,9 +694,15 @@ bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t ca
     Win32MutationOps ops;
     // Qualification used owned copies. Refuse if live code changed before the
     // transaction; publication independently checks every site's expected bytes.
-    if (FingerprintReadable(providerCopy.address, providerCopy.bytes.size()) != qualification.providerFingerprint ||
-        FingerprintReadable(wrapperCopy.address, wrapperCopy.bytes.size()) != qualification.wrapperFingerprint)
-        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused);
+    observed.stage = MfgPreparationStage::ProviderCodeCurrent;
+    if (FingerprintReadable(providerCopy.address, providerCopy.bytes.size()) != qualification.providerFingerprint)
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
+    observed.stage = MfgPreparationStage::WrapperCodeCurrent;
+    if (FingerprintReadable(wrapperCopy.address, wrapperCopy.bytes.size()) != qualification.wrapperFingerprint)
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
+    if (!CurrentWrapperRoleLocked(pending.wrapper) || runtime.wrapperSelectionEpoch != generation)
+        return Report(WrapperRoleReasonLocked(), generation, MfgRuntimeStatus::Unavailable, &context);
+    observed.stage = MfgPreparationStage::Publication;
     const auto publication = PublishMfgPatches(ops, plan, generation, runtime.latch);
     runtime.snapshot.generation = generation;
     runtime.snapshot.status = publication.status == MfgPublicationStatus::OwnedPublication ?
@@ -415,8 +712,14 @@ bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t ca
     if (publication.status == MfgPublicationStatus::OwnedPublication ||
         publication.status == MfgPublicationStatus::Indeterminate)
     {
+        for (size_t i = 0; i < runtime.wrapperInputs.size(); ++i)
+        {
+            runtime.ownedWrapperInputs[i] = runtime.wrapperInputs[i];
+            if (runtime.ownedWrapperInputs[i]) runtime.ownedWrapperInputs[i]->processRetained = true;
+        }
         runtime.heldWrapper = pending.wrapper;
         runtime.heldProvider = pending.provider;
+        runtime.ownedAdapterLuid = runtime.adapterLuid;
         runtime.temporalAllocation = pending.allocation;
         pending.wrapper = nullptr;
         pending.provider = nullptr;
@@ -442,19 +745,174 @@ bool PrepareAndPublish(HMODULE selectedWrapper, uint64_t generation, uint32_t ca
             {
                 runtime.snapshot.status = MfgRuntimeStatus::Indeterminate;
                 runtime.latch.indeterminate = true;
-                return Report(MfgRuntimeReason::OwnedBytesChanged, generation, MfgRuntimeStatus::Indeterminate);
+                return Report(MfgRuntimeReason::OwnedBytesChanged, generation, MfgRuntimeStatus::Indeterminate, &context);
             }
         }
     }
     return Report(publication.status == MfgPublicationStatus::OwnedPublication ?
-        MfgRuntimeReason::Published : MfgRuntimeReason::Mutation, generation, runtime.snapshot.status);
+        MfgRuntimeReason::Published : MfgRuntimeReason::Mutation, generation, runtime.snapshot.status, &context);
 }
 }
 
+MfgWrapperResolution::MfgWrapperResolution(MfgWrapperResolution&& other) noexcept
+    : prepared(std::exchange(other.prepared, PreparedInput {})), function(other.function), result(other.result)
+{
+    for (size_t i = 0; i < 2; ++i) retired[i] = std::exchange(other.retired[i], nullptr);
+    retiredGeneration = std::exchange(other.retiredGeneration, 0);
+    retiredTracking = other.retiredTracking; retiredUntracked = other.retiredUntracked;
+}
+MfgWrapperResolution& MfgWrapperResolution::operator=(MfgWrapperResolution&& other) noexcept
+{
+    if (this == &other) return *this;
+    ReleaseWrapperInput(prepared);
+    for (auto* lease : retired) ReleaseWrapperLease(lease);
+    prepared = std::exchange(other.prepared, PreparedInput {});
+    for (size_t i = 0; i < 2; ++i) retired[i] = std::exchange(other.retired[i], nullptr);
+    retiredGeneration = std::exchange(other.retiredGeneration, 0);
+    retiredTracking = other.retiredTracking; retiredUntracked = other.retiredUntracked;
+    function = other.function; result = other.result;
+    return *this;
+}
+MfgWrapperResolution::~MfgWrapperResolution()
+{
+    ReleaseWrapperInput(prepared);
+    for (auto* lease : retired) ReleaseWrapperLease(lease);
+}
+
+MfgWrapperResolution MfgWrapperResolution::FromPluginReturn(const char* name, void* function,
+    uint64_t generation, const void* ownOptionsHook, const void* ownStateHook)
+{
+    MfgWrapperResolution observation;
+    observation.function = function;
+    auto& input = observation.prepared;
+    input.epoch = generation;
+    input.source = MfgWrapperResolutionSource::Plugin;
+    const int kind = WrapperCallbackKind(name);
+    if (kind < 0 || !function || function == ownOptionsHook || function == ownStateHook) return observation;
+    input.kind = static_cast<uint8_t>(kind); input.callback = function; input.attempted = true;
+    // The private producer calls this AFTER its original lookup returned. No
+    // upstream resolver, copied trampoline or callback body is invoked here.
+    try { input.ready = HoldWrapperAddress(function, input.callbackOwner) &&
+        ExecutableWrapperAddress(function, input.callbackOwner); }
+    catch (...) { input.ready = false; }
+    return observation;
+}
+MfgWrapperResolution MfgWrapperResolution::FromFeatureReturn(sl::Result result, sl::Feature feature,
+    const char* name, void* function, uint64_t generation, const void* ownOptionsHook, const void* ownStateHook)
+{
+    if (result != sl::Result::eOk || feature != sl::kFeatureDLSS_G) return {};
+    auto observation = FromPluginReturn(name, function, generation, ownOptionsHook, ownStateHook);
+    observation.prepared.source = MfgWrapperResolutionSource::Feature;
+    observation.result = result;
+    return observation;
+}
+
+MfgWrapperBinding MfgWrapperResolution::Commit(std::atomic<uint64_t>& clock, uint64_t ownAdvance,
+    MfgWrapperResolution* invalidated) noexcept
+{
+    auto& input = prepared;
+    if (!input.attempted || input.kind >= 2 || !input.epoch) return {};
+    const auto captured = input.epoch;
+    // ownAdvance is the actual fetch_add result in the EXISTING cache-change
+    // branch, not a source/quiescence promise. Any other drift rejects metadata.
+    const auto expected = ownAdvance ? ownAdvance : captured;
+    if (ownAdvance && ownAdvance != captured + 1) return {MfgWrapperBindingStatus::Retired, nullptr, 0};
+    std::lock_guard lock(runtime.mutex);
+    if (clock.load(std::memory_order_acquire) != expected || expected < runtime.invalidationGeneration)
+        return {MfgWrapperBindingStatus::Retired, nullptr, 0};
+    const bool restoreOwn = ownAdvance && invalidated && invalidated->retiredGeneration == captured &&
+        runtime.wrapperSelectionEpoch == expected && !runtime.wrapperInputs[0] && !runtime.wrapperInputs[1];
+    const bool sameContext = runtime.wrapperSelectionEpoch == captured || restoreOwn;
+    auto currentInput = [&](size_t i) -> MfgWrapperRoleLease* {
+        return !sameContext ? nullptr : restoreOwn ? invalidated->retired[i] : runtime.wrapperInputs[i]; };
+    const auto oldFailed = restoreOwn ? invalidated->retiredTracking : sameContext ? runtime.wrapperTrackingFailed : uint8_t{0};
+    HMODULE oldTarget = nullptr; bool oldAmbiguous = false;
+    for (size_t i = 0; i < 2; ++i) if (auto* previous = currentInput(i))
+    {
+        if (oldTarget && oldTarget != previous->input.callbackOwner) oldAmbiguous = true;
+        oldTarget = previous->input.callbackOwner;
+    }
+    if (oldAmbiguous || oldFailed) oldTarget = nullptr;
+    const auto bit = static_cast<uint8_t>(1u << input.kind);
+    const auto* prior = currentInput(input.kind);
+    const bool repeat = prior && prior->input.callback == input.callback &&
+        ExecutableWrapperAddress(prior->input.callback, prior->input.callbackOwner);
+    // Allocate before advancing a metadata generation; failure is tracked as an
+    // actual unavailable input, never a claim that the old different callback is ready.
+    auto* lease = !repeat && input.ready && input.callbackOwner ? new (std::nothrow) MfgWrapperRoleLease : nullptr;
+    const bool tracked = repeat || lease;
+    const auto nextFailed = tracked ? static_cast<uint8_t>(oldFailed & ~bit) : static_cast<uint8_t>(oldFailed | bit);
+    HMODULE proposed = nullptr; bool ambiguous = false;
+    for (size_t i = 0; i < 2; ++i)
+    {
+        const auto* current = currentInput(i);
+        HMODULE owner = current ? current->input.callbackOwner : nullptr;
+        if (i == input.kind && tracked) owner = repeat ? prior->input.callbackOwner : input.callbackOwner;
+        if (!owner) continue;
+        if (proposed && proposed != owner) ambiguous = true;
+        proposed = owner;
+    }
+    const auto target = ambiguous || nextFailed ? nullptr : proposed;
+    const bool changed = !sameContext || target != oldTarget || ambiguous != oldAmbiguous || nextFailed != oldFailed ||
+        (!tracked && runtime.untrackedWrapperCallbacks[input.kind] != input.callback);
+    uint64_t generation = expected;
+    if (changed && !ownAdvance)
+    {
+        auto current = expected;
+        if (!clock.compare_exchange_strong(current, expected + 1, std::memory_order_acq_rel))
+        { delete lease; return {MfgWrapperBindingStatus::Retired, nullptr, 0}; }
+        generation = expected + 1;
+    }
+    if (!sameContext)
+    {
+        for (size_t i = 0; i < 2; ++i) retired[i] = std::exchange(runtime.wrapperInputs[i], nullptr);
+        runtime.wrapperTrackingFailed = 0; runtime.untrackedWrapperCallbacks = {};
+    }
+    else if (restoreOwn)
+    {
+        for (size_t i = 0; i < 2; ++i) runtime.wrapperInputs[i] = std::exchange(invalidated->retired[i], nullptr);
+        runtime.untrackedWrapperCallbacks = invalidated->retiredUntracked;
+        invalidated->retiredGeneration = 0;
+    }
+    runtime.wrapperSelectionEpoch = generation;
+    runtime.wrapperHookClock = &clock; // Process-static metadata clock, never a callable lease.
+    runtime.wrapperTrackingFailed = nextFailed;
+    runtime.untrackedWrapperCallbacks[input.kind] = tracked ? nullptr : input.callback;
+    if (lease)
+    {
+        if (sameContext) retired[0] = runtime.wrapperInputs[input.kind];
+        lease->input = std::exchange(input, WrapperInput {});
+        runtime.wrapperInputs[lease->input.kind] = lease;
+        runtime.unloadEpoch.fetch_add(1);
+    }
+    else input.attempted = false; // A token is consumed once, including repeated/failed tracking.
+    RefreshWrapperRoleLocked();
+    if (changed) TraceWrapperRoleLocked();
+    if (nextFailed)
+    {
+        if (!runtime.latch.indeterminate && !runtime.providerConflict)
+            Report(MfgRuntimeReason::WrapperTrackingUnavailable, generation,
+                runtime.heldWrapper ? MfgRuntimeStatus::Stale : MfgRuntimeStatus::Unavailable);
+        return {changed ? MfgWrapperBindingStatus::TrackingUnavailable : MfgWrapperBindingStatus::TrackingUnavailableUnchanged, nullptr, generation};
+    }
+    if (ambiguous)
+    {
+        if (!runtime.latch.indeterminate && !runtime.providerConflict)
+            Report(MfgRuntimeReason::WrapperTargetAmbiguous, generation,
+                runtime.heldWrapper ? MfgRuntimeStatus::Stale : MfgRuntimeStatus::Unavailable);
+        return {changed ? MfgWrapperBindingStatus::Ambiguous : MfgWrapperBindingStatus::AmbiguousUnchanged, nullptr, generation};
+    }
+    if (runtime.heldWrapper && runtime.heldWrapper != target && !runtime.latch.indeterminate && !runtime.providerConflict)
+        Report(MfgRuntimeReason::WrapperChanged, generation, MfgRuntimeStatus::Stale);
+    return {changed || ownAdvance ? MfgWrapperBindingStatus::Changed : MfgWrapperBindingStatus::Unchanged, target, generation};
+}
 bool TryPublishAdaMfg(HMODULE selectedWrapper, uint64_t generation,
     uint32_t callerAbi, LUID expectedAdapter, HMODULE enteredProvider, const LUID* enteredAdapter) noexcept
 {
     std::lock_guard lock(runtime.mutex);
+    // This check must be inside the same lock as initial preparation/mutation.
+    // Ignore retired requests without poisoning a newer owned publication.
+    if (generation < runtime.invalidationGeneration) return false;
     if (runtime.latch.indeterminate) return false;
     if (runtime.providerConflict) return false;
     // Actual invocation evidence is immutable call-local input, consumed under
@@ -468,13 +926,7 @@ bool TryPublishAdaMfg(HMODULE selectedWrapper, uint64_t generation,
             runtime.providerConflict = true;
             return Report(MfgRuntimeReason::AdapterChanged, generation, MfgRuntimeStatus::Stale);
         }
-        if (runtime.heldProvider && enteredProvider != runtime.heldProvider)
-        {
-            runtime.providerConflict = true;
-            return Report(MfgRuntimeReason::ProviderChanged, generation, MfgRuntimeStatus::Stale);
-        }
-        runtime.adapterLuid = *enteredAdapter;
-        runtime.adapterObserved = true;
+        if (!ObserveCreateOwnerLocked(enteredProvider, enteredAdapter, generation)) return false;
     }
     // An invalid request cannot erase the receipt for already owned patches.
     if (!selectedWrapper || !generation) return runtime.heldWrapper ? false :
@@ -487,6 +939,8 @@ bool TryPublishAdaMfg(HMODULE selectedWrapper, uint64_t generation,
     {
         return Report(MfgRuntimeReason::WrapperChanged, generation, MfgRuntimeStatus::Stale);
     }
+    if ((runtime.heldWrapper || runtime.heldProvider) && !CurrentWrapperRoleLocked(selectedWrapper))
+        return Report(WrapperRoleReasonLocked(), generation, MfgRuntimeStatus::Stale);
     if (runtime.snapshot.status == MfgRuntimeStatus::Published)
     {
         if (runtime.snapshot.generation != generation || runtime.heldWrapper != selectedWrapper)
@@ -509,23 +963,33 @@ bool TryPublishAdaMfg(HMODULE selectedWrapper, uint64_t generation,
         runtime.receipt.plan.generation = generation;
         runtime.snapshot.generation = generation;
         runtime.snapshot.status = MfgRuntimeStatus::Published;
-        return true;
+        return Report(MfgRuntimeReason::Published, generation, MfgRuntimeStatus::Published);
     }
     if (runtime.heldWrapper || runtime.heldProvider || runtime.temporalAllocation) return false;
     if (runtime.snapshot.status == MfgRuntimeStatus::Refused &&
         runtime.snapshot.generation == generation) return false;
-    try { return PrepareAndPublish(selectedWrapper, generation, callerAbi, enteredProvider); }
+    PreparationContext context;
+    context.observation.selectedWrapperIdentity = reinterpret_cast<uintptr_t>(selectedWrapper);
+    context.observation.selectedProviderIdentity = reinterpret_cast<uintptr_t>(enteredProvider);
+    context.observation.callerAbi = callerAbi;
+    try { return PrepareAndPublish(selectedWrapper, generation, callerAbi, enteredProvider, context); }
     catch (...)
     {
         // Publication and its rollback are noexcept. Exceptions here happened
         // during read-only qualification; PendingPublication releases handles.
-        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused);
+        context.observation.readOnlyException = true;
+        return Report(MfgRuntimeReason::Structure, generation, MfgRuntimeStatus::Refused, &context);
     }
+}
+
+bool IsAdaMfgWrapperModule(HMODULE module) noexcept
+{
+    return module && runtime.observedWrapper.load(std::memory_order_acquire) == module;
 }
 
 bool IsAdaMfgModule(HMODULE module) noexcept
 {
-    return module && (IsWrapperModule(module) ||
+    return module && (ObservedWrapperFamily(module) || IsWrapperModule(module) ||
         ModuleNameIs(module, L"nvngx_dlssg.dll") ||
         GetProcAddress(module, "NVSDK_NGX_D3D12_PopulateDeviceParameters_Impl") != nullptr);
 }
@@ -549,14 +1013,29 @@ void NoteAdaModuleRelease(HMODULE module) noexcept
 void ObserveAdaD3D12Adapter(LUID luid) noexcept
 {
     std::lock_guard lock(runtime.mutex);
-    if (runtime.heldProvider && runtime.adapterObserved &&
-        (runtime.adapterLuid.HighPart != luid.HighPart || runtime.adapterLuid.LowPart != luid.LowPart))
+    if (runtime.heldProvider &&
+        (runtime.ownedAdapterLuid.HighPart != luid.HighPart || runtime.ownedAdapterLuid.LowPart != luid.LowPart))
     {
         runtime.providerConflict = true;
         Report(MfgRuntimeReason::AdapterChanged, runtime.snapshot.generation, MfgRuntimeStatus::Stale);
     }
     runtime.adapterLuid = luid;
     runtime.adapterObserved = true;
+}
+
+bool ObserveAdaCreateOwner(HMODULE enteredProvider, const LUID* enteredAdapter,
+    uint64_t generation) noexcept
+{
+    std::lock_guard lock(runtime.mutex);
+    return ObserveCreateOwnerLocked(enteredProvider, enteredAdapter, generation);
+}
+
+bool ObservedAdaD3D12Adapter(LUID& luid) noexcept
+{
+    std::lock_guard lock(runtime.mutex);
+    if (!runtime.adapterObserved) return false;
+    luid = runtime.adapterLuid;
+    return true;
 }
 
 MfgRuntimeSnapshot AdaMfgSnapshot() noexcept
@@ -579,13 +1058,10 @@ bool ObserveAdaLoadedModule(HMODULE module, DWORD loadFlags) noexcept
     {
         PendingPublication observation;
         if (!HoldModule(module, observation.provider)) return false;
-        MfgProviderVersion version;
         if (!GetProcAddress(module, "NVSDK_NGX_D3D12_PopulateDeviceParameters_Impl") ||
-            !GetProcAddress(module, "NVSDK_NGX_GetGPUArchitecture") ||
-            !ReadModuleVersion(module, version) || !MfgProviderTemporalProfile(version)) return false;
+            !GetProcAddress(module, "NVSDK_NGX_GetGPUArchitecture")) return false;
         MfgTemporalDescriptors temporal;
-        if (!FindTemporalDescriptors(reinterpret_cast<const uint8_t*>(module), temporal) ||
-            temporal.profile != MfgProviderTemporalProfile(version)) return false;
+        if (!FindTemporalDescriptors(reinterpret_cast<const uint8_t*>(module), temporal)) return false;
         auto* entry = reinterpret_cast<void*>(GetProcAddress(module, "NVSDK_NGX_D3D12_CreateFeature"));
         static RetainedCreateEntries hooks;
         return hooks.Install(module, entry, [](HMODULE owner, ID3D12GraphicsCommandList* command) noexcept {
@@ -649,7 +1125,8 @@ void ObserveAdaExportResolution(HMODULE queried, const char* name,
 bool HasOwnedAdaMfg(HMODULE selectedWrapper, uint64_t generation) noexcept
 {
     std::lock_guard lock(runtime.mutex);
-    if (runtime.providerConflict || runtime.snapshot.status != MfgRuntimeStatus::Published ||
+    if (!CurrentWrapperRoleLocked(selectedWrapper) || runtime.providerConflict ||
+        runtime.snapshot.status != MfgRuntimeStatus::Published ||
         runtime.snapshot.generation != generation || !runtime.receipt.owned ||
         runtime.heldWrapper != selectedWrapper || !runtime.heldProvider) return false;
     Win32MutationOps ops;
@@ -668,11 +1145,32 @@ bool HasOwnedAdaMfg(HMODULE selectedWrapper, uint64_t generation) noexcept
     return true;
 }
 
-void InvalidateAdaMfg(uint64_t newGeneration) noexcept
+MfgWrapperResolution InvalidateAdaMfg(uint64_t newGeneration) noexcept
 {
-    std::lock_guard lock(runtime.mutex);
-    if (runtime.snapshot.status == MfgRuntimeStatus::Published &&
-        runtime.snapshot.generation != newGeneration)
-        runtime.snapshot.status = MfgRuntimeStatus::Stale;
+    MfgWrapperResolution retired;
+    {
+        std::lock_guard lock(runtime.mutex);
+        if (newGeneration > runtime.invalidationGeneration)
+            runtime.invalidationGeneration = newGeneration;
+        if (newGeneration > runtime.wrapperSelectionEpoch)
+        {
+            retired.retiredGeneration = runtime.wrapperSelectionEpoch;
+            retired.retiredTracking = runtime.wrapperTrackingFailed;
+            retired.retiredUntracked = runtime.untrackedWrapperCallbacks;
+            for (size_t i = 0; i < 2; ++i)
+                MfgWrapperResolutionAccess::Retired(retired, i) = std::exchange(runtime.wrapperInputs[i], nullptr);
+            runtime.wrapperSelectionEpoch = newGeneration;
+            runtime.wrapperTrackingFailed = 0; runtime.untrackedWrapperCallbacks = {};
+            RefreshWrapperRoleLocked();
+            runtime.snapshot.wrapperRole.status = MfgWrapperRoleStatus::Retired;
+            runtime.unloadEpoch.fetch_add(1);
+        }
+        if (runtime.snapshot.status == MfgRuntimeStatus::Published &&
+            runtime.snapshot.generation < runtime.invalidationGeneration)
+            runtime.snapshot.status = MfgRuntimeStatus::Stale;
+    }
+    // Free only unpublished displaced observation owners, after runtime lock.
+    // A caller holding another lock retains this value until outside that scope.
+    return retired;
 }
 }

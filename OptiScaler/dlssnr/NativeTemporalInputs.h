@@ -5,6 +5,7 @@
 #include "NativeNgxCreationParameters.h"
 #include "NativeTemporalSource.h"
 #include <memory>
+#include "../nr/context/GuideGeometry.h"
 
 namespace DlssNr {class NativeNgxCallCapture;}
 
@@ -55,13 +56,14 @@ constexpr unsigned ResolveFlags(std::optional<unsigned> creation, std::optional<
 }
 constexpr bool Fits(Rect region, uint64_t width, uint64_t height)
 {
-    return region.width && region.height && region.x <= width && region.y <= height &&
-           region.width <= width - region.x && region.height <= height - region.y;
+    return Neurotic::Context::GuideGeometry::Fits({region.x,region.y,region.width,region.height},{width,height});
 }
 constexpr Rect GuideRect(unsigned x, unsigned y, unsigned renderWidth, unsigned renderHeight,
                          unsigned outputWidth, unsigned outputHeight, bool lowResolution)
 {
-    return {x, y, lowResolution ? renderWidth : outputWidth, lowResolution ? renderHeight : outputHeight};
+    const auto region=Neurotic::Context::GuideGeometry::ForResolution(
+        {x,y},{renderWidth,renderHeight},{outputWidth,outputHeight},lowResolution);
+    return {region.x,region.y,region.width,region.height};
 }
 constexpr bool Authoritative(bool superResolution, bool dlssBackend, bool dx12, bool adapter)
 {

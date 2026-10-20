@@ -1,0 +1,180 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-013",
+  "case_input_sha256": "00c24035967af54547c7c6c01a996db21727d8701045c0c51e17e8f8b30e6c0b",
+  "revision": 1,
+  "transport_checks": [],
+  "qualifications": [],
+  "decisions": [
+    {
+      "check_id": "D-HISTORY-0",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "history",
+      "actual_pointer": "/operations/history-sequence-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "resetPending": true,
+        "completedFrames": "0",
+        "resetReason": "initial Present frame",
+        "lastInvalidationReason": ""
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "decision",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-present-history-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "a83f86c3ff56f3322cdbffcfcf5a91e4637942aef6890c377b274009bba76b0a"
+        }
+      },
+      "stage": "history",
+      "scope": "source_policy_only"
+    },
+    {
+      "check_id": "D-HISTORY-1",
+      "event_id": {
+        "state": "known",
+        "value": "event-1"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "history",
+      "actual_pointer": "/operations/history-sequence-frame:event-1/output",
+      "comparison": "exact",
+      "expected": {
+        "resetPending": false,
+        "completedFrames": "1",
+        "resetReason": "initial Present frame",
+        "lastInvalidationReason": ""
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "decision",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-present-history-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "a83f86c3ff56f3322cdbffcfcf5a91e4637942aef6890c377b274009bba76b0a"
+        }
+      },
+      "stage": "history",
+      "scope": "source_policy_only"
+    },
+    {
+      "check_id": "D-HISTORY-2",
+      "event_id": {
+        "state": "known",
+        "value": "event-2"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "history",
+      "actual_pointer": "/operations/history-sequence-frame:event-2/output",
+      "comparison": "exact",
+      "expected": {
+        "resetPending": true,
+        "completedFrames": "0",
+        "resetReason": "synthetic-gap",
+        "lastInvalidationReason": "synthetic-gap"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "decision",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-present-history-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "a83f86c3ff56f3322cdbffcfcf5a91e4637942aef6890c377b274009bba76b0a"
+        }
+      },
+      "stage": "history",
+      "scope": "source_policy_only"
+    },
+    {
+      "check_id": "D-HISTORY-3",
+      "event_id": {
+        "state": "known",
+        "value": "event-3"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "history",
+      "actual_pointer": "/operations/history-sequence-frame:event-3/output",
+      "comparison": "exact",
+      "expected": {
+        "resetPending": true,
+        "completedFrames": "0",
+        "resetReason": "synthetic-gap",
+        "lastInvalidationReason": "synthetic-gap"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "decision",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-present-history-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "a83f86c3ff56f3322cdbffcfcf5a91e4637942aef6890c377b274009bba76b0a"
+        }
+      },
+      "stage": "history",
+      "scope": "source_policy_only"
+    }
+  ],
+  "approval": "synthetic_reviewed"
+}

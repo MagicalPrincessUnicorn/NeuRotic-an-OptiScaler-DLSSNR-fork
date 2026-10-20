@@ -1,0 +1,820 @@
+{
+  "schemaVersion": "1.0-draft",
+  "bundleId": "bundle:unknown:778",
+  "recordRevision": 1,
+  "mode": "candidate_only",
+  "ownerDomain": "FrameContext",
+  "sourceSnapshot": {
+    "presence": "observed",
+    "validity": "established",
+    "origin": "direct_contract",
+    "evidence": [
+      "E-EX-UNKNOWN-ENGINE"
+    ],
+    "value": "Chat-D-design-fixture"
+  },
+  "frameContext": {
+    "identity": {
+      "sessionId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "value": "session:unknown-engine"
+      },
+      "renderStreamId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "value": "stream:unknown-engine"
+      },
+      "viewId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "value": "view:main"
+      },
+      "episodeId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "value": "episode:unknown-engine:1"
+      },
+      "baseRealFrameId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.BASE_REAL_UNKNOWN"
+        ]
+      },
+      "renderId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.RENDER_UNKNOWN"
+        ]
+      },
+      "evaluationId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.EVALUATION_UNKNOWN"
+        ]
+      },
+      "presentId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.PRESENT_NOT_OBSERVED"
+        ]
+      },
+      "generatedFrameId": {
+        "presence": "not_applicable",
+        "validity": "established",
+        "origin": "none",
+        "evidence": []
+      },
+      "finalSealId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-unknown-engine"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.FINAL_LINEAGE_MISSING"
+        ]
+      }
+    },
+    "associations": [
+      {
+        "edgeId": "edge:E-EX-UNKNOWN-ENGINE:same_evaluation",
+        "type": "same_evaluation",
+        "from": "unknown",
+        "to": "unknown",
+        "validity": "unknown",
+        "scope": "one provider evaluation and view",
+        "evidence": [
+          "E-EX-UNKNOWN-ENGINE"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.MISSING_ANCHOR"
+        ]
+      }
+    ],
+    "routeGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-UNKNOWN-ENGINE"
+      ],
+      "value": 1
+    },
+    "historyGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-UNKNOWN-ENGINE"
+      ],
+      "value": 1
+    },
+    "modelGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-UNKNOWN-ENGINE"
+      ],
+      "value": 1
+    },
+    "fgPolicyGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-UNKNOWN-ENGINE"
+      ],
+      "value": 1
+    },
+    "contextEvidence": [
+      "E-EX-UNKNOWN-ENGINE"
+    ]
+  },
+  "signals": [
+    {
+      "recordId": "sig:unknown:candidate-778",
+      "recordRevision": 1,
+      "signalRole": "auxiliary_surface",
+      "payloadKind": "resource",
+      "source": {
+        "provider": "UnknownEngineObserver",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "UnknownEngineObserver:incarnation:1"
+        },
+        "adapter": "CandidateDiscoveryObserver",
+        "sourceSchema": "D3D12DescriptorObservation",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "observer-v1"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "resource_pointer",
+          "descriptor",
+          "observed_barrier",
+          "callback_timestamp"
+        ],
+        "observationId": "obs:unknown:778",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "value": "session:unknown-engine"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "value": "stream:unknown-engine"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "value": "episode:unknown-engine:1"
+          },
+          "baseRealFrameId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.BASE_REAL_UNKNOWN"
+            ]
+          },
+          "renderId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.RENDER_UNKNOWN"
+            ]
+          },
+          "evaluationId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.EVALUATION_UNKNOWN"
+            ]
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-unknown-engine"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-UNKNOWN-ENGINE:same_evaluation",
+            "type": "same_evaluation",
+            "from": "unknown",
+            "to": "unknown",
+            "validity": "unknown",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.MISSING_ANCHOR"
+            ]
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "unknown"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "sampling:unknown:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "auxiliary",
+        "facts": {
+          "hypothesizedRole": {
+            "presence": "observed",
+            "validity": "unassessed",
+            "origin": "heuristic",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": "motion_candidate"
+          },
+          "units": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "heuristic",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "reasonIds": [
+              "SEM.SEMANTIC.MOTION_UNITS_UNKNOWN"
+            ]
+          },
+          "direction": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "heuristic",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "reasonIds": [
+              "SEM.SEMANTIC.MOTION_DIRECTION_UNKNOWN"
+            ]
+          },
+          "jitterRelationship": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "heuristic",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "reasonIds": [
+              "SEM.SEMANTIC.JITTER_CONVENTION_UNKNOWN"
+            ]
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-UNKNOWN-ENGINE"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pending",
+            "hard": true,
+            "reasonIds": [
+              "SEM.ID.UNPROVEN"
+            ],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pending",
+            "hard": true,
+            "reasonIds": [
+              "SEM.FRAME.MISSING_ANCHOR"
+            ],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pending",
+            "hard": true,
+            "reasonIds": [
+              "SEM.LIFE.QUEUE_OR_DEVICE_UNKNOWN"
+            ],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pending",
+            "hard": true,
+            "reasonIds": [
+              "SEM.LIFE.LIFETIME_UNKNOWN"
+            ],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pending",
+            "hard": true,
+            "reasonIds": [
+              "SEM.SEMANTIC.ROLE_UNKNOWN"
+            ],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "fail",
+            "hard": false,
+            "reasonIds": [
+              "SEM.SEMANTIC.CONVENTION_UNKNOWN"
+            ],
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ]
+          }
+        ],
+        "admission": "candidate_only",
+        "reasonIds": [
+          "SEM.ID.UNPROVEN",
+          "SEM.FRAME.MISSING_ANCHOR",
+          "SEM.LIFE.QUEUE_OR_DEVICE_UNKNOWN",
+          "SEM.LIFE.LIFETIME_UNKNOWN",
+          "SEM.SEMANTIC.ROLE_UNKNOWN",
+          "SEM.SEMANTIC.CONVENTION_UNKNOWN"
+        ],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "CandidateDiscovery-Only-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-UNKNOWN-ENGINE"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "resource": {
+        "api": "d3d12",
+        "opaqueNativeToken": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "opaque:candidate-778",
+          "scope": "in-process diagnostic token; not serialized native pointer"
+        },
+        "objectIncarnation": {
+          "presence": "missing",
+          "validity": "unknown",
+          "origin": "heuristic",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "reasonIds": [
+            "SEM.ID.OBJECT_INCARNATION_UNPROVEN"
+          ]
+        },
+        "resourceIncarnation": {
+          "presence": "missing",
+          "validity": "unknown",
+          "origin": "heuristic",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "reasonIds": [
+            "SEM.ID.RESOURCE_INCARNATION_UNPROVEN"
+          ]
+        },
+        "viewIncarnation": {
+          "presence": "missing",
+          "validity": "unknown",
+          "origin": "heuristic",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "reasonIds": [
+            "SEM.ID.VIEW_UNPROVEN"
+          ]
+        },
+        "resourceGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": 1
+        },
+        "representationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": 1
+        },
+        "contentRevision": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": 17
+        },
+        "subresource": {
+          "mip": 0,
+          "arrayLayer": 0,
+          "plane": 0,
+          "levelCount": 1,
+          "layerCount": 1,
+          "aspectMask": "color"
+        },
+        "descriptor": {
+          "dimension": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": "2d"
+          },
+          "format": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": "R16G16_FLOAT"
+          },
+          "allocationExtent": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": {
+              "width": 1920,
+              "height": 1080
+            }
+          },
+          "sampleCount": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": 1
+          },
+          "usage": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": [
+              "shader_read"
+            ]
+          }
+        },
+        "deviceIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "device:0"
+        },
+        "adapterIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-UNKNOWN-ENGINE"
+          ],
+          "value": "adapter:0"
+        },
+        "accessState": {
+          "stateOrLayout": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": "D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE"
+          },
+          "queueIdentity": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "heuristic",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "reasonIds": [
+              "SEM.LIFE.QUEUE_OR_DEVICE_UNKNOWN"
+            ]
+          },
+          "queueFamily": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "accessMode": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-UNKNOWN-ENGINE"
+            ],
+            "value": "read"
+          }
+        }
+      }
+    }
+  ],
+  "bundleValidation": {
+    "hardGates": [],
+    "semanticChecks": [],
+    "admission": "candidate_only",
+    "reasonIds": [
+      "SEM.ID.UNPROVEN",
+      "SEM.FRAME.MISSING_ANCHOR",
+      "SEM.LIFE.QUEUE_OR_DEVICE_UNKNOWN",
+      "SEM.LIFE.LIFETIME_UNKNOWN",
+      "SEM.SEMANTIC.ROLE_UNKNOWN",
+      "SEM.SEMANTIC.CONVENTION_UNKNOWN"
+    ],
+    "consumerProfile": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-UNKNOWN-ENGINE"
+      ],
+      "value": "fixture_bundle_validation"
+    }
+  }
+}

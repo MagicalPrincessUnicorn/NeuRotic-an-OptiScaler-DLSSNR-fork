@@ -1,0 +1,69 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ReplayEnvironment",
+  "environment_id": "gym-cpu-source-v2",
+  "requested_layers": [
+    "L0",
+    "L1"
+  ],
+  "required_adapters": [
+    {
+      "adapter_id": "source-contract-cpu-v2",
+      "interface_version": "2.0.0",
+      "contract_refs": [
+        {
+          "owner": "source_contract",
+          "contract_id": "source-native-inputs-v1",
+          "version": "baseline-alpha-0.9.6",
+          "sha256": {
+            "state": "known",
+            "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+          }
+        },
+        {
+          "owner": "source_contract",
+          "contract_id": "source-present-compat-v1",
+          "version": "baseline-alpha-0.9.6",
+          "sha256": {
+            "state": "known",
+            "value": "49104dd7e3fb3f6f09878ce34e3c463a5a794c77b8d53363b0b44a688a257cb1"
+          }
+        },
+        {
+          "owner": "source_contract",
+          "contract_id": "source-readiness-v1",
+          "version": "baseline-alpha-0.9.6",
+          "sha256": {
+            "state": "known",
+            "value": "3ce7a2b18c50e4a6dc06cb2971f463e41fa3caaf79e1ce3893c50baca201e3d3"
+          }
+        },
+        {
+          "owner": "source_contract",
+          "contract_id": "source-present-history-v1",
+          "version": "baseline-alpha-0.9.6",
+          "sha256": {
+            "state": "known",
+            "value": "a83f86c3ff56f3322cdbffcfcf5a91e4637942aef6890c377b274009bba76b0a"
+          }
+        }
+      ]
+    }
+  ],
+  "seed": "1",
+  "ordering": "frame_order_then_event_index",
+  "clock": "logical_ticks",
+  "time_unit": "arbitrary_logical_tick",
+  "real_provider_allowed": false,
+  "game_process_allowed": false,
+  "capability_observations": {},
+  "limits": {
+    "max_frame_bytes": 262144,
+    "max_frames": 256,
+    "max_events_per_frame": 4096,
+    "max_payload_bytes": "67108864",
+    "max_case_payload_bytes": "268435456",
+    "max_corpus_bytes": "1073741824",
+    "max_reduce_trials": 256
+  }
+}

@@ -3,6 +3,8 @@
 template <typename FeatureType> struct ContextData
 {
     std::unique_ptr<FeatureType> feature;
+    // The D3D11 input contract survives replacement-backend object recreation.
+    bool nativeTemporalSuperSampling = false;
     NVSDK_NGX_Parameter* createParams = nullptr;
     // D3D12 transitions own local parameter tables; other API owners retain
     // their existing createParams lifecycle until migrated.

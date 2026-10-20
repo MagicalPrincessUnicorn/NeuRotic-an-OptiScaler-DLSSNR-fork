@@ -1,0 +1,54 @@
+NEUROTIC - CAPTURED GUIDES WITH VULKAN NR PERFORMANCE TEST
+
+Based on 60625fed. This experimental renderer retains native depth capture and
+our existing FidelityFX optical flow, then passes completed depth/motion through
+shared GPU textures to the Vulkan NR renderer. Color/model/output remain Vulkan
+resident. No game-name profile, new motion algorithm, or CPU pixel transfer.
+The existing D3D12 guided renderer remains available for a matched comparison.
+
+1. Close the game. Extract the whole ZIP outside the game folder.
+2. Run NeuRotic-Setup.cmd, select the actual game executable, and choose Update
+   for an existing managed installation. Keep the same proxy filename.
+3. Keep your existing private NVIDIA NR model installed; it is not bundled.
+4. Open NeuRotic with Insert. Enable Neural Rendering and Apply the model;
+   select Present and your normal style, preset and NR resolution.
+5. Set Input source to Built-in capture. Use Automatic or GPU only transport.
+   Set standalone FSR frame generation OFF. Save and restart after route edits.
+
+Run the same scene for at least 60 seconds with each comparison:
+A. Input source Automatic (explicit InputSource=0), Missing-guide policy Image only: Vulkan control.
+B. Built-in capture; Vulkan NR renderer (experimental) OFF: existing guided NR.
+C. Built-in capture; Vulkan NR renderer (experimental) ON: new Vulkan guided NR.
+Save and restart between each. Keep game/output/NR resolution, model, preset,
+style, depth direction, multipass settings and camera scene identical. Warm up
+before measuring. Test one NR percentage first; changing it changes workload.
+
+For C, Built-in Vulkan inputs should report captured depth + estimated motion
+delivered to Vulkan NR. Captured/completed counters should increase. Check NR
+image changes and motion stability as well as FPS. Send OptiScaler.log, your
+saved OptiScaler.ini, and screenshots of timing/status for B and C. A 60 FPS
+hook cadence alone does not establish generated frames or displayed pacing.
+
+If C reports shared textures unsupported or capture/model unavailable, the
+original game frame is preserved. C does not retry the D3D12 model or CPU route.
+Return to B and restart. Keep the existing private model and disable old ReShade
+debug/prepared effects for the comparison. ReShade is not needed for this path.
+The installer preserves your INI, private model and foreign ReShade files.
+
+Standalone FG currently uses the existing D3D12 guided renderer even when this
+experimental toggle is on. It is excluded from this performance comparison.
+Its queue/fullscreen contract limitations remain; this package does not claim
+FG/MFG, 57 FPS, faster rendering, equal quality or fullscreen recovery on hardware.
+Depth association and motion are estimated; camera/jitter are policy inputs.
+
+Local tests verify measured depth pixels, finite estimated motion, real export
+completion, exact capture/acquisition matching, refused-consumer behavior,
+reused private-frame handoff, safe refused-recording cleanup, first/final
+completion counters, software Vulkan acquisition and existing FG regressions.
+They do not load the private NR model or qualify hardware shared-texture reads,
+actual displayed output, game quality, latency or matched-scene performance.
+Hashes and verification details: support/NATIVE-GUIDES-VERIFICATION.json.
+
+Uninstall with NeuRotic-Uninstall.cmd with the game closed. Preserve recovery
+records until testing finishes. Incompatible in-game integrations should use
+NR Anything until a compatible native integration is available.

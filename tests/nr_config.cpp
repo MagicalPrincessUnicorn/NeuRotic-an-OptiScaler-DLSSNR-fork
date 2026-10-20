@@ -22,115 +22,9 @@ static_assert(!std::is_reference_v<decltype(*std::declval<NrOptional<std::string
 static_assert(!std::is_convertible_v<NrOptional<float>&, std::optional<float>&>);
 static_assert(!std::is_copy_constructible_v<NrConfigSynchronization::Transaction>);
 
-// CPU-only source with the production NR field types/defaults. Production Config does not
-// need Windows/NGX/ImGui initialization to test the actual wrapper and snapshot template.
-constexpr int UnboundKey = -1;
-enum class Scaler : uint32_t { Lanczos3 = 4 };
-struct TestConfig
-{
-    struct Layer
-    {
-        CustomOptional<float> workingScale {1.0f}, intensity {1.0f}, localStructure {1.0f}, localTone {1.0f},
-            skinStructure {-1.0f}, transferStrength {1.0f}, colourStrength {1.0f}, maxRatio {2.0f};
-        CustomOptional<Scaler> scalingDownscaler {Scaler::Lanczos3};
-        CustomOptional<uint32_t> transfer {1}, preset {0}, style {0}, reversibleMode {0};
-        CustomOptional<bool> autoMask {true}, applyModel {true};
-    };
-    struct ExtraLayers
-    {
-        std::array<Layer, 8> values;
-        auto CopyForSnapshot(const NrConfigSynchronization::Transaction&) const { return values; }
-    };
-    NrConfigSnapshot<TestConfig> GetDlssNrConfigSnapshot() const;
-    NrOptional<bool> DlssNrEnabled { false };
-    NrOptional<bool> DlssNrMultipassEnabled { false };
-    NrOptional<bool> DlssNrExperimentalMode { false };
-    NrOptional<bool> DlssNrOverrideMultipassGuardrails { false };
-    NrOptional<bool> DlssNrOverrideHdrGuardrails { false };
-    NrOptional<bool> DlssNrOverrideFgGuardrails { false };
-    NrOptional<DlssNr::BasicMultipass::Profile> DlssNrBasicMultipass { {} };
-    NrOptional<bool> DlssNrSecondLayer { false };
-    NrOptional<float> DlssNrSecondLayerWorkingScale { 1.0f };
-    NrOptional<Scaler> DlssNrSecondLayerScalingDownscaler { Scaler::Lanczos3 };
-    NrOptional<uint32_t> DlssNrSecondLayerTransfer { 1 };
-    NrOptional<uint32_t> DlssNrSecondLayerPreset { 0 };
-    NrOptional<float> DlssNrSecondLayerIntensity { 1.0f };
-    NrOptional<uint32_t> DlssNrSecondLayerStyle { 0 };
-    NrOptional<float> DlssNrSecondLayerLocalStructure { 1.0f };
-    NrOptional<float> DlssNrSecondLayerLocalTone { 1.0f };
-    NrOptional<float> DlssNrSecondLayerSkinStructure { -1.0f };
-    NrOptional<bool> DlssNrSecondLayerAutoMask { true };
-    NrOptional<float> DlssNrSecondLayerTransferStrength { 1.0f };
-    NrOptional<float> DlssNrSecondLayerColourStrength { 1.0f };
-    NrOptional<float> DlssNrSecondLayerMaxRatio { 2.0f };
-    NrOptional<uint32_t> DlssNrSecondLayerReversibleMode { 0 };
-    NrOptional<bool> DlssNrSecondLayerApplyModel { true };
-    ExtraLayers DlssNrExtraLayers;
-    NrOptional<uint32_t> DlssNrRoute { 2 };
-    NrOptional<bool> DlssNrUiManualResolution { false };
-    NrOptional<float> DlssNrUiManualScale { 0.25f };
-    NrOptional<float> DlssNrUiPresentManualScale { 0.25f };
-    NrOptional<float> DlssNrUiEnhancedManualScale { 0.25f };
-    NrOptional<uint32_t> DlssNrUiResolutionPreset { 0 };
-    NrOptional<uint32_t> DlssNrUiPresentResolutionPreset { 0 };
-    NrOptional<uint32_t> DlssNrUiEnhancedResolutionPreset { 0 };
-    NrOptional<uint32_t> DlssNrUiAfterMethod { 0 };
-    NrOptional<uint32_t> DlssNrPresentResolution { 0 };
-    NrOptional<uint32_t> DlssNrPresentCustomScale { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedResolution { 0 };
-    NrOptional<uint32_t> DlssNrEnhancedCustomScale { 0 };
-    NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
-    NrOptional<int32_t> DlssNrRenderingMode { 1 };
-    NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR
-    NrOptional<bool> DlssNrPreSrSoftReset { false };
-    NrOptional<int> DlssNrToggleKey { UnboundKey };
-    NrOptional<uint32_t> DlssNrPreset { 0 };
-    NrOptional<float> DlssNrIntensity { 1.0f };
-    NrOptional<uint32_t> DlssNrStyle { 0 };
-    NrOptional<float> DlssNrLocalStructure { 1.0f };
-    NrOptional<float> DlssNrLocalTone { 1.0f };
-    NrOptional<float> DlssNrSkinStructure { -1.0f };
-    NrOptional<bool> DlssNrAutoMask { true };
-    NrOptional<float> DlssNrTransferStrength { 1.0f };
-    NrOptional<float> DlssNrColourStrength { 1.0f };
-    NrOptional<uint32_t> DlssNrReversibleMode { 0 };
-    NrOptional<bool> DlssNrApplyModel { true };
-    NrOptional<bool> DlssNrHoldFrame { false };
-    NrOptional<float> DlssNrMaxRatio { 2.0f };
-    NrOptional<uint32_t> DlssNrTransfer { 1 };
-    NrOptional<bool> DlssNrWhitePointFromExposure { true };
-    NrOptional<bool> DlssNrProbeD3D11 { false };
-    NrOptional<uint32_t> DlssNrDebugView { 0 };
-    NrOptional<uint32_t> DlssNrCompare { 0 };
-    NrOptional<float> DlssNrCompareSplit { 0.5f };
-    NrOptional<float> DlssNrCompareZoom { 1.0f };
-    NrOptional<bool> DlssNrCompareSwap { false };
-    NrOptional<bool> DlssNrCompareTags { false };
-    NrOptional<float> DlssNrTagScale { 1.5f };
-    NrOptional<float> DlssNrWorkingScale { 1.0f };
-    NrOptional<Scaler> DlssNrScalingDownscaler { Scaler::Lanczos3 };
-    NrOptional<bool> DlssNrProxyProbe { false };
-    NrOptional<bool> DlssNrUseProxy { false };
-    NrOptional<bool> DlssNrScanExposure { false };
-    NrOptional<uint32_t> DlssNrWhitePointSource { 1 };
-    NrOptional<bool> DlssNrScanMeter { false };
-    NrOptional<float> DlssNrScanAnchorValue { 0.0f };       // legacy single anchor, migrated then unused
-    NrOptional<float> DlssNrScanAnchorWhitePoint { 0.0f };  // legacy single anchor, migrated then unused
-    NrOptional<std::string> DlssNrScanAnchors { std::string() };
-    NrOptional<bool> DlssNrScanInverted { false };
-    NrOptional<float> DlssNrWhitePointTrim { 1.0f };
-    NrOptional<float> DlssNrScanTrim { 1.0f };
-    NrOptional<uint32_t> DlssNrPasses { 1 };
-    NrOptional<bool> DlssNrAutoCapture { true };
-    NrOptional<float> DlssNrWhitePointScale { 1.0f };
-    NrConfigState state;
-    NrConfigState::RuntimeSnapshot GetDlssNrRuntimeSnapshot() const noexcept { return state.Snapshot(); }
-};
-
-NrConfigSnapshot<TestConfig> TestConfig::GetDlssNrConfigSnapshot() const
-{
-    return NrConfigSnapshot<TestConfig>(*this);
-}
+#include "NrConfigFixture.h"
+#include "../OptiScaler/dlssnr/NativeNrResolution.h"
+#include "../OptiScaler/dlssnr/NrReadiness.h"
 
 template <class T, HasDefaultValue D> void Differential(NrOptional<T, D>& synchronized,
                                                        CustomOptional<T, D>& original,
@@ -297,6 +191,7 @@ void EnablePublication()
 void CoherentSnapshots()
 {
     TestConfig config;
+    config.DlssNrStyle = 0u; // The correlated counter fixture starts at zero, independent of UI defaults.
     config.DlssNrIntensity = 0.0f;
     NrConfigState::LoadRoutingMode(config.DlssNrRenderingMode, config.DlssNrRunBeforeSr, 0);
     config.state.LoadEnabled(config.DlssNrEnabled, false);
@@ -336,6 +231,12 @@ void CoherentSnapshots()
     for (auto& reader : readers) reader.join();
 
     const NrConfigSnapshot<TestConfig> held(config);
+    config.DlssNrPreparedDepth = true;
+    const NrConfigSnapshot<TestConfig> withPreparedDepth(config);
+    CHECK(!held.DlssNrPreparedDepth.value_or_default());
+    CHECK(withPreparedDepth.DlssNrPreparedDepth.value_or_default());
+    CHECK(!held.SameConfiguration(withPreparedDepth));
+    config.DlssNrPreparedDepth = false;
     CHECK(held.SameConfiguration(NrConfigSnapshot<TestConfig>(config)));
     CHECK(held.Describe().find("DlssNrIntensity=30000") != std::string::npos);
     CHECK(held.Describe().find("runtime.resumeGeneration=") != std::string::npos);
@@ -568,7 +469,169 @@ static void BasicMultipassContract()
 
 int main()
 {
+    {
+        TestConfig c;
+        auto before=c.GetDlssNrConfigSnapshot();
+        const auto revision=before.ObservationRevision(); CHECK(revision.has_value());
+        c.DlssNrRoute=1u; c.DlssNrRoute=0u;
+        auto after=c.GetDlssNrConfigSnapshot();
+        CHECK(after.ObservationRevision()>revision);
+        auto same=after; same.DlssNrRoute=1u;
+        CHECK(NrConfigSynchronization::ObservationRevision()==after.ObservationRevision());
+        NrConfigSynchronization::InvalidateProfileEdits();
+        CHECK(c.GetDlssNrConfigSnapshot().ObservationRevision()>after.ObservationRevision());
+        const auto r=NrConfigSynchronization::ObservationRevision();
+        c.DlssNrRoute.set_volatile_value(0u); c.DlssNrRoute.reset();
+        NrOptional<unsigned int> other(0u); c.DlssNrRoute=other;
+        CHECK(NrConfigSynchronization::ObservationRevision()>r);
+        auto copied=other; (void)copied;
+        const auto stable=NrConfigSynchronization::ObservationRevision(); auto copiedAgain=other; (void)copiedAgain;
+        CHECK(NrConfigSynchronization::ObservationRevision()==stable);
+        NrObservationRevision exhausted(UINT64_MAX); CHECK(exhausted.Value().has_value());
+        exhausted.Advance(); CHECK(!exhausted.Value()); exhausted.Advance(); CHECK(!exhausted.Value());
+        const auto baseline=c.GetDlssNrConfigSnapshot(); c.DlssNrProxyProbe=true;
+        const auto deprecated=c.GetDlssNrConfigSnapshot();
+        CHECK(deprecated.DlssNrProxyProbe.value_or_default()); // still archival/parseable
+        CHECK(deprecated.SameConfiguration(baseline));
+        CHECK(deprecated.SamePresentReadinessConfiguration(baseline));
+    }
+    {
+        namespace U = DlssNr::StageUi;
+        TestConfig c;
+        c.DlssNrRoute = 0u;
+        c.DlssNrRenderingMode = 1;
+        c.DlssNrRunBeforeSr = true;
+        c.DlssNrWorkingScale = 0.67f;
+        CHECK(U::ResolutionChoiceSelection(c) == U::ManualChoice);
+        CHECK(c.DlssNrRunBeforeSr.value_or_default() && c.DlssNrWorkingScale.value_or_default() == 0.67f);
+        U::SelectUnifiedResolution(c, 0);
+        CHECK(!c.DlssNrRunBeforeSr.value_or_default() && c.DlssNrWorkingScale.value_or_default() == 1.0f);
+        U::SelectUnifiedResolution(c, 1);
+        CHECK(c.DlssNrRunBeforeSr.value_or_default() && c.DlssNrWorkingScale.value_or_default() == 1.0f);
+        CHECK(U::UnifiedResolutionRefusal(c, 1, true) == nullptr);
+        CHECK(U::NativePlacementRefusal(c, true) == nullptr);
+        namespace N = DlssNr::NativeResolution;
+        CHECK(N::MatchAfterReconstruction(c, true, false));
+        CHECK(!N::MatchAfterReconstruction(c, false, false));
+        CHECK(!N::MatchAfterReconstruction(c, true, true));
+        auto legacyManual = c.GetDlssNrConfigSnapshot();
+        legacyManual.DlssNrUiManualResolution = true;
+        CHECK(!N::MatchAfterReconstruction(legacyManual, true, false));
+        legacyManual.DlssNrUiManualResolution = false;
+        legacyManual.DlssNrWorkingScale = 0.67f;
+        CHECK(!N::MatchAfterReconstruction(legacyManual, true, false));
+        const auto native = N::MatchWorkSize(1920, 1080, 3840, 2160);
+        CHECK(!native.reason && native.width == 1920 && native.height == 1080);
+        const auto dynamic = N::MatchWorkSize(1667, 939, 3840, 2160);
+        CHECK(!dynamic.reason && dynamic.width == 1664 && dynamic.height == 936);
+        CHECK(N::MatchWorkSize(0, 1080, 3840, 2160).reason);
+        CHECK(N::MatchWorkSize(1920, 0, 3840, 2160).reason);
+        CHECK(N::MatchWorkSize(4096, 2160, 3840, 2160).reason);
+        CHECK(N::MatchWorkSize(1920, 2200, 3840, 2160).reason);
+        DlssNr::ReadinessInput ready {true, true, false, true, true, false, 1, 1};
+        const char* refusal = "";
+        N::PublishWorkSize(native, refusal, ready.resetPending);
+        CHECK(DlssNr::GetReadiness(ready).running && !refusal[0]);
+        N::PublishWorkSize(N::MatchWorkSize(0, 0, 3840, 2160), refusal, ready.resetPending);
+        CHECK(!DlssNr::GetReadiness(ready).running && refusal[0] && !ready.failed);
+        N::PublishWorkSize(native, refusal, ready.resetPending);
+        CHECK(!DlssNr::GetReadiness(ready).running && !refusal[0]);
+        ready.resetPending = false; // Existing renderer publishes successful reset/evaluation.
+        CHECK(DlssNr::GetReadiness(ready).running && !ready.failed);
+        U::SelectUnifiedResolution(c, U::ManualChoice);
+        CHECK(!c.DlssNrRunBeforeSr.value_or_default() && c.DlssNrWorkingScale.value_or_default() == 0.67f);
+        CHECK(!N::MatchAfterReconstruction(c, true, false));
+        U::SelectUnifiedResolutionScale(c, 1.0f);
+        CHECK(!N::MatchAfterReconstruction(c, true, false)); // Explicit Manual 100% stays Manual.
+        c.DlssNrPresentInputPolicy = 1u; // explicit legacy guide-required profile
+        U::SelectUnifiedMethod(c, 0);
+        CHECK(c.DlssNrRoute.value_or_default() != 0 && c.DlssNrPresentInputPolicy.value_or_default() == 2);
+        CHECK(!c.GetDlssNrRuntimeSnapshot().enabled);
+        U::SelectUnifiedMethod(c, 1);
+        CHECK(c.DlssNrRoute.value_or_default() == 0);
+    }
+    {
+        TestConfig defaults;
+        CHECK(defaults.GetDlssNrConfigSnapshot().DlssNrStyle.value_or_default()==0u);
+        defaults.DlssNrStyle=0u;
+        defaults.DlssNrStyle.set_from_config(2u);
+        CHECK(defaults.GetDlssNrConfigSnapshot().DlssNrStyle.value_or_default()==0u);
+    }
+    {
+        TestConfig c;
+        c.DlssNrInputSource=2;c.DlssNrInputTransport=1;c.DlssNrAllowCpuFallback=false;
+        auto captured=c.GetDlssNrConfigSnapshot();
+        c.DlssNrInputSource=1;c.DlssNrInputTransport=2;c.DlssNrAllowCpuFallback=true;
+        CHECK(captured.DlssNrInputSource.value_or_default()==2);
+        CHECK(captured.DlssNrInputTransport.value_or_default()==1);
+        CHECK(!captured.DlssNrAllowCpuFallback.value_or_default());
+        CHECK(!captured.SameConfiguration(c.GetDlssNrConfigSnapshot()));
+        c.state.SetEnabled(c.DlssNrEnabled,true);
+        auto enabled=c.GetDlssNrConfigSnapshot();
+        DlssNr::FinalFallback::suppressInGame=true;
+        CHECK(!enabled.GetDlssNrRuntimeSnapshot().enabled);
+        CHECK(enabled.DlssNrEnabled.value_or_default()); // Admission never overwrites saved intent.
+        DlssNr::FinalFallback::suppressInGame=false;
+        CHECK(enabled.GetDlssNrRuntimeSnapshot().enabled);
+    }
     BasicMultipassContract();
+    {
+        TestConfig c;
+        // An old INI with no signal keys retains Auto without altering its route.
+        CHECK(c.DlssNrDepthSource.value_or_default()==0);
+        CHECK(c.DlssNrMotionSource.value_or_default()==0);
+        CHECK(!c.DlssNrSignalStrict.value_or_default());
+        c.DlssNrInputSource=3;
+        c.DlssNrDepthSource.set_from_config(4);
+        c.DlssNrMotionSource.set_from_config(2);
+        c.DlssNrSignalStrict.set_from_config(true);
+        auto captured=c.GetDlssNrConfigSnapshot();
+        CHECK(captured.DlssNrDepthSource.value_or_default()==4);
+        CHECK(captured.DlssNrMotionSource.value_or_default()==2);
+        CHECK(captured.DlssNrSignalStrict.value_or_default());
+        c.DlssNrDepthSource=0;c.DlssNrMotionSource=0;c.DlssNrSignalStrict=false;
+        CHECK(!captured.SameConfiguration(c.GetDlssNrConfigSnapshot()));
+        CHECK(c.DlssNrInputSource.value_or_default()==3);
+        TestConfig future;
+        future.DlssNrDepthSource.set_from_config(99);
+        CHECK(future.GetDlssNrConfigSnapshot().DlssNrDepthSource.value_or_default()==99);
+        TestConfig withheld;
+        withheld.DlssNrDepthSource.set_from_config(5);
+        withheld.DlssNrMotionSource.set_from_config(5);
+        CHECK(withheld.GetDlssNrConfigSnapshot().DlssNrDepthSource.value_or_default()==5);
+        CHECK(withheld.GetDlssNrConfigSnapshot().DlssNrMotionSource.value_or_default()==5);
+    }
+    {
+        TestConfig c;
+        c.state.SetEnabled(c.DlssNrEnabled,true);
+        DlssNr::StageUi::SelectUnifiedMethod(c,2);
+        CHECK(c.DlssNrRoute.value_or_default()==3u);
+        CHECK(DlssNr::StageUi::UnifiedMethodSelection(c)==2);
+        auto captured=c.GetDlssNrConfigSnapshot();
+        CHECK(captured.DlssNrAnythingScale.value_or_default()==100u);
+        c.DlssNrAnythingScale=50u;
+        CHECK(!captured.SameConfiguration(c.GetDlssNrConfigSnapshot()));
+        CHECK(captured.DlssNrEnabled.value_or_default());
+        CHECK(!captured.GetDlssNrRuntimeSnapshot().enabled);
+        DlssNr::StageUi::SelectUnifiedMethod(c,0);
+        CHECK(c.DlssNrRoute.value_or_default()==2u);
+        CHECK(c.GetDlssNrConfigSnapshot().GetDlssNrRuntimeSnapshot().enabled);
+        DlssNr::StageUi::SelectUnifiedMethod(c,1);
+        CHECK(c.DlssNrRoute.value_or_default()==0u);
+    }
+    {
+        for(const auto saved:{0u,1u,2u,3u,4u,0xffffffffu}){
+            TestConfig c;
+            DlssNr::StageUi::LoadRoute(c,saved);
+            CHECK(c.DlssNrRoute.value_or_default()==(saved<=3?saved:2));
+        }
+        TestConfig c;
+        c.DlssNrRoute=3u;
+        DlssNr::StageUi::LoadHints(c,{}, {},1u);
+        CHECK(c.DlssNrUiAfterMethod.value_or_default()==1u);
+        DlssNr::StageUi::SelectUnifiedMethod(c,0);
+        CHECK(c.DlssNrRoute.value_or_default()==1u);
+    }
     StageFirstContract();
     OptionalSemantics();
     ConcurrentOptional();

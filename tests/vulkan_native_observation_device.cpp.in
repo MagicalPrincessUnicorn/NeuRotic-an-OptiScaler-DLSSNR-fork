@@ -1,0 +1,31 @@
+#include "NrConfigFixture.h"
+#include "dlssnr/VulkanNrNativeObservation.h"
+#include "inputs/VulkanNativeFeatures.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include <cstdio>
+#include <mutex>
+std::mutex nativeFeaturesMutex;
+VulkanNativeFeatures::Registry nativeFeatures;
+unsigned checks=0,failed=0;
+void Check(bool value,const char* label){++checks;failed+=!value;std::printf("%s %s\n",value?"PASS":"FAIL",label);}
+std::optional<DlssNr::VkNrNativeObservation> Observe(uint32_t handleId,[[maybe_unused]] VkDevice vkDevice){
+    TestConfig config;config.DlssNrRoute=0u;
+    std::optional<NrConfigSnapshot<TestConfig>> nrSettings{config};
+    std::optional<DlssNr::VkNrTemporalMetadata> nrTemporal;
+    const auto nrIdentity=nativeFeatures.Observe(handleId);
+    const DlssNr::VkNrEvaluationIdentity selectedEvaluation{reinterpret_cast<VkCommandBuffer>(3),1,nrIdentity.evaluations,nrIdentity.generation};
+    NVSDK_NGX_Parameter* InParameters=nullptr;const bool bridged=false,isRrRoute=false;
+// ACTUAL_NATIVE_CAPTURE
+    return nrObservation;
+}
+int main(){using namespace DlssNr;
+    const auto a=reinterpret_cast<VkDevice>(8),b=reinterpret_cast<VkDevice>(9);
+    // Actual CreateFeature1 stores its explicit InDevice, which need not equal ambient init device.
+    nativeFeatures.Register(42,1,reinterpret_cast<uintptr_t>(a));
+    auto ordinary=Observe(42,a);Check(ordinary&&ordinary->device==a&&ordinary->Current(0),"same-device actual caller capture retains genuine feature owner");
+    auto alternate=Observe(42,b);Check(alternate&&alternate->device==a&&alternate->Current(0),"actual caller capture attributes explicit CreateFeature1 owner instead of ambient device");
+    VkNrNativeRawStatus raw;raw.Publish(*alternate,true,0);raw.InvalidateDevice(a);
+    Check(!raw.observation&&!raw.observations,"actual source device destruction retires raw diagnostics without a Native model owner");
+    nativeFeatures.Release(42,true);Check(!ordinary->Current(0)&&!alternate->Current(0),"actual feature release still retires both captured observations");
+    std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}

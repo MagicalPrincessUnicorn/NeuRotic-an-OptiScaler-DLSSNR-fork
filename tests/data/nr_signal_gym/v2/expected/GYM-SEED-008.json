@@ -1,0 +1,50 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-008",
+  "case_input_sha256": "c040b63fd509e76da093a93ff42b20f59093363283e7d785f7360da61a35e4ad",
+  "revision": 1,
+  "transport_checks": [],
+  "qualifications": [
+    {
+      "check_id": "Q-FLAGS",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "flags",
+      "actual_pointer": "/operations/explicit-absence-flags-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "flags": 143
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "qualification",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-native-inputs-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+        }
+      },
+      "dimension": "source_presence"
+    }
+  ],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

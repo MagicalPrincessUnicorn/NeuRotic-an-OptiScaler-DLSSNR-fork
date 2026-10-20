@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <span>
 namespace DlssNr::Connections {
-enum class Source : uint32_t { Automatic, Native, BuiltIn, ReShade, External };
+enum class Source : uint32_t { Automatic, Native, BuiltIn, ReShade, External, None };
 enum class Transport : uint32_t { Automatic, GPUOnly, CPU };
 struct RequestedPolicy { Source source=Source::Automatic; Transport transport=Transport::Automatic; bool allowCpuFallback=true; };
 struct RouteCapability {

@@ -1,0 +1,11 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -145,6 +145,7 @@
+ ClosureResult StreamCoordinatorKernel::Close()
+ {
+     auto& p=*impl_;Revoke(RevocationCause::SessionClose);
++    p.finalizerStopped=p.root.owners_->Finalizer()->StopAdmissions();
+     SweepInvocations();
+     {
+         std::lock_guard lock(p.mutex);

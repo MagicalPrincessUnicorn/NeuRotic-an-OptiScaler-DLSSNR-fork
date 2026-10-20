@@ -1,4 +1,7 @@
 #pragma once
+#if defined(NR_ADAPTIVE_PUBLIC_PROVIDER_FIXTURE)
+#include "../../../tests/nr/adaptive/public_fixture_services.h"
+#endif
 #include "NativeInitialMaterialization.h"
 #include "NativeReturnTransaction.h"
 #include <nr/protocol/NativeTemporalProtocolAdapter.h>
@@ -347,12 +350,12 @@ class NativeInvocationOwner final:public Protocol::NativeInvocationOwnerPort,
             store_->committedRoute=std::static_pointer_cast<const NativeInitialMaterialization::Store>(record.metadata);
         if(store_->committedRoute&&
            !NativeInitialMaterialization::SameSettings(*store_,*store_->committedRoute))return {};
-        Protocol::RecipeRequest request;
+        auto requestStorage=std::make_unique<Protocol::RecipeRequest>();auto& request=*requestStorage;
         static_cast<Protocol::NativeProfilePreparationRequest&>(request)=store_->request;
         request.recipeHeader=owners_->ProtocolJournal().Header(C::ContractId::C06,scope_);
         request.externalPlan=Protocol::Reference<C::ContractId::C05>(record.plan);
         request.nativePlan=store_->Publish(record.plan,C::OwnerDomain::StreamCoordinator);
-        auto built=Protocol::BuildRecipe(request,*store_);
+        auto built=Protocol::BuildRecipeOwned(request,*store_);
         if(!built.product){preparationReason_=built.reason;return {};}
         preparationReason_=Protocol::Symbol("Native.Admission.BindingMap");
         const auto map=Protocol::BuildNativeBindingMap(built.product->Value(),*store_);
@@ -429,7 +432,8 @@ class NativeInvocationOwner final:public Protocol::NativeInvocationOwnerPort,
         if(sourceBoundTransaction_||sourceBoundContract_)
         {
             if(!sourceBoundTransaction_||!sourceBoundContract_)return {};
-            SourceBoundPrimaryRequest selected;selected.transaction=*sourceBoundTransaction_;selected.contract=*sourceBoundContract_;
+            auto selectedStorage=std::make_unique<SourceBoundPrimaryRequest>();auto& selected=*selectedStorage;
+            selected.transaction=*sourceBoundTransaction_;selected.contract=*sourceBoundContract_;
             selected.recipe=snapshot->product.recipe;selected.plan=record.plan;selected.generations=snapshot->generations;
             selected.evaluationAssociation=store_->evaluationAssociation_;
             if(!SealSourceBoundSnapshot(*snapshot,store_,selected))return {};
@@ -510,8 +514,14 @@ class NativeInvocationOwner final:public Protocol::NativeInvocationOwnerPort,
     try
     {
         auto borrow=LiveBorrow();
+#if defined(NR_ADAPTIVE_PUBLIC_PROVIDER_FIXTURE) && !defined(NR_NATIVE_SELECTED_PROVIDER_FIXTURE)
+        const auto contract=DlssNr::AdaptivePublicFixture::Services::Lifetime();
+        return contract&&borrow&&LiveRecording()&&providerOwner_&&providerUse_&&
+            providerOwner_->Enter(providerUse_,borrow->RecordingAction(),*contract);
+#else
         return borrow&&LiveRecording()&&providerOwner_&&providerUse_&&
             providerOwner_->Enter(providerUse_,borrow->RecordingAction(),DlssNr::ProviderLifetimeContract::NgxFeature18(DlssNr::Feature18HostContractIdentity));
+#endif
     }
     catch(...){return false;}
     void ProviderEntryCancelled()noexcept override

@@ -1,11 +1,33 @@
 #pragma once
 #include "NrPreflightSignals.h"
+#include "NrDiagnosticSignals.h"
+#include <cmath>
+#include <optional>
 #include <cstdint>
 #include <cstdio>
 #include <string>
 
 namespace DlssNr::JitterDisplay
 {
+// Hold numeric display samples only. Availability/status still follows live data.
+class ReceiptSnapshot
+{
+    std::optional<SignalReceipts::Fact> value_;
+    SignalReceipts::Epoch epoch_{};
+    uint64_t published_=0,lastSeen_=0,sequence_=0;
+public:
+    const std::optional<SignalReceipts::Fact>& Update(const SignalReceipts::Reading& r,bool eligible,uint64_t now)
+    {
+        const bool changed=r.epoch!=epoch_||r.sequence<sequence_||now<lastSeen_;
+        epoch_=r.epoch;sequence_=r.sequence;lastSeen_=now;
+        if(!eligible||!DiagnosticSignals::Current(r)||!r.fact.valuesKnown||
+            !std::isfinite(r.fact.x)||!std::isfinite(r.fact.y))value_.reset();
+        else if(changed||!value_||now-published_>=500||value_->stage!=r.fact.stage||
+            value_->width!=r.fact.width||value_->height!=r.fact.height)
+        {value_=r.fact;published_=now;}
+        return value_;
+    }
+};
 struct Context
 {
     uintptr_t owner = 0;

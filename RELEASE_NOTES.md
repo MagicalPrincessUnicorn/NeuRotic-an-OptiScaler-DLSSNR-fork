@@ -1,3 +1,101 @@
+# NeuRotic Alpha 0.9.9
+
+Changes since Alpha 0.9.8.
+
+## Fresh-install defaults
+
+Per-game file logging, Neural Rendering, and all MFG unlockers start **off**. Enable them as needed. Ordinary updates preserve existing settings.
+
+## Enhancements
+
+- **Updated interface:** redesigned the Installation Library to give the selected game more space and make its details and controls clearer.
+- **Installation defaults:** added a dedicated section in Settings for default installation choices.
+- **Optional setup helpers:** Home now explains that Streamline setup and the NR DLL manager are optional. You can supply the files manually instead.
+- **NR DLL profiles:** keep multiple user-supplied `nvngx_dlssnr.dll` versions and select one per game. Updates preserve your selected DLL and saved settings.
+- **More portable DLL selection:** recognizes expected filenames without a fixed-version requirement. Runtime support still depends on the selected DLL's interfaces.
+- **Faster setup:** reduced installation and update overhead, repeated component checks, and settings-processing delays. (Installs should take about 10-15 seconds now)
+- **Local data cleanup:** automatically clears completed-operation files and recognized older temporary files. Active jobs, saved settings, DLL profiles, and diagnostic exports are preserved; the latest desktop-session log stays bounded. If you wanna clean up the old mess, open the NeuRotic Appdata folder and delete everything in the 'release' folder.
+- **Rendering controls:** revised Basic and Advanced Multipass controls, clearer Native resolution choices before and after upscaling, and more useful source and rendering status.
+- **Frame generation:** expanded compatibility on supported routes, including additional reported MFG results. Available multipliers still depend on the game and rendering path. (needs more work--sorry)
+- **Translations:** updated interface text across the nine included translation packs. (Gemini Pro Translations)
+- **NR Anything HDR:** experimental HDR processing for desktop windows. (Plenty more work to be done with NR Anything)
+
+## Fixes
+
+- Improved Native rendering-state restoration and recovery when changing routes or resolutions.
+- Corrected Vulkan rendering regions, frame identification, and input coordinates; improved DirectX 11 color and guide handling.
+- Improved Present rendering with frame generation in The Witcher 3.
+- Fixed a desktop crash when selecting saved NR Anything profiles and improved recovery of saved preferences.
+- Corrected misleading installation results after a follow-up inspection fails, and improved file-overwrite confirmation.
+- Improved game switching while installation-status checks finish, preventing late results from replacing another game's status.
+- Simplified the desktop version display and hover text.
+
+## Games used for testing
+
+Grouped by graphics API. Results describe the tested configurations; a working result for a multi-API game does not confirm every backend. FG means frame generation; MFG means multi-frame generation.
+
+### DirectX 12
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Clair Obscur: Expedition 33 | Working | Built-in MFG Unlocker not working.   |
+| Control | Working | DLSS must be enabled; disabling it causes crashes!      |
+| Crimson Desert | Working | Ray Reconstruction supported; MFG unlock confirmed on RTX 40 series. |
+| Cyberpunk 2077 | Working | Built-in MFG unlock not working. |
+| Dragon's Dogma 2 | Working | MFG working. |
+| God of War Ragnarök | Unresolved | Could not launch; investigation ongoing. |
+| Grand Theft Auto V Enhanced | Working | — |
+| Horizon Forbidden West | Working | — |
+| Kingdom Come: Deliverance II | Working | — |
+| Marvel's Spider-Man Remastered | Working | — |
+| Monster Hunter Rise: Sunbreak | Working | — |
+| Monster Hunter Wilds | Working | — |
+| Onimusha (demo) | Working | — |
+| Stellar Blade | Working | — |
+| The Witcher 3: Wild Hunt | Working | MFG working; HUD issues and a persistent restoration notice remain. |
+
+### DirectX 11
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Borderlands 3 | Present only | — |
+| God of War (2018) | Working | — |
+
+### Vulkan
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Detroit: Become Human | Present only | No DLSS required; frame-generation support planned. |
+| Doom Eternal | Working | — |
+| Doom: The Dark Ages | Working | FG working in Native and Present. |
+| No Man's Sky | Working | UI flickers. |
+
+### Multiple API options
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Baldur's Gate 3 | Working | DirectX 11 / Vulkan. |
+| Satisfactory | Working | DirectX 11 / DirectX 12 / Vulkan. |
+
+### MFG unlocker recommendation
+
+Where NeuRotic's built-in MFG unlocking is unavailable, I recommend the upstream [MFGAmpereUnlock-RenoDX addon](https://github.com/nefh/MFGAmpereUnlock-RenoDx), which my integration builds on. Download it separately and follow the project's ReShade/RenoDX installation instructions.
+
+## Known issues
+
+- NR Anything remains a work in progress; its HDR support is experimental.
+- Built-in MFG unlocking remains game-dependent; see the game chart and upstream alternative above.
+- HDR can cause incorrect interface appearance. The menu may also flicker without preventing neural rendering from working.
+- In The Witcher 3, switching from Present with frame generation to Native can leave **UI restoration pending** displayed while neural rendering continues. The compatibility path can also affect the HUD.
+
+## Roadmap
+
+- HDR interface color and composition fixes.
+- Menu flicker, HUD restoration, and remaining rendering-transition fixes.
+- Continued game compatibility and performance improvements.
+
+---
+
 # NeuRotic Alpha 0.9.8 Hotfix — Patch notes
 
 **Native Temporal compatibility is still a work in progress.** This hotfix improves stability and fixes tested paths; it does not complete compatibility across games, graphics APIs, or rendering modes. More Native work remains.

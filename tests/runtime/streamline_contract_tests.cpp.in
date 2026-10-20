@@ -1,0 +1,58 @@
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <map>
+#include <mutex>
+#include <optional>
+#include <thread>
+#include "inputs/FG/FgOwnerScope.h"
+constexpr int BUFFER_COUNT=4;
+#define LOG_TRACE(...)
+struct IUnknown{};struct ID3D12Resource{};struct ID3D12GraphicsCommandList{};
+enum class FG_ResourceType{Depth,Velocity,HudlessColor,UIColor};
+namespace sl {
+constexpr int kBufferTypeDepth=1,kBufferTypeHiResDepth=2,kBufferTypeLinearDepth=3,kBufferTypeMotionVectors=4,kBufferTypeHUDLessColor=5,kBufferTypeUIColorAndAlpha=6,kBufferTypeBackbuffer=7;
+struct Resource{void* native;};struct ResourceTag{int type;Resource* resource;};
+}
+struct IFGFeature_Dx12 {
+ uint64_t inputOwner=1;int index=0;IUnknown chain;ID3D12Resource backbuffer;
+ std::map<std::pair<FG_ResourceType,int>,bool> eligible;
+ bool ready[BUFFER_COUNT]={true,true,true,true};
+ void SetStreamlineInputsReady(int slot,bool value){ready[slot]=value;}
+ IUnknown* SwapchainIdentity(){return &chain;}
+ bool OwnsBackbuffer(ID3D12Resource* p){return p==&backbuffer;}
+ void RevokeResource(FG_ResourceType type,int slot){eligible.erase({type,slot});}
+ void StartNewFrame(){index=(index+1)%BUFFER_COUNT;}
+ unsigned GetIndex(){return index;}
+ void SetFrameCount(uint64_t){}
+};
+struct State {IFGFeature_Dx12* currentFG=nullptr;static State& Instance(){static State state;return state;}};
+struct Sl_Inputs_Dx12 {
+ std::recursive_mutex _frameBoundaryMutex;uint64_t _provider=0,_owner=0;std::optional<uint32_t> _viewport;IUnknown* _chain=nullptr;
+ bool _haveFrame=false,_haveConstants=false,_isFrameFinished=true;
+ uint64_t mvsWidth=0;uint32_t mvsHeight=0;
+ uint32_t _currentFrameId=0,_currentIndex=0,_frameIdIndex[BUFFER_COUNT]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};bool _frameSlotValid[BUFFER_COUNT]{};
+ uint32_t _lastPresentFrameId=UINT32_MAX;
+ static uint64_t CaptureOwner();void acceptedTags(const sl::ResourceTag*,uint32_t,ID3D12GraphicsCommandList*,uint32_t,uint32_t,uint64_t,uint64_t,bool);
+ void CheckForFrame(IFGFeature_Dx12*,uint32_t);int IndexForFrameId(uint32_t)const;
+ void markPresent(uint64_t);
+ bool reportResource(const sl::ResourceTag&,ID3D12GraphicsCommandList*,uint32_t frame){State::Instance().currentFG->eligible[{FG_ResourceType::Depth,IndexForFrameId(frame)}]=true;return true;}
+};
+// PRODUCTION_FUNCTIONS
+int main(){int checks=0,failures=0;auto check=[&](bool value,const char* name){++checks;if(!value){++failures;std::printf("FAIL: %s\n",name);}};
+ IFGFeature_Dx12 fg;State::Instance().currentFG=&fg;Sl_Inputs_Dx12 inputs;auto owner=inputs.CaptureOwner();
+ ID3D12Resource depth;sl::Resource back{&fg.backbuffer},dep{&depth};sl::ResourceTag tags[]={{sl::kBufferTypeBackbuffer,&back},{sl::kBufferTypeDepth,&dep}};
+ inputs.acceptedTags(tags,2,nullptr,9,3,1,owner,true);check(fg.eligible.size()==1&&!fg.ready[inputs._currentIndex],"accepted tags stage while dispatch waits for matching constants");
+ inputs._haveConstants=true;inputs.acceptedTags(tags,2,nullptr,9,3,1,owner,true);check(fg.eligible.size()==1&&fg.ready[inputs._currentIndex],"accepted authenticated constants admit staged tags");
+ auto originalIndex=inputs._currentIndex;inputs.acceptedTags(tags,2,nullptr,10,4,1,owner,true);check(inputs._currentFrameId==9&&inputs._currentIndex==originalIndex,"another viewport cannot recycle active slot");
+ sl::ResourceTag revoke{sl::kBufferTypeDepth,nullptr};inputs.acceptedTags(&revoke,1,nullptr,9,3,1,owner,true);check(fg.eligible.empty(),"null tag revokes eligibility");
+ inputs.acceptedTags(tags,2,nullptr,9,3,1,owner,true);inputs.acceptedTags(tags,2,nullptr,9,3,1,owner,false);check(fg.eligible.empty(),"provider rejection revokes replacement cache");
+ inputs.acceptedTags(tags,2,nullptr,8,3,1,owner,true);check(fg.eligible.empty()&&inputs._currentFrameId==9,"expired explicit token not relabeled current");
+ {Neurotic::Runtime::FgOwnerTransition transition;check(inputs.CaptureOwner()==0,"transition stops feeder admission");}
+ inputs.acceptedTags(tags,2,nullptr,9,3,1,owner,true);check(fg.eligible.empty(),"old owner stamp rejected after same-object recreation");
+ owner=inputs.CaptureOwner();inputs.acceptedTags(tags,2,nullptr,UINT32_MAX,3,2,owner,true);check(inputs.IndexForFrameId(UINT32_MAX)==int(inputs._currentIndex),"maximum token is not an empty slot sentinel");
+ inputs._haveConstants=true;inputs.acceptedTags(tags,2,nullptr,0,3,2,owner,true);check(inputs._currentFrameId==0&&!inputs._haveConstants,"token wrap resets constants eligibility");
+ inputs.markPresent(0);check(!fg.eligible.contains({FG_ResourceType::Depth,int(inputs._currentIndex)})&&!fg.ready[inputs._currentIndex]&&inputs._isFrameFinished,"present expires pending tags when matching constants never arrived");
+ inputs._haveConstants=true;inputs.acceptedTags(tags,2,nullptr,0,3,2,owner,true);check(!fg.eligible.contains({FG_ResourceType::Depth,int(inputs._currentIndex)})&&!fg.ready[inputs._currentIndex],"late same-frame tags cannot resurrect expired UntilPresent rights");
+ std::printf("Streamline scoped admission: %d checks, %d failures\n",checks,failures);return failures?1:0;
+}

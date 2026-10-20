@@ -1,4 +1,5 @@
 #pragma once
+#include "../../../OptiScaler/nr/context/PreparedRasterBounds.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -23,7 +24,7 @@ inline bool FiniteLuminance(float low, float high)
 constexpr bool Dimensions(std::uint32_t width, std::uint32_t height)
 // The SDK's seven-level packed luma search reads four horizontal pixels at
 // level six. Smaller input is rejected rather than reading a negative clamp.
-{ return width >= 256 && height >= 64 && width <= 4096 && height <= 2160; }
+{ return Neurotic::PreparedRaster::Admit(width, height, true); }
 constexpr bool Completed(std::uint64_t observed, std::uint64_t required)
 { return required != 0 && observed != (std::numeric_limits<std::uint64_t>::max)() && observed >= required; }
 constexpr bool NvidiaCaps(std::uint32_t width, std::uint32_t height, std::uint32_t minWidth,

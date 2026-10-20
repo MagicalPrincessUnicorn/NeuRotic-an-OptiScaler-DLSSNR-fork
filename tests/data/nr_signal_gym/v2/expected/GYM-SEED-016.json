@@ -1,0 +1,42 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-016",
+  "case_input_sha256": "11033b0cd62da3233a29c85e5802773289979e2fe8aead7cb038e6b26cb65825",
+  "revision": 1,
+  "transport_checks": [
+    {
+      "check_id": "T-NAN",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/nonfinite-scalar-frame/signals/0/scalars/scale_x",
+      "comparison": "exact",
+      "expected": {
+        "state": "synthetic_corruption",
+        "corruption_token": "nan",
+        "unit": "unitless"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    }
+  ],
+  "qualifications": [],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

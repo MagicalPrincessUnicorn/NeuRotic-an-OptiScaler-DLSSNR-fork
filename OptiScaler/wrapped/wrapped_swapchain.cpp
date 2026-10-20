@@ -5,6 +5,8 @@
 #include <inputs/FG/FgOwnerScope.h>
 #include <dlssnr/FrameTrace.h>
 #include "wrapped_swapchain.h"
+#include <hooks/DxgiSwapchainExtent.h>
+#include <cstdint>
 
 #include <Util.h>
 #include <Config.h>
@@ -181,7 +183,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         LOG_DEBUG("SyncInterval: {}, Flags: {:X}, Frametime: {:0.3f} ms", SyncInterval, Flags, ftDelta);
 
         // Update swapchain info evey frame
-        if (pSwapChain->GetDesc(&State::Instance().currentSwapchainDesc) != S_OK)
+        const auto observed=DxgiSwapchainExtent::ObserveCreated(S_OK,pSwapChain);
+        if (!DxgiSwapchainExtent::ApplyObservedDescription(observed,State::Instance().currentSwapchainDesc))
             LOG_WARN("Can't get swapchain desc!");
     }
 
@@ -469,7 +472,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
                                         originalPresentCpuMs, presentResult});
     }
 
-    if (presentResult == S_OK)
+    if (SUCCEEDED(presentResult))
     {
         LOG_DEBUG("Original present result: {:X}", (UINT) presentResult);
     }
@@ -754,6 +757,11 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::Present(UINT SyncInterval, UIN
         result = _real->Present(SyncInterval, Flags);
     }
 
+    if((Flags&DXGI_PRESENT_TEST)==0&&!_firstPresentReceipt.exchange(true,std::memory_order_relaxed)&&
+        DxgiSwapchainExtent::TakeReceipt(DxgiSwapchainExtent::presentReceipts))
+        LOG_INFO("DXGI first Present call: api={} chain={:X} real={:X} window={:X} result={:08X}",
+            __FUNCTION__,reinterpret_cast<std::uintptr_t>(this),reinterpret_cast<std::uintptr_t>(_real),
+            reinterpret_cast<std::uintptr_t>(_handle),static_cast<unsigned>(result));
     return result;
 }
 
@@ -835,6 +843,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
                                                                   DXGI_FORMAT_UNKNOWN);
         return DXGI_ERROR_WAS_STILL_DRAWING;
     }
+    DlssNr::PreFg::OutputIdentity::ResizeScope outputResize;
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -961,6 +970,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
         result = _real->ResizeBuffers(BufferCount, Width, Height, NewFormat, SwapChainFlags);
     }
 
+    const HRESULT nativeResizeResult=result;
     DXGI_SWAP_CHAIN_DESC1 observationDesc {};
     const DXGI_FORMAT observationFormat = SUCCEEDED(result) && _real1 != nullptr &&
         SUCCEEDED(_real1->GetDesc1(&observationDesc)) ? observationDesc.Format : DXGI_FORMAT_UNKNOWN;
@@ -982,8 +992,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
 
     if (result == S_OK && State::Instance().currentFeature == nullptr)
     {
-        State::Instance().screenWidth = static_cast<float>(Width);
-        State::Instance().screenHeight = static_cast<float>(Height);
+        // Final actual buffer dimensions are refreshed after optional HDR resize below.
         State::Instance().lastMipBias = 100.0f;
         State::Instance().lastMipBiasMax = -100.0f;
     }
@@ -1075,6 +1084,12 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
         State::Instance().currentFG->Mutex.unlockThis(3);
     }
 
+    if(SUCCEEDED(nativeResizeResult)&&State::Instance().currentFeature==nullptr){
+        const auto observed=DxgiSwapchainExtent::ObserveCreated(nativeResizeResult,_real);
+        if(!DxgiSwapchainExtent::ApplyObservedExtent(observed,State::Instance().currentSwapchainDesc,
+                State::Instance().screenWidth,State::Instance().screenHeight))
+            LOG_WARN("DXGI resize dimensions unavailable: descriptionResult={:08X}",static_cast<unsigned>(observed.descriptionResult));
+    }
     return result;
 }
 
@@ -1142,6 +1157,11 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::Present1(UINT SyncInterval, UI
         result = _real1->Present1(SyncInterval, Flags, pPresentParameters);
     }
 
+    if((Flags&DXGI_PRESENT_TEST)==0&&!_firstPresentReceipt.exchange(true,std::memory_order_relaxed)&&
+        DxgiSwapchainExtent::TakeReceipt(DxgiSwapchainExtent::presentReceipts))
+        LOG_INFO("DXGI first Present call: api={} chain={:X} real={:X} window={:X} result={:08X}",
+            __FUNCTION__,reinterpret_cast<std::uintptr_t>(this),reinterpret_cast<std::uintptr_t>(_real),
+            reinterpret_cast<std::uintptr_t>(_handle),static_cast<unsigned>(result));
     return result;
 }
 
@@ -1256,6 +1276,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
                                                                   DXGI_FORMAT_UNKNOWN);
         return DXGI_ERROR_WAS_STILL_DRAWING;
     }
+    DlssNr::PreFg::OutputIdentity::ResizeScope outputResize;
     LOG_DEBUG("");
 
 #ifdef USE_LOCAL_MUTEX
@@ -1440,8 +1461,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
 
     if (result == S_OK && State::Instance().currentFeature == nullptr)
     {
-        State::Instance().screenWidth = static_cast<float>(Width);
-        State::Instance().screenHeight = static_cast<float>(Height);
+        // Final actual buffer dimensions are refreshed after optional HDR resize below.
         State::Instance().lastMipBias = 100.0f;
         State::Instance().lastMipBiasMax = -100.0f;
     }
@@ -1531,6 +1551,12 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
         State::Instance().currentFG->Mutex.unlockThis(3);
     }
 
+    if(result==S_OK&&State::Instance().currentFeature==nullptr){
+        const auto observed=DxgiSwapchainExtent::ObserveCreated(result,_real);
+        if(!DxgiSwapchainExtent::ApplyObservedExtent(observed,State::Instance().currentSwapchainDesc,
+                State::Instance().screenWidth,State::Instance().screenHeight))
+            LOG_WARN("DXGI resize dimensions unavailable: descriptionResult={:08X}",static_cast<unsigned>(observed.descriptionResult));
+    }
     return result;
 }
 

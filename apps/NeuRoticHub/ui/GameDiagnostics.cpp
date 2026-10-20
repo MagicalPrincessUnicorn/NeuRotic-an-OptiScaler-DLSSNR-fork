@@ -58,7 +58,8 @@ GameDiagnosticsResult ReadGameDiagnostics(const std::string& executable,const Js
  GameDiagnosticsResult result;
  try{
   std::ostringstream text;text<<Neurotic::UiLiteral("desktop.gamediagnostics.selected_game_diagnostics_last_hub_inspection_ca_79216248", "Selected game diagnostics\nLast Hub inspection (cached; Refresh checks installation files again).\n");
-  text<<"Installation: "<<SafeText(inspection.at("state"),"status")<<"\nProxy: "<<SafeText(inspection.at("state"),"proxy")<<Neurotic::UiLiteral("desktop.gamediagnostics.config_revision_4f4d4e06", "\nConfig revision: ")<<SafeText(inspection,"configRevision")<<"\n";
+  const auto state=inspection.is_object()?inspection.value("state",Json()):Json();
+  text<<"Installation: "<<SafeText(state,"status")<<"\nProxy: "<<SafeText(state,"proxy")<<Neurotic::UiLiteral("desktop.gamediagnostics.config_revision_4f4d4e06", "\nConfig revision: ")<<SafeText(inspection,"configRevision")<<"\n";
   text<<"Runtime: "<<SafeText(inspection,Neurotic::UiLiteral("desktop.hubshell.runtime_d63852ad", "runtime"))<<Neurotic::UiLiteral("desktop.gamediagnostics.the_hub_does_not_load_the_game_runtime_saved_set_5a67ef5a", " (the Hub does not load the game runtime).\n\nSaved settings from the last inspection:\n");
   if(inspection.contains("settings")&&inspection["settings"].is_array()){
    size_t count=0;for(auto& setting:inspection["settings"]){if(++count>128){text<<Neurotic::UiLiteral("desktop.gamediagnostics.settings_projection_limited_8a092027", "[Settings projection limited]\n");break;}text<<SafeText(setting,"section")<<" / "<<SafeText(setting,"key")<<" = "<<SafeText(setting,"value",1024)<<"\n";}

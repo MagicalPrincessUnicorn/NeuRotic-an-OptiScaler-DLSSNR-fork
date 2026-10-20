@@ -1,0 +1,69 @@
+{
+  "schema": "SpectreObligationSemanticMutants/1",
+  "profiles": {
+    "spectre-return-history": {
+      "output_recording_identity_ignored": {
+        "case": "O06",
+        "changes": [
+          [
+            "OptiScaler/nr/context/NativeStageQualification.h",
+            "a.recording==b.recording&&a.producerOrdinal==b.producerOrdinal",
+            "a.producerOrdinal==b.producerOrdinal"
+          ]
+        ],
+        "detectors": [
+          "O06.wrong-recording"
+        ],
+        "before_sha256": "833fa84e3e35f7a453514eae2b42a039393a0e50828108a5fb0fb474fcba99d0",
+        "after_sha256": "61b8aa3e5c0817398b9f3993abc010b517ea61a7f541394924c57ebcc2e28ac6"
+      },
+      "explicit_restore_repeated_by_destructor": {
+        "case": "O07",
+        "changes": [
+          [
+            "OptiScaler/dlssnr/NativeParameterOverride.h",
+            "restoreAttempted_=true;",
+            "restoreAttempted_=attempted_&&false;"
+          ]
+        ],
+        "detectors": [
+          "O07.normal-explicit-restore"
+        ],
+        "before_sha256": "425468519c4bafe68e37fa964066671787df75807aad571aa58001c8b8ccb453",
+        "after_sha256": "9fd54806718267e1625d9b7b18e6e6e5c69c62e1e63d8a12efbc817821a67e45"
+      }
+    },
+    "spectre-final-boundary": {
+      "selected_view_scope_ignored": {
+        "case": "F06",
+        "changes": [
+          [
+            "OptiScaler/nr/lifecycle/FinalRealFrameTypes.h",
+            "f.viewId.KnownPart()->value==s.view&&",
+            "true&&"
+          ]
+        ],
+        "detectors": [
+          "F06.wrong-view"
+        ],
+        "before_sha256": "37bf66bdaa99b28f7cd81c5a982452ad588c037cf6563f52ef66746f6e178fb9",
+        "after_sha256": "a08198cc1fe4c58bdfb4cc76f61cd51d7c91ea2720d21b61ae74842676751dce"
+      },
+      "required_hud_value_ignored": {
+        "case": "F07",
+        "changes": [
+          [
+            "OptiScaler/nr/lifecycle/FinalRealFrameFinalizer.h",
+            "boundary.boundary.hudIncluded.KnownPart()->value!=boundary.requiredHudIncluded",
+            "false"
+          ]
+        ],
+        "detectors": [
+          "F07.hud-false"
+        ],
+        "before_sha256": "e9bd69559683b6e52bc8a2af15aff26d1d43b4d57fe27d0cbb7f9081a003cab4",
+        "after_sha256": "b2493c290933fd5bdce30de7683c39aa84f51c275681e382589938b7c03aaa24"
+      }
+    }
+  }
+}

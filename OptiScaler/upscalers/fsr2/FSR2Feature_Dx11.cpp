@@ -217,6 +217,23 @@ FSR2FeatureDx11::FSR2FeatureDx11(unsigned int InHandleId, NVSDK_NGX_Parameter* I
 {
 }
 
+bool FSR2FeatureDx11::PrepareEvaluation(NVSDK_NGX_Parameter* InParameters)
+{
+    ID3D11Resource* exposure = nullptr;
+    if (!AutoExposure())
+    {
+        if (InParameters->Get(NVSDK_NGX_Parameter_ExposureTexture, &exposure) != NVSDK_NGX_Result_Success)
+            InParameters->Get(NVSDK_NGX_Parameter_ExposureTexture, (void**) &exposure);
+        if (!exposure)
+        {
+            State::Instance().autoExposure = true;
+            State::Instance().changeBackend[Handle()->Id] = true;
+            return false; // common wrapper retains the existing success/re-init result
+        }
+    }
+    return true;
+}
+
 bool FSR2FeatureDx11::EvaluateInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Parameter* InParameters)
 {
     LOG_FUNC();

@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <locale>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -76,17 +78,55 @@ template<class F> auto Call(CallSite site,uint64_t object,F&& function) -> declt
         throw;
     }
 }
+// Supplied only by an explicit export caller. FILETIME fields use the Windows
+// 1601 epoch in100ns units; unavailable identity is never synthesized from time.
+struct ExportContext {
+    std::string build,session,exportId,provenance;
+    uint32_t pid=0;
+    uint64_t processCreation100ns=0,exportUtc100ns=0;
+};
+inline std::string IdentityWord(const std::string& value) {
+    if(value.empty()||value.size()>128)return "unknown";
+    for(char c:value)if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||
+        (c>='0'&&c<='9')||c=='_'||c=='.'||c=='+'||c=='-'))return "unknown";
+    return value;
+}
+inline std::string IdentityGuid(const std::string& value) {
+    if(value.size()!=32||value==std::string(32,'0'))return "unknown";
+    std::string text=value;
+    for(char& c:text){if(c>='A'&&c<='F')c=char(c-'A'+'a');
+        if(!((c>='a'&&c<='f')||(c>='0'&&c<='9')))return "unknown";}
+    return text;
+}
+inline std::string IdentityNumber(uint64_t value){return value?std::to_string(value):"unknown";}
+inline std::string ExportIdentity(const ExportContext& context,const Snapshot& snapshot) {
+    return "identity_schema=1; identity_clock=windows_filetime_100ns; build="+IdentityWord(context.build)+
+        "; pid="+IdentityNumber(context.pid)+"; process_creation_100ns="+IdentityNumber(context.processCreation100ns)+
+        "; session="+IdentityGuid(context.session)+"; export="+IdentityGuid(context.exportId)+
+        "; export_utc_100ns="+IdentityNumber(context.exportUtc100ns)+
+        "; provenance="+(context.provenance=="manual_explicit"?std::string("manual_explicit"):std::string("unknown"))+
+        "; rows="+std::to_string(snapshot.events.size())+
+        "; first_sequence="+std::to_string(snapshot.events.empty()?0:snapshot.events.front().sequence)+
+        "; last_sequence="+std::to_string(snapshot.events.empty()?0:snapshot.events.back().sequence);
+}
 // Explicit diagnostic capture only. No file I/O, allocation or blocking lock in Write.
 // Coverage remains partial: absent events never grant queue, frame or release rights.
-inline bool Export(const std::filesystem::path& path) noexcept {
+inline bool Export(const std::filesystem::path& path,const ExportContext& context,
+    std::string* exportedIdentity=nullptr) noexcept {
+    if(exportedIdentity)exportedIdentity->clear();
     try {
-        auto snapshot=Current().Read();std::ofstream out(path,std::ios::trunc);
+        auto snapshot=Current().Read();const auto identity=ExportIdentity(context,snapshot);
+        std::ofstream out(path,std::ios::trunc);out.imbue(std::locale::classic());
         out<<"# Vulkan observation trace v1; clock=steady_ns; coverage=partial; overwritten="
-           <<snapshot.overwritten<<"; dropped="<<snapshot.dropped<<"\n";
+           <<snapshot.overwritten<<"; dropped="<<snapshot.dropped<<"; "<<identity<<"\n";
         out<<"sequence,ticks,thread,kind,operation,evaluation,command,use,queue,detail,result\n";
         for(const auto& e:snapshot.events)out<<e.sequence<<','<<e.ticks<<','<<e.thread<<','<<static_cast<uint32_t>(e.kind)
             <<','<<e.operation<<','<<e.evaluation<<','<<e.command<<','<<e.use<<','<<e.queue<<','<<e.detail<<','<<e.result<<'\n';
-        out.flush();return bool(out);
+        out.flush();out.close();if(!out)return false;
+        if(exportedIdentity)*exportedIdentity=identity;
+        return true;
     }catch(...){return false;}
 }
+// Existing explicit callers keep a usable CSV; lack of context stays unknown.
+inline bool Export(const std::filesystem::path& path) noexcept {return Export(path,ExportContext{});}
 }

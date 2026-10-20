@@ -1,0 +1,459 @@
+{
+  "work_order": "NR-LIFE-002",
+  "suites": {
+    "consumption-leases": [
+      {
+        "id": "T16.c03-description",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.candidate-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.closed-no-admission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.consumer-pending",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.consumer-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.content-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.context-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.diagnostics-cannot-author",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.evidence-optional",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.expired-callback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.failed-registry-no-recycle",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.fully-retired",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.moved-from-closed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.moved-to-active",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.native-owner-map",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.no-false-completion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.no-false-reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.object-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.ordered-before-completion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.ordered-not-reusable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.owner-receipt",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.pixel-read-needs-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.plan-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.profile-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.purpose-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.representation-generation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.resource-generation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.resource-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.revocation-epoch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.revoked",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.revoked-safe-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.route-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.scratch-no-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.submit-ordered",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.unknown-use",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.view-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.wrong-context-type",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.closed-replayable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.descriptor-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.first-completion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.record-before-use",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.register-descriptor",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.register-resource",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.replay-not-unique",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.c03-dependency",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.c03-missing-submission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.c03-order-not-completion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.copy-list",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.cross-device",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.cross-queue-replayable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.device-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.queue-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.registry-failed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.reserved-not-committed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.sealed-cross-queue",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.unknown-dependency",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.unknown-queue",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.active-provider",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.explicit-release",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.missing-registration",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.no-provider-hold",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.release-token-missing",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.unknown-release",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.write-held",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.wrong-target-release",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.invocation-owner-current",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.invocation-current",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.wrong-candidate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.callback-closed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.content-basis-substitution",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.invocation-revoked",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.read-as-write-target",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.future-target",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "gpu-consumption-leases": [
+      {
+        "id": "T16.gpu-order-not-reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.gpu-ordered-incomplete",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.first-completed-unsealed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.gpu-replay-no-unique",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.null-ticket",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.reset-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.cross-unsealed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.sealed-cross-order",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.unsubmitted-order",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.failed-wait",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.missing-observer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.submitted-not-release",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "guide-consumption-leases": [
+      {
+        "id": "T16.guide-admission-closed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.guide-submit-fresh",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.guide-submit-stale",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.guide-submit-wrong-list",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.private-guide-lease",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.held-slot-not-recycled",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.missing-release-bind",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.missing-release-not-recycled",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.other-slot-while-held",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.released-slot-bind",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.released-slot-recycled",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "provider-consumption-leases": [
+      {
+        "id": "T18.provider-bind-committed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.provider-delayed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.provider-uncommitted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.provider-wait-applied",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.completed-not-released",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-bind-token",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-handoff",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-incarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-instance",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-not-released",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.provider-once",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "consumption-leases": {
+      "emitted_suite": "consumption-leases"
+    },
+    "gpu-consumption-leases": {
+      "emitted_suite": "gpu-consumption-leases"
+    },
+    "guide-consumption-leases": {
+      "emitted_suite": "guide-consumption-leases"
+    },
+    "provider-consumption-leases": {
+      "emitted_suite": "provider-consumption-leases"
+    }
+  }
+}

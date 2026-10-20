@@ -29,7 +29,6 @@
 static ID3D12Fence* resizeFence = nullptr;
 static UINT64 resizeFenceValue = 0;
 static HANDLE resizeFenceEvent = nullptr;
-static IUnknown* oldSwapChain = nullptr;
 static ID3D12CommandQueue* currentCommandQueue = nullptr;
 static bool _forcedHdrForXeFG = false;
 static HANDLE _semaphore = nullptr;
@@ -175,8 +174,6 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
                     LOG_DEBUG("WaitForSingleObject result: {:X}", waitResult);
                 }
             }
-
-            oldSwapChain = State::Instance().currentFGSwapchain;
         }
 
         scResult = fg->CreateSwapchain(pFactory, cq, pDesc, ppSwapChain, true);
@@ -289,8 +286,6 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
                     LOG_DEBUG("WaitForSingleObject result: {:X}", waitResult);
                 }
             }
-
-            oldSwapChain = State::Instance().currentFGSwapchain;
         }
 
         scResult = fg->CreateSwapchain1(pFactory, cq, hWnd, pDesc, pFullscreenDesc, ppSwapChain, true);
@@ -1347,13 +1342,7 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
 
 ULONG FGHooks::hkFGRelease(IUnknown* This)
 {
-    // We already released this one, prevent crashes
-    if (This == oldSwapChain)
-    {
-        LOG_DEBUG("Release called on old swapchain, skipping release and returning 0");
-        return 0;
-    }
-
+    // Retired generations still owe the caller their normal COM Release.
 #if (XEFG_RESOURCE_REF_LIMIT == 0)
     // find if this resource in oldBackBuffers, if it is, skip release and return 0
     if (oldBackBuffers.size() > 0)

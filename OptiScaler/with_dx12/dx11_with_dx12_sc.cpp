@@ -6,6 +6,7 @@
 #include <with_dx12/with_dx12.h>
 
 #include <hooks/FG_Hooks.h>
+#include <hooks/DxgiSwapchainExtent.h>
 #include <menu/menu_overlay_dx.h>
 
 #include <Util.h>
@@ -323,6 +324,17 @@ HRESULT Dx11wDx12SC::_Present(UINT SyncInterval,UINT Flags,const DXGI_PRESENT_PA
     if ((Flags & DXGI_PRESENT_TEST) != 0)
         return parameters && _real1 ? _real1->Present1(SyncInterval,Flags,parameters) : _real->Present(SyncInterval, Flags);
 
+    // A failed resize can leave either chain changed. Re-observe the actual
+    // pair before any interop allocation/copy; a later successful ResizeBuffers
+    // can recover it. Do not resize here and discard the application's frame.
+    const auto pairResult=DxgiSwapchainExtent::RequireMatchingBufferExtent(_real,_fgSwapChain);
+    if(FAILED(pairResult)){
+        if(DxgiSwapchainExtent::TakeReceipt(DxgiSwapchainExtent::pairRefusalReceipts))
+            LOG_WARN("DX11/DX12 swapchain buffer extents unavailable or mismatched: {:08X}; retry ResizeBuffers before presenting",
+                static_cast<unsigned>(pairResult));
+        return pairResult;
+    }
+
     if (parameters) {
         DXGI_SWAP_CHAIN_DESC desc{};
         if (FAILED(_real->GetDesc(&desc)) ||
@@ -448,6 +460,10 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers(UINT BufferCount, UINT Widt
     if (SUCCEEDED(realResult) && _fgSwapChain != nullptr)
         fgResult = _fgSwapChain->ResizeBuffers(BufferCount, Width, Height, NewFormat, SwapChainFlags);
 
+    HRESULT pairResult=FAILED(realResult)?realResult:fgResult;
+    if(SUCCEEDED(realResult)&&SUCCEEDED(fgResult)&&(Width==0||Height==0))
+        pairResult=DxgiSwapchainExtent::MatchHiddenBufferExtent(_real,_fgSwapChain);
+
     LOG_DEBUG("Dx11wDx12SC ResizeBuffers results: real {:X}, fg {:X}", (UINT) realResult, (UINT) fgResult);
 
     const auto realObservation =
@@ -468,7 +484,7 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers(UINT BufferCount, UINT Widt
              presentObservation.resizeGeneration, (UINT) presentObservation.format,
              (UINT) realResult, (UINT) fgResult);
 
-    if (SUCCEEDED(realResult) && SUCCEEDED(fgResult))
+    if (SUCCEEDED(realResult) && SUCCEEDED(fgResult) && SUCCEEDED(pairResult))
     {
         _RefreshCachedSwapchainDesc();
 
@@ -484,14 +500,15 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers(UINT BufferCount, UINT Widt
 
         if (State::Instance().currentFeature == nullptr)
         {
-            State::Instance().screenWidth = static_cast<float>(Width);
-            State::Instance().screenHeight = static_cast<float>(Height);
+            const auto observed=DxgiSwapchainExtent::ObserveCreated(realResult,this);
+            DxgiSwapchainExtent::ApplyObservedExtent(observed,State::Instance().currentSwapchainDesc,
+                State::Instance().screenWidth,State::Instance().screenHeight);
             State::Instance().lastMipBias = 100.0f;
             State::Instance().lastMipBiasMax = -100.0f;
         }
     }
 
-    return FAILED(realResult) ? realResult : fgResult;
+    return pairResult;
 }
 
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeTarget(const DXGI_MODE_DESC* pNewTargetParameters)
@@ -693,6 +710,10 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
         fgResult = _fgSwapChain->ResizeBuffers(BufferCount, Width, Height, Format, SwapChainFlags);
     }
 
+    HRESULT pairResult=FAILED(realResult)?realResult:fgResult;
+    if(SUCCEEDED(realResult)&&SUCCEEDED(fgResult)&&(Width==0||Height==0))
+        pairResult=DxgiSwapchainExtent::MatchHiddenBufferExtent(_real,_fgSwapChain);
+
     LOG_DEBUG("Dx11wDx12SC ResizeBuffers1 results: real {:X}, fg {:X}", (UINT) realResult, (UINT) fgResult);
 
     const auto realObservation =
@@ -713,9 +734,15 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
              presentObservation.resizeGeneration, (UINT) presentObservation.format,
              (UINT) realResult, (UINT) fgResult);
 
-    if (SUCCEEDED(realResult) && SUCCEEDED(fgResult))
+    if (SUCCEEDED(realResult) && SUCCEEDED(fgResult) && SUCCEEDED(pairResult))
     {
         _RefreshCachedSwapchainDesc();
+
+        if(State::Instance().currentFeature==nullptr){
+            const auto observed=DxgiSwapchainExtent::ObserveCreated(realResult,this);
+            DxgiSwapchainExtent::ApplyObservedExtent(observed,State::Instance().currentSwapchainDesc,
+                State::Instance().screenWidth,State::Instance().screenHeight);
+        }
 
         if (Config::Instance()->FGEnabled.value_or_default())
         {
@@ -728,7 +755,7 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
         State::Instance().SCAllowTearing = (SwapChainFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
     }
 
-    return FAILED(realResult) ? realResult : fgResult;
+    return pairResult;
 }
 
 HRESULT STDMETHODCALLTYPE Dx11wDx12SC::SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData)

@@ -1,0 +1,471 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "RecordedFrame",
+  "record_id": "present-device-mismatch-frame",
+  "legacy_fixture_ids": [],
+  "identity": {
+    "identity_basis": "synthetic",
+    "session_id": "synthetic-session-1",
+    "stream_id": "stream-1",
+    "view_id": {
+      "state": "known",
+      "value": "view-1"
+    },
+    "frame_id": {
+      "state": "known",
+      "value": "frame-100"
+    },
+    "native_eval_id": {
+      "state": "known",
+      "value": "100"
+    },
+    "present_interval_id": {
+      "state": "known",
+      "value": "100"
+    },
+    "provider_frame_id": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "observation_id": "observation-100",
+    "device": {
+      "logical_id": {
+        "state": "known",
+        "value": "device-1"
+      },
+      "generation": {
+        "state": "known",
+        "value": "1"
+      }
+    },
+    "queue": {
+      "logical_id": {
+        "state": "known",
+        "value": "queue-1"
+      },
+      "generation": {
+        "state": "known",
+        "value": "1"
+      }
+    },
+    "swapchain": {
+      "logical_id": {
+        "state": "known",
+        "value": "swapchain-1"
+      },
+      "generation": {
+        "state": "known",
+        "value": "1"
+      }
+    },
+    "recording": {
+      "logical_id": {
+        "state": "known",
+        "value": "recording-100"
+      },
+      "generation": {
+        "state": "known",
+        "value": "1"
+      }
+    },
+    "feature_generation": {
+      "state": "known",
+      "value": "1"
+    },
+    "lifecycle_generation": {
+      "state": "known",
+      "value": "1"
+    },
+    "provider_generation": {
+      "state": "known",
+      "value": "1"
+    },
+    "route_generation": {
+      "state": "known",
+      "value": "1"
+    },
+    "plan_commit_ref": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "authority": "record_only"
+  },
+  "render_extent": {
+    "width": {
+      "state": "known",
+      "value": "8"
+    },
+    "height": {
+      "state": "known",
+      "value": 4
+    }
+  },
+  "output_extent": {
+    "width": {
+      "state": "known",
+      "value": "16"
+    },
+    "height": {
+      "state": "known",
+      "value": 8
+    }
+  },
+  "reset": {
+    "requested": {
+      "state": "known",
+      "value": false
+    },
+    "camera_cut": {
+      "state": "known",
+      "value": false
+    },
+    "history_generation": {
+      "state": "known",
+      "value": "1"
+    },
+    "reason": {
+      "state": "known",
+      "value": "no_reset"
+    }
+  },
+  "configuration": {
+    "request_generation": {
+      "state": "known",
+      "value": "1"
+    },
+    "requested": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "effective": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    }
+  },
+  "resources": [
+    {
+      "resource_ref": "motion-g1",
+      "logical_resource_id": "motion",
+      "allocation_id": {
+        "state": "known",
+        "value": "allocation-motion-1"
+      },
+      "generation": {
+        "state": "known",
+        "value": "1"
+      },
+      "content_revision": {
+        "state": "known",
+        "value": "100"
+      },
+      "device": {
+        "logical_id": {
+          "state": "known",
+          "value": "device-1"
+        },
+        "generation": {
+          "state": "known",
+          "value": "1"
+        }
+      },
+      "lifecycle_generation": {
+        "state": "known",
+        "value": "1"
+      },
+      "provider_generation": {
+        "state": "known",
+        "value": "1"
+      },
+      "api": {
+        "state": "known",
+        "value": "d3d12"
+      },
+      "dimension": {
+        "state": "known",
+        "value": "texture_2d"
+      },
+      "format": {
+        "state": "known",
+        "value": "R32G32_FLOAT"
+      },
+      "extent": {
+        "width": {
+          "state": "known",
+          "value": "8"
+        },
+        "height": {
+          "state": "known",
+          "value": 4
+        }
+      },
+      "sample_count": {
+        "state": "known",
+        "value": 1
+      },
+      "mip_levels": {
+        "state": "known",
+        "value": 1
+      },
+      "array_size": {
+        "state": "known",
+        "value": 1
+      },
+      "subresource": {
+        "mip": {
+          "state": "known",
+          "value": 0
+        },
+        "array_slice": {
+          "state": "known",
+          "value": 0
+        },
+        "plane": {
+          "state": "known",
+          "value": 0
+        }
+      },
+      "active_rect": {
+        "state": "known",
+        "value": {
+          "x": 0,
+          "y": 0,
+          "width": 8,
+          "height": 4
+        }
+      },
+      "ownership_observation": "synthetic_test_owned",
+      "lifetime_observation": {
+        "state": "known",
+        "value": "described_only"
+      },
+      "payload": {
+        "kind": "not_captured",
+        "reason_id": "GYM.METADATA_ONLY"
+      }
+    }
+  ],
+  "signals": [
+    {
+      "signal_id": "motion",
+      "semantic": {
+        "owner": "ChatD",
+        "contract_id": "unbound-chat-d",
+        "version": "unbound",
+        "sha256": {
+          "state": "not_observed",
+          "reason_id": "GYM.CHAT_D_CONTRACT_NOT_BOUND"
+        }
+      },
+      "presence": "present",
+      "presence_reason_id": "GYM.SYNTHETIC_DECLARATION",
+      "resource_ref": {
+        "state": "known",
+        "value": "motion-g1"
+      },
+      "producer_frame_id": {
+        "state": "known",
+        "value": "frame-100"
+      },
+      "producer_eval_id": {
+        "state": "known",
+        "value": "100"
+      },
+      "lifecycle_generation": {
+        "state": "known",
+        "value": "1"
+      },
+      "provider_generation": {
+        "state": "known",
+        "value": "1"
+      },
+      "freshness_observation": "reported_current",
+      "active_rect": {
+        "state": "known",
+        "value": {
+          "x": 0,
+          "y": 0,
+          "width": 8,
+          "height": 4
+        }
+      },
+      "coordinate_space": {
+        "state": "known",
+        "value": "render_pixels"
+      },
+      "units": {
+        "state": "known",
+        "value": "pixels"
+      },
+      "axes": {
+        "state": "known",
+        "value": "x_right_y_down"
+      },
+      "direction": {
+        "state": "known",
+        "value": "current_to_previous"
+      },
+      "jitter_included": {
+        "state": "known",
+        "value": false
+      },
+      "scalars": {
+        "scale_x": {
+          "state": "known",
+          "f32_bits_hex": "3f800000",
+          "unit": "unitless"
+        },
+        "scale_y": {
+          "state": "known",
+          "f32_bits_hex": "3f800000",
+          "unit": "unitless"
+        }
+      },
+      "transforms": [],
+      "provenance": [
+        {
+          "claim_id": "claim-motion-1",
+          "source_kind": "synthetic_specification",
+          "producer": "specification-builder",
+          "source_version": {
+            "state": "known",
+            "value": "2.0.0"
+          },
+          "source_frame_id": {
+            "state": "known",
+            "value": "frame-100"
+          },
+          "lineage_parents": [],
+          "evidence_refs": [
+            "SRC-E-01"
+          ],
+          "confidence": {
+            "state": "not_observed",
+            "reason_id": "GYM.NOT_OBSERVED"
+          }
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "event_id": "event-0",
+      "event_index": 0,
+      "logical_tick": "0",
+      "actor": "source-contract-cpu-v2",
+      "depends_on": [],
+      "kind": "invoke",
+      "operation": {
+        "adapter_id": "source-contract-cpu-v2",
+        "operation_id": "present.admit",
+        "subject_ref": "present-policy",
+        "bindings": {
+          "capabilities": {
+            "selector": "frame_pointer",
+            "pointer": "/source_contract_inputs/capabilities"
+          }
+        }
+      },
+      "observation": null
+    }
+  ],
+  "source_contract_inputs": {
+    "capabilities": {
+      "directQueue": {
+        "state": "known",
+        "value": true
+      },
+      "singleSample": {
+        "state": "known",
+        "value": true
+      },
+      "flipModel": {
+        "state": "known",
+        "value": true
+      },
+      "sdr": {
+        "state": "known",
+        "value": true
+      },
+      "texture2D": {
+        "state": "known",
+        "value": true
+      },
+      "nonZeroExtent": {
+        "state": "known",
+        "value": true
+      },
+      "sameDevice": {
+        "state": "known",
+        "value": false
+      },
+      "rgba8": {
+        "state": "known",
+        "value": true
+      },
+      "rgba8ShaderLoad": {
+        "state": "known",
+        "value": true
+      },
+      "rgba8TypedStore": {
+        "state": "known",
+        "value": true
+      },
+      "targetShaderLoad": {
+        "state": "known",
+        "value": true
+      },
+      "targetTypedStore": {
+        "state": "known",
+        "value": true
+      },
+      "sharedResources": {
+        "state": "known",
+        "value": true
+      },
+      "synchronization": {
+        "state": "known",
+        "value": true
+      },
+      "rgb10": {
+        "state": "known",
+        "value": false
+      },
+      "api": {
+        "state": "known",
+        "value": "D3D12"
+      }
+    }
+  },
+  "provenance": {
+    "origin": "synthetic_specification",
+    "game_label": {
+      "state": "not_applicable",
+      "reason_id": "GYM.NO_GAME_CAPTURE"
+    },
+    "game_version": {
+      "state": "not_applicable",
+      "reason_id": "GYM.NO_GAME_CAPTURE"
+    },
+    "source_build": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "source_hashes": [],
+    "contains_game_assets": false,
+    "contains_model_binary": false,
+    "contains_personal_data": false,
+    "distribution": "synthetic_specification",
+    "license_labels": [
+      "NeuRotic-project-design-artifact"
+    ],
+    "attribution": [
+      "EspiOwnage"
+    ],
+    "redactions": [],
+    "evidence_refs": [
+      "User:Chat-E-Implementation-Closure",
+      "Prior:GYM-PROMO-001",
+      "Prior:GYM-PROMO-002"
+    ]
+  }
+}

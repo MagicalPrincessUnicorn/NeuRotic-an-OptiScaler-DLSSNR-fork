@@ -2,6 +2,7 @@
 #include <imgui/imgui.h>
 #include <menu/Localization.h>
 #include <menu/BoundedPopup.h>
+#include <menu/ItemHelp.h>
 #include <algorithm>
 #include <string>
 #include <string_view>
@@ -46,7 +47,7 @@ inline void Cell(const char* id,std::string_view value,int lines) {
     draw->AddText(ImGui::GetFont(),ImGui::GetFontSize(),pos,ImGui::GetColorU32(ImGuiCol_Text),
         visible.c_str(),nullptr,lines==2?width:0.f);
     draw->PopClipRect();
-    if(clipped&&(ImGui::IsItemHovered()||ImGui::IsItemFocused())){
+    if(clipped&&Neurotic::ItemHelpHovered()){
         ImGui::BeginTooltip();ImGui::PushTextWrapPos(ImGui::GetFontSize()*40.f);
         ImGui::TextUnformatted(full.c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();
     }

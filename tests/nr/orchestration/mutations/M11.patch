@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/lifecycle/NativeExecutionLedger.h b/after/OptiScaler/nr/lifecycle/NativeExecutionLedger.h
+--- a/before/OptiScaler/nr/lifecycle/NativeExecutionLedger.h
++++ b/after/OptiScaler/nr/lifecycle/NativeExecutionLedger.h
+@@ -33,7 +33,7 @@
+     // already in the session before any owner or model effect is possible.
+     std::optional<Ticket> Reserve(const C::NativeSampleIdentityV1& sample)noexcept
+     {
+-        if(sample.Check()!=C::Error::None||sample.producerOrdinal<=highestOrdinal_)return {};
++        if(sample.Check()!=C::Error::None)return {};
+         for(std::size_t i=0;i<slots_.size();++i)
+         {
+             auto& slot=slots_[i];

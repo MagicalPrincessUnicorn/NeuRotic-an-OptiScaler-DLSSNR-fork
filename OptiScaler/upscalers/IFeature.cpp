@@ -16,12 +16,18 @@ bool IFeature::SetInitParameters(NVSDK_NGX_Parameter* InParameters)
     unsigned int outHeight = 0;
     int pqValue = 0;
 
+    _featureFlagsObserved = false;
+    _hdrOverrideApplied = false;
+
     if (InParameters->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &_featureFlags) == NVSDK_NGX_Result_Success)
     {
-        if (Config::Instance()->HDR.has_value())
+        _featureFlagsObserved = true;
+        const auto hdrOverride = Config::Instance()->HDR;
+        _hdrOverrideApplied = hdrOverride.has_value();
+        if (hdrOverride.has_value())
         {
-            LOG_INFO("HDR flag overrided by user: {}", Config::Instance()->HDR.value());
-            _initFlags.IsHdr = Config::Instance()->HDR.value();
+            LOG_INFO("HDR flag overrided by user: {}", hdrOverride.value());
+            _initFlags.IsHdr = hdrOverride.value();
         }
         else
         {

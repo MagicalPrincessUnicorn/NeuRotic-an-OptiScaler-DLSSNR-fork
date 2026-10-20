@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <nr/diagnostics/PacingTrace.h>
 #include "Reflex_Hooks.h"
 #include <Config.h>
 
@@ -25,19 +26,24 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_SetSleepMode(IUnknown* pDev, NV_SET_SLEEP_
     LOG_FUNC();
 #endif
     // Store for later so we can adjust the fps whenever we want
+    const auto requestedInterval=pSetSleepModeParams->minimumIntervalUs;
+    const auto requestedLowLatency=pSetSleepModeParams->bLowLatencyMode;
+    bool hookOverride=false;
     memcpy(&_lastSleepParams, pSetSleepModeParams, sizeof(NV_SET_SLEEP_MODE_PARAMS));
     _lastSleepDev = pDev;
 
     if (State::Instance().gameQuirks & GameQuirk::HitmanReflexHacks)
         _lastSetSleepThread = std::this_thread::get_id();
 
-    if (_minimumIntervalUs != 0)
+    if (_minimumIntervalUs != 0) {
         pSetSleepModeParams->minimumIntervalUs = _minimumIntervalUs;
+        hookOverride=true;
+    }
 
     if (State::Instance().activeFgOutput == FGOutput::XeFG)
-        return nvapi_calls::NvAPI_D3D_SetSleepMode(pDev, pSetSleepModeParams);
+        return Neurotic::PacingTrace::Mode("NvAPI-D3D-SetSleepMode-XeFG",requestedInterval,pSetSleepModeParams->minimumIntervalUs,requestedLowLatency,pSetSleepModeParams->bLowLatencyMode,hookOverride,[&]{return nvapi_calls::NvAPI_D3D_SetSleepMode(pDev, pSetSleepModeParams);});
 
-    return o_NvAPI_D3D_SetSleepMode(pDev, pSetSleepModeParams);
+    return Neurotic::PacingTrace::Mode("NvAPI-D3D-SetSleepMode-original",requestedInterval,pSetSleepModeParams->minimumIntervalUs,requestedLowLatency,pSetSleepModeParams->bLowLatencyMode,hookOverride,[&]{return o_NvAPI_D3D_SetSleepMode(pDev, pSetSleepModeParams);});
 }
 
 NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
@@ -61,7 +67,7 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
             LOG_TRACE("Sleep for frame {}", frameCount);
 
             skip = true;
-            StreamlineProxy::ReflexSleep()(*frameToken);
+            Neurotic::PacingTrace::Sleep([&]{return StreamlineProxy::ReflexSleep()(*frameToken);});
             skip = false;
 
             return NVAPI_OK;
@@ -69,15 +75,15 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
         else
         {
             _lastSleepDev = pDev;
-            return o_NvAPI_D3D_Sleep(pDev);
+            return Neurotic::PacingTrace::Sleep([&]{return o_NvAPI_D3D_Sleep(pDev);});
         }
     }
 
     if (State::Instance().activeFgOutput == FGOutput::XeFG)
-        return nvapi_calls::NvAPI_D3D_Sleep(pDev);
+        return Neurotic::PacingTrace::Sleep([&]{return nvapi_calls::NvAPI_D3D_Sleep(pDev);});
 
     _lastSleepDev = pDev;
-    return o_NvAPI_D3D_Sleep(pDev);
+    return Neurotic::PacingTrace::Sleep([&]{return o_NvAPI_D3D_Sleep(pDev);});
 }
 
 NvAPI_Status ReflexHooks::hkNvAPI_D3D_GetLatency(IUnknown* pDev, NV_LATENCY_RESULT_PARAMS* pGetLatencyParams)
@@ -378,13 +384,18 @@ NvAPI_Status ReflexHooks::hkNvAPI_Vulkan_SetSleepMode(HANDLE vkDevice,
     LOG_FUNC();
 #endif
     // Store for later so we can adjust the fps whenever we want
+    const auto requestedInterval=pSetSleepModeParams->minimumIntervalUs;
+    const auto requestedLowLatency=pSetSleepModeParams->bLowLatencyMode;
+    bool hookOverride=false;
     memcpy(&_lastVkSleepParams, pSetSleepModeParams, sizeof(NV_VULKAN_SET_SLEEP_MODE_PARAMS));
     _lastVkSleepDev = vkDevice;
 
-    if (_minimumIntervalUs != 0)
+    if (_minimumIntervalUs != 0) {
         pSetSleepModeParams->minimumIntervalUs = _minimumIntervalUs;
+        hookOverride=true;
+    }
 
-    return o_NvAPI_Vulkan_SetSleepMode(vkDevice, pSetSleepModeParams);
+    return Neurotic::PacingTrace::Mode("NvAPI-Vulkan-SetSleepMode-original",requestedInterval,pSetSleepModeParams->minimumIntervalUs,requestedLowLatency,pSetSleepModeParams->bLowLatencyMode,hookOverride,[&]{return o_NvAPI_Vulkan_SetSleepMode(vkDevice, pSetSleepModeParams);});
 }
 
 NvAPI_Status ReflexHooks::hkNvAPI_Vulkan_GetLatency(HANDLE vkDevice, NV_VULKAN_LATENCY_RESULT_PARAMS* pGetLatencyParams)
@@ -689,20 +700,22 @@ void ReflexHooks::setFPSLimit(float fps)
     {
         NV_SET_SLEEP_MODE_PARAMS temp {};
         memcpy(&temp, &_lastSleepParams, sizeof(NV_SET_SLEEP_MODE_PARAMS));
+        const auto requestedInterval=temp.minimumIntervalUs;
         temp.minimumIntervalUs = _minimumIntervalUs;
 
         if (State::Instance().activeFgOutput == FGOutput::XeFG)
-            nvapi_calls::NvAPI_D3D_SetSleepMode(_lastSleepDev, &temp);
+            Neurotic::PacingTrace::Mode("nvapi_calls::NvAPI_D3D_SetSleepMode-hook-fps-adjustment",requestedInterval,temp.minimumIntervalUs,temp.bLowLatencyMode,temp.bLowLatencyMode,true,[&]{return nvapi_calls::NvAPI_D3D_SetSleepMode(_lastSleepDev, &temp);});
         else
-            o_NvAPI_D3D_SetSleepMode(_lastSleepDev, &temp);
+            Neurotic::PacingTrace::Mode("o_NvAPI_D3D_SetSleepMode-hook-fps-adjustment",requestedInterval,temp.minimumIntervalUs,temp.bLowLatencyMode,temp.bLowLatencyMode,true,[&]{return o_NvAPI_D3D_SetSleepMode(_lastSleepDev, &temp);});
     }
 
     if (_lastVkSleepDev != nullptr)
     {
         NV_VULKAN_SET_SLEEP_MODE_PARAMS temp {};
         memcpy(&temp, &_lastVkSleepParams, sizeof(NV_VULKAN_SET_SLEEP_MODE_PARAMS));
+        const auto requestedInterval=temp.minimumIntervalUs;
         temp.minimumIntervalUs = _minimumIntervalUs;
-        o_NvAPI_Vulkan_SetSleepMode(_lastVkSleepDev, &temp);
+        Neurotic::PacingTrace::Mode("o_NvAPI_Vulkan_SetSleepMode-hook-fps-adjustment",requestedInterval,temp.minimumIntervalUs,temp.bLowLatencyMode,temp.bLowLatencyMode,true,[&]{return o_NvAPI_Vulkan_SetSleepMode(_lastVkSleepDev, &temp);});
     }
 }
 

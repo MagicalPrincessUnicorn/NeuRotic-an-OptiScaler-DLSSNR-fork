@@ -50,11 +50,14 @@ class VkPresentLogGate
 
 struct VkNrGpuStageSample {
     VkNrUseId use;VkNrFrameContract frame;uint32_t pass=0;
+    VkDevice device=VK_NULL_HANDLE;uint64_t applied=0,reset=0,at=0,resetEpoch=0;uint32_t productRoute=0;
     // Encode, rescale, model, resolve. Final copyback/WSI are separate boundaries.
     std::array<double,4> milliseconds{};
 };
 struct VkPresentStatusSnapshot
 {
+    Connections::Mixed::Policy requestedSources;
+    Connections::SignalStatusSnapshot sources;
     bool requested = false;
     bool active = false;
     bool failed = false;
@@ -73,12 +76,16 @@ struct VkPresentStatusSnapshot
     unsigned long long submitted = 0;
     unsigned long long completed = 0;
     unsigned long long originalAccepted = 0;
+    unsigned long long gamePresents = 0;
     unsigned long long uncertain = 0;
     unsigned long long consecutiveFallbacks = 0;
     std::string reason;
     VkNrWorkloadStatus workload;
     uint32_t requestedPasses=0,completedPasses=0;
     uint64_t outputVersion=0;
+    VkDevice timingDevice=VK_NULL_HANDLE;VkQueue timingQueue=VK_NULL_HANDLE;VkSwapchainKHR timingSwapchain=VK_NULL_HANDLE;
+    uint64_t timingDeviceGeneration=0;
+    bool gpuTimeValid=false;double gpuTimeMs=0;uint64_t gpuTimeSamples=0;
     std::array<VkNrGpuStageSample,10> gpuStages{},nativeGpuStages{};
     PresentPacing::WindowSummary pacing;
     uint64_t realFrameContributions=0,retainedFgConsumers=0;
@@ -95,9 +102,17 @@ class VulkanPresentStatus
     bool PhysicalReports(uint64_t provider) const{return !provider||applicationProvider_.load(std::memory_order_acquire)!=provider;}
     void Observe(const VkObservedPresent* observed, const VkPresentExecution* execution,
                  bool originalCalled, VkResult originalResult, const char* reason);
+    void ObserveGamePresent(bool called,VkResult result);
     void GpuCompleted();
+    void ObserveSourcePolicy(const Connections::Mixed::Policy&,const VkPresentSources::Context&,
+                             uint64_t firstCapture=0);
+    bool SourceCompleted(const VkPresentSources::Receipt&,uint64_t currentRevision);
+    void InvalidateSources();
     void ObserveWorkload(const VkNrWorkloadStatus&);
     VkPresentStatusSnapshot Snapshot() const;
+    std::array<VkNrGpuStageSample,10> NativeGpuStages() const;
+    // Callback-free raw owner snapshot; caller performs current-context timing checks.
+    VkPresentStatusSnapshot TimingSnapshot() const;
     void ObserveFgOwnership(uint64_t primary,uint64_t consumers);
     bool ObserveGpuStages(const VkNrRecordingOwner&,const VkNrGpuStageSample&);
     PresentPacing::CallToken BeginCall(uint32_t route,double startMs);
@@ -108,6 +123,8 @@ class VulkanPresentStatus
     std::atomic<uint64_t> applicationProvider_{0};
     mutable std::mutex mutex_;
     VkPresentStatusSnapshot state_;
+    std::optional<VkPresentSources::Context> sourceContext_;
+    uint64_t firstSourceCapture_=0;
     PresentPacing::Window<> pacing_;
     uint64_t calls_=0;double priorMs_=0;
     std::unordered_map<uint64_t,double> callIntervals_;

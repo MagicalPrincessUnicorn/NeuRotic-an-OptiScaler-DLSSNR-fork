@@ -10,6 +10,6 @@ std::pair<uint32_t,uint32_t> WorkingExtent(const NrOptions&, uint32_t width, uin
 bool UseGuides(const NrOptions &, const FrameStamp &, const GuideResult *);
 bool ResetHistory(const FrameStamp &, const FrameStamp &);
 bool AdmitShape(uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight,
-                std::string &reason);
+                std::string &reason,bool hdr=false);
 std::filesystem::path CoreAtRoot(const std::filesystem::path &);
 } // namespace nrw::detail

@@ -1,0 +1,109 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-DERIVED-a797bab4969c764b177f7c34b36e0104",
+  "case_input_sha256": "23094d73f8fd637bab62c867ee42cbcfb772cf76d9c28ac5b17460c7d461310a",
+  "revision": 1,
+  "transport_checks": [
+    {
+      "check_id": "T-OVERLAY-FRAME",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/minimal-frame/signals/0/producer_frame_id",
+      "comparison": "exact",
+      "expected": {
+        "state": "known",
+        "value": "frame-101"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    },
+    {
+      "check_id": "T-OVERLAY-CLAIM-UNCHANGED",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/minimal-frame/signals/0/provenance/0/source_frame_id",
+      "comparison": "exact",
+      "expected": {
+        "state": "known",
+        "value": "frame-100"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    }
+  ],
+  "qualifications": [
+    {
+      "check_id": "Q-FITS",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/operations/minimal-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "fits": true
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "qualification",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-native-inputs-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+        }
+      },
+      "dimension": "geometry"
+    }
+  ],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

@@ -236,6 +236,24 @@ bool VkNrRecordingOwner::RecordingReleased(VkNrUseId use) const
     std::lock_guard lock(mutex_); const auto found = uses_.find(use.value);
     return found == uses_.end() || !found->second.recordingReference;
 }
+std::optional<VkNrRecordingOwner::UseRecordingSnapshot> VkNrRecordingOwner::InspectUseRecording(VkNrUseId use)const
+{
+    std::lock_guard lock(mutex_);
+    const auto found=uses_.find(use.value);if(found==uses_.end())return {};
+    const auto& state=found->second;
+    UseRecordingSnapshot result;
+    result.use=use;result.device=state.device;result.buffer=state.buffer;
+    result.generation=state.generation;result.incarnation=state.incarnation;
+    result.recordingReference=state.recordingReference;result.submitted=state.submitted;
+    result.uncertain=state.uncertain;result.pending=state.pending;result.consumerHolds=state.consumerHolds;
+    const auto recording=recordings_.find(state.buffer);
+    if(recording!=recordings_.end()&&recording->second.device==state.device){
+        result.recordingKnown=true;result.pool=recording->second.pool;
+        result.currentIncarnation=recording->second.incarnation;
+        result.recording=recording->second.recording;result.executable=recording->second.executable;
+    }
+    return result;
+}
 std::optional<VkNrUseId> VkNrRecordingOwner::ReserveSubmissionDependency(VkDevice device,uint64_t generation,uint32_t family)
 {
     std::lock_guard lock(mutex_);
@@ -494,7 +512,8 @@ std::string VkNrRecordingOwner::DescribeProducer(VkNrUseId use) const
     const bool current=recording!=recordings_.end()&&recording->second.incarnation==u.incarnation;
     auto text="submitted="+std::to_string(u.submitted)+" uncertain="+std::to_string(u.uncertain)+
         " submissions="+std::to_string(u.submissionCount)+" pending="+std::to_string(u.pending)+
-        " recordingReference="+std::to_string(u.recordingReference)+" useGeneration="+std::to_string(u.generation)+
+        " recordingReference="+std::to_string(u.recordingReference)+" observers="+std::to_string(u.observers)+
+        " consumerHolds="+std::to_string(u.consumerHolds)+" useGeneration="+std::to_string(u.generation)+
         " submissionGeneration="+std::to_string(u.producer.deviceGeneration)+" family="+std::to_string(u.family)+
         " currentRecording="+std::to_string(current)+
         " executable="+std::to_string(current&&recording->second.executable)+

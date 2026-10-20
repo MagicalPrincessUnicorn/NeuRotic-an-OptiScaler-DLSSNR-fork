@@ -2,6 +2,8 @@
 * text=auto
 # Provider rules have a pinned raw-byte digest; preserve LF on Windows checkouts.
 tools/packaging/customer/support/NeuRotic-AntiCheatProviders.json text eol=lf
+# Inspector host admission hashes this packaged source byte-for-byte.
+tools/nr_semantic_worker/inspector_contract.py text eol=lf
 # Hash-locked unmodified Zoo source must survive Windows checkout byte-exact.
 tools/nr_semantic_worker/third_party/** -text -whitespace
 *.sh eol=lf
@@ -305,3 +307,14 @@ external/mfg_ampere/** -text
 
 # Preserve the exact trusted provider-policy bytes.
 /tools/packaging/customer/support/NeuRotic-AntiCheatProviders.json -text
+
+# Inspector integrity hashes approved CRLF bytes independently of user Git settings.
+tools/nr_semantic_worker/models.lock.json text eol=crlf
+tools/nr_semantic_worker/object_classes.json text eol=crlf
+tools/nr_semantic_worker/protocol.py text eol=crlf
+tools/nr_semantic_worker/providers/zoo_character.py text eol=crlf
+tools/nr_semantic_worker/providers/zoo_objects.py text eol=crlf
+tools/nr_semantic_worker/server.py text eol=crlf
+tools/nr_semantic_worker/tracking.py text eol=crlf
+tools/nr_semantic_worker/tracking_engine.py text eol=crlf
+tools/nr_semantic_worker/upstream.lock.json text eol=crlf

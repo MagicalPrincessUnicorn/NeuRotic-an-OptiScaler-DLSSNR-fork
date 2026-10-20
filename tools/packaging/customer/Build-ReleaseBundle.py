@@ -11,12 +11,17 @@ sys.path.insert(0, str(Path(__file__).parent))
 from NativePackagePolicy import retain_native_shipping
 from LoggingProfile import apply_logging_profile
 from PublicPayload import public_payload
+from OfflineDependencies import DependencyArchive, ACCEPTED_ARCHIVE_SHA256, ACCEPTED_INVENTORY_SHA256, file_sha, owned_output, write_owned
+sys.path.insert(0,str(Path(__file__).parents[2]/'build'))
+from BuildEvidence import validate_receipt
 
 ROOT = Path(__file__).resolve().parents[3]
-BASE = ROOT.parent / '_exports/NeuRotic-Current-Flagship-4134edeb.zip'
-BASE_SHA = '2d7618859cccb628b93da9475118440083fe297be24a775b86795a2e1feaae67'
-EVIDENCE = ROOT / 'docs/implementation-evidence/release-readiness-20261004'
+BASE = None
+BASE_INVENTORY = None
+BASE_SHA = ACCEPTED_ARCHIVE_SHA256
+ALLOW_INSPECTOR_MODELS = False
 WORK = ROOT / 'builds/release-bundle'
+EVIDENCE = WORK / 'evidence'
 spec = importlib.util.spec_from_file_location('release_verify', Path(__file__).with_name('Verify-ReleaseBundle.py'))
 verify = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify)
@@ -25,17 +30,18 @@ PACKAGE, WORKER, SUPPORT = verify.PACKAGE, verify.WORKER, verify.SUPPORT
 LOCAL_WORKER = 'payload/' + verify.inspector_component()['relativeRoot'] + '/'
 SCOPES = ('OptiScaler', 'integration', 'apps/NeuRoticHub', 'apps/NeuRoticWindowWorker',
           'tools/nr_semantic_worker', 'tools/packaging/customer', 'tools/window-worker',
-          'addons', 'references/prepared-guide-installer',
-          'Licenses', 'LICENSE', 'localization', 'tools/localization', 'references/window-nr/capture-donor/Magpie.LICENSE')
+          'addons', 'tools/build', 'tools/hub',
+          'Licenses', 'LICENSE', 'localization', 'tools/localization')
 COMPONENT_SCOPES = ('apps/NeuRoticHub', 'apps/NeuRoticWindowWorker', 'OptiScaler', 'tools/window-worker', 'addons', 'localization')
 COMPONENTS = {
-    'NeuRotic.exe': 'builds/hub/bin/NeuRotic.exe',
-    **{'discovery/' + n: 'builds/hub/bin/discovery/' + n for n in
+    'NeuRotic.exe': 'builds/source/app/bin/NeuRotic.exe',
+    **{'discovery/' + n: 'builds/source/app/bin/discovery/' + n for n in
        ('NeuRotic.Discovery.exe', 'NeuRotic.Discovery.dll', 'NeuRotic.Discovery.deps.json', 'NeuRotic.Discovery.runtimeconfig.json')},
-    'Tools/WindowWorker/NeuRotic.WindowWorker.exe': 'builds/window-worker/bin/NeuRotic.WindowWorker.exe',
-    'Tools/WindowWorker/nvngx.dll_dlssnr.dll': 'builds/window-worker/bin/nvngx.dll_dlssnr.dll',
-    PACKAGE + 'payload/OptiScaler/NRAnything/NeuRotic.WindowWorker.exe': 'builds/window-worker/bin/NeuRotic.WindowWorker.exe',
-    PACKAGE + 'payload/OptiScaler/NRAnything/nvngx.dll_dlssnr.dll': 'builds/window-worker/bin/nvngx.dll_dlssnr.dll',
+    'Tools/WindowWorker/NeuRotic.WindowWorker.exe': 'builds/source/worker/bin/NeuRotic.WindowWorker.exe',
+    'Tools/WindowWorker/nvngx.dll_dlssnr.dll': 'builds/source/worker/bin/nvngx.dll_dlssnr.dll',
+    PACKAGE + 'payload/OptiScaler/NRAnything/NeuRotic.WindowWorker.exe': 'builds/source/worker/bin/NeuRotic.WindowWorker.exe',
+    PACKAGE + 'payload/OptiScaler/NRAnything/nvngx.dll_dlssnr.dll': 'builds/source/worker/bin/nvngx.dll_dlssnr.dll',
+    PACKAGE + 'payload/nvngx.dll_dlssnr.dll': 'builds/source/core/forwarder/nvngx.dll_dlssnr.dll',
     PACKAGE + 'payload/NeuRotic.Fsr3.Vulkan.dll': 'builds/native-framegen/bridge/NeuRotic.Fsr3.Vulkan.dll',
     PACKAGE + 'payload/WinPixEventRuntime.dll': 'builds/prepared-guides/WinPixEventRuntime.dll',
 }
@@ -52,7 +58,37 @@ def encode(value):
 
 
 def git(*args):
-    return subprocess.check_output(['git', '-C', str(ROOT), *args], text=True).strip()
+    return subprocess.check_output(['git', '-c', 'safe.directory='+ROOT.as_posix(), '-C', str(ROOT), *args], text=True,
+                                   env={**__import__('os').environ, 'GIT_OPTIONAL_LOCKS':'0'}).strip()
+
+
+def internal_output(path):
+    return owned_output(ROOT,path,tree=True)
+
+
+def require_development_receipt(receipt, target=None):
+    validate_receipt(receipt)
+    require(receipt.get('schema_version')==2 and receipt.get('qualification')=='INTERNAL_DEVELOPMENT_BUILD_ONLY' and
+            receipt.get('exit_code')==0 and receipt.get('source_unchanged') is True and
+            (target is None or receipt.get('target')==target), 'Fresh internal development build receipt required')
+    require(re.fullmatch('[0-9a-f]{64}',receipt.get('source_manifest_sha256','')) and receipt.get('input_pins'),
+            'Content-bound build inputs required')
+    require(receipt.get('source_manifest_path') and file_sha(receipt['source_manifest_path'])==receipt['source_manifest_sha256'],
+            'Frozen build manifest identity differs')
+    manifest=json.loads(Path(receipt['source_manifest_path']).read_bytes())
+    require(manifest.get('schema_version')==1 and manifest.get('target')==receipt['target'] and
+            Path(manifest['repository']).resolve()==ROOT and manifest.get('files')==receipt['input_pins'],
+            'Receipt input closure differs from frozen manifest')
+    require(receipt.get('build_label')=='099-dev-'+receipt['source_manifest_sha256'][:16],
+            'Build content label differs from frozen manifest')
+    seen=set()
+    for row in receipt['input_pins']:
+        path=Path(row['path'])
+        require(path.is_absolute() and str(path.resolve()).casefold() not in seen,'Invalid/duplicate build input')
+        seen.add(str(path.resolve()).casefold())
+        require(path.stat().st_size==row['bytes'] and file_sha(path)==row['sha256'],'Frozen build input changed: '+str(path))
+    for path,digest in receipt.get('actual_include_pins',{}).items():
+        require(file_sha(path)==digest,'Consumed build include changed: '+path)
 
 
 def rows(files, windows=False):
@@ -61,7 +97,7 @@ def rows(files, windows=False):
 
 
 def clean_source():
-    require(git('branch', '--show-current') == 'codex/flagship', 'Select the flagship branch')
+    require(git('branch', '--show-current') == 'codex/alpha-0.9.9', 'Select the internal Alpha 0.9.9 branch')
     require(not git('status', '--porcelain', '--', *SCOPES), 'Commit shipping source before sealing')
     return git('rev-parse', 'HEAD')
 
@@ -78,14 +114,24 @@ def verify_built_file(row, expected=None):
 
 def load_builds(build_path, components_path):
     build = json.loads(build_path.read_bytes())
+    require_development_receipt(build, 'core')
     require(build['exit_code'] == 0 and build['source_unchanged'], 'Unsuccessful/changed product build')
     require(git('rev-parse', 'HEAD:OptiScaler') == build['product_tree'] ==
             git('rev-parse', build['source_commit'] + ':OptiScaler'), 'Product source differs from exact build')
     raw = verify_built_file(build['product'])
     sys.path.insert(0, str(ROOT / 'tools/character-inspector'))
-    from package_checks import require_product_commit
-    version = require_product_commit((ROOT / build['product']['path']).resolve(), build['source_commit'][:8])
-    components = json.loads(components_path.read_bytes())
+    from package_checks import product_version
+    version = product_version((ROOT / build['product']['path']).resolve())
+    require(version == '0.9.9 DEVELOPMENT ('+build['build_label']+')', 'DLL content identity differs from build receipt')
+    paths=components_path if isinstance(components_path,list) else [components_path]
+    receipts=[json.loads(p.read_bytes()) for p in paths]
+    require(receipts, 'Component receipts missing')
+    for receipt in receipts:require_development_receipt(receipt)
+    components={**receipts[0], 'files':[r for receipt in receipts for r in receipt['files']],
+                'manifest_sha256s':[receipt['source_manifest_sha256'] for receipt in receipts]}
+    for receipt in receipts:
+        require(receipt['source_commit']==components['source_commit'] and receipt['source_trees']==components['source_trees'],
+                'Component receipts bind different source candidates')
     require(components['exit_code'] == 0 and components['source_unchanged'], 'Unsuccessful/changed component build')
     for scope in COMPONENT_SCOPES:
         require(components['source_trees'][scope] == git('rev-parse', 'HEAD:' + scope) ==
@@ -93,7 +139,7 @@ def load_builds(build_path, components_path):
     by_path = {}
     for row in components['files']:
         key = (ROOT / row['path']).resolve()
-        require(key not in by_path, 'Duplicate component receipt path')
+        require(key not in by_path or by_path[key]==row, 'Conflicting component receipt path')
         by_path[key] = row
     files = {}
     for destination, path in COMPONENTS.items():
@@ -111,38 +157,13 @@ def load_builds(build_path, components_path):
 
 
 def baseline_dependencies():
-    require(sha(BASE.read_bytes()) == BASE_SHA, 'Baseline archive identity differs')
-    selected, provenance = {}, []
-    with zipfile.ZipFile(BASE) as archive:
-        require(archive.testzip() is None, 'Baseline ZIP CRC failure')
-        names = archive.namelist()
-        require(len(names) == len({n.casefold() for n in names}), 'Duplicate baseline ZIP member')
-        manifest = json.loads(archive.read('NeuRotic/ARCHIVE-MANIFEST.json'))
-        manifest_rows = {r['path'].replace('\\', '/'): r for r in manifest['files']}
-        donor_worker = WORKER if WORKER + 'DISTRIBUTION-MANIFEST.json' in manifest_rows else PACKAGE + 'payload/OptiScaler/CharacterInspector/'
-        require(len(manifest_rows) == len(manifest['files']) and
-                set(names) == {'NeuRotic/' + n for n in manifest_rows} | {'NeuRotic/ARCHIVE-MANIFEST.json'},
-                'Baseline archive inventory differs')
-        for full in names:
-            verify.safe_name(full)
-            name = full.removeprefix('NeuRotic/')
-            keep = name.startswith(('licenses/', 'discovery/')) and name not in COMPONENTS and not name.endswith('.pdb')
-            keep |= name.startswith(donor_worker + 'runtime/') or name.startswith(donor_worker + 'packages/') or name.startswith(donor_worker + 'models/')
-            keep |= name.startswith(PACKAGE + 'payload/Licenses/')
-            keep |= name in {PACKAGE + n for n in (
-                      'payload/NeuRotic-LICENSE.txt', 'payload/nvngx.dll_dlssnr.dll', 'payload/OptiScaler/amd_fidelityfx_dx12.dll')}
-            if not keep:
-                continue
-            require(not full.endswith('/') and not name.endswith(('.pyc', '.pdb')), 'Unwanted dependency artifact')
-            raw = archive.read(full)
-            row = manifest_rows[name]
-            require(len(raw) == row['bytes'] and sha(raw) == row['sha256'], 'Baseline dependency hash differs: ' + name)
-            destination = WORKER + name[len(donor_worker):] if name.startswith(donor_worker) else name
-            selected[destination] = raw
-            provenance.append({'path': destination, 'donorPath': name, 'bytes': len(raw), 'sha256': sha(raw)})
-        oldbuild = json.loads(archive.read('NeuRotic/' + PACKAGE + 'support/BUILD-MANIFEST.json'))
-        olddistribution = json.loads(archive.read('NeuRotic/' + donor_worker + 'DISTRIBUTION-MANIFEST.json'))
-    return selected, provenance, oldbuild, olddistribution
+    require(BASE is not None and BASE_INVENTORY is not None, 'Explicit accepted dependency archive/inventory required')
+    require(ALLOW_INSPECTOR_MODELS, 'Complete internal assembly requires explicit Inspector model selection')
+    reader=DependencyArchive(BASE,BASE_SHA,BASE_INVENTORY,ACCEPTED_INVENTORY_SHA256)
+    names=reader.eligible(allow_models=True)
+    selected=reader.read(names,allow_models=True)
+    provenance=[{'path':r['path'],'donorPath':r['path'],'bytes':r['bytes'],'sha256':r['sha256']} for r in reader.plan(names,allow_models=True)]
+    return selected, provenance, reader.document['build'], reader.document['distribution']
 
 
 def setting(ini, section, key, value):
@@ -321,8 +342,8 @@ def assemble(build, components, product, version, current, commit, reshade_setup
     files[WORKER + 'DISTRIBUTION-MANIFEST.json'] = encode(distribution)
     files['LICENSE'] = files['Tools/WindowWorker/LICENSE'] = (ROOT / 'LICENSE').read_bytes()
     files['Tools/WindowWorker/RenoDX_ATTRIBUTION.txt'] = (ROOT / 'Licenses/RenoDX_ATTRIBUTION.txt').read_bytes()
-    files['Tools/WindowWorker/Magpie-LICENSE.txt'] = (ROOT / 'references/window-nr/capture-donor/Magpie.LICENSE').read_bytes()
-    files['Tools/WindowWorker/LICENSE-FSR1.txt'] = (ROOT / 'apps/NeuRoticWindowWorker/sr/LICENSE-FSR1.txt').read_bytes()
+    files['Tools/WindowWorker/Magpie-LICENSE.txt'] = (ROOT / 'Licenses/Magpie-LICENSE.txt').read_bytes()
+    files['Tools/WindowWorker/LICENSE-FSR1.txt'] = (ROOT / 'Licenses/LICENSE-FSR1.txt').read_bytes()
     files['licenses/ImGui-LICENSE.txt'] = (ROOT / 'OptiScaler/include/imgui/LICENSE.txt').read_bytes()
     for font in ('NotoSans', 'NotoSansCJK'):
         files['licenses/OFL-' + font + '.txt'] = (ROOT / 'localization/fonts' / ('OFL-' + font + '.txt')).read_bytes()
@@ -345,6 +366,10 @@ def assemble(build, components, product, version, current, commit, reshade_setup
         'The App, full instructions and change notes are two folders above.\n'
         'Keep the entire extracted release together. Close the game before changes.')
     provenance = {
+        'development': {'version':'0.9.9 DEVELOPMENT','publication_authorized':False,
+                        'native_manifest_sha256':build['source_manifest_sha256'],
+                        'component_manifest_sha256':components['source_manifest_sha256'],
+                        'component_manifest_sha256s':components['manifest_sha256s']},
         'product': {'source_commit': build['source_commit'], 'source_tree': build['product_tree'], 'sha256': sha(product)},
         'app_and_worker': {'source_commit': components['source_commit'], 'source_trees': components['source_trees'], 'files': rows(current)},
         'inspector': {'source_commit': commit, 'product_source_commit': build['source_commit'],
@@ -354,7 +379,8 @@ def assemble(build, components, product, version, current, commit, reshade_setup
     }
     retain_native_shipping(files)
     metadata = {k: oldbuild[k] for k in ('status', 'version', 'architecture', 'runtime_prerequisites')}
-    metadata.update(commit=commit, package_source_commit=commit, product_source_commit=build['source_commit'],
+    metadata.update(version='0.9.9 DEVELOPMENT', qualification='INTERNAL_DEVELOPMENT_ONLY', publication_authorized=False,
+                    commit=commit, package_source_commit=commit, product_source_commit=build['source_commit'],
                     build={'exit_code': 0}, product_sha256=sha(product), product_version=version, config_sha256=sha(ini), loggingProfile=logging_profile,
                     forwarder_sha256=sha(files[PACKAGE + 'payload/nvngx.dll_dlssnr.dll']),
                     sdk_sha256=sha(files[PACKAGE + 'payload/OptiScaler/amd_fidelityfx_dx12.dll']),
@@ -362,7 +388,8 @@ def assemble(build, components, product, version, current, commit, reshade_setup
                     game_runtime_verified=False, prior_acceptance_transfers_to_this_binary=False, base_archive_sha256=BASE_SHA)
     files[PACKAGE + 'support/BUILD-MANIFEST.json'] = encode(metadata)
     files[PACKAGE + 'support/PACKAGE-MANIFEST.json'] = encode({
-        'kind': 'neurotic-customer-candidate', 'name': 'NeuRotic Internal Test' if internal_testing else 'NeuRotic Release Candidate', 'version': '0.9.8', 'loggingProfile': logging_profile,
+        'kind': 'neurotic-internal-development', 'name': 'NeuRotic 0.9.9 Internal Development', 'version': '0.9.9 DEVELOPMENT', 'loggingProfile': logging_profile,
+        'publication_authorized':False,
         'commit': commit, 'product_source_commit': build['source_commit'], 'component_provenance': {'inspector': provenance['inspector']},
         'components': {'characterInspector': verify.inspector_component()},
         'files': rows({n[len(PACKAGE):]: raw for n, raw in files.items() if n.startswith(PACKAGE)}, windows=True)})
@@ -374,14 +401,23 @@ def assemble(build, components, product, version, current, commit, reshade_setup
 
 
 def main():
+    global BASE, BASE_INVENTORY, ALLOW_INSPECTOR_MODELS
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-receipt', type=Path, required=True)
-    parser.add_argument('--components-receipt', type=Path, required=True)
+    parser.add_argument('--components-receipt', type=Path, action='append', required=True)
+    parser.add_argument('--dependency-archive',type=Path,required=True)
+    parser.add_argument('--dependency-inventory',type=Path,required=True)
+    parser.add_argument('--allow-inspector-models',action='store_true')
     parser.add_argument('--output', type=Path, help='Explicit distribution ZIP destination; omit for local verification')
     parser.add_argument('--verify-only', action='store_true', help='Verify complete in-memory assembly without making a ZIP')
     parser.add_argument('--reshade-setup', type=Path, help='Deprecated compatibility argument; ReShade is not shipped')
     parser.add_argument('--internal-testing', action='store_true', help='Internal Josh/Codex test defaults: Trace to file; public logging is off by default')
     args = parser.parse_args()
+    owned_output(ROOT,WORK,tree=True)
+    for p in (WORK/'verified-assembly.json',WORK/'public-verification-evidence.json',WORK/'package-receipt.json',EVIDENCE/'release-package-receipt.json',EVIDENCE/'public-verification-evidence.json'):
+        owned_output(ROOT,p);owned_output(ROOT,p.with_name(p.name+'.nr-write.tmp'))
+    BASE=args.dependency_archive;BASE_INVENTORY=args.dependency_inventory;ALLOW_INSPECTOR_MODELS=args.allow_inspector_models
+    if args.output:args.output=internal_output(args.output)
     require(args.verify_only != bool(args.output), 'Choose local --verify-only or an explicit --output ZIP')
     commit = clean_source()
     build, components, raw, version, current = load_builds(args.build_receipt, args.components_receipt)
@@ -393,13 +429,12 @@ def main():
     load_builds(args.build_receipt, args.components_receipt)
     if args.verify_only:
         receipt = {**details, 'source_commit': commit, 'archive_created': False, 'game_files_changed': False, 'game_qualified': False, 'files': rows(files)}
-        WORK.mkdir(parents=True, exist_ok=True)
-        (WORK / 'verified-assembly.json').write_bytes(encode(receipt))
+        write_owned(ROOT,WORK / 'verified-assembly.json',encode(receipt))
         if verification_evidence:
-            (WORK / 'public-verification-evidence.json').write_bytes(encode(verification_evidence))
+            write_owned(ROOT,WORK / 'public-verification-evidence.json',encode(verification_evidence))
         print(json.dumps({k: v for k, v in receipt.items() if k != 'files'}, indent=2))
         return
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    internal_output(args.output);owned_output(ROOT,args.output.parent);args.output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.output, 'x', zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for name, data in sorted(files.items()):
             archive.writestr('NeuRotic/' + name, data)
@@ -408,13 +443,11 @@ def main():
     receipt = {'path': str(args.output.resolve()), 'bytes': args.output.stat().st_size, 'sha256': sha(args.output.read_bytes()),
                **sealed, 'base_archive_sha256': BASE_SHA, 'game_files_changed': False,
                'game_qualified': False, 'private_nr_model_bundled': False}
-    WORK.mkdir(parents=True, exist_ok=True)
-    EVIDENCE.mkdir(parents=True, exist_ok=True)
-    (WORK / 'package-receipt.json').write_bytes(encode(receipt))
-    (EVIDENCE / 'release-package-receipt.json').write_bytes(encode(receipt))
+    write_owned(ROOT,WORK / 'package-receipt.json',encode(receipt))
+    write_owned(ROOT,EVIDENCE / 'release-package-receipt.json',encode(receipt))
     if verification_evidence:
-        (WORK / 'public-verification-evidence.json').write_bytes(encode(verification_evidence))
-        (EVIDENCE / 'public-verification-evidence.json').write_bytes(encode(verification_evidence))
+        write_owned(ROOT,WORK / 'public-verification-evidence.json',encode(verification_evidence))
+        write_owned(ROOT,EVIDENCE / 'public-verification-evidence.json',encode(verification_evidence))
     print(json.dumps(receipt, indent=2))
 
 

@@ -1,0 +1,156 @@
+{
+  "work_order": "W03-finite-58-construction",
+  "suites": {
+    "native-adversarial-authority": [
+      {
+        "id": "copied_plan_pre_revoke_start",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "copied_plan_stays_structural_after_revoke",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "copied_plan_post_revoke_no_authority",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "rekeyed_source_first_call",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "rekeyed_evaluation_no_opportunity",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "rekeyed_route_label_no_opportunity",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "rekeyed_sample_retirement_preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "genuinely_new_sample_after_closure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "selection_frozen_before",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "selection_frozen_after",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "late_ticket_after_reuse_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "new_ticket_and_closed_prefix",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "same_sample_exact_recipe_resources",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "cross_sample_recipe_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "raw_values_convey_no_authority",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "failed_attempt_same_sample_not_retry",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "failed_history_requires_next_reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "new_sample_reset_requested_not_ack",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "optional_diagnostics_failure_independent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "optional_diagnostics_control",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "post_call_publication_refusal_retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "publication_failure_owner_until_terminal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "native_local_semantic_use_history",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "local_qualification_not_final_association",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "feature_reuse_old_sample_output_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "new_feature_exact_owner_bindings",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "untouched_refusal_original_once",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unrestored_parameter_blocks_original",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "full_table_no_preparation_or_effect",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "reserved_failure_preserves_older_slots",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unrelated_final_client_progress_after_native_stop",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "shared_finalizer_stops_after_all_clients",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "terminal_gpu_does_not_end_callback_reader",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "cold_root_waits_exact_cpu_tails",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "native_ordinal_cannot_match_real_association",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unknown_final_association_stays_unknown",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "native-adversarial-authority": {
+      "emitted_suite": "native-adversarial-authority"
+    }
+  }
+}

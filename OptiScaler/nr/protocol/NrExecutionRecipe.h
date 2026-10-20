@@ -3,13 +3,13 @@
 
 namespace Neurotic::Protocol
 {
-template<class Store> RecipeBuildResult BuildRecipe(const RecipeRequest& input,Store& store)
+template<class Store> OwnedRecipeBuildResult BuildRecipeOwned(const RecipeRequest& input,Store& store)
 {
-    RecipeBuildResult result;result.reason=Qualify(input,store);if(!result.reason.Empty())return result;
-    const auto prepared=Detail::BuildProfileProjection(input,store,C::EvidenceRef{input.recipeHeader.record});
-    if(!prepared.projection)return {{},prepared.reason};
     try
     {
+        OwnedRecipeBuildResult result;result.reason=Qualify(input,store);if(!result.reason.Empty())return result;
+        const auto prepared=Detail::BuildProfileProjectionOwned(input,store,C::EvidenceRef{input.recipeHeader.record});
+        if(!prepared.projection)return {{},prepared.reason};
         const auto& projection=prepared.projection->Value();
         const auto* context=S::ResolveMetadata(input.context,store);
         const auto* settings=S::ResolveMetadata(input.settings,store);
@@ -34,8 +34,17 @@ template<class Store> RecipeBuildResult BuildRecipe(const RecipeRequest& input,S
         p.bindingPlan=projection.bindingPlan;p.bindingPlan.recipe=recipe.header.record;
         p.dependencies=projection.dependencies;p.disposition=projection.disposition;p.bypassReason=projection.bypassReason;
         if(!S::ValidValues(p))return {{},Symbol("RENDER.Profile.InvalidProduct")};
-        result.product.emplace(p);return result;
+        result.product=std::make_unique<C::ImmutableRecord<RecipeProduct>>(p);return result;
     }
     catch(const std::bad_alloc&){return {{},Symbol("RENDER.Profile.AllocationFailure")};}
 }
+// Compatibility value API; native invocation consumes BuildRecipeOwned directly.
+template<class Store> RecipeBuildResult BuildRecipe(const RecipeRequest& input,Store& store)
+{
+    const auto owned=BuildRecipeOwned(input,store);
+    RecipeBuildResult result;result.reason=owned.reason;
+    if(owned.product)result.product.emplace(owned.product->Value());
+    return result;
+}
+
 }

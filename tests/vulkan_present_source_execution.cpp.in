@@ -1,0 +1,317 @@
+// The runner inserts the current production executor method and ownership
+// helpers. Only GPU/model/provider services are fakes; selection is production.
+#include <dlssnr/VulkanPresentSourcePlan.h>
+#include <dlssnr/VulkanPresentAdmission.h>
+#include <dlssnr/VulkanNrFrameContract.h>
+#include <dlssnr/VulkanNrRenderSize.h>
+#include <dlssnr/CapturedGuideContract.h>
+#include <dlssnr/FinalFallbackControl.h>
+#include <dlssnr/VulkanPresentProviderPreparation.h>
+#include <dlssnr/DlssNr_PresentResolution.h>
+#include <algorithm>
+#include <atomic>
+#include <cassert>
+#include <chrono>
+#include <cstdio>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+#define LOG_INFO(...) ((void)0)
+template<class T> struct Field { T value{};T value_or_default()const{return value;} };
+struct Config {
+ Field<uint32_t> DlssNrRoute{1},DlssNrEnhancedResolution{1},DlssNrEnhancedCustomScale{},DlssNrPresentResolution{1},DlssNrPresentCustomScale{};
+ Field<bool> DlssNrVulkanPresentSameFrameInit{false},DlssNrHoldFrame{false};
+ uint64_t revision=9;bool enabled=true;
+ struct Runtime {bool enabled;};
+ Runtime GetDlssNrRuntimeSnapshot()const{return {enabled};}
+ uint64_t ObservationRevision()const{return revision;}
+ static Config* Instance(){static Config c;return &c;}
+};
+template<class T> struct NrConfigSnapshot:T {bool IsPrivateDiagnostic()const{return false;}};
+static std::optional<NrConfigSnapshot<Config>> TryNrConfigSnapshot(const Config& cfg){NrConfigSnapshot<Config> snapshot;static_cast<Config&>(snapshot)=cfg;return snapshot;}
+namespace DlssNr {
+template<class T> static T Handle(uintptr_t n){return reinterpret_cast<T>(n);}
+struct Counts {int record=0,bind=0,discard=0,abandon=0,forward=0,reset=0,submit=0,release=0,used=0,invalidated=0;bool historyReset=false,initializationCompleted=false;} calls;
+static Connections::Mixed::Policy policy;
+namespace Connections {Mixed::Policy SignalPreferences() noexcept{return policy;}}
+static bool nativeGuides=true,changeAtRecord=false,discardOkay=true,consumerComplete=true;
+static bool changeLifetimeAtProvider=false,changeLifetimeAtActualSubmit=false;
+static int ownerReadsAfterReset=0;
+static std::optional<VkNrPresentModelLifetime> liveModel;
+std::optional<VkNrPresentModelLifetime> CurrentVulkanPresentModelLifetimeVk(){
+ if(changeLifetimeAtActualSubmit&&calls.reset&&++ownerReadsAfterReset==2)++liveModel->inputInterruptionEpoch;
+ return liveModel;
+}
+static bool changeAtProvider=false,changeAtReset=false,providerFails=false,omitRecordedLifetime=false;
+static bool preparation=false,partial=false;static VkResult fenceResult=VK_SUCCESS,submitResult=VK_SUCCESS;
+static VkSemaphore expectedWait{};
+struct VkNrUseId {uint64_t value=0;explicit operator bool()const{return value!=0;}bool operator==(const VkNrUseId&)const=default;};
+enum class VkRecordStatus {NoWork,Complete,Partial};
+// PRODUCTION_WAIT_BUDGET
+static VkNrWaitBudget::Clock::time_point fixtureNow{};
+static std::shared_ptr<const VkNrWaitBudget> fixtureBudget;
+struct VkNrGuideLease {VkNrFrameContract contract;unsigned slot=1,images=1;VkNrUseId sourceUse{1};};
+class VkNrGuideSelection {};
+struct VkCapturedGuideInput {CapturedGuideContract identity;std::shared_ptr<void> lease;std::function<bool(VkNrUseId)> bind;};
+// PRODUCTION_IMAGE_REQUEST
+// PRODUCTION_RECORD_RESULT
+struct VkObservedPresent {
+ bool applicationFacing=false;VkPresentRequest request;VkPresentCapabilities capabilities;
+ VkDevice device{};VkPhysicalDevice physicalDevice{};VkQueue queue{};uint32_t queueFamily=0;
+ VkSwapchainKHR swapchain{};VkImage image{};std::vector<uint64_t> predecessorGenerations;VkNrRenderSizeSelection renderSize;
+};
+static uint64_t VulkanGuideContextGeneration(const VkNrFrameContract&,const VkNrGuideSelection*){return 7;}
+// PRODUCTION_GUIDE_CONTRACT
+static unsigned guideIdentity=1;
+static std::optional<VkNrGuideLease> SelectVulkanPresentGuides(const VkNrFrameContract& f,const VkNrGuideSelection*,VkImage){
+ if(!nativeGuides)return {};auto frame=f;frame.temporal=VkNrTemporalMetadata{};frame.temporal->color={0,0,16,16};return VkNrGuideLease{frame,1,guideIdentity,{1}};
+}
+static bool CurrentVulkanPresentGuideLease(const VkNrFrameContract& frame,const VkNrGuideSelection* selection,VkImage image,const VkNrGuideLease& lease){auto current=SelectVulkanPresentGuides(frame,selection,image);return current&&current->sourceUse==lease.sourceUse&&current->images==lease.images;}
+static std::optional<VkNrFrameContract> SelectVulkanResolutionMetadata(const VkNrFrameContract& f,const VkNrGuideSelection*){if(!nativeGuides)return {};auto frame=f;frame.temporal=VkNrTemporalMetadata{};frame.temporal->color={0,0,16,16};return frame;}
+struct VkNrAcquireProof {VkNrUseId use{1};VkDevice device=Handle<VkDevice>(1);uint64_t deviceGeneration=1,swapchainGeneration=2;bool Complete()const{return consumerComplete;}};
+struct FakeRegistry {
+ std::shared_ptr<const VkNrAcquireProof> proof=std::make_shared<VkNrAcquireProof>();
+ std::shared_ptr<const VkNrAcquireProof> AcquireProof(VkSwapchainKHR,uint32_t,uint64_t){return proof;}
+ bool IsSwapchainImage(VkDevice,VkImage){return true;}
+};
+static FakeRegistry& GetVulkanPresentRegistry(){static FakeRegistry r;return r;}
+static FakeRegistry& GetVulkanApplicationPresentRegistry(){return GetVulkanPresentRegistry();}
+static bool queueValid=true;
+static bool VkNrRecordingQueueContext(VkDevice,uint32_t,VkQueue){return queueValid;}
+// PRODUCTION_INITIALIZATION_ELIGIBILITY
+// PRODUCTION_INITIALIZATION_RESULTS
+struct VkPresentInitializationRequest {};
+static int initializationCalls=0,initializationMutation=0;
+static VkPresentInitializationStatus initializationStatus=VkPresentInitializationStatus::Ready;
+static void PollPresentInitializationVk(){}
+static VkPresentInitializationStep PreparePresentModelsVk(const VkPresentInitializationRequest&,VkCommandBuffer,VkNrUseId){
+ VkPresentInitializationStep step;step.status=initializationStatus;step.modelLifetime=liveModel;return step;
+}
+static int mutateDuringRecord=0,mutateDuringProvider=0;
+static void ApplyInitializationMutation(int mutation){
+  switch(mutation){
+   case 1:++Config::Instance()->revision;break;
+   case 2:++policy.revision;break;
+   case 3:++liveModel->resumeGeneration;break;
+   case 4:GetVulkanPresentRegistry().proof=std::make_shared<VkNrAcquireProof>();break;
+   case 5:++guideIdentity;break;
+   case 6:++FinalFallback::inputInterruptionEpoch;break;
+   case 7:queueValid=false;break;
+   case 8:Config::Instance()->enabled=false;break;
+   case 9:fixtureNow+=std::chrono::milliseconds(101);break;
+  }
+}
+class VkPresentInitializationOwner {
+ VkDevice device_{};
+public:
+ VkDevice Device()const{return device_;}
+ bool Busy()const{return false;}
+ void Maintain(void(*)()){}
+ bool Release(bool,void(*)()){device_={};return true;}
+ template<class Current,class PrepareCallback,class Poll>
+ VkPresentInitializationResult Prepare(const VkPresentInitializationRequest& request,Current current,PrepareCallback prepare,Poll){
+  ++initializationCalls;device_=Handle<VkDevice>(1);
+  if(!current())return {VkPresentInitializationStatus::Refused,"initial proof rejected"};
+  const auto step=prepare(request,{},VkNrUseId{1});
+  ApplyInitializationMutation(initializationMutation);
+  // The real transport owns stage/completion tests separately. This seam tests
+  // the actual executor's post-initialization freshness and once-only effects.
+  return {step.status,step.status==VkPresentInitializationStatus::Ready?"":"fixture initializer not ready",1};
+ }
+};
+struct VkPresentConsumer {bool Complete()const{return consumerComplete;}};
+struct FakeConsumers {std::shared_ptr<VkPresentConsumer> Register(VkDevice,uint64_t,VkSemaphore){return std::make_shared<VkPresentConsumer>();}};
+static FakeConsumers& VulkanPresentConsumers(){static FakeConsumers r;return r;}
+static uint64_t VkNrCompletionDeviceGeneration(VkDevice){return 1;}
+static VkResult WaitVkNrUse(VkNrUseId,uint64_t){return consumerComplete?VK_SUCCESS:VK_TIMEOUT;}
+struct FakeStatus {
+ std::optional<VkPresentSources::Context> context;uint64_t revision=0,last=0;
+ void ObserveSourcePolicy(const Connections::Mixed::Policy& p,const VkPresentSources::Context& c,uint64_t){context=c;revision=p.revision;}
+ void GpuCompleted(){}
+ bool SourceCompleted(const VkPresentSources::Receipt& r,uint64_t current){
+  if(!context||r.context!=*context||!r.completeTarget||!VkPresentSources::CurrentModelMatches(r.context,liveModel)||r.signals.revision!=current||revision!=current||!r.signals.capture||r.signals.capture<=last)return false;
+  last=r.signals.capture;++calls.used;return true;
+ }
+ void InvalidateSources(){context.reset();last=0;++calls.invalidated;}
+};
+static FakeStatus status;
+static FakeStatus& GetVulkanPresentStatus(){return status;}
+struct VkPresentPrivateFrame {
+ VkPresentImageRequest request_;
+ VkCommandBuffer commandBuffer_=Handle<VkCommandBuffer>(9);
+ bool Ready()const{return true;}
+ bool Check(const VkPresentImageRequest&);
+ std::optional<VkPresentInitializationRequest> InitializationRequest(const VkPresentImageRequest& image,std::string& reason){
+  if(!Check(image)){reason="frame mismatch";return {};}
+  return VkPresentInitializationRequest{};
+ }
+ VkCommandBuffer CommandBuffer()const{return commandBuffer_;}
+ void Release(bool){++calls.release;}
+ bool DiscardCapturedGuides(){++calls.discard;return discardOkay;}
+};
+// PRODUCTION_PRIVATE_FRAME_CHECK
+static void AbandonPresentRecordingVk(bool){++calls.abandon;}
+static void MarkPresentRuntimeUncertainVk(const char*){}
+static VkPresentRecordResult RecordVkPresentImage(const VkPresentImageRequest& r,VkPresentPrivateFrame& frame,bool reset){
+ assert(frame.Check(r));++calls.record;calls.historyReset=reset;calls.initializationCompleted=frame.request_.initializationCompleted;
+ if(r.guides)++calls.bind;
+ if(r.capturedGuides){++calls.bind;assert(r.capturedGuides->bind(VkNrUseId{1}));}
+ VkPresentRecordResult out;out.status=partial?VkRecordStatus::Partial:VkRecordStatus::Complete;
+ out.modelRecorded=true;out.targetWriteRecorded=!preparation;out.requestedPasses=2;
+ out.completedPasses=preparation?0:partial?1:2;out.outputVersion=preparation?0:10;out.chainDeliverable=!preparation&&!partial;out.preparationOnly=preparation;
+ if(!omitRecordedLifetime)out.modelLifetime=liveModel;
+ if(changeAtRecord)++policy.revision;ApplyInitializationMutation(mutateDuringRecord);return out;
+}
+// PRODUCTION_SUBMISSION_TYPES
+// PRODUCTION_SLOT_TYPES
+static VkResult VKAPI_CALL vkGetFenceStatusFake(VkDevice,VkFence){return fenceResult;}
+static VkResult VKAPI_CALL vkWaitForFencesFake(VkDevice,uint32_t,const VkFence*,VkBool32,uint64_t){return fenceResult;}
+static VkResult vkResetFencesFake(VkDevice,uint32_t,const VkFence*){++calls.reset;ownerReadsAfterReset=0;if(changeAtReset)++policy.revision;return VK_SUCCESS;}
+static VkResult vkQueueSubmitFake(VkQueue,uint32_t,const VkSubmitInfo* info,VkFence){
+ ++calls.submit;assert(info->waitSemaphoreCount==1&&info->pWaitSemaphores[0]==expectedWait);return submitResult;
+}
+#define vkGetFenceStatus vkGetFenceStatusFake
+#define vkWaitForFences vkWaitForFencesFake
+#define vkResetFences vkResetFencesFake
+#define vkQueueSubmit vkQueueSubmitFake
+namespace VkFlight {enum class CallSite{PresentCompositionWait};template<class F> auto Call(CallSite,uintptr_t,F f){return f();}}
+// PRODUCTION_SUBMISSION_FUNCTIONS
+// PRODUCTION_EXECUTOR_TYPES
+static constexpr uint64_t kMaximumPrivateBytes=1536ull*1024*1024;
+VulkanPresentExecutor::Slot* VulkanPresentExecutor::Create(const VkObservedPresent& o,VkInstance){
+ auto s=std::make_unique<Slot>();s->ticket=++nextTicket_;s->generation=o.request.swapchainGeneration;s->deviceGeneration=o.request.deviceGeneration;
+ s->device=o.device;s->queue=o.queue;s->swapchain=o.swapchain;s->imageIndex=o.request.imageIndex;s->applicationFacing=o.applicationFacing;
+ s->frame=std::make_unique<VkPresentPrivateFrame>();s->signal=Handle<VkSemaphore>(10);s->fence=Handle<VkFence>(11);
+ s->frame->request_.image=o.image;s->frame->request_.format=o.request.format;
+ s->frame->request_.colorSpace=o.request.colorSpace;s->frame->request_.generation=o.request.swapchainGeneration;s->frame->request_.extent=o.request.extent;
+ auto p=s.get();slots_.push_back(std::move(s));return p;
+}
+void VulkanPresentExecutor::Destroy(Slot&,bool){}
+void VulkanPresentExecutor::Shutdown(bool){}
+void VulkanPresentExecutor::ReleaseCompletedSupersededFrames(const VkObservedPresent&){}
+void VulkanPresentExecutor::RetirePredecessors(const VkObservedPresent&,uint64_t){}
+// PRODUCTION_FIND
+// PRODUCTION_COMPLETION
+// PRODUCTION_INVALIDATE
+// PRODUCTION_BEFORE_PRESENT
+// PRODUCTION_ORIGINAL_RETURNED
+static VkObservedPresent Observed(bool app=true){
+ VkObservedPresent o;o.applicationFacing=app;o.device=Handle<VkDevice>(1);o.queue=Handle<VkQueue>(2);o.swapchain=Handle<VkSwapchainKHR>(3);o.image=Handle<VkImage>(4);
+ auto& r=o.request;r.enabled=true;r.route=1;r.extent={32,32};r.arrayLayers=1;r.format=VK_FORMAT_R8G8B8A8_UNORM;r.colorSpace=VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+ r.imageUsage=VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT;r.swapchainCount=1;r.imageIndex=0;r.acquiredObserved=true;
+ r.deviceGeneration=1;r.swapchainGeneration=2;r.acquireGeneration=3;
+ auto& c=o.capabilities;c.deviceObserved=c.modelExtensionsEnabled=c.routePreparedAtDeviceCreation=c.surfaceUsageKnown=c.swapchainPNextKnown=c.swapchainObserved=c.imagesObserved=c.queueObserved=c.queueFamilyMatches=c.presentQueueAccessQualified=true;
+ c.surfaceUsage=r.imageUsage;c.imageCount=1;c.queueFlags=VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT;c.deviceGeneration=1;c.swapchainGeneration=2;return o;
+}
+static std::shared_ptr<VkCapturedGuideInput> Captured(const VkObservedPresent& o){
+ auto c=std::make_shared<VkCapturedGuideInput>();auto& i=c->identity;i.device=1;i.deviceGeneration=1;i.swapchain=3;i.swapchainGeneration=2;i.acquisition=o.request.acquireGeneration;
+ i.image=4;i.stream=1;i.capture=2;i.previous=1;i.width=32;i.height=32;i.completed=true;c->lease=std::make_shared<int>(0);c->bind=[](VkNrUseId){return true;};return c;
+}
+static void Reset(){fixtureBudget.reset();fixtureNow={};*Config::Instance()={};initializationCalls=initializationMutation=mutateDuringRecord=mutateDuringProvider=0;initializationStatus=VkPresentInitializationStatus::Ready;guideIdentity=1;queueValid=true;FinalFallback::inputInterruptionEpoch=0;calls={};policy={};policy.revision=9;nativeGuides=true;changeAtRecord=false;discardOkay=true;consumerComplete=true;preparation=partial=false;fenceResult=submitResult=VK_SUCCESS;status={};liveModel=VkNrPresentModelLifetime{1,1,50,0,0};changeAtProvider=changeAtReset=providerFails=omitRecordedLifetime=false;changeLifetimeAtProvider=changeLifetimeAtActualSubmit=false;ownerReadsAfterReset=0;}
+static VkPresentExecution Run(VulkanPresentExecutor& e,const VkObservedPresent& o,std::shared_ptr<const VkCapturedGuideInput> captured={}){
+ expectedWait=Handle<VkSemaphore>(12);VkPresentInfoKHR original{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};original.waitSemaphoreCount=1;original.pWaitSemaphores=&expectedWait;
+ const auto saved=expectedWait;auto r=e.BeforePresent(o,{},original,{},{},fixtureBudget,[](uint64_t revision /* FIXTURE_CALLBACK_LIFETIME */){assert(revision==policy.revision);++calls.forward;if(changeAtProvider)++policy.revision;ApplyInitializationMutation(mutateDuringProvider);if(changeLifetimeAtProvider)++liveModel->resumeGeneration;VkPresentProviderPreparation p;p.prepared=!providerFails;p.effects=VkProviderPrepareEffects::ExternalEntered;return p;},captured);
+ assert(expectedWait==saved&&original.waitSemaphoreCount==1&&original.pWaitSemaphores==&expectedWait);return r;
+}
+}
+int main(){using namespace DlssNr;using Connections::Source;
+ for(auto color:{0,1,2})for(bool guided:{false,true})for(bool fg:{false,true}){
+  Reset();nativeGuides=guided;auto o=Observed();
+  o.request.fgKnownActive=fg;
+  if(color==1){o.request.format=VK_FORMAT_A2B10G10R10_UNORM_PACK32;o.request.colorSpace=VK_COLOR_SPACE_HDR10_ST2084_EXT;}
+  if(color==2){o.request.format=VK_FORMAT_R16G16B16A16_SFLOAT;o.request.colorSpace=VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;}
+  VulkanPresentExecutor e;auto r=Run(e,o);assert(r.ticket&&calls.record==1&&calls.submit==1&&calls.forward==1&&calls.bind==int(guided));
+  assert(r.sources.completeTarget&&calls.used==0);e.ObserveSlotCompletion(*e.slots_.front());assert(calls.used==1); // GPU completion is explicit
+ }
+ Reset();{VulkanPresentExecutor e;policy.strict=true;policy.color=Source::External;auto r=Run(e,Observed());assert(!r.ticket&&calls.record==0&&calls.bind==0&&calls.forward==0&&calls.reset==0&&calls.submit==0);}
+ Reset();{VulkanPresentExecutor e;auto o=Observed();o.request.policy=PresentInput::Policy::ImageOnly;auto r=Run(e,o);assert(r.ticket&&!calls.bind&&!r.sources.signals.depth&&!r.sources.signals.motion);}
+ Reset();{VulkanPresentExecutor e;auto o=Observed();o.capabilities.queueFlags=VK_QUEUE_GRAPHICS_BIT;auto r=Run(e,o);assert(!r.ticket&&!calls.record&&!calls.forward&&!calls.submit);}
+ Reset();{VulkanPresentExecutor e;auto o=Observed();o.request.colorSpace=VK_COLOR_SPACE_HDR10_ST2084_EXT;auto r=Run(e,o);assert(!r.ticket&&!calls.record&&!calls.forward&&!calls.submit);}
+ Reset();{VulkanPresentExecutor e;policy.strict=true;policy.depth=Source::External;auto o=Observed();o.request.policy=PresentInput::Policy::RequireGuides;auto r=Run(e,o);assert(r.ticket&&calls.bind==0&&r.admission.actualInputClass==PresentInputDecision::InputClass::ImageOnly&&!r.sources.signals.depth&&!r.sources.signals.motion);}
+ for(bool captured:{false,true}){
+  Reset();auto o=Observed(!captured);VulkanPresentExecutor e;auto c=captured?Captured(o):nullptr;
+  if(captured){policy.strict=true;policy.depth=policy.motion=Source::BuiltIn;}
+  auto good=Run(e,o,c);assert(good.ticket&&calls.submit==1&&calls.bind==1);
+  e.OriginalPresentReturned(good.ticket,VK_SUCCESS);++o.request.acquireGeneration;if(c)c->identity.acquisition=o.request.acquireGeneration;
+  calls={};changeAtRecord=true;auto refused=Run(e,o,c);
+  assert(!refused.ticket&&calls.record==1&&calls.forward==0&&calls.reset==0&&calls.submit==0&&calls.release==0);
+  assert(captured?calls.discard==1&&calls.abandon==0:calls.abandon==1&&calls.discard==0);
+ }
+ Reset();{auto o=Observed(false);VulkanPresentExecutor e;policy.strict=true;policy.depth=Source::Native;auto r=Run(e,o,Captured(o));assert(!r.ticket&&!calls.record&&!calls.bind&&!calls.forward&&!calls.submit);}
+ Reset();{auto o=Observed(false);VulkanPresentExecutor e;auto c=Captured(o);++c->identity.acquisition;auto r=Run(e,o,c);assert(!r.ticket&&!calls.record&&!calls.bind&&!calls.submit);}
+ Reset();{auto o=Observed(false);VulkanPresentExecutor e;changeAtRecord=true;discardOkay=false;auto r=Run(e,o,Captured(o));assert(r.handoff.state==VkPresentHandoffState::Uncertain&&calls.discard==1&&e.slots_.front()->state.Pending()&&!calls.submit&&!calls.release);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);fenceResult=VK_NOT_READY;++o.request.acquireGeneration;calls={};auto b=Run(e,o);assert(!b.ticket&&!calls.record&&!calls.used&&!calls.release);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);consumerComplete=false;++o.request.acquireGeneration;calls={};auto b=Run(e,o);assert(!b.ticket&&calls.used==1&&!calls.record&&!calls.release);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);++o.request.acquireGeneration;calls={};auto b=Run(e,o);assert(b.ticket==a.ticket&&b.sources.signals.capture>a.sources.signals.capture&&b.sources.acquisition!=a.sources.acquisition);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;preparation=true;auto r=Run(e,o);assert(r.ticket&&!r.sources.completeTarget&&!calls.forward);e.ObserveSlotCompletion(*e.slots_.front());assert(!calls.used);}
+ Reset();{VulkanPresentExecutor e;partial=true;auto r=Run(e,Observed());assert(!r.ticket&&!calls.submit&&!calls.used);}
+ Reset();{VulkanPresentExecutor e;auto r=Run(e,Observed());auto& slot=*e.slots_.front();slot.sources.acquisition++;calls={};e.ObserveSlotCompletion(slot);assert(!calls.used);}
+ Reset();{VulkanPresentExecutor e;submitResult=VK_ERROR_DEVICE_LOST;auto r=Run(e,Observed());assert(r.handoff.state==VkPresentHandoffState::Uncertain&&!r.ticket&&!calls.used&&e.slots_.front()->state.Pending());}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);auto context=e.sourceContext_;auto capture=e.nextSourceCapture_;o.applicationFacing=false;o.request.fgKnownActive=true;calls={};auto b=Run(e,o);assert(!b.ticket&&e.sourceContext_==context&&e.nextSourceCapture_==capture&&!calls.record&&!calls.used);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);fenceResult=VK_ERROR_DEVICE_LOST;++o.request.acquireGeneration;calls={};auto b=Run(e,o);assert(!b.ticket&&!calls.record&&!calls.used&&!calls.release);}
+ // VK002: production captured caller is the physical boundary.
+ Reset();{auto o=Observed(false);o.request.policy=PresentInput::Policy::Invalid;VulkanPresentExecutor e;
+  auto r=Run(e,o,Captured(o));assert(!r.ticket&&!calls.bind&&!calls.record&&!calls.forward&&!calls.reset&&!calls.submit);}
+ // VK001: recycled old fence remains signaled, but supplies no new completion.
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);
+  ++o.request.acquireGeneration;calls={};changeAtProvider=true;auto r=Run(e,o);
+  assert(r.handoff.state==VkPresentHandoffState::Uncertain&&!r.ticket&&e.closed_);
+  assert(calls.forward==1&&!calls.reset&&!calls.submit&&!calls.abandon&&!calls.discard&&!calls.release);
+  auto& s=*e.slots_.front();assert(s.consumer&&s.frame&&s.state.Pending()&&s.completionObserved);
+  assert(s.sources.signals.capture==a.sources.signals.capture&&!s.retirementProven);
+  calls={};e.ObserveSlotCompletion(s);assert(!calls.used);auto next=Run(e,o);assert(!next.ticket&&!calls.record&&!calls.submit);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;providerFails=true;auto r=Run(e,o);
+  assert(r.handoff.state==VkPresentHandoffState::Uncertain&&e.closed_&&calls.forward==1&&!calls.reset&&!calls.submit&&!calls.abandon&&e.slots_.front()->consumer);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);
+  ++o.request.acquireGeneration;calls={};changeAtReset=true;auto r=Run(e,o);
+  assert(r.handoff.state==VkPresentHandoffState::Uncertain&&calls.forward==1&&calls.reset==1&&!calls.submit&&!calls.release&&e.slots_.front()->consumer);}
+ // VK004: an unknown or missing recorded owner identity never qualifies output.
+ Reset();{VulkanPresentExecutor e;omitRecordedLifetime=true;auto r=Run(e,Observed());assert(!r.ticket&&calls.abandon==1&&!calls.forward&&!calls.reset&&!calls.submit);}
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);++liveModel->routeEpoch;
+  e.ObserveSlotCompletion(*e.slots_.front());assert(!calls.used);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);
+  ++o.request.acquireGeneration;auto b=Run(e,o);assert(b.ticket&&b.sources.context.modelLifetime==liveModel&&b.sources.context.routeEpoch==liveModel->routeEpoch);
+  e.ObserveSlotCompletion(*e.slots_.front());assert(calls.used==1);}
+ // C1-001 integration: entered callback returns after an authentic owner change.
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);
+  ++o.request.acquireGeneration;calls={};changeLifetimeAtProvider=true;auto r=Run(e,o);
+  assert(r.handoff.state==VkPresentHandoffState::Uncertain&&e.closed_&&calls.forward==1&&!calls.reset&&!calls.submit&&!calls.abandon&&!calls.discard&&!calls.release);
+  auto& s=*e.slots_.front();assert(s.consumer&&s.frame&&s.signal&&s.state.Pending()&&s.completionObserved&&!s.retirementProven);
+  assert(s.sources.signals.capture==a.sources.signals.capture);calls={};e.ObserveSlotCompletion(s);assert(!calls.used);}
+ // C1-002: first owner read after reset is current; only the real submit guard
+ // (second read) observes the changed lifetime. No duplicated submit selector.
+ Reset();{auto o=Observed();VulkanPresentExecutor e;auto a=Run(e,o);e.OriginalPresentReturned(a.ticket,VK_SUCCESS);
+  auto* frame=e.slots_.front()->frame.get();const auto semaphore=e.slots_.front()->signal;
+  ++o.request.acquireGeneration;calls={};changeLifetimeAtActualSubmit=true;auto r=Run(e,o);
+  assert(ownerReadsAfterReset==2&&calls.forward==1&&calls.reset==1&&!calls.submit);
+  assert((r.handoff.state==VkPresentHandoffState::Uncertain&&e.closed_)&&"C1-002 entered-provider final guard must close executor");
+  auto& s=*e.slots_.front();assert(s.consumer&&s.frame.get()==frame&&s.signal==semaphore&&s.state.Pending()&&s.completionObserved&&!s.retirementProven);
+  assert(s.sources.signals.capture==a.sources.signals.capture&&s.sources.signals.revision==a.sources.signals.revision&&s.sources.acquisition==a.sources.acquisition&&s.sources.context==a.sources.context);
+  assert(!calls.abandon&&!calls.discard&&!calls.release);calls={};e.ObserveSlotCompletion(s);assert(!calls.used);
+  // A distinct otherwise eligible slot would record unless the executor closed.
+  o.image=Handle<VkImage>(14);o.request.imageIndex=1;o.capabilities.imageCount=2;
+  auto next=Run(e,o);assert(!next.ticket&&!calls.record&&!calls.forward&&!calls.reset&&!calls.submit&&e.slots_.size()==1);}
+ // Same-frame opt-in: actual executor must gate normal capture/provider/submit.
+ auto optIn=[](){auto* c=Config::Instance();c->DlssNrVulkanPresentSameFrameInit.value=true;c->DlssNrEnhancedResolution.value=0;c->DlssNrPresentResolution.value=0;};
+ Reset();{optIn();VulkanPresentExecutor e;auto o=Observed();auto r=Run(e,o);
+  assert(r.ticket&&initializationCalls==1&&calls.record==1&&calls.bind==1&&calls.forward==1&&calls.submit==1&&calls.initializationCompleted);
+  e.OriginalPresentReturned(r.ticket,VK_SUCCESS);++o.request.acquireGeneration;
+  Config::Instance()->DlssNrVulkanPresentSameFrameInit.value=false;calls={};auto off=Run(e,o);
+  assert(off.ticket&&initializationCalls==1&&calls.record==1&&!calls.initializationCompleted);}
+ for(auto stage:{VkPresentInitializationStatus::Pending,VkPresentInitializationStatus::Refused,VkPresentInitializationStatus::Uncertain}){
+  Reset();optIn();initializationStatus=stage;VulkanPresentExecutor e;auto r=Run(e,Observed());
+  assert(!r.ticket&&initializationCalls==1&&!calls.record&&!calls.bind&&!calls.forward&&!calls.reset&&!calls.submit&&!calls.used);
+  assert(e.closed_==(stage==VkPresentInitializationStatus::Uncertain));
+ }
+ for(int mutation=1;mutation<=8;++mutation){Reset();optIn();initializationMutation=mutation;VulkanPresentExecutor e;
+  auto r=Run(e,Observed());assert(!r.ticket&&initializationCalls==1&&!calls.record&&!calls.bind&&!calls.forward&&!calls.submit&&!calls.used);}
+ for(unsigned mode:{1u,3u,4u}){Reset();optIn();Config::Instance()->DlssNrEnhancedResolution.value=mode;Config::Instance()->DlssNrPresentResolution.value=mode;
+  VulkanPresentExecutor e;auto r=Run(e,Observed());assert(!initializationCalls&&!calls.initializationCompleted);}
+ Reset();{optIn();Config::Instance()->DlssNrHoldFrame.value=true;VulkanPresentExecutor e;auto r=Run(e,Observed());assert(!initializationCalls);}
+ for(int mutation:{1,4,5,6,7,8,9}){Reset();optIn();fixtureBudget=std::make_shared<VkNrWaitBudget>(fixtureNow,[]{return fixtureNow;});mutateDuringRecord=mutation;VulkanPresentExecutor e;
+  auto r=Run(e,Observed());assert((!r.ticket&&initializationCalls==1&&calls.record==1&&!calls.forward&&!calls.submit&&!calls.used)&&"DOOM-04 freshness change during record must stop before provider");}
+ for(int mutation:{1,4,5,6,7,8,9}){Reset();optIn();fixtureBudget=std::make_shared<VkNrWaitBudget>(fixtureNow,[]{return fixtureNow;});mutateDuringProvider=mutation;VulkanPresentExecutor e;
+  auto r=Run(e,Observed());assert((!r.ticket&&calls.forward==1&&!calls.submit&&e.closed_&&e.slots_.front()->consumer)&&"DOOM-04 freshness change after provider must retain and close");}
+ std::puts("PASS extracted production BeforePresent: policy/admission/SDR-PQ-scRGB, strict refusal, late guard, captured discard, waits, pending ownership, capture identity and application history");
+}

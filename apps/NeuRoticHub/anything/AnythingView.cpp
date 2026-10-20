@@ -1,3 +1,4 @@
+#include <menu/ItemHelp.h>
 #include <menu/localization/LanguageRuntime.h>
 #include <menu/Localization.h>
 #include "AnythingView.h"
@@ -7,8 +8,10 @@
 #include "artwork/ArtworkService.h"
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include "ui/HubViewModel.h"
 #include "ui/SleekWidgets.h"
+#include "ui/SavedControlLayout.h"
 #include "ui/ActionFont.h"
 #include "imgui.h"
 #include <commdlg.h>
@@ -206,11 +209,49 @@ bool AnythingStrength(const char* label,float& value,const char* helper,float dp
  AnythingMuted(helper);ImGui::PopID();return changed;
 }
 
+
+const char* AnythingResetLabel(){return Neurotic::UiLiteral("desktop.anythingview.reset_51fe8741", "Reset");}
+struct AnythingSavedStrip {SavedReviewAction reset;float valueWidth,gap;};
+AnythingSavedStrip MeasureAnythingSavedStrip(float width,float widestCaption){
+ const float gap=ImGui::GetStyle().ItemInnerSpacing.x;
+ const auto reset=MeasureSavedReviewAction(AnythingResetLabel(),std::max(1.f,width*.32f));
+ return {reset,MeasureSavedChoiceWidth(width-reset.width-gap,widestCaption),gap};
 }
-float AnythingCountdownWidth(float dpi){
+AnythingSavedStrip MeasureAnythingSavedStrip(float width,const char* const* labels,int count){
+ float widest=0;for(int i=0;i<count;++i)widest=std::max(widest,ImGui::CalcTextSize(Neurotic::Translate(labels[i]).c_str()).x);
+ return MeasureAnythingSavedStrip(width,widest);
+}
+AnythingSavedStrip MeasureAnythingSavedStrip(float width,const char* options,int count){
+ float widest=0;for(int i=0;i<count;++i){widest=std::max(widest,ImGui::CalcTextSize(Neurotic::Translate(options).c_str()).x);options+=std::strlen(options)+1;}
+ return MeasureAnythingSavedStrip(width,widest);
+}
+bool AnythingSavedReset(const char* scope,const SavedReviewAction& action,float gap){
+ ImGui::SameLine(0,gap);ImGui::PushID(scope);
+ const bool pressed=SavedReviewButton(AnythingResetLabel(),action);ImGui::PopID();return pressed;
+}
+float AnythingCountdownValueWidth(float dpi){
  const char* format=Neurotic::UiLiteral("desktop.anything.countdown_seconds_short", "%d s");
  Neurotic::LocalizedFormat localized(format);char label[128]{};snprintf(label,sizeof(label),format,30);
  return ImGui::CalcTextSize(label).x+12*dpi+ImGui::GetFrameHeight();
+}
+AnythingSavedStrip MeasureCountdownStrip(float dpi,float available){
+ const float width=std::min(AnythingCountdownWidth(dpi),std::max(1.f,available)),gap=ImGui::GetStyle().ItemInnerSpacing.x;
+ const auto reset=MeasureSavedReviewAction(AnythingResetLabel(),std::max(1.f,width-std::min(AnythingCountdownValueWidth(dpi),width*.5f)-gap));
+ return {reset,std::max(1.f,width-reset.width-gap),gap};
+}
+}
+float AnythingCountdownWidth(float dpi){
+ // Navigation reserves the entire value/Reset strip, using the same padding.
+ ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{6*dpi,ImGui::GetStyle().FramePadding.y});
+ const auto caption=Neurotic::Translate(AnythingResetLabel());
+ const auto reset=MeasureSavedReviewAction(AnythingResetLabel(),ImGui::CalcTextSize(caption.c_str()).x+ImGui::GetStyle().FramePadding.x*2);
+ const float width=AnythingCountdownValueWidth(dpi)+reset.width+ImGui::GetStyle().ItemInnerSpacing.x;
+ ImGui::PopStyleVar();return width;
+}
+float AnythingCountdownHeight(float dpi,float width){
+ ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{6*dpi,ImGui::GetStyle().FramePadding.y});
+ const auto strip=MeasureCountdownStrip(dpi,width);
+ const float height=std::max(ImGui::GetFrameHeight(),strip.reset.height);ImGui::PopStyleVar();return height;
 }
 void RenderAnythingCountdown(HubModel& model,float dpi){
  EnsureController(model);auto& page=model.anythingUi;
@@ -218,21 +259,29 @@ void RenderAnythingCountdown(HubModel& model,float dpi){
  const char* format=Neurotic::UiLiteral("desktop.anything.countdown_seconds_short", "%d s");
  const auto delayText=[&](int seconds){const char* value=format;Neurotic::LocalizedFormat localized(value);char label[128]{};snprintf(label,sizeof(label),value,seconds);return std::string(label);};
  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{6*dpi,ImGui::GetStyle().FramePadding.y});
- ImGui::BeginDisabled(state.active||state.busy||state.stopping);ImGui::SetNextItemWidth(AnythingCountdownWidth(dpi));
+ ImGui::BeginDisabled(state.active||state.busy||state.stopping);
+ const auto strip=MeasureCountdownStrip(dpi,ImGui::GetContentRegionAvail().x);
+ const auto& reset=strip.reset;const float resetGap=strip.gap;ImGui::SetNextItemWidth(strip.valueWidth);
  const auto countdownLabel=delayText(page.countdownSeconds);
  if(ImGui::BeginCombo("##Countdown",countdownLabel.c_str())){
   ImGui::TextDisabled(Neurotic::UiLiteral("desktop.anythingview.choose_foreground_after_delay_23769432", "Choose foreground after delay"));
   for(int seconds=1;seconds<=30;++seconds){const auto label=delayText(seconds);
    if(ImGui::Selectable(label.c_str(),page.selected.is_null()&&page.countdownSeconds==seconds)){
-    page.countdownSeconds=seconds;
+    page.countdownSeconds=seconds;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Countdown);
     try{SaveAnythingPreferences(page,UserRoot()/L"Runtime"/L"anything-profiles.json");}catch(const std::exception& error){page.notice=error.what();}
     model.Save();
    }
   }
   ImGui::EndCombo();
  }
+ const bool countdownHovered=Neurotic::ItemHelpHovered();
+ if(AnythingSavedReset("CountdownReset",reset,resetGap)){
+  page.countdownSeconds=3;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Countdown);
+  try{SaveAnythingPreferences(page,UserRoot()/L"Runtime"/L"anything-profiles.json");}catch(const std::exception& error){page.notice=error.what();}
+  model.Save();
+ }
  ImGui::EndDisabled();ImGui::PopStyleVar();
- if(ImGui::IsItemHovered())ImGui::SetTooltip(Neurotic::UiLiteral("desktop.anythingview.choose_foreground_after_delay_23769432", "Choose foreground after delay"));
+ if(countdownHovered)ImGui::SetTooltip(Neurotic::UiLiteral("desktop.anythingview.choose_foreground_after_delay_23769432", "Choose foreground after delay"));
 }
 void RequestAnythingDiagnosticsDialog(){diagnosticsDialogRequested=true;}
 void RenderAnything(HubModel& model,float dpi) try{
@@ -261,25 +310,42 @@ void RenderAnything(HubModel& model,float dpi) try{
  const bool healthy=running&&page.ratesKnown&&page.incomingFps>0&&page.processedFps>0&&page.deficitSeconds==0;
  auto lookCard=[&]{
   AnythingCard(Neurotic::UiLiteral("desktop.anythingview.anythinglookcard_8a879e8f", "AnythingLookCard"),Neurotic::UiLiteral("desktop.anything.look_heading","Look"),cardWidth,dpi,model.light);ImGui::BeginDisabled(processingBlocked);bool changed=false;
-  ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anythingview.profile_59ccf293", "Profile"));const auto saveLabel=Neurotic::UiLiteral("desktop.anythingview.save_profile_1a567671", "Save profile...");const float saveWidth=std::max(112*dpi,ImGui::CalcTextSize(Neurotic::Translate(saveLabel).c_str()).x+ImGui::GetStyle().FramePadding.x*2);
-  ImGui::SetNextItemWidth(std::max(90*dpi,ImGui::GetContentRegionAvail().x-saveWidth-ImGui::GetStyle().ItemSpacing.x));
+  ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anythingview.profile_59ccf293", "Profile"));
+  const auto saveLabel=Neurotic::UiLiteral("desktop.anythingview.save_profile_1a567671", "Save profile...");
+  const float profileWidth=ImGui::GetContentRegionAvail().x,profileGap=ImGui::GetStyle().ItemInnerSpacing.x;
+  const float profileMinimum=std::min(72.f*dpi,profileWidth*.4f);
+  const auto profileReset=MeasureSavedReviewAction(AnythingResetLabel(),std::max(1.f,profileWidth-profileMinimum-profileGap));
+  const auto saveAction=MeasureSavedReviewAction(saveLabel,std::max(1.f,profileWidth));
+  const bool profileSaveInline=profileMinimum+profileReset.width+saveAction.width+profileGap*2<=profileWidth;
+  ImGui::SetNextItemWidth(std::max(1.f,profileWidth-profileReset.width-profileGap-(profileSaveInline?saveAction.width+profileGap:0.f)));
   const auto defaultProfile=Neurotic::UiMessage("desktop.installdefaults.default_preset","Default");
+  std::string selectedProfile;
   if(ImGui::BeginCombo("##Profile",page.profile=="Default"?defaultProfile.c_str():page.profile.c_str())){
    if(ImGui::Selectable(defaultProfile.c_str(),page.profile=="Default")){ApplyAnythingDefaultProfile(page);changed=true;}
-   if(!page.profiles.empty())ImGui::Separator();for(const auto& item:page.profiles.items())if(!ProtectedAnythingProfile(item.key())&&ImGui::Selectable(item.key().c_str(),page.profile==item.key())){if(ApplyAnythingSessionProfile(page,item.value(),state.active)){page.profile=item.key();changed=true;}else page.notice=Neurotic::UiMessage("desktop.anythingview.this_profile_could_not_be_loaded_c6325469", "This profile could not be loaded.");}
+   if(!page.profiles.empty())ImGui::Separator();for(const auto& item:page.profiles.items())if(!ProtectedAnythingProfile(item.key())&&ImGui::Selectable(item.key().c_str(),page.profile==item.key()))selectedProfile=item.key();
    ImGui::EndCombo();
   }
-  ImGui::SameLine();if(ui::Button(saveLabel,{saveWidth,0})){page.selectedUserProfile=page.profiles.contains(page.profile)&&!ProtectedAnythingProfile(page.profile)?page.profile:std::string{};snprintf(page.profileName.data(),page.profileName.size(),"%s",page.selectedUserProfile.c_str());openDialog=Neurotic::UiLiteral("desktop.anythingview.nr_anything_profiles_fdecfc2f", "NR Anything profiles");}
+  // Applying replaces page, including profiles. Finish enumeration first.
+  if(!selectedProfile.empty()){
+   const auto selectedValue=page.profiles.at(selectedProfile);
+   if(ApplyAnythingSessionProfile(page,selectedValue,state.active)){page.profile=selectedProfile;changed=true;}
+   else page.notice=Neurotic::UiMessage("desktop.anythingview.this_profile_could_not_be_loaded_c6325469", "This profile could not be loaded.");
+  }
+  if(AnythingSavedReset("ProfileReset",profileReset,profileGap)){ApplyAnythingDefaultProfile(page);changed=true;}
+  if(profileSaveInline)ImGui::SameLine(0,profileGap);if(SavedReviewButton(saveLabel,saveAction)){page.selectedUserProfile=page.profiles.contains(page.profile)&&!ProtectedAnythingProfile(page.profile)?page.profile:std::string{};snprintf(page.profileName.data(),page.profileName.size(),"%s",page.selectedUserProfile.c_str());openDialog=Neurotic::UiLiteral("desktop.anythingview.nr_anything_profiles_fdecfc2f", "NR Anything profiles");}
   AnythingMuted(Neurotic::UiLiteral("desktop.anythingview.last_loaded_profile_remembered_cd8493f1", "Last loaded profile remembered"));ImGui::Dummy({0,4*dpi});
   AnythingRule(dpi);
-  ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anythingview.nr_quality_a7e7948e", "NR quality"));ImGui::BeginDisabled(processingBlocked||!page.neuralRendering);ImGui::SetNextItemWidth(-1);
-  if(ImGui::Combo("##NRQuality",&page.resolution,Neurotic::UiOptions("desktop.anythingview.full_resolution_100_43c681f2|desktop.anythingview.quality_75_8f8e3665|desktop.anythingview.balanced_67_ef85811d|desktop.anythingview.performance_50_9c9083bd|desktop.anythingview.manual_9ca08eb3|", "Full resolution - 100%\0Quality - 75%\0Balanced - 67%\0Performance - 50%\0Manual\0")))applyProcessing();
+  ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anythingview.nr_quality_a7e7948e", "NR quality"));ImGui::BeginDisabled(processingBlocked||!page.neuralRendering);
+  const auto qualityOptions=Neurotic::UiOptions("desktop.anythingview.full_resolution_100_43c681f2|desktop.anythingview.quality_75_8f8e3665|desktop.anythingview.balanced_67_ef85811d|desktop.anythingview.performance_50_9c9083bd|desktop.anythingview.manual_9ca08eb3|", "Full resolution - 100%\0Quality - 75%\0Balanced - 67%\0Performance - 50%\0Manual\0");
+  const auto qualityStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,qualityOptions,5);ImGui::SetNextItemWidth(qualityStrip.valueWidth);
+  if(ImGui::Combo("##NRQuality",&page.resolution,qualityOptions)){MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Resolution);applyProcessing();}
+  if(AnythingSavedReset("NRQualityReset",qualityStrip.reset,qualityStrip.gap)){page.resolution=0;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Resolution);applyProcessing();}
   if(page.resolution==4){
    ImGui::AlignTextToFramePadding();ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anythingview.manual_resolution_332a66fe", "Manual resolution"));
    ImGui::SameLine(std::max(ImGui::GetCursorPosX(),(ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x)-ImGui::CalcTextSize(Neurotic::UiLiteral("desktop.anythingview.reset_51fe8741", "Reset")).x-ImGui::GetStyle().FramePadding.x*2));
-   if(ui::Button(Neurotic::UiLiteral("desktop.anythingview.reset_51fe8741", "Reset##ManualResolution"))){page.manualPercent=100;applyProcessing();}
+   if(ui::Button(Neurotic::UiLiteral("desktop.anythingview.reset_51fe8741", "Reset##ManualResolution"))){page.manualPercent=100;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Resolution);applyProcessing();}
    ImGui::SetNextItemWidth(-1);ImGui::SliderInt("##ManualResolution",&page.manualPercent,25,100,"%d%%",ImGuiSliderFlags_AlwaysClamp);
-   if(ImGui::IsItemDeactivatedAfterEdit())applyProcessing();
+   if(ImGui::IsItemDeactivatedAfterEdit()){MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Resolution);applyProcessing();}
   }
   ImGui::EndDisabled();
   ImGui::Dummy({0,5*dpi});AnythingMuted(Neurotic::UiLiteral("desktop.anything.sr_nr_quality_help", "Changes NR processing size. Game rendering resolution is unchanged."));
@@ -293,14 +359,16 @@ void RenderAnything(HubModel& model,float dpi) try{
   const char* fgOff=Neurotic::UiLiteral("desktop.anything.fg_off","Off");
   const char* fg2x=Neurotic::UiLiteral("desktop.anything.fg_2x","FSR 2x");
   ImGui::BeginDisabled(state.stopping||(state.busy&&!state.active)||(!supportedFg&&!page.frameGeneration));
-  ImGui::SetNextItemWidth(-1);
+  const char* fgWidths[]={fgOff,fg2x,fgUnavailable};
+  const auto fgStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,fgWidths,3);ImGui::SetNextItemWidth(fgStrip.valueWidth);
   if(ImGui::BeginCombo("##AnythingFG",supportedFg?(page.frameGeneration?fg2x:fgOff):fgUnavailable)){
    for(int generation=0;generation<(supportedFg?2:1);++generation){
     const auto label=Neurotic::Translate(generation?fg2x:fgOff)+"##AnythingFGChoice";
-    if(ImGui::Selectable(label.c_str(),page.frameGeneration==(generation==1))){page.frameGeneration=generation==1;save();if(supportedFg&&state.active&&model.anything)model.anything->SetFrameGeneration(page.frameGeneration);}
+    if(ImGui::Selectable(label.c_str(),page.frameGeneration==(generation==1))){page.frameGeneration=generation==1;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::FrameGeneration);save();if(supportedFg&&state.active&&model.anything)model.anything->SetFrameGeneration(page.frameGeneration);}
    }
    ImGui::EndCombo();
   }
+  if(AnythingSavedReset("AnythingFGReset",fgStrip.reset,fgStrip.gap)){page.frameGeneration=false;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::FrameGeneration);save();if(supportedFg&&state.active&&model.anything)model.anything->SetFrameGeneration(false);}
   ImGui::EndDisabled();
   const char* fgMessages[]={
    Neurotic::UiLiteral("desktop.anything.fg_worker_unavailable","Unavailable with this worker"),
@@ -327,10 +395,10 @@ void RenderAnything(HubModel& model,float dpi) try{
   float minimumStyleWidth=0;for(int look:looks)minimumStyleWidth=std::max(minimumStyleWidth,ImGui::CalcTextSize(Neurotic::Translate(AnythingLooks[look]).c_str()).x+ImGui::GetStyle().FramePadding.x*2);
   const int styleColumns=std::clamp(int((styleWidth+styleGap)/(minimumStyleWidth+styleGap)),1,3);
   const float segment=(styleWidth-(styleColumns-1)*styleGap)/styleColumns;
-  for(int i=0;i<3;++i){if(i%styleColumns)ImGui::SameLine();ImGui::BeginDisabled(i>0&&state.connected&&!capability("modelStyles"));if(AnythingSegment(AnythingLooks[looks[i]],page.look==looks[i]||(page.look==1&&i==0),segment,dpi)){page.look=looks[i];changed=true;}ImGui::EndDisabled();}
+  for(int i=0;i<3;++i){if(i%styleColumns)ImGui::SameLine();ImGui::BeginDisabled(i>0&&state.connected&&!capability("modelStyles"));if(AnythingSegment(AnythingLooks[looks[i]],page.look==looks[i]||(page.look==1&&i==0),segment,dpi)){page.look=looks[i];MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Look);changed=true;}ImGui::EndDisabled();}
   ImGui::Dummy({0,5*dpi});
-  changed|=AnythingStrength(Neurotic::UiLiteral("desktop.anythingview.detail_strength_9908dd0e", "Detail strength"),page.transfer,Neurotic::UiLiteral("desktop.anythingview.adjusts_the_detail_contribution_from_nr_7fdabf64", "Adjusts the detail contribution from NR."),dpi);
-  changed|=AnythingStrength(Neurotic::UiLiteral("desktop.anythingview.color_strength_8cc291c4", "Color strength"),page.colour,Neurotic::UiLiteral("desktop.anythingview.adjusts_the_color_contribution_from_nr_bf325926", "Adjusts the color contribution from NR."),dpi);
+  if(AnythingStrength(Neurotic::UiLiteral("desktop.anythingview.detail_strength_9908dd0e", "Detail strength"),page.transfer,Neurotic::UiLiteral("desktop.anythingview.adjusts_the_detail_contribution_from_nr_7fdabf64", "Adjusts the detail contribution from NR."),dpi)){MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Detail);changed=true;}
+  if(AnythingStrength(Neurotic::UiLiteral("desktop.anythingview.color_strength_8cc291c4", "Color strength"),page.colour,Neurotic::UiLiteral("desktop.anythingview.adjusts_the_color_contribution_from_nr_bf325926", "Adjusts the color contribution from NR."),dpi)){MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Colour);changed=true;}
   ImGui::EndDisabled();ImGui::EndDisabled();if(changed)applyProcessing();
   AnythingMuted(state.active?(capability(Neurotic::UiLiteral("desktop.anythingview.liveprocessing_ac48aaa6", "liveProcessing"))?Neurotic::UiLiteral("desktop.anythingview.changes_apply_at_completed_frame_boundaries_30bb0d89", "Changes apply at completed-frame boundaries."):Neurotic::UiLiteral("desktop.anythingview.this_worker_requires_stop_before_changing_the_lo_ff67f9bd", "This worker requires Stop before changing the look.")):Neurotic::UiLiteral("desktop.anythingview.your_look_will_be_used_when_rendering_starts_0591f7bb", "Your look will be used when rendering starts."));
   if(page.look==1)AnythingMuted(Neurotic::UiLiteral("desktop.anythingview.neutral_standard_with_both_transfer_strengths_at_daaebef8", "Neutral: Standard with both transfer strengths at zero."));
@@ -347,6 +415,9 @@ void RenderAnything(HubModel& model,float dpi) try{
  else ImGui::TextDisabled(Neurotic::UiLiteral("desktop.anythingview.neural_rendering_size_unavailable_8d2b5e5e", "Neural Rendering size: Unavailable"));
  if(state.status.value(Neurotic::UiLiteral("desktop.anythingview.outputwidth_b32d54f2", "outputWidth"),0u))ImGui::TextDisabled(Neurotic::UiLiteral("desktop.anythingview.output_resolution_u_x_u_4cca2ecf", "Output resolution: %u x %u"),state.status.value(Neurotic::UiLiteral("desktop.anythingview.outputwidth_b32d54f2", "outputWidth"),0u),state.status.value(Neurotic::UiLiteral("desktop.anythingview.outputheight_0aed7a99", "outputHeight"),0u));
  else ImGui::TextDisabled(Neurotic::UiLiteral("desktop.anythingview.output_resolution_unavailable_ef61cd5d", "Output resolution: Unavailable"));
+  const auto capturedColor=AnythingCurrentCapturedColor(state);
+  const char* colorText=capturedColor==AnythingCapturedColor::ScRgb?Neurotic::UiLiteral("desktop.anything.capture_scrgb","Last captured color: scRGB (FP16)"):capturedColor==AnythingCapturedColor::Sdr?Neurotic::UiLiteral("desktop.anything.capture_sdr","Last captured color: SDR (8-bit)"):Neurotic::UiLiteral("desktop.anything.capture_unknown","Last captured color: Unknown");
+  AnythingMuted(colorText);
   AnythingRule(dpi);
   ImGui::BeginDisabled(editing);
   const bool stagesKnown=state.connected&&state.status.contains("capabilities")&&state.status["capabilities"].is_object();
@@ -361,30 +432,34 @@ void RenderAnything(HubModel& model,float dpi) try{
    ImGui::SetCursorPosY(y+height+ImGui::GetStyle().ItemSpacing.y);
   };
   ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anything.sr_label","Super resolution"));
-  int sr=page.superResolution?1:0;ImGui::SetNextItemWidth(-1);
-  ImGui::BeginDisabled(!stagesKnown);
   const char* srOptions[]={Neurotic::UiLiteral("desktop.anything.fg_off","Off"),Neurotic::UiLiteral("desktop.anything.sr_fsr1","FSR 1")};
-  if(ImGui::BeginCombo("##AnythingSR",srOptions[sr])){for(int option=0;option<2;++option){ImGui::BeginDisabled(option==1&&!capability("spatialSuperResolution"));const auto choice=Neurotic::Translate(srOptions[option])+"##AnythingSRChoice";if(ImGui::Selectable(choice.c_str(),option==sr)){page.superResolution=option==1;if(!page.superResolution)page.fullscreen=false;save();}ImGui::EndDisabled();}ImGui::EndCombo();}
+  int sr=page.superResolution?1:0;const auto srStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,srOptions,2);ImGui::SetNextItemWidth(srStrip.valueWidth);
+  ImGui::BeginDisabled(!stagesKnown);
+  if(ImGui::BeginCombo("##AnythingSR",srOptions[sr])){for(int option=0;option<2;++option){ImGui::BeginDisabled(option==1&&!capability("spatialSuperResolution"));const auto choice=Neurotic::Translate(srOptions[option])+"##AnythingSRChoice";if(ImGui::Selectable(choice.c_str(),option==sr)){page.superResolution=option==1;if(!page.superResolution)page.fullscreen=false;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Output);save();}ImGui::EndDisabled();}ImGui::EndCombo();}
+  const bool srHovered=Neurotic::ItemHelpHovered();
+  if(AnythingSavedReset("AnythingSRReset",srStrip.reset,srStrip.gap)){page.superResolution=false;page.fullscreen=false;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Output);save();}
   ImGui::EndDisabled();
-  if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("%s",Neurotic::Translate(Neurotic::UiLiteral("desktop.anything.sr_help","Spatial upscaling includes the captured HUD. Lower the resolution in the game's settings to reduce game rendering work.")).c_str());
+  if(srHovered)ImGui::SetTooltip("%s",Neurotic::Translate(Neurotic::UiLiteral("desktop.anything.sr_help","Spatial upscaling includes the captured HUD. Lower the resolution in the game's settings to reduce game rendering work.")).c_str());
   ImGui::EndDisabled();
   availability(capability("spatialSuperResolution"),false);
   ImGui::BeginDisabled(editing);
   ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anything.sr_neural_rendering","Neural rendering"));
-  int nr=page.neuralRendering?1:0;ImGui::SetNextItemWidth(-1);
-  ImGui::BeginDisabled(!stagesKnown);
   const char* nrOptions[]={Neurotic::UiLiteral("desktop.anything.fg_off","Off"),Neurotic::UiLiteral("desktop.anything.sr_on","On")};
-  if(ImGui::BeginCombo("##AnythingNR",nrOptions[nr])){for(int option=0;option<2;++option){ImGui::BeginDisabled(option==0&&!capability("optionalNeuralRendering"));const auto choice=Neurotic::Translate(nrOptions[option])+"##AnythingNRChoice";if(ImGui::Selectable(choice.c_str(),option==nr)){page.neuralRendering=option==1;save();}ImGui::EndDisabled();}ImGui::EndCombo();}
+  int nr=page.neuralRendering?1:0;const auto nrStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,nrOptions,2);ImGui::SetNextItemWidth(nrStrip.valueWidth);
+  ImGui::BeginDisabled(!stagesKnown);
+  if(ImGui::BeginCombo("##AnythingNR",nrOptions[nr])){for(int option=0;option<2;++option){ImGui::BeginDisabled(option==0&&!capability("optionalNeuralRendering"));const auto choice=Neurotic::Translate(nrOptions[option])+"##AnythingNRChoice";if(ImGui::Selectable(choice.c_str(),option==nr)){page.neuralRendering=option==1;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::NeuralRendering);save();}ImGui::EndDisabled();}ImGui::EndCombo();}
+  if(AnythingSavedReset("AnythingNRReset",nrStrip.reset,nrStrip.gap)){page.neuralRendering=true;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::NeuralRendering);save();}
   ImGui::EndDisabled();
   ImGui::EndDisabled();
   availability(capability("optionalNeuralRendering"),true);
   ImGui::BeginDisabled(editing);
-  ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anything.sr_output","Output"));ImGui::SetNextItemWidth(-1);
   const char* outputs[]={Neurotic::UiLiteral("desktop.anything.sr_overlay","Source overlay"),Neurotic::UiLiteral("desktop.anything.sr_preview","Preview"),Neurotic::UiLiteral("desktop.anything.sr_fullscreen","Fullscreen")};
+  ImGui::TextUnformatted(Neurotic::UiLiteral("desktop.anything.sr_output","Output"));const auto outputStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,outputs,3);ImGui::SetNextItemWidth(outputStrip.valueWidth);
   if(ImGui::BeginCombo("##AnythingOutput",outputs[page.fullscreen?2:page.overlay?0:1])){
-   for(int mode=0;mode<3;++mode){ImGui::BeginDisabled(mode==2&&(!page.superResolution||(state.connected&&!capability("fullscreenSuperResolution"))));if(ImGui::Selectable(outputs[mode],mode==(page.fullscreen?2:page.overlay?0:1))){page.fullscreen=mode==2;page.overlay=mode!=1;save();}ImGui::EndDisabled();}
+   for(int mode=0;mode<3;++mode){ImGui::BeginDisabled(mode==2&&(!page.superResolution||(state.connected&&!capability("fullscreenSuperResolution"))));if(ImGui::Selectable(outputs[mode],mode==(page.fullscreen?2:page.overlay?0:1))){page.fullscreen=mode==2;page.overlay=mode!=1;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Output);save();}ImGui::EndDisabled();}
    ImGui::EndCombo();
   }
+  if(AnythingSavedReset("AnythingOutputReset",outputStrip.reset,outputStrip.gap)){page.overlay=true;page.fullscreen=false;MarkAnythingPreferenceEdit(page,AnythingPreferenceEdit::Output);save();}
   ImGui::EndDisabled();
   const char* stageNotes[]={Neurotic::UiLiteral("desktop.anything.stage_restart","Stop to change supported stages or output."),Neurotic::UiLiteral("desktop.anything.sr_pointer","Source view for pointer control."),Neurotic::UiLiteral("desktop.anything.sr_fullscreen_help","Fullscreen requires hidden, confined game input.")};
   const auto stageY=ImGui::GetCursorPosY();float stageHeight=ImGui::GetTextLineHeight();for(const char* note:stageNotes)stageHeight=std::max(stageHeight,ImGui::CalcTextSize(Neurotic::Translate(note).c_str(),nullptr,false,ImGui::GetContentRegionAvail().x).y);
@@ -398,7 +473,7 @@ void RenderAnything(HubModel& model,float dpi) try{
   const bool srWaiting=state.active&&page.superResolution&&srStatus.value("state",std::string{})!="source-size";
   ui::StatusDot(srActive?ui::ReadyState::Ready:srWaiting?ui::ReadyState::Attention:ui::ReadyState::Checking,model.light,dpi);
   ImGui::TextDisabled("%s",Neurotic::Translate(srActive?Neurotic::UiLiteral("desktop.anything.sr_active","SR: Active"):srWaiting?Neurotic::UiLiteral("desktop.anything.sr_waiting","SR: Waiting"):Neurotic::UiLiteral("desktop.anything.sr_off","SR: Off")).c_str());
-  if(ImGui::IsItemHovered()&&srStatus.contains("reason"))ImGui::SetTooltip("%s",srStatus.value("reason",std::string{}).c_str());
+  if(Neurotic::ItemHelpHovered(ImGui::GetID("##AnythingSRStatusHelp"))&&srStatus.contains("reason"))ImGui::SetTooltip("%s",srStatus.value("reason",std::string{}).c_str());
   ui::StatusDot(nrActive?ui::ReadyState::Ready:state.active&&page.neuralRendering?ui::ReadyState::Attention:ui::ReadyState::Checking,model.light,dpi);
   ImGui::TextDisabled("%s",Neurotic::Translate(nrActive?Neurotic::UiLiteral("desktop.anything.sr_nr_active","NR: Active"):state.active&&page.neuralRendering?Neurotic::UiLiteral("desktop.anything.sr_nr_waiting","NR: Waiting"):Neurotic::UiLiteral("desktop.anything.sr_nr_off","NR: Off")).c_str());
   if(state.status.value("captureWidth",0u))ImGui::TextDisabled(Neurotic::UiLiteral("desktop.anything.sr_capture_size","Captured: %u x %u"),state.status.value("captureWidth",0u),state.status.value("captureHeight",0u));
@@ -417,7 +492,7 @@ void RenderAnything(HubModel& model,float dpi) try{
   ImGui::PushFont(nullptr,26);
   const auto title=Neurotic::Translate(heading);ImGui::Dummy({available,headerHeight});
   ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(),{origin.x,origin.y+(headerHeight-ImGui::GetTextLineHeight())*.5f},{origin.x+available,origin.y+headerHeight},origin.x+available,title.c_str(),nullptr,nullptr);
-  if(ImGui::IsItemHovered())ImGui::SetTooltip("%s",title.c_str());
+  if(Neurotic::ItemHelpHovered(ImGui::GetID("##AnythingHeadingHelp")))ImGui::SetTooltip("%s",title.c_str());
   if(ImGui::GetCurrentContext()->LogEnabled)ImGui::LogRenderedText(&origin,title.c_str());ImGui::PopFont();
   const auto targetIdentity=page.clearTargetPending?Json():state.active?(state.status.value("window",Json()).is_object()?state.status["window"]:page.activeTarget):page.selected;
   const float infoHeight=std::max(ImGui::GetTextLineHeight(),24*dpi);
@@ -429,7 +504,7 @@ void RenderAnything(HubModel& model,float dpi) try{
   const auto titleMin=ImGui::GetCursorScreenPos();const float targetWidth=std::max(1.f,leftWidth-(icon?24*dpi+spacing:0.f));
   ImGui::Dummy({targetWidth,infoHeight});
   ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(),{titleMin.x,titleMin.y+(infoHeight-ImGui::GetTextLineHeight())*.5f},{titleMin.x+targetWidth,titleMin.y+infoHeight},titleMin.x+targetWidth,targetTitle.c_str(),nullptr,nullptr);
-  if(ImGui::IsItemHovered())ImGui::SetTooltip("%s",targetTitle.c_str());
+  if(Neurotic::ItemHelpHovered(ImGui::GetID("##AnythingTargetHelp")))ImGui::SetTooltip("%s",targetTitle.c_str());
   if(ImGui::GetCurrentContext()->LogEnabled)ImGui::LogRenderedText(&titleMin,targetTitle.c_str());
   ImGui::EndGroup();
 #ifdef IMGUI_ENABLE_TEST_ENGINE
@@ -444,7 +519,7 @@ void RenderAnything(HubModel& model,float dpi) try{
     else if(ClearIdleAnythingTarget(page,false,false,false))page.notice.clear();
    }
    ImGui::EndDisabled();
-   if(ImGui::IsItemHovered())ImGui::SetTooltip(Neurotic::UiLiteral("desktop.anythingview.stop_and_clear_target", "Stop and clear target"));
+   if(Neurotic::ItemHelpHovered())ImGui::SetTooltip(Neurotic::UiLiteral("desktop.anythingview.stop_and_clear_target", "Stop and clear target"));
   }
   ImGui::SetCursorScreenPos({origin.x,origin.y+headerHeight+ImGui::GetStyle().ItemSpacing.y+clearHeight+ImGui::GetStyle().ItemSpacing.y});ImGui::Dummy({available,0});
   EndAnythingCard();
@@ -507,10 +582,26 @@ void RenderAnything(HubModel& model,float dpi) try{
   auto binding=[&](const char* title,bool& enabled,unsigned& modifiersValue,unsigned& keyValue,unsigned& revision,bool& available,const std::string& error,char defaultKey){
    ImGui::PushID(title);ImGui::TextUnformatted(title);bool changed=ui::Toggle(Neurotic::UiLiteral("desktop.anythingview.enable_global_shortcut_248d8df1", "Enable global shortcut"),&enabled);
    const unsigned modifiers[]={MOD_CONTROL|MOD_ALT,MOD_CONTROL|MOD_SHIFT,MOD_ALT|MOD_SHIFT,MOD_CONTROL|MOD_ALT|MOD_SHIFT};int modifier=0;for(int i=0;i<4;++i)if(modifiersValue==modifiers[i])modifier=i;
-   ImGui::SetNextItemWidth(230*dpi);if(ImGui::Combo(Neurotic::UiLiteral("desktop.anythingview.modifiers_976c21b9", "Modifiers"),&modifier,Neurotic::UiOptions("desktop.anythingview.ctrl_alt_0c6439b2|desktop.anythingview.ctrl_shift_c667546e|desktop.anythingview.alt_shift_25912955|desktop.anythingview.ctrl_alt_shift_b3e6fe08|", "Ctrl + Alt\0Ctrl + Shift\0Alt + Shift\0Ctrl + Alt + Shift\0"))){modifiersValue=modifiers[modifier];if(!ValidAnythingHotkey(modifiersValue,keyValue))keyValue=defaultKey;changed=true;}
-   auto keyName=[](unsigned key){return key>=VK_F1?"F"+std::to_string(key-VK_F1+1):std::string(1,char(key));};ImGui::SetNextItemWidth(230*dpi);
-   if(ImGui::BeginCombo(Neurotic::UiLiteral("desktop.anythingview.key_df9dc9c4", "Key"),keyName(keyValue).c_str())){for(unsigned key='A';key<='Z';++key)if(ImGui::Selectable(keyName(key).c_str(),keyValue==key)){keyValue=key;changed=true;}for(unsigned key=VK_F1;key<=VK_F11;++key){ImGui::BeginDisabled(!ValidAnythingHotkey(modifiersValue,key));if(ImGui::Selectable(keyName(key).c_str(),keyValue==key)){keyValue=key;changed=true;}ImGui::EndDisabled();}ImGui::EndCombo();}
-   if(changed){available=false;++revision;save();}
+   const auto modifierLabel=Neurotic::UiLiteral("desktop.anythingview.modifiers_976c21b9", "Modifiers");
+   const auto modifierOptions=Neurotic::UiOptions("desktop.anythingview.ctrl_alt_0c6439b2|desktop.anythingview.ctrl_shift_c667546e|desktop.anythingview.alt_shift_25912955|desktop.anythingview.ctrl_alt_shift_b3e6fe08|", "Ctrl + Alt\0Ctrl + Shift\0Alt + Shift\0Ctrl + Alt + Shift\0");
+   ImGui::TextUnformatted(modifierLabel);const auto modifierStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,modifierOptions,4);
+   ImGui::SetNextItemWidth(modifierStrip.valueWidth);
+   // Hash the original label once, then an empty label hashes to that seed.
+   // This keeps the native combo/popup ID while its visible label sits above.
+   ImGui::PushOverrideID(ImGui::GetID(modifierLabel));
+   if(ImGui::Combo("",&modifier,modifierOptions)){modifiersValue=modifiers[modifier];if(!ValidAnythingHotkey(modifiersValue,keyValue))keyValue=defaultKey;changed=true;}
+   ImGui::PopID();
+   if(AnythingSavedReset("ModifiersReset",modifierStrip.reset,modifierStrip.gap)){
+    modifiersValue=MOD_CONTROL|MOD_ALT;if(!ValidAnythingHotkey(modifiersValue,keyValue))keyValue=defaultKey;changed=true;
+   }
+   auto keyName=[](unsigned key){return key>=VK_F1?"F"+std::to_string(key-VK_F1+1):std::string(1,char(key));};const auto keyLabel=Neurotic::UiLiteral("desktop.anythingview.key_df9dc9c4", "Key");
+   float keyWidth=0;for(unsigned key='A';key<='Z';++key)keyWidth=std::max(keyWidth,ImGui::CalcTextSize(keyName(key).c_str()).x);for(unsigned key=VK_F1;key<=VK_F11;++key)keyWidth=std::max(keyWidth,ImGui::CalcTextSize(keyName(key).c_str()).x);
+   ImGui::TextUnformatted(keyLabel);const auto keyStrip=MeasureAnythingSavedStrip(ImGui::GetContentRegionAvail().x,keyWidth);
+   ImGui::SetNextItemWidth(keyStrip.valueWidth);ImGui::PushOverrideID(ImGui::GetID(keyLabel));
+   if(ImGui::BeginCombo("",keyName(keyValue).c_str())){for(unsigned key='A';key<='Z';++key)if(ImGui::Selectable(keyName(key).c_str(),keyValue==key)){keyValue=key;changed=true;}for(unsigned key=VK_F1;key<=VK_F11;++key){ImGui::BeginDisabled(!ValidAnythingHotkey(modifiersValue,key));if(ImGui::Selectable(keyName(key).c_str(),keyValue==key)){keyValue=key;changed=true;}ImGui::EndDisabled();}ImGui::EndCombo();}
+   ImGui::PopID();
+   if(AnythingSavedReset("KeyReset",keyStrip.reset,keyStrip.gap)&&ValidAnythingHotkey(modifiersValue,defaultKey)){keyValue=defaultKey;changed=true;}
+   if(changed){MarkAnythingPreferenceEdit(page,&enabled==&page.hotkeyEnabled?AnythingPreferenceEdit::Hotkey:AnythingPreferenceEdit::ScreenshotHotkey);available=false;++revision;save();}
    ImGui::TextWrapped("%s",Neurotic::Translate(!enabled?Neurotic::UiLiteral("desktop.anythingview.shortcut_disabled_207c8974", "Shortcut disabled."):!error.empty()?error.c_str():available?Neurotic::UiLiteral("desktop.anythingview.shortcut_registered_e3154776", "Shortcut registered."):Neurotic::UiLiteral("desktop.anythingview.waiting_for_shortcut_registration_f57dfabc", "Waiting for shortcut registration...")).c_str());
    if(enabled&&!error.empty()&&ui::Button(Neurotic::UiLiteral("desktop.anythingview.retry_registration_d317a9ad", "Retry registration")))++revision;ImGui::PopID();
   };
@@ -524,7 +615,15 @@ void RenderAnything(HubModel& model,float dpi) try{
  if(AnythingDialog(Neurotic::UiLiteral("desktop.anythingview.nr_anything_diagnostics_18e0216a", "NR Anything diagnostics"),dpi)){
   DialogBody();ImGui::SeparatorText(Neurotic::UiLiteral("desktop.anything.probe_title","One-frame measurement"));
   ImGui::TextWrapped(Neurotic::UiLiteral("desktop.anything.probe_description","Check up to 256 samples from one frame. Results contain numbers only; no image is saved."));
-  ImGui::TextWrapped("%s",Neurotic::Translate(Neurotic::UiLiteral("desktop.anything.probe_requirements","Requires NR, 100% resolution, SDR and Compare set to On.")).c_str());
+  const auto measurementColor=AnythingCurrentCapturedColor(state);
+  const bool hdrMeasurement=measurementColor==AnythingCapturedColor::ScRgb;
+  const bool unknownMeasurementColor=state.connected&&state.active&&state.phase=="Running"&&measurementColor==AnythingCapturedColor::Unknown;
+  const char* measureNotices[]={Neurotic::UiLiteral("desktop.anything.probe_requirements","Requires NR, 100% resolution, SDR and Compare set to On."),Neurotic::UiLiteral("desktop.anything.probe_hdr_unavailable","Measurement unavailable for HDR."),Neurotic::UiLiteral("desktop.anything.probe_color_unknown","Measurement unavailable: captured color unknown.")};
+  const float noticeTop=ImGui::GetCursorPosY(),noticeWidth=ImGui::GetContentRegionAvail().x;
+  float noticeHeight=ImGui::GetTextLineHeight();
+  for(const char* notice:measureNotices)noticeHeight=std::max(noticeHeight,ImGui::CalcTextSize(Neurotic::Translate(notice).c_str(),nullptr,false,noticeWidth).y);
+  ImGui::TextWrapped("%s",Neurotic::Translate(measureNotices[hdrMeasurement?1:unknownMeasurementColor?2:0]).c_str());
+  ImGui::SetCursorPosY(noticeTop+noticeHeight+ImGui::GetStyle().ItemSpacing.y);
   ImGui::BeginDisabled(model.showDataMaintenance||!AnythingCanMeasureFrame(state));
   if(ui::Button(Neurotic::UiLiteral("desktop.anything.probe_action","Measure one frame"))&&model.anything)model.anything->MeasureOneFrame();ImGui::EndDisabled();
   const auto measurement=state.status.value("measurement",Json::object());const auto measurementPhase=measurement.value("state",std::string{});
@@ -532,7 +631,12 @@ void RenderAnything(HubModel& model,float dpi) try{
   else if(!capability("oneFrameMeasurement"))AnythingMuted(Neurotic::UiLiteral("desktop.anything.stage_unavailable_package","Unavailable in this package."));
   else {
    const char* resultText=measurementPhase=="pending"?Neurotic::UiLiteral("desktop.anything.probe_pending","Measuring one frame..."):measurementPhase=="complete"?Neurotic::UiLiteral("desktop.anything.probe_complete","Measurement complete. Copy session status to share the four results."):measurementPhase=="unsupported"?Neurotic::UiLiteral("desktop.anything.probe_unsupported","Measurement unavailable."):measurementPhase=="invalidated"?Neurotic::UiLiteral("desktop.anything.probe_invalidated","Measurement canceled by a session change."):measurementPhase=="failed/unknown"?Neurotic::UiLiteral("desktop.anything.probe_unknown","Measurement failed. Restart the worker before trying again."):measurementPhase=="failed"?Neurotic::UiLiteral("desktop.anything.probe_failed","Measurement failed."):AnythingCanMeasureFrame(state)?Neurotic::UiLiteral("desktop.anything.probe_ready","Ready to measure."):Neurotic::UiLiteral("desktop.anything.probe_wait","Wait for rendering to be ready.");
-   ImGui::TextWrapped("%s",Neurotic::Translate(resultText).c_str());
+   const float resultTop=ImGui::GetCursorPosY(),resultWidth=ImGui::GetContentRegionAvail().x;
+   float resultHeight=ImGui::GetTextLineHeight();
+   for(const char* text:{resultText,Neurotic::UiLiteral("desktop.anything.probe_ready","Ready to measure."),Neurotic::UiLiteral("desktop.anything.probe_wait","Wait for rendering to be ready."),Neurotic::UiLiteral("desktop.anything.probe_unsupported","Measurement unavailable.")})resultHeight=std::max(resultHeight,ImGui::CalcTextSize(Neurotic::Translate(text).c_str(),nullptr,false,resultWidth).y);
+   if((hdrMeasurement||unknownMeasurementColor)&&(measurementPhase.empty()||measurementPhase=="disabled"||measurementPhase=="unsupported"))ImGui::Dummy({0,resultHeight});
+   else ImGui::TextWrapped("%s",Neurotic::Translate(resultText).c_str());
+   ImGui::SetCursorPosY(resultTop+resultHeight+ImGui::GetStyle().ItemSpacing.y);
    const auto reason=measurement.value("reason",std::string{});
    if(!reason.empty()){
     const char* caption=reason.c_str();

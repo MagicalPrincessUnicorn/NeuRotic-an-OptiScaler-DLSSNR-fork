@@ -1,0 +1,11 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+--- a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
++++ b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+@@ -19,6 +19,7 @@
+ bool NativeInvocationMatches(const NativeInvocationSnapshot& s,const Orchestration::MaterializationRecord& m)noexcept
+ {
+     const auto& recipe=s.product.recipe;const auto& profile=s.product.profileCertificate;
++    if(recipe.evaluation!=m.preparation.bindingPlan.evaluation)return false;
+     const auto& dependencies=s.product.dependencies;const auto& stable=m.preparation.dependencies;
+     if(!s.Sample()||s.Sample()->Check()!=C::Error::None||s.Delivery()!=m.delivery.kind||
+        m.delivery.Check()!=C::Error::None||m.initialSample.Check()!=C::Error::None||

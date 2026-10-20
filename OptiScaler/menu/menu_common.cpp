@@ -1,8 +1,12 @@
 #include "pch.h"
+#include <menu/ItemHelp.h>
+#include "Logger.h"
 #include <menu/Localization.h>
 #include "localization/LanguageRuntime.h"
 #include "input/HotkeyChord.h"
 #include <dlssnr/NrStatusPanel.h>
+#include <dlssnr/NrAdvancedMenu.h>
+#include <ConfigFgRoutePersistence.h>
 #include "SleekPilotLight.h"
 #include "MenuHeightControl.h"
 #include "MenuLayoutControls.h"
@@ -15,6 +19,7 @@ static Neurotic::MenuLayout::ContextOwner menuContextOwner;
 #include <mfg/ExperimentalMfgRuntime.h>
 #include "ExperimentalMfgControls.h"
 #include "menu_common.h"
+#include "FrameCadence.h"
 #include "SleekTheme.h"
 #include "SleekWater.h"
 #include "Localization.h"
@@ -78,6 +83,21 @@ static Neurotic::MenuLayout::ContextOwner menuContextOwner;
 #define MARK_ALL_BACKENDS_CHANGED()                                                                                    \
     for (auto& singleChangeBackend : State::Instance().changeBackend)                                                  \
         singleChangeBackend.second = true;
+
+static std::string NativeMfgReasonText(Neurotic::Mfg::MfgRuntimeReason reason)
+{
+    using Neurotic::Mfg::MfgRuntimeReason;
+    switch (reason)
+    {
+    case MfgRuntimeReason::WrapperRoleUnobserved:
+        return Neurotic::Translate(Neurotic::UiLiteral("ingame.mfg-runtime-reason.waiting_for_dlss_g_callback_b0d7f0d4", "waiting for DLSS-G callback"));
+    case MfgRuntimeReason::WrapperTargetAmbiguous:
+        return Neurotic::Translate(Neurotic::UiLiteral("ingame.mfg-runtime-reason.dlss_g_callback_targets_differ_481c6cfb", "DLSS-G callback targets differ"));
+    case MfgRuntimeReason::WrapperTrackingUnavailable:
+        return Neurotic::Translate(Neurotic::UiLiteral("ingame.mfg-runtime-reason.dlss_g_callback_tracking_unavailable_5cfd729e", "DLSS-G callback tracking unavailable"));
+    default: return Neurotic::Translate(Neurotic::Mfg::MfgRuntimeReasonName(reason));
+    }
+}
 
 static float fontSize = 16.0f;
 static bool reduceMenuMotion = false;
@@ -260,6 +280,11 @@ template <typename T, size_t N> struct RingBuffer
 const int plotWidth = 360;
 static RingBuffer<float, plotWidth> gFrameTimes;
 static RingBuffer<float, plotWidth> gUpscalerTimes;
+static float FramePlotValue(void* data, int index)
+{
+    const auto& game = *static_cast<Neurotic::FrameCadence::Snapshot*>(data);
+    return game.owner ? game.At(index) : gFrameTimes.At(index);
+}
 
 static bool HasUpscalerGpuTiming(const State& state)
 {
@@ -981,6 +1006,8 @@ template <HasDefaultValue B> void MenuCommon::AddDLSSDRenderPreset(const char* n
     }
 }
 
+static thread_local bool advancedCompactControls=false;
+static void AdvancedSameLine(float offset=0,float spacing=-1){if(!advancedCompactControls)ImGui::SameLine(offset,spacing);}
 template <typename TStorage, typename T>
 void MenuCommon::PopulateCombo(const char* name, TStorage& currentValue,
                                const std::vector<MenuOption<T>>& options)
@@ -1006,7 +1033,13 @@ void MenuCommon::PopulateCombo(const char* name, TStorage& currentValue,
         }
     }
 
-    if (ImGui::BeginCombo(name, preview.c_str()))
+    if(advancedCompactControls){
+        const auto translated=Neurotic::Translate(name);
+        const std::string caption(translated.c_str(),ImGui::FindRenderedTextEnd(translated.c_str()));
+        if(!caption.empty())ImGui::TextWrapped("%s",caption.c_str());
+        ImGui::PushID(name);ImGui::SetNextItemWidth(-FLT_MIN);
+    }
+    if (ImGui::BeginCombo(advancedCompactControls?"##SharedChoice":name, preview.c_str()))
     {
         for (const auto& opt : options)
         {
@@ -1030,6 +1063,7 @@ void MenuCommon::PopulateCombo(const char* name, TStorage& currentValue,
         }
         ImGui::EndCombo();
     }
+    if(advancedCompactControls)ImGui::PopID();
 }
 
 static ImVec4 toneMapColor(const ImVec4& color)
@@ -1218,6 +1252,8 @@ struct MenuCommon::RenderMenuContext
     int neuralPage = 0;
     int childPage = 0;
     int requestedNeuralPage = -1;
+    Neurotic::FrameCadence::Snapshot gameTiming;
+    double callbackFrameTime = 0.0;
     bool frameTimesCalculated = false;
     bool newFrame = false;
 
@@ -1265,6 +1301,7 @@ void MenuCommon::UpdateRenderTiming(RenderMenuContext& ctx)
 
     state.frameTimes.pop_front();
     state.frameTimes.push_back(frameTime);
+    ctx.gameTiming = Neurotic::FrameCadence::GameFrames().Read(Neurotic::FrameCadence::outputOwner, now);
 }
 
 void MenuCommon::UpdateMenuInputMode(RenderMenuContext& ctx)
@@ -1503,7 +1540,7 @@ void MenuCommon::BeginMenuFrameIfNeeded(RenderMenuContext& ctx)
                                (State::Instance().api==API::Vulkan || DlssNr::ExposureScan::Where() != DlssNr::ExposureScan::Verdict::Off);
 
     if ((!config->DisableSplash.value_or_default() && now > splashStart && now < splashLimit) ||
-        config->ShowFps.value_or_default() || _isVisible || ImGui::notifications.size() > 0 || scanIndicator ||
+        config->ShowFps.value_or_default() || _isVisible || ImGui::HasNotifications() || scanIndicator ||
         (config->CharacterInspectorEnabled.value_or_default() && Neurotic::Semantic::Character::CharacterWorkerRequested()) ||
         (config->DlssNrCompare.value_or_default() != 0 && config->DlssNrCompareTags.value_or_default()))
     {
@@ -1613,6 +1650,10 @@ void MenuCommon::RenderSplashWindow(RenderMenuContext& ctx)
 
 void MenuCommon::RenderNotifications(RenderMenuContext& ctx)
 {
+    // Guard font/style work as well as the notification renderer itself.
+    if (!ctx.newFrame)
+        return;
+
     auto config = ctx.config;
     auto& io = ctx.io;
 
@@ -1673,8 +1714,8 @@ void MenuCommon::UpdateFrameTimeAverages(RenderMenuContext& ctx)
             }
         }
 
-        frameTime /= frameCnt;
-        frameRate = 1000.0 / frameTime;
+        frameTime = frameCnt ? frameTime / frameCnt : 0;
+        frameRate = frameTime > 0 ? 1000.0 / frameTime : 0;
         frameTimesCalculated = true;
 
         float lastFT = static_cast<float>(state.frameTimes.empty() ? 0.0f : state.frameTimes.back());
@@ -1682,8 +1723,22 @@ void MenuCommon::UpdateFrameTimeAverages(RenderMenuContext& ctx)
         gFrameTimes.Push(lastFT);
         if (HasUpscalerGpuTiming(state)) gUpscalerTimes.Push(lastUT);
 
-        averageFrameTime = gFrameTimes.Average();
+        ctx.callbackFrameTime = frameTime;
+        if (ctx.gameTiming.owner)
+        {
+            frameTime = ctx.gameTiming.Average(100);
+            frameRate = frameTime > 0 ? 1000.0 / frameTime : 0;
+        }
+        averageFrameTime = static_cast<float>(ctx.gameTiming.owner ? ctx.gameTiming.Average() : frameTime);
         averageUpscalerFT = gUpscalerTimes.Average();
+        static double lastCadenceReport = 0;
+        if (ctx.now - lastCadenceReport >= 5000.0)
+        {
+            lastCadenceReport = ctx.now;
+            LOG_INFO("Frame cadence: source={} gameSamples={} gameAvgMs={:.3f} callbackAvgMs={:.3f} callbackLatestMs={:.3f} displayTiming=unavailable",
+                ctx.gameTiming.owner ? "application-Present" : "output-callback",
+                ctx.gameTiming.count, ctx.gameTiming.Average(100), ctx.callbackFrameTime, lastFT);
+        }
     }
 }
 
@@ -1941,42 +1996,15 @@ void MenuCommon::RenderPerformanceOverlay(RenderMenuContext& ctx)
                                      currentFeature->Version().minor, currentFeature->Version().patch,Neurotic::Translate(usesDx12CompatLayer ? " w/Dx12" : "").c_str());
             }
 
-            if (fg != nullptr && fg->IsActive() && !fg->IsPaused())
-            {
-                const double baseFps = frameRate / (double) (fg->GetInterpolatedFrameCount() + 1);
-
-                switch (overlayType)
-                {
-                case FpsOverlay_JustFPS:
-                    fpsPart = StrFmt("%6.1f/%5.1f ", frameRate, baseFps);
-                    break;
-
-                case FpsOverlay_Simple:
-                    fpsPart = StrFmt("FPS: %6.1f/%5.1f, %7.2f ms", frameRate, baseFps, frameTime);
-                    break;
-
-                default:
-                    fpsPart = StrFmt("FPS: %6.1f/%5.1f, Avg: %6.1f", frameRate, baseFps, 1000.0f / averageFrameTime);
-                    break;
-                }
-            }
-            else
-            {
-                switch (overlayType)
-                {
-                case FpsOverlay_JustFPS:
-                    fpsPart = StrFmt("%6.1f ", frameRate);
-                    break;
-
-                case FpsOverlay_Simple:
-                    fpsPart = StrFmt("FPS: %6.1f, %7.2f ms", frameRate, frameTime);
-                    break;
-
-                default:
-                    fpsPart = StrFmt("FPS: %6.1f, Avg: %6.1f", frameRate, 1000.0f / averageFrameTime);
-                    break;
-                }
-            }
+            // Both rates name their measurement domain. Never divide callback
+            // counts by a configured FG multiplier to invent a base rate.
+            const char* rateFormat = ctx.gameTiming.owner
+                ? Neurotic::UiLiteral("ingame.timing.game_fps", "Game FPS: %6.1f")
+                : Neurotic::UiLiteral("ingame.timing.callback_fps", "Callback FPS: %6.1f");
+            fpsPart = ctx.gameTiming.owner && !ctx.gameTiming.count
+                ? Neurotic::UiLiteral("ingame.timing.game_waiting", "Game FPS: waiting") : StrFmt(rateFormat, frameRate);
+            if (overlayType == FpsOverlay_Simple && (!ctx.gameTiming.owner || ctx.gameTiming.count))
+                fpsPart += StrFmt(" | %7.2f ms", frameTime);
 
             if (overlayType == FpsOverlay_JustFPS)
                 firstLine = StrFmt("%s",Neurotic::Translate(fpsPart.c_str()).c_str());
@@ -1997,7 +2025,10 @@ void MenuCommon::RenderPerformanceOverlay(RenderMenuContext& ctx)
                     ImGui::Spacing();
                 }
 
-                secondLine = StrFmt(Neurotic::UiLiteral("ingame.menu-common.frame_time_7_2f_ms_avg_7_2f_ms_155ac9bd", "Frame Time: %7.2f ms, Avg: %7.2f ms"), state.frameTimes.back(), averageFrameTime);
+                secondLine = ctx.gameTiming.owner && !ctx.gameTiming.count
+                    ? StrFmt(Neurotic::UiLiteral("ingame.timing.waiting_callback_ms", "Game: waiting | Callback: %6.2f ms"), state.frameTimes.back())
+                    : ctx.gameTiming.owner ? StrFmt(Neurotic::UiLiteral("ingame.timing.game_callback_ms", "Game: %6.2f ms | Callback: %6.2f ms"), ctx.gameTiming.Latest(), state.frameTimes.back())
+                    : StrFmt(Neurotic::UiLiteral("ingame.timing.callback_average_ms", "Callback: %6.2f ms | Avg: %6.2f ms"), state.frameTimes.back(), averageFrameTime);
             }
 
             // Prepare Line 3
@@ -2059,8 +2090,8 @@ void MenuCommon::RenderPerformanceOverlay(RenderMenuContext& ctx)
                 // Graph of frame times
                 ImGui::PlotLines(
                     "##FrameTimeGraph",
-                    [](void* rb, int idx) -> float { return static_cast<RingBuffer<float, plotWidth>*>(rb)->At(idx); },
-                    &gFrameTimes, plotWidth, 0, nullptr, 0.0f, 66.6f, plotSize);
+                    FramePlotValue, &ctx.gameTiming, ctx.gameTiming.owner ? static_cast<int>(ctx.gameTiming.count) : plotWidth,
+                    0, nullptr, 0.0f, FLT_MAX, plotSize);
             }
 
             if (config->FpsOverlayType.value_or_default() >= FpsOverlay_Full)
@@ -2264,8 +2295,6 @@ void MenuCommon::RenderMainMenuHeaderMessages(RenderMenuContext& ctx)
 {
     auto config = ctx.config;
     auto& menuResScale = ctx.menuResScale;
-    auto& versionStatus = ctx.versionStatus;
-    auto& currentVersionText = ctx.currentVersionText;
 
     if (!_showMipmapCalcWindow && !_showHudlessWindow && !ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow))
         ImGui::SetWindowFocus();
@@ -2277,35 +2306,6 @@ void MenuCommon::RenderMainMenuHeaderMessages(RenderMenuContext& ctx)
     else
     {
         _selectedScale = 0;
-    }
-
-    if (versionStatus.completed)
-    {
-        if (versionStatus.updateAvailable && !versionStatus.latestTag.empty())
-        {
-            ImGui::Spacing();
-            ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.8f, 0.f, 1.f)), Neurotic::UiLiteral("ingame.menu-common.update_available_s_current_s_935af44f", "Update available: %s (current %s)"),Neurotic::Translate(versionStatus.latestTag.c_str()).c_str(),Neurotic::Translate(currentVersionText.c_str()).c_str());
-
-            if (!versionStatus.latestUrl.empty())
-            {
-                ImGui::SameLine();
-                ImGui::TextLinkOpenURL(Neurotic::UiLiteral("ingame.menu-common.open_release_page_89121111", "Open release page"), versionStatus.latestUrl.c_str());
-            }
-
-            ImGui::Spacing();
-        }
-        else if (!versionStatus.error.empty())
-        {
-            LOG_ERROR("Version check failed: {0}", versionStatus.error);
-            versionStatus.error.clear();
-        }
-        // Disabled error message
-        // else if (!versionStatus.error.empty())
-        //{
-        //    ImGui::Spacing();
-        //    ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.4f, 0.f, 1.f)), "%s", versionStatus.error.c_str());
-        //    ImGui::Spacing();
-        //}
     }
 
 }
@@ -2399,16 +2399,16 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
         switch (state.api)
         {
         case DX11:
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.device_s_6ed0e8fb", "Device: %s"),Neurotic::Translate(primaryGpu.name.c_str()).c_str());
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.device_s_6ed0e8fb", "Device: %s"),Neurotic::Translate(primaryGpu.name.c_str()).c_str());
 
-            ImGui::Text("D3D11 %s| %s %d.%d.%d%s",Neurotic::Translate(primaryGpu.usesDxvk ? Neurotic::UiLiteral("ingame.menu-common.dxvk_fc0fbf36", "(DXVK) ") : "").c_str(),Neurotic::Translate(currentFeature->ShortName().c_str()).c_str(), currentFeature->Version().major,
+            ImGui::TextWrapped("D3D11 %s| %s %d.%d.%d%s",Neurotic::Translate(primaryGpu.usesDxvk ? Neurotic::UiLiteral("ingame.menu-common.dxvk_fc0fbf36", "(DXVK) ") : "").c_str(),Neurotic::Translate(currentFeature->ShortName().c_str()).c_str(), currentFeature->Version().major,
                         currentFeature->Version().minor, currentFeature->Version().patch,Neurotic::Translate(usesDx12CompatLayer ? " w/Dx12" : "").c_str());
-            ImGui::SameLine(0.0f, 6.0f);
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.input_s_e9536956", "| Input: %s"),Neurotic::Translate(ApiUpscalerInputName(state.currentInputApiName).c_str()).c_str());
+            AdvancedSameLine(0.0f, 6.0f);
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.input_s_e9536956", "| Input: %s"),Neurotic::Translate(ApiUpscalerInputName(state.currentInputApiName).c_str()).c_str());
 
-            ImGui::SameLine(0.0f, 6.0f);
+            AdvancedSameLine(0.0f, 6.0f);
             spoofingText = config->DxgiSpoofing.value_or_default() ? Neurotic::UiLiteral("ingame.menu-common.on_d2f9df8a", "On") : Neurotic::UiLiteral("ingame.objectruleeditor.off_dc516be5", "Off");
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.spoof_s_1a437f0b", "| Spoof: %s"),Neurotic::Translate(spoofingText.c_str()).c_str());
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.spoof_s_1a437f0b", "| Spoof: %s"),Neurotic::Translate(spoofingText.c_str()).c_str());
 
             if (!usesDlssd)
                 AddDx11Backends(currentBackend);
@@ -2416,16 +2416,16 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
             break;
 
         case DX12:
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.device_s_6ed0e8fb", "Device: %s"),Neurotic::Translate(primaryGpu.name.c_str()).c_str());
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.device_s_6ed0e8fb", "Device: %s"),Neurotic::Translate(primaryGpu.name.c_str()).c_str());
 
-            ImGui::Text("D3D12 %s| %s %d.%d.%d",Neurotic::Translate(primaryGpu.usesDxvk ? Neurotic::UiLiteral("ingame.menu-common.dxvk_fc0fbf36", "(DXVK) ") : "").c_str(),Neurotic::Translate(currentFeature->ShortName().c_str()).c_str(), currentFeature->Version().major,
+            ImGui::TextWrapped("D3D12 %s| %s %d.%d.%d",Neurotic::Translate(primaryGpu.usesDxvk ? Neurotic::UiLiteral("ingame.menu-common.dxvk_fc0fbf36", "(DXVK) ") : "").c_str(),Neurotic::Translate(currentFeature->ShortName().c_str()).c_str(), currentFeature->Version().major,
                         currentFeature->Version().minor, currentFeature->Version().patch);
-            ImGui::SameLine(0.0f, 6.0f);
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.input_s_e9536956", "| Input: %s"),Neurotic::Translate(ApiUpscalerInputName(state.currentInputApiName).c_str()).c_str());
+            AdvancedSameLine(0.0f, 6.0f);
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.input_s_e9536956", "| Input: %s"),Neurotic::Translate(ApiUpscalerInputName(state.currentInputApiName).c_str()).c_str());
 
-            ImGui::SameLine(0.0f, 6.0f);
+            AdvancedSameLine(0.0f, 6.0f);
             spoofingText = config->DxgiSpoofing.value_or_default() ? Neurotic::UiLiteral("ingame.menu-common.on_d2f9df8a", "On") : Neurotic::UiLiteral("ingame.objectruleeditor.off_dc516be5", "Off");
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.spoof_s_1a437f0b", "| Spoof: %s"),Neurotic::Translate(spoofingText.c_str()).c_str());
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.spoof_s_1a437f0b", "| Spoof: %s"),Neurotic::Translate(spoofingText.c_str()).c_str());
 
             if (!usesDlssd)
                 AddDx12Backends(currentBackend);
@@ -2433,12 +2433,12 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
             break;
 
         default:
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.device_s_6ed0e8fb", "Device: %s"),Neurotic::Translate(primaryGpu.name.c_str()).c_str());
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.device_s_6ed0e8fb", "Device: %s"),Neurotic::Translate(primaryGpu.name.c_str()).c_str());
 
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.vulkan_s_s_d_d_d_s_de11c178", "Vulkan %s| %s %d.%d.%d%s"),Neurotic::Translate(primaryGpu.usesDxvk ? Neurotic::UiLiteral("ingame.menu-common.dxvk_fc0fbf36", "(DXVK) ") : "").c_str(),Neurotic::Translate(currentFeature->ShortName().c_str()).c_str(), currentFeature->Version().major,
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.vulkan_s_s_d_d_d_s_de11c178", "Vulkan %s| %s %d.%d.%d%s"),Neurotic::Translate(primaryGpu.usesDxvk ? Neurotic::UiLiteral("ingame.menu-common.dxvk_fc0fbf36", "(DXVK) ") : "").c_str(),Neurotic::Translate(currentFeature->ShortName().c_str()).c_str(), currentFeature->Version().major,
                         currentFeature->Version().minor, currentFeature->Version().patch,Neurotic::Translate(usesDx12CompatLayer ? " w/Dx12" : "").c_str());
-            ImGui::SameLine(0.0f, 6.0f);
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.input_s_e9536956", "| Input: %s"),Neurotic::Translate(ApiUpscalerInputName(state.currentInputApiName).c_str()).c_str());
+            AdvancedSameLine(0.0f, 6.0f);
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.input_s_e9536956", "| Input: %s"),Neurotic::Translate(ApiUpscalerInputName(state.currentInputApiName).c_str()).c_str());
 
             auto vlkSpoof = config->VulkanSpoofing.value_or_default();
             auto vlkExtSpoof = config->VulkanExtensionSpoofing.value_or_default();
@@ -2452,8 +2452,8 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
             else
                 spoofingText = Neurotic::UiLiteral("ingame.objectruleeditor.off_dc516be5", "Off");
 
-            ImGui::SameLine(0.0f, 6.0f);
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.spoof_s_1a437f0b", "| Spoof: %s"),Neurotic::Translate(spoofingText.c_str()).c_str());
+            AdvancedSameLine(0.0f, 6.0f);
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.spoof_s_1a437f0b", "| Spoof: %s"),Neurotic::Translate(spoofingText.c_str()).c_str());
 
             if (!usesDlssd)
                 AddVulkanBackends(currentBackend);
@@ -2463,7 +2463,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
 
         if (!usesDlssd)
         {
-            ImGui::SameLine(0.0f, 6.0f);
+            AdvancedSameLine(0.0f, 6.0f);
 
             if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.change_upscaler_fa9a7441", "Change Upscaler##2")) && state.newBackend != Upscaler::Reset &&
                 state.newBackend != currentBackend)
@@ -2575,7 +2575,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 if (bool dbg = state.xessDebug; ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.dump_shift_del_83d7eb41", "Dump (Shift+Del)"), &dbg))
                     state.xessDebug = dbg;
 
-                ImGui::SameLine(0.0f, 6.0f);
+                AdvancedSameLine(0.0f, 6.0f);
                 int dbgCount = state.xessDebugFrames;
 
                 ImGui::PushItemWidth(95.0f * menuResScale);
@@ -2626,7 +2626,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
 
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.list_of_upscalers_reported_by_ffx_sdk_7a39e57f", "List of upscalers reported by FFX SDK"));
 
-                ImGui::SameLine(0.0f, 6.0f);
+                AdvancedSameLine(0.0f, 6.0f);
 
                 if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.change_upscaler_fa9a7441", "Change Upscaler")) && _ffxUpscalerIndex >= 0 &&
                     static_cast<size_t>(_ffxUpscalerIndex) < state.ffxUpscalerVersionIds.size() &&
@@ -2712,7 +2712,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                                    "Preset 5 is meant for Ultra Performance"));
 
                     // Display the active preset right next to the combo box instead of using a table
-                    ImGui::SameLine();
+                    AdvancedSameLine();
                     if (state.currentFsr4Preset.has_value())
                         ImGui::TextDisabled(Neurotic::UiLiteral("ingame.menu-common.active_d_3dbc0593", "(Active: %d)"), state.currentFsr4Preset.value());
                     else if (FSR4ModelSelection::IsInt8FsrHooked())
@@ -2756,7 +2756,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
 
                     if (majorFsrVersion > 3)
                     {
-                        ImGui::SameLine(0.0f, 20.0f * menuResScale);
+                        AdvancedSameLine(0.0f, 20.0f * menuResScale);
                         bool fsr4wm = config->Fsr4EnableWatermark.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.watermark_712d9e67", "Watermark"), &fsr4wm))
                         {
@@ -2776,9 +2776,9 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
 
                     if (currentFeature != nullptr)
                     {
-                        ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.fsr_3_1_presets_837b6af7", "FSR 3.1 Presets:"));
+                        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.fsr_3_1_presets_837b6af7", "FSR 3.1 Presets:"));
 
-                        ImGui::SameLine(0.0f, 6.0f);
+                        AdvancedSameLine(0.0f, 6.0f);
 
                         // This will be applied by default
                         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.stability_048bc449", "Stability")))
@@ -2800,7 +2800,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                             config->FsrMinDisOccAcc.set_volatile_value(scaleRatio / 20.0f);
                         }
 
-                        ImGui::SameLine(0.0f, 6.0f);
+                        AdvancedSameLine(0.0f, 6.0f);
 
                         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.motion_6cf3bc87", "Motion")))
                         {
@@ -2821,7 +2821,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                             config->FsrMinDisOccAcc.set_volatile_value(scaleRatio / 20.0f);
                         }
 
-                        ImGui::SameLine(0.0f, 6.0f);
+                        AdvancedSameLine(0.0f, 6.0f);
 
                         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.default_92fe477b", "Default")))
                         {
@@ -2919,7 +2919,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.8f, 0.f, 1.f)), Neurotic::UiLiteral("ingame.menu-common.external_preset_override_observed_effective_mode_4e9edf9f", "External preset override observed; effective model is not confirmed"));
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.this_usually_happens_due_to_using_tools_such_as__996244b2", "This usually happens due to using tools\n"
                                "such as Nvidia App or Nvidia Inspector"));
-                // ImGui::Text("Selecting setting below will disable that external override\n"
+                // ImGui::TextWrapped("Selecting setting below will disable that external override\n"
                 //             "but you need to Save Settings and restart the game");
 
                 ImGui::Spacing();
@@ -2939,9 +2939,9 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 auto currentPresetIndex = GetPresetIndex(currentFeature, true);
 
                 if (currentPresetIndex == 0)
-                    ImGui::Text("Current Preset: Default");
+                    ImGui::TextWrapped("Current Preset: Default");
                 else
-                    ImGui::Text("Current Preset: %c", 64 + currentPresetIndex);
+                    ImGui::TextWrapped("Current Preset: %c", 64 + currentPresetIndex);
                 */
 
                 ImGui::BeginDisabled(!config->DLSSDRenderPresetOverride.value_or_default() /*|| overridden*/);
@@ -2966,9 +2966,9 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 auto currentPresetIndex = GetPresetIndex(currentFeature, false);
 
                 if (currentPresetIndex == 0)
-                    ImGui::Text("Current Preset: Default");
+                    ImGui::TextWrapped("Current Preset: Default");
                 else
-                    ImGui::Text("Current Preset: %c", 64 + currentPresetIndex);
+                    ImGui::TextWrapped("Current Preset: %c", 64 + currentPresetIndex);
                 */
 
                 ImGui::BeginDisabled(!config->RenderPresetOverride.value_or_default() /*|| overridden*/);
@@ -2981,7 +2981,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 ImGui::EndDisabled();
             }
 
-            ImGui::SameLine(0.0f, 6.0f);
+            AdvancedSameLine(0.0f, 6.0f);
 
             if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.apply_changes_287d89d1", "Apply Changes")))
             {
@@ -3223,9 +3223,9 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
     // TODO: Automatically switch to any other option
 
 
-    const bool nativeSupported = state.swapchainApi == API::DX12 &&
-        primaryGpu.nvidiaArchInfo.architecture_id >= NV_GPU_ARCHITECTURE_AD100 &&
-        primaryGpu.nvidiaArchInfo.architecture_id < NV_GPU_ARCHITECTURE_GB200;
+    LUID nativeAdapter {};
+    const auto nativeAdapterSupport = StreamlineHooks::nativeMfgAdapter(nativeAdapter);
+    const bool nativeSupported = state.swapchainApi == API::DX12 && nativeAdapterSupport.value_or(true);
     bool nativeEnabled = config->FGDLSSGNativeMfgExperimental.value_or_default();
     bool nativeSelected = nativeSupported && nativeEnabled;
     if (ctx.childPage == 0)
@@ -3334,7 +3334,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
                 else if (selected > 1)
                 {
                     const auto publication = Neurotic::Mfg::AdaMfgSnapshot();
-                    ImGui::TextDisabled(Neurotic::UiLiteral("ingame.menu-common.mfg_s_cae71a08", "MFG: %s"),Neurotic::Translate(Neurotic::Mfg::MfgRuntimeReasonName(publication.reason)).c_str());
+                    ImGui::TextDisabled(Neurotic::UiLiteral("ingame.menu-common.mfg_s_cae71a08", "MFG: %s"),NativeMfgReasonText(publication.reason).c_str());
                     if (publication.status == Neurotic::Mfg::MfgRuntimeStatus::Published)
                         ImGui::TextDisabled(Neurotic::UiLiteral("ingame.menu-common.mfg_unlock_applied_displayed_frames_unverified_6b6f129d", "MFG unlock applied; displayed frames unverified."));
                     else if (publication.status == Neurotic::Mfg::MfgRuntimeStatus::Indeterminate)
@@ -3380,7 +3380,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
             StreamlineHooks::updateDlssgOptions();
         }
 
-        ImGui::SameLine(0.0f, 16.0f);
+        AdvancedSameLine(0.0f, 16.0f);
 
         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_target_ecdec9b0", "Reset Target")))
         {
@@ -3398,7 +3398,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
     Neurotic::Sleek::DrawMfgRestartWarning(false);
     bool rtx30 = config->FGDLSSGExperimentalUnlockRTX30.value_or_default();
     bool rtx20 = config->FGDLSSGExperimentalUnlockRTX20.value_or_default();
-    const auto compatibilityChanged = Neurotic::Sleek::ExperimentalMfgControls(nativeEnabled, rtx30, rtx20, menuResScale);
+    const auto compatibilityChanged = Neurotic::Sleek::ExperimentalMfgControls(nativeEnabled, rtx30, rtx20, menuResScale,advancedCompactControls);
     const bool nativeChanged = (compatibilityChanged & 1u) != 0;
     if (compatibilityChanged & 2u) config->FGDLSSGExperimentalUnlockRTX30 = rtx30;
     if (compatibilityChanged & 4u) config->FGDLSSGExperimentalUnlockRTX20 = rtx20;
@@ -3442,7 +3442,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
     case Neurotic::Mfg::MfgSetupStatus::Restart: nativeStatus = Neurotic::UiMessage("ingame.menu-common.save_settings_and_restart_to_apply_the_native_fg_cecd4eb1", "Save settings and restart to apply the native FG route."); break;
     case Neurotic::Mfg::MfgSetupStatus::Waiting:
     case Neurotic::Mfg::MfgSetupStatus::Blocked:
-        nativeStatus = DlssNr::StatusPanel::Format(Neurotic::UiLiteral("ingame.menu-common.native_mfg_s_40d16c72", "Native MFG: %s"),Neurotic::Translate(Neurotic::Mfg::MfgRuntimeReasonName(nativePublication.reason)).c_str()); break;
+        nativeStatus = DlssNr::StatusPanel::Format(Neurotic::UiLiteral("ingame.menu-common.native_mfg_s_40d16c72", "Native MFG: %s"),NativeMfgReasonText(nativePublication.reason).c_str()); break;
     case Neurotic::Mfg::MfgSetupStatus::Ready: nativeStatus = Neurotic::UiMessage("ingame.menu-common.unlock_applied_enable_fg_in_the_game_higher_rati_a5d42585", "Unlock applied; enable FG in the game. Higher ratios require runtime acceptance."); break;
     default: nativeStatus = nativePublication.status == Neurotic::Mfg::MfgRuntimeStatus::Published ?
         Neurotic::UiLiteral("ingame.menu-common.manual_overrides_off_native_unlock_remains_until_a0358bc1", "Manual overrides off; native unlock remains until exit.") : Neurotic::UiLiteral("ingame.menu-common.native_mfg_is_off_8d48fc2d", "Native MFG is off."); break;
@@ -3474,7 +3474,10 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
     // Four meaningful fixed slots preserve control positions without reserving
     // empty effective/notice/observation rows. Overflow keeps full hover details.
     if (*notice) qualification = std::string(notice) + " " + qualification;
-    DlssNr::StatusPanel::Line("##MfgQualification", qualification,
+    if(advancedCompactControls){
+        ImGui::BeginChild("##MfgQualificationWrapped",{0,ImGui::GetFontSize()*4});
+        ImGui::TextWrapped("%s",qualification.c_str());ImGui::EndChild();
+    }else DlssNr::StatusPanel::Line("##MfgQualification", qualification,
         *notice ? toneMapColor(ImVec4(1,.72f,.25f,1)) : ink);
 
     }
@@ -3483,12 +3486,13 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
     {
 
         ImGui::BeginDisabled(nativeSelected);
-        if (ImGui::BeginTable("fgSelection", 2, ImGuiTableFlags_SizingStretchSame))
+        if (ImGui::BeginTable("fgSelection", advancedCompactControls?1:2, ImGuiTableFlags_SizingStretchSame))
         {
             ImGui::TableNextColumn();
 
             const auto previousInput = config->FGInput.value_or_default();
-            PopulateCombo(Neurotic::UiLiteral("ingame.menu-common.fg_input_029fc693", "FG Input"), config->FGInput, inputOptions);
+            if(Neurotic::Sleek::flatContentCards)Neurotic::Sleek::ControlLabel("Input integration");
+            PopulateCombo(Neurotic::Sleek::flatContentCards?"##AdvancedFgInput":Neurotic::UiLiteral("ingame.menu-common.fg_input_029fc693", "FG Input"), config->FGInput, inputOptions);
             if (previousInput != config->FGInput.value_or_default() && config->FGInput.value_or_default() == FGInput::NvngxFG)
                 config->FGOutput = FGOutput::NoFG;
             ShowTooltip(Neurotic::UiLiteral("ingame.menu-common.the_data_source_to_be_used_for_fg_the_native_fg__c22f6e4b", "The data source to be used for FG\n"
@@ -3499,12 +3503,14 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
             if (replaceFgOutputWithNvngx)
             {
                 // Disable None?
-                PopulateCombo(Neurotic::UiLiteral("ingame.menu-common.fg_nvngx_fae9a007", "FG Nvngx"), config->FGNvngxReplacement, nvngxOptions);
+                if(Neurotic::Sleek::flatContentCards)Neurotic::Sleek::ControlLabel("Output provider");
+                PopulateCombo(Neurotic::Sleek::flatContentCards?"##AdvancedFgNvngx":Neurotic::UiLiteral("ingame.menu-common.fg_nvngx_fae9a007", "FG Nvngx"), config->FGNvngxReplacement, nvngxOptions);
                 ShowTooltip(Neurotic::UiLiteral("ingame.menu-common.what_backend_to_use_instead_of_the_real_dlssg_62512954", "What backend to use instead of the real DLSSG"));
             }
             else
             {
-                PopulateCombo(Neurotic::UiLiteral("ingame.menu-common.fg_output_b24f5825", "FG Output"), config->FGOutput, outputOptions);
+                if(Neurotic::Sleek::flatContentCards)Neurotic::Sleek::ControlLabel("Output provider");
+                PopulateCombo(Neurotic::Sleek::flatContentCards?"##AdvancedFgOutput":Neurotic::UiLiteral("ingame.menu-common.fg_output_b24f5825", "FG Output"), config->FGOutput, outputOptions);
                 ShowTooltip(Neurotic::UiLiteral("ingame.menu-common.the_fg_that_you_will_actually_be_using_9b4848b3", "The FG that you will actually be using"));
             }
 
@@ -3565,7 +3571,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
             ImGui::EndDisabled();
 
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             ImGui::BeginDisabled(!isUsingUIAny || !config->FGDrawUIOverFG.value_or_default());
 
@@ -3617,7 +3623,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
                         ImGui::EndDisabled();
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         bool disableHudless = config->FGDisableHudless.value_or_default();
                         ImGui::BeginDisabled(!isUsingHudlessAny && !disableHudless);
@@ -3638,7 +3644,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
                         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.will_use_more_vram_but_uniscaler_needs_this_mayb_576c6267", "Will use more VRAM, but Uniscaler needs this\n"
                                        "Maybe some other games might need too"));
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         bool velocityValidNow = config->FGVelocityValidNow.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.velocity_as_validnow_275cf9a6", "Velocity as ValidNow"), &velocityValidNow))
@@ -3653,7 +3659,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
                         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.will_use_more_vram_but_some_games_might_need_thi_8c0b4d83", "Will use more VRAM, but some games might need this"));
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         bool firstHudless = config->FGOnlyAcceptFirstHudless.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.accept_first_hudless_37071169", "Accept First HUDless"), &firstHudless))
@@ -3684,7 +3690,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
                         ImGui::PopItemWidth();
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         const char* ftSources[] = { Neurotic::UiLiteral("ingame.menu-common.input_f238798e", "Input"), Neurotic::UiLiteral("ingame.option.c2854dc2b604", "Opti"), Neurotic::UiLiteral("ingame.option.973d0c649aa9", "Zero") };
                         const char* ftSourceInfos[] = { Neurotic::UiLiteral("ingame.menu-common.uses_frametimes_provided_by_dlssg_or_fsr_fg_9319aa2f", "Uses frametimes provided by\nDLSSG or FSR-FG "),
@@ -3776,7 +3782,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.list_of_fgs_reported_by_ffx_sdk_677919aa", "List of FGs reported by FFX SDK"));
 
-                ImGui::SameLine(0.0f, 6.0f);
+                AdvancedSameLine(0.0f, 6.0f);
 
                 if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.change_fg_2677b6d7", "Change FG")) && _ffxFGIndex != config->FfxFGIndex.value_or_default())
                 {
@@ -3811,7 +3817,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             }
             ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.enable_async_for_better_fg_performance_might_cau_fb93cab1", "Enable Async for better FG performance\nMight cause crashes, especially with HUD Fix!"));
 
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             bool fgDV = config->FGDebugView.value_or_default();
             if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.debug_view_7682ecca", "Debug View##2"), &fgDV))
@@ -3833,7 +3839,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                            "Bottom middle: Interpolation source (w/o UI)\n"
                            "Bottom right: HUDless resource"));
 
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             if (state.currentFG && state.currentFG->Version().major > 3)
             {
@@ -3858,7 +3864,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.fg_only_generated_15e8bf6d", "FG Only Generated"), &state.fgOnlyGenerated);
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.display_only_fsr_3_1_generated_frames_cd533f55", "Display only FSR 3.1 Generated frames"));
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
                 auto debugResetLines = config->FGDebugResetLines.value_or_default();
                 if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.debug_reset_lines_b7abdb17", "Debug Reset Lines"), &debugResetLines))
                 {
@@ -3875,7 +3881,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 }
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.enables_drawing_of_tear_and_interpolation_skip_l_6e7987c3", "Enables drawing of Tear and Interpolation skip lines"));
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
                 auto debugPacingLines = config->FGDebugPacingLines.value_or_default();
                 if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.debug_pacing_lines_0b057908", "Debug Pacing Lines"), &debugPacingLines))
                 {
@@ -3892,7 +3898,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                     if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_left_8f884915", "Rect Left"), &rectLeft))
                         config->FGRectLeft = rectLeft;
 
-                    ImGui::SameLine(0.0f, 16.0f);
+                    AdvancedSameLine(0.0f, 16.0f);
                     int rectTop = config->FGRectTop.value_or(0);
                     if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_top_b0cb8311", "Rect Top"), &rectTop))
                         config->FGRectTop = rectTop;
@@ -3901,7 +3907,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                     if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_width_65204d77", "Rect Width"), &rectWidth))
                         config->FGRectWidth = rectWidth;
 
-                    ImGui::SameLine(0.0f, 16.0f);
+                    AdvancedSameLine(0.0f, 16.0f);
                     int rectHeight = config->FGRectHeight.value_or(0);
                     if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_height_9660ea59", "Rect Height"), &rectHeight))
                         config->FGRectHeight = rectHeight;
@@ -4081,7 +4087,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
         if (maxInterpolationCount > 1)
         {
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             const char* intModes[] = { "2X", "3X", "4X", "5X", "6X" };
             auto currentSet = fgOutput->GetInterpolatedFrameCount() - 1;
@@ -4109,7 +4115,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.set_xefg_interpolation_count_642e1509", "Set XeFG interpolation count"));
         }
 
-        ImGui::SameLine(0.0f, 16.0f);
+        AdvancedSameLine(0.0f, 16.0f);
         ImGui::BeginDisabled(!fgOutput->IsUsingHudlessAny() || XeFGProxy::SetUiCompositionState() == nullptr);
         bool fgCompositeUI = config->FGXeFGUIComposition.value_or_default();
         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.ui_composition_c34708fc", "UI Composition"), &fgCompositeUI))
@@ -4135,7 +4141,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
         ImGui::EndDisabled();
 
-        ImGui::SameLine(0.0f, 16.0f);
+        AdvancedSameLine(0.0f, 16.0f);
         bool fgBorderless = config->FGXeFGForceBorderless.value_or_default();
         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.force_borderless_eacd0cfe", "Force Borderless"), &fgBorderless))
             config->FGXeFGForceBorderless = fgBorderless;
@@ -4147,7 +4153,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                        "NEEDS GAME RESTART TO BE ACTIVE!"));
 
         // Disable this for now
-        // ImGui::SameLine(0.0f, 16.0f);
+        // AdvancedSameLine(0.0f, 16.0f);
         // ImGui::Checkbox("Only Generated##2", &state.fgOnlyGenerated);
         // ShowHelpMarker("Display only XeFG generated frames");
 
@@ -4162,7 +4168,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_left_8f884915", "Rect Left##2"), &rectLeft))
                     config->FGRectLeft = rectLeft;
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
                 int rectTop = config->FGRectTop.value_or(0);
                 if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_top_b0cb8311", "Rect Top##2"), &rectTop))
                     config->FGRectTop = rectTop;
@@ -4171,7 +4177,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_width_65204d77", "Rect Width##2"), &rectWidth))
                     config->FGRectWidth = rectWidth;
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
                 int rectHeight = config->FGRectHeight.value_or(0);
                 if (ImGui::InputInt(Neurotic::UiLiteral("ingame.menu-common.rect_height_9660ea59", "Rect Height##2"), &rectHeight))
                     config->FGRectHeight = rectHeight;
@@ -4216,8 +4222,8 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             }
         }
 
-        ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.current_dlssg_state_daef18ca", "Current DLSSG state:"));
-        ImGui::SameLine();
+        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.current_dlssg_state_daef18ca", "Current DLSSG state:"));
+        AdvancedSameLine();
         if (auto count = state.dlssgDetectedInterpolationCount.load(); count > 0)
         {
             ImGui::TextColored(toneMapColor(ImVec4(0.f, 1.f, 0.25f, 1.f)), StrFmt(Neurotic::UiLiteral("ingame.menu-common.on_x_4c44c906", "ON %dx"), count + 1).c_str());
@@ -4243,7 +4249,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
         if (maxInterpolationCount > 1)
         {
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             ImGui::BeginDisabled(config->FGDLSSGForceDMFG.value_or_default());
 
@@ -4275,7 +4281,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
             if (fgOutput->GetDMFGSupport())
             {
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
 
                 if (bool dynamicMFG = config->FGDLSSGForceDMFG.value_or_default();
                     ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.force_dynamic_mfg_7dd3df71", "Force Dynamic MFG"), &dynamicMFG))
@@ -4294,7 +4300,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                     config->FGDLSSGFramerateTargetDMFG = fpsTarget;
                 }
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
 
                 if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_target_ecdec9b0", "Reset Target")))
                 {
@@ -4343,7 +4349,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
                 ImGui::BeginDisabled(!config->FGHUDFix.value_or_default());
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
                 ImGui::PushItemWidth(95.0f * menuResScale);
                 int hudFixLimit = config->FGHUDLimit.value_or_default();
                 if (ImGui::InputInt("Limit", &hudFixLimit))
@@ -4358,7 +4364,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 }
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.delay_hudless_capture_high_values_might_cause_cr_9758910b", "Delay HUDless capture, high values might cause crash!"));
 
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
                 if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.res_5cf341a2", "Res##2")))
                     _showHudlessWindow = !_showHudlessWindow;
 
@@ -4371,7 +4377,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                     config->FGHUDFixExtended = hudExtended;
                 }
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.extended_format_checks_for_possible_hudless_migh_7c738ed7", "Extended format checks for possible HUDless\nMight cause crashes and slowdowns!"));
-                ImGui::SameLine(0.0f, 16.0f);
+                AdvancedSameLine(0.0f, 16.0f);
 
                 ImGui::BeginDisabled(!config->FGHUDFix.value_or_default());
 
@@ -4399,7 +4405,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 config->FGResourceFlip = resourceFlip;
             ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.flip_velocity_depth_resources_of_unity_games_95e561c6", "Flip Velocity & Depth resources of Unity games"));
 
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             bool resourceFlipOffset = config->FGResourceFlipOffset.value_or_default();
             if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.flip_use_offset_d13535ba", "Flip Use Offset"), &resourceFlipOffset))
@@ -4427,7 +4433,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                                    "to prevent flickers and other issues\n\n"
                                    "HUDfix enable/disable will reset the block list!"));
 
-                    ImGui::SameLine(0.0f, 16.0f);
+                    AdvancedSameLine(0.0f, 16.0f);
 
                     auto rrc = config->FGRelaxedResolutionCheck.value_or_default();
                     if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.relaxed_resource_check_b7ddc760", "Relaxed Resource Check"), &rrc))
@@ -4449,7 +4455,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                             state.fgOnlyUseCapturedResources = false;
                     }
 
-                    ImGui::SameLine(0.0f, 16.0f);
+                    AdvancedSameLine(0.0f, 16.0f);
                     if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.fg_use_list_2dd56311", "FG Use List"), &state.fgOnlyUseCapturedResources))
                     {
                         if (state.fgCaptureResources)
@@ -4459,12 +4465,12 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                         }
                     }
 
-                    ImGui::SameLine(0.0f, 8.0f);
-                    ImGui::Text("(%d)", state.fgCapturedResourceCount);
+                    AdvancedSameLine(0.0f, 8.0f);
+                    ImGui::TextWrapped("(%d)", state.fgCapturedResourceCount);
 
                     ImGui::PopItemWidth();
 
-                    ImGui::SameLine(0.0f, 16.0f);
+                    AdvancedSameLine(0.0f, 16.0f);
 
                     if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_list_e09fedb9", "Reset List")))
                     {
@@ -4495,7 +4501,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.disable_tracking_of_createrendertargetview_this__0125c716", "Disable tracking of CreateRenderTargetView\n"
                                        "This might help filtering of wrong HUDless resources"));
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         auto disableSRV = config->FGHudfixDisableSRV.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.disable_srv_tracking_223952e0", "Disable SRV Tracking"), &disableSRV))
@@ -4509,7 +4515,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.disable_tracking_of_createunorderedaccessview_th_e56fc6c6", "Disable tracking of CreateUnorderedAccessView\n"
                                        "This might help filtering of wrong HUDless resources"));
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         auto disableOM = config->FGHudfixDisableOM.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.disable_om_tracking_f0800e34", "Disable OM Tracking"), &disableOM))
@@ -4523,7 +4529,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.disable_tracking_of_setcomputerootdescriptortabl_1d6bf4a2", "Disable tracking of SetComputeRootDescriptorTable\n"
                                        "This might help filtering of wrong HUDless resources"));
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         auto disableSGR = config->FGHudfixDisableSGR.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.disable_sgr_tracking_96c24789", "Disable SGR Tracking"), &disableSGR))
@@ -4539,7 +4545,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.disable_tracking_of_drawinstanced_this_might_hel_248c9891", "Disable tracking of DrawInstanced\n"
                                        "This might help filtering of wrong HUDless resources"));
 
-                        ImGui::SameLine(0.0f, 16.0f);
+                        AdvancedSameLine(0.0f, 16.0f);
 
                         auto disableDII = config->FGHudfixDisableDII.value_or_default();
                         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.disable_dii_tracking_345a5e8a", "Disable DII Tracking"), &disableDII))
@@ -4600,7 +4606,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
         }
         else if (currentFeature == nullptr || currentFeature->IsFrozen())
         {
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.upscaler_is_not_active_d5fa3259", "Upscaler is not active")); // Probably never will be visible
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.upscaler_is_not_active_d5fa3259", "Upscaler is not active")); // Probably never will be visible
         }
         else if (state.activeFgOutput == FGOutput::FSRFG && !FfxApiProxy::IsFGReady())
         {
@@ -4661,18 +4667,18 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             if (!ReflexHooks::isReflexHooked())
             {
                 ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.f, 0.f, 1.f)), Neurotic::UiLiteral("ingame.menu-common.reflex_not_hooked_4896e1c5", "Reflex not hooked"));
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.if_you_are_using_an_amd_intel_gpu_then_make_sure_83636051", "If you are using an AMD/Intel GPU, then make sure you have Fakenvapi"));
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.if_you_are_using_an_amd_intel_gpu_then_make_sure_83636051", "If you are using an AMD/Intel GPU, then make sure you have Fakenvapi"));
             }
             else if (ReflexHooks::dlssgFrameCountToGenerate() == 0 && !dmfgActive)
             {
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.please_select_dlss_frame_generation_in_the_game__45194c2a", "Please select DLSS Frame Generation in the game options\n"
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.please_select_dlss_frame_generation_in_the_game__45194c2a", "Please select DLSS Frame Generation in the game options\n"
                             "You might need to select DLSS first"));
             }
 
             if (state.swapchainApi == DX12)
             {
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.current_dlssg_state_daef18ca", "Current DLSSG state:"));
-                ImGui::SameLine();
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.current_dlssg_state_daef18ca", "Current DLSSG state:"));
+                AdvancedSameLine();
                 if (auto count = state.dlssgDetectedInterpolationCount.load(); count > 0)
                 {
                     ImGui::TextColored(toneMapColor(ImVec4(0.f, 1.f, 0.25f, 1.f)),
@@ -4721,7 +4727,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             {
                 auto featureVer = Nvngx_FG::version();
                 auto antighostingVer = Nvngx_FG::extraVersion();
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.de_ver_d_d_d_d_gb_ver_d_d_b4db9564", "DE Ver: %d.%d.%d.%d   GB Ver: %d.%d"), featureVer.major, featureVer.minor, featureVer.patch,
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.de_ver_d_d_d_d_gb_ver_d_d_b4db9564", "DE Ver: %d.%d.%d.%d   GB Ver: %d.%d"), featureVer.major, featureVer.minor, featureVer.patch,
                             featureVer.reserved, antighostingVer.major, antighostingVer.minor);
 
                 static std::vector<FlagDefinition> common_flags = {
@@ -4751,11 +4757,11 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 uint32_t temp_flags = config->NvngxFGDispatchFlags.value_or_default();
                 bool changed = false;
 
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.raw_dispatchflags_4409124e", "Raw DispatchFlags:"));
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.raw_dispatchflags_4409124e", "Raw DispatchFlags:"));
                 changed |= ImGui::InputScalar("##RawFlags", ImGuiDataType_U32, &temp_flags, NULL, NULL, "%08X",
                                               ImGuiInputTextFlags_CharsHexadecimal);
 
-                ImGui::SameLine(0.0f, 20.0f * menuResScale);
+                AdvancedSameLine(0.0f, 20.0f * menuResScale);
                 if (bool showDebug = config->NvngxFGShowDebug.value_or_default();
                     ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.show_debug_6dbb45ff", "Show Debug"), &showDebug))
                 {
@@ -4837,7 +4843,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
                     ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.list_of_fgs_reported_by_ffx_sdk_677919aa", "List of FGs reported by FFX SDK"));
 
-                    ImGui::SameLine(0.0f, 6.0f);
+                    AdvancedSameLine(0.0f, 6.0f);
 
                     if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.change_fg_2677b6d7", "Change FG")) && _ffxFGIndex != config->FfxFGIndex.value_or_default())
                     {
@@ -4859,7 +4865,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 }
                 ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.enable_async_for_better_fg_performance_might_cau_fb93cab1", "Enable Async for better FG performance\nMight cause crashes, especially with HUD Fix!"));
 
-                ImGui::SameLine(0.0f, 20.0f * menuResScale);
+                AdvancedSameLine(0.0f, 20.0f * menuResScale);
                 bool fgDV = config->FGDebugView.value_or_default();
                 if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.debug_view_7682ecca", "Debug View##3"), &fgDV))
                 {
@@ -4882,7 +4888,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
                 if (Nvngx_FG::version().major > 3)
                 {
-                    ImGui::SameLine(0.0f, 20.0f * menuResScale);
+                    AdvancedSameLine(0.0f, 20.0f * menuResScale);
                     if (bool fgwm = config->FSRFGEnableWatermark.value_or_default();
                         ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.enable_watermark_e535d078", "Enable Watermark"), &fgwm))
                     {
@@ -4913,8 +4919,8 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
         auto fgOutput = reinterpret_cast<IFGFeature_Dx12*>(state.currentFG);
         if (fgOutput != nullptr)
         {
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.current_fsr_fg_state_5f27e25c", "Current FSR-FG state:"));
-            ImGui::SameLine();
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.current_fsr_fg_state_5f27e25c", "Current FSR-FG state:"));
+            AdvancedSameLine();
             if (state.fsrfgInputActive)
             {
                 if (fgOutput->IsActive())
@@ -4925,7 +4931,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             else
             {
                 ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.f, 0.f, 1.f)), Neurotic::UiLiteral("ingame.dlssnr-menucontrols.off_aaedffb0", "OFF"));
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.please_select_fsr_frame_generation_in_the_game_o_d8cd3e11", "Please select FSR Frame Generation in the game options\n"
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.please_select_fsr_frame_generation_in_the_game_o_d8cd3e11", "Please select FSR Frame Generation in the game options\n"
                             "You might need to select FSR first"));
             }
         }
@@ -4936,7 +4942,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
         ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.do_not_use_hudless_set_at_ffxconfig_d0e7f55f", "Do not use HUDless set at ffxConfig"));
 
-        ImGui::SameLine(0.0f, 6.0f);
+        AdvancedSameLine(0.0f, 6.0f);
 
         bool skipDispatch = config->FSRFGSkipDispatchForHudless.value_or_default();
         if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.skip_dispatch_for_hudless_710af8c8", "Skip Dispatch for HUDless"), &skipDispatch))
@@ -4955,12 +4961,12 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
         if (!ReflexHooks::isReflexHooked())
         {
             ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.f, 0.f, 1.f)), Neurotic::UiLiteral("ingame.menu-common.reflex_not_hooked_4896e1c5", "Reflex not hooked"));
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.if_you_are_using_an_amd_intel_gpu_then_make_sure_b0c535f2", "If you are using an AMD/Intel GPU, then make sure you have fakenvapi"));
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.if_you_are_using_an_amd_intel_gpu_then_make_sure_b0c535f2", "If you are using an AMD/Intel GPU, then make sure you have fakenvapi"));
         }
         else if (fgOutput != nullptr)
         {
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.current_streamline_fg_state_adf444f2", "Current Streamline FG state:"));
-            ImGui::SameLine();
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.current_streamline_fg_state_adf444f2", "Current Streamline FG state:"));
+            AdvancedSameLine();
             if ((state.fgLastFrame - state.dlssgLastFrame) < 3)
             {
                 if (fgOutput->IsActive())
@@ -4971,7 +4977,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             else
             {
                 ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.f, 0.f, 1.f)), Neurotic::UiLiteral("ingame.dlssnr-menucontrols.off_aaedffb0", "OFF"));
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.please_select_dlss_frame_generation_in_the_game__45194c2a", "Please select DLSS Frame Generation in the game options\n"
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.please_select_dlss_frame_generation_in_the_game__45194c2a", "Please select DLSS Frame Generation in the game options\n"
                             "You might need to select DLSS first"));
             }
         }
@@ -5019,7 +5025,7 @@ void MenuCommon::RenderFsrCommonSettings(RenderMenuContext& ctx)
                     useVFov = true;
                 }
 
-                ImGui::SameLine(0.0f, 6.0f);
+                AdvancedSameLine(0.0f, 6.0f);
 
                 if (ImGui::RadioButton(Neurotic::UiLiteral("ingame.menu-common.use_horz_fov_0acb424a", "Use Horz. Fov"), !useVFov))
                 {
@@ -5071,8 +5077,8 @@ void MenuCommon::RenderFsrCommonSettings(RenderMenuContext& ctx)
                     config->FsrCameraFar.reset();
                 }
 
-                ImGui::SameLine(0.0f, 6.0f);
-                ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.near_1f_far_1f_4dc7a047", "Near: %.1f Far: %.1f"),
+                AdvancedSameLine(0.0f, 6.0f);
+                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.near_1f_far_1f_4dc7a047", "Near: %.1f Far: %.1f"),
                             state.lastFsrCameraNear < 500000.0f ? state.lastFsrCameraNear : 500000.0f,
                             state.lastFsrCameraFar < 500000.0f ? state.lastFsrCameraFar : 500000.0f);
 
@@ -5140,7 +5146,7 @@ void MenuCommon::RenderFramerateSettings(RenderMenuContext& ctx)
         if (fakenvapiInactive)
             currentMethod.append(" (inactive)");
 
-        ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.current_method_s_0e91ae93", "Current method: %s"),Neurotic::Translate(currentMethod.c_str()).c_str());
+        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.current_method_s_0e91ae93", "Current method: %s"),Neurotic::Translate(currentMethod.c_str()).c_str());
 
         if (fakenvapiMode == LowLatencyMode::AntiLag2)
             ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.fsr_anti_lag_2_0_is_the_new_name_for_antilag_2_d_309f7c4d", "FSR Anti-Lag 2.0 is the new name for AntiLag 2\nDon't ask me why"));
@@ -5157,14 +5163,15 @@ void MenuCommon::RenderFramerateSettings(RenderMenuContext& ctx)
         if (std::isinf(_limitFps))
             _limitFps = config->FramerateLimit.value_or_default();
 
-        ImGui::SliderFloat(Neurotic::UiLiteral("ingame.menu-common.fps_limit_9668bd31", "FPS Limit"), &_limitFps, 0, 200, "%.0f");
+        if(advancedCompactControls){ImGui::TextUnformatted("FPS Limit");ImGui::SetNextItemWidth(-FLT_MIN);}
+        ImGui::SliderFloat(advancedCompactControls?"###FPS Limit":Neurotic::UiLiteral("ingame.menu-common.fps_limit_9668bd31", "FPS Limit"), &_limitFps, 0, 200, "%.0f");
 
         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.apply_limit_3c466181", "Apply Limit")))
         {
             config->FramerateLimit = _limitFps;
         }
 
-        ImGui::SameLine(0.0f, 16.0f);
+        AdvancedSameLine(0.0f, 16.0f);
 
         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_limit_9e622be4", "Reset Limit")))
         {
@@ -5191,9 +5198,9 @@ void MenuCommon::RenderFramerateSettings(RenderMenuContext& ctx)
             if (fpsLimitTech == LowLatencyMode::AntiLag2 || fpsLimitTech == LowLatencyMode::AntiLagVk)
                 frameCap = std::round(frameCap);
 
-            ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.calculated_cap_1f_63cec668", "Calculated Cap: %.1f"), frameCap);
+            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.calculated_cap_1f_63cec668", "Calculated Cap: %.1f"), frameCap);
 
-            ImGui::SameLine(0.0f, 16.0f);
+            AdvancedSameLine(0.0f, 16.0f);
 
             if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.set_as_fps_limit_962b337d", "Set as FPS Limit")))
             {
@@ -5229,17 +5236,16 @@ void MenuCommon::RenderFakenvapiSettings(RenderMenuContext& ctx)
         ImGui::EndDisabled();
 
         // Keep Force XeLL on the same line if LatencyFlex is visible
-        ImGui::SameLine(0.0f, 16.0f);
+        AdvancedSameLine(0.0f, 16.0f);
     }
 
     // Force XeLL is always visible
     bool forceXell = config->ForceXeLL.value_or_default();
     static bool activeForceXeLL = forceXell;
 
+    LUID nativeAdapter {};
     const bool nativeMfgSelected = config->FGDLSSGNativeMfgExperimental.value_or_default() &&
-        state.swapchainApi == API::DX12 &&
-        ctx.primaryGpu->nvidiaArchInfo.architecture_id >= NV_GPU_ARCHITECTURE_AD100 &&
-        ctx.primaryGpu->nvidiaArchInfo.architecture_id < NV_GPU_ARCHITECTURE_GB200;
+        state.swapchainApi == API::DX12 && StreamlineHooks::nativeMfgAdapter(nativeAdapter).value_or(true);
     ImGui::BeginDisabled(nativeMfgSelected);
     if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.force_xell_cb2ccfdf", "Force XeLL"), &forceXell))
     {
@@ -5330,11 +5336,11 @@ void MenuCommon::RenderLowLatencySettings(RenderMenuContext& ctx)
 
         ImGui::TableNextColumn();
 
-        ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.active_input_s_2718a893", "Active input: %s"),Neurotic::Translate(GetMenuOptionLabel(lowLatencyInput, activeInput).c_str()).c_str());
+        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.active_input_s_2718a893", "Active input: %s"),Neurotic::Translate(GetMenuOptionLabel(lowLatencyInput, activeInput).c_str()).c_str());
 
         ImGui::TableNextColumn();
 
-        ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.active_output_s_bedc1e46", "Active output: %s"),Neurotic::Translate(GetMenuOptionLabel(lowLatencyOutput, activeOutput).c_str()).c_str());
+        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.active_output_s_bedc1e46", "Active output: %s"),Neurotic::Translate(GetMenuOptionLabel(lowLatencyOutput, activeOutput).c_str()).c_str());
 
         ImGui::EndTable();
     }
@@ -5430,7 +5436,7 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
             ShowHelpMarker(Neurotic::UiLiteral("ingame.menu-common.ignores_the_value_sent_by_the_game_and_uses_the__92620cb9", "Ignores the value sent by the game\n"
                            "and uses the value set below"));
 
-            ImGui::SameLine(0.0f, 16.0f * menuResScale);
+            AdvancedSameLine(0.0f, 16.0f * menuResScale);
 
             float featuresCurrentSharpness = currentFeature->Sharpness();
             if (featuresCurrentSharpness > 0.0f)
@@ -5706,7 +5712,7 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
             auto minSliderLimit = config->ExtendedLimits.value_or_default() ? 0.1f : 1.0f;
             auto maxSliderLimit = config->ExtendedLimits.value_or_default() ? 6.0f : 3.0f;
 
-            if (ImGui::BeginTable("##UpscaleRatioColumns", 3, ImGuiTableFlags_SizingStretchSame))
+            if (ImGui::BeginTable("##UpscaleRatioColumns", advancedCompactControls?1:3, ImGuiTableFlags_SizingStretchSame))
             {
             ImGui::TableNextColumn();
             if (bool upOverride = config->UpscaleRatioOverrideEnabled.value_or_default();
@@ -5747,7 +5753,7 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                 ResetSliderSetting("UpscaleRatioOverrideValue", config->UpscaleRatioOverrideValue);
             }
 
-            ImGui::TableSetColumnIndex(1);
+            if(advancedCompactControls)ImGui::TableNextRow(); ImGui::TableSetColumnIndex(advancedCompactControls?0:1);
             if (auto reveal = Neurotic::Sleek::AnimatedRegion("##QualityRatioOptions", config->QualityRatioOverrideEnabled.value_or_default()); reveal.Visible())
             {
                 float qDlaa = config->QualityRatio_DLAA.value_or_default();
@@ -5825,7 +5831,7 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                                    "If greyed out, please check Git Wiki - Unreal Engine tweaks\n\n"
                                    "Target res and total ratio at the bottom (max. total 3.0!)"));
 
-                    ImGui::SameLine(0.0f, 6.0f);
+                    AdvancedSameLine(0.0f, 6.0f);
 
                     ImGui::BeginDisabled(!_ssEnabled);
                     {
@@ -5899,13 +5905,13 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                     ImGui::BeginDisabled(!_ssEnabled || currentFeature->RenderWidth() > currentFeature->DisplayWidth());
                     ImGui::SetNextItemWidth((std::max)(1.0f, ImGui::GetContentRegionAvail().x / 3.0f));
                     ImGui::SliderFloat(Neurotic::UiLiteral("ingame.menu-common.ratio_2639f7da", "Ratio"), &_ssRatio, 0.5f, 3.0f, "%.2f");
-                    ImGui::SameLine();
+                    AdvancedSameLine();
                     if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##OutputScalingRatio"))) _ssRatio = defaultRatio;
                     ImGui::EndDisabled();
 
                     if (currentFeature != nullptr && !currentFeature->IsFrozen())
                     {
-                        ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.output_scaling_is_s_target_res_dx_d_2f_jitter_co_2405c09b", "Output Scaling is %s, Target Res: %dx%d (%.2f)\nJitter Count: %d"),Neurotic::Translate(config->OutputScalingEnabled.value_or_default() ? Neurotic::UiLiteral("ingame.menu-common.enabled_de1c9c71", "ENABLED") : Neurotic::UiLiteral("ingame.menu-common.disabled_938e7c61", "DISABLED")).c_str(),
+                        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.output_scaling_is_s_target_res_dx_d_2f_jitter_co_2405c09b", "Output Scaling is %s, Target Res: %dx%d (%.2f)\nJitter Count: %d"),Neurotic::Translate(config->OutputScalingEnabled.value_or_default() ? Neurotic::UiLiteral("ingame.menu-common.enabled_de1c9c71", "ENABLED") : Neurotic::UiLiteral("ingame.menu-common.disabled_938e7c61", "DISABLED")).c_str(),
                                     (uint32_t) (currentFeature->DisplayWidth() * _ssRatio),
                                     (uint32_t) (currentFeature->DisplayHeight() * _ssRatio),
                                     ((float) currentFeature->DisplayWidth() * _ssRatio) /
@@ -6260,12 +6266,6 @@ void MenuCommon::RenderLoggingSettings(RenderMenuContext& ctx)
     {
         ImGui::Spacing();
 
-        if (config->LogToConsole.value_or_default() || config->LogToFile.value_or_default() ||
-            config->LogToNGX.value_or_default())
-            spdlog::default_logger()->set_level((spdlog::level::level_enum) config->LogLevel.value_or_default());
-        else
-            spdlog::default_logger()->set_level(spdlog::level::off);
-
         if (bool toFile = config->LogToFile.value_or_default(); ImGui::Checkbox(Neurotic::UiLiteral("ingame.menu-common.to_file_5219586a", "To File"), &toFile))
         {
             config->LogToFile = toFile;
@@ -6279,18 +6279,20 @@ void MenuCommon::RenderLoggingSettings(RenderMenuContext& ctx)
             PrepareLogger();
         }
 
-        const char* logLevels[] = { Neurotic::UiLiteral("ingame.option.7e14c3d7dd12", "Trace"), Neurotic::UiLiteral("ingame.menu-common.debug_c014083d", "Debug"), Neurotic::UiLiteral("ingame.option.1cb0ba125f84", "Information"), Neurotic::UiLiteral("ingame.option.e981ddae45d8", "Warning"), Neurotic::UiLiteral("ingame.option.54a0e8c17ebb", "Error") };
-        const char* selectedLevel = logLevels[config->LogLevel.value_or_default()];
+        const char* logLevels[] = { Neurotic::UiLiteral("ingame.option.7e14c3d7dd12", "Trace"), Neurotic::UiLiteral("ingame.menu-common.debug_c014083d", "Debug"), Neurotic::UiLiteral("ingame.option.1cb0ba125f84", "Information"), Neurotic::UiLiteral("ingame.option.e981ddae45d8", "Warning"), Neurotic::UiLiteral("ingame.option.54a0e8c17ebb", "Error"), Neurotic::UiLiteral("desktop.settings.log/loglevel/value.427dd2969b", "Critical"), Neurotic::UiLiteral("ingame.option.off", "Off") };
+        const int configuredLevel = config->LogLevel.value_or_default();
+        const auto unknownLevel = std::format("{} ({})", Neurotic::UiLiteral("ingame.menu-common.unknown_d80d0833", "Unknown"), configuredLevel);
+        const char* selectedLevel = Neurotic::Logging::SupportedLevel(configuredLevel)
+            ? logLevels[configuredLevel] : unknownLevel.c_str();
 
         if (ImGui::BeginCombo(Neurotic::UiLiteral("ingame.menu-common.log_level_3e0f47de", "Log Level"), selectedLevel))
         {
-            for (int n = 0; n < 5; n++)
+            for (int n = 0; n < 7; n++)
             {
                 if (ImGui::Selectable(logLevels[n], (config->LogLevel.value_or_default() == n)))
                 {
                     config->LogLevel = n;
-                    spdlog::default_logger()->set_level(
-                        (spdlog::level::level_enum) config->LogLevel.value_or_default());
+                    PrepareLogger();
                 }
             }
 
@@ -6926,13 +6928,13 @@ void MenuCommon::RenderVsyncSettings(RenderMenuContext& ctx)
         fitControl(Neurotic::UiLiteral("ingame.menu-common.v_sync_f402ef17", "V-Sync"));
         bool vsyncChanged = ImGui::Combo(Neurotic::UiLiteral("ingame.menu-common.v_sync_f402ef17", "V-Sync"), &mode, modes, IM_ARRAYSIZE(modes));
         if (vsyncChanged) { if (mode == 0) config->ForceVsync.reset(); else config->ForceVsync = mode == 1; }
-        ImGui::SameLine();
+        AdvancedSameLine();
         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##10"))) { config->ForceVsync.reset(); mode = 0; vsyncChanged = true; }
         ImGui::BeginDisabled(mode != 1);
         int interval = static_cast<int>((std::max)(1u, config->VsyncInterval.value_or_default()));
         fitControl(Neurotic::UiLiteral("ingame.menu-common.sync_interval_bd987355", "Sync interval"));
         if (ImGui::SliderInt(Neurotic::UiLiteral("ingame.menu-common.sync_interval_bd987355", "Sync interval"), &interval, 1, 3)) { config->VsyncInterval = interval; vsyncChanged = true; }
-        ImGui::SameLine();
+        AdvancedSameLine();
         if (ImGui::Button(Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##VsyncInterval"))) { config->VsyncInterval.reset(); vsyncChanged = true; }
         ImGui::EndDisabled();
         ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.dxgi_presentation_override_on_waits_for_the_sele_51d73e62", "DXGI presentation override. On waits for the selected number of refreshes; Game retains the game's choice."));
@@ -7401,7 +7403,7 @@ void MenuCommon::RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ct
         {
             if (ImGui::Checkbox(label, &value)) draft.dirty = true;
             ImGui::SameLine(); ImGui::TextDisabled("(?)");
-            if (ImGui::IsItemHovered())
+            if (Neurotic::ItemHelpHovered(ImGui::GetID(description)))
             {
                 ImGui::BeginTooltip(); ImGui::PushTextWrapPos(ImGui::GetFontSize()*32);
                 ImGui::TextUnformatted(description);
@@ -7448,9 +7450,56 @@ void MenuCommon::RenderNeuralRenderingExperimentalSettings(RenderMenuContext& ct
 }
 
 #include "RenderingDiagnosticsNavigation.h"
+#include "NrAdvancedStageLayout.inl"
 void MenuCommon::RenderNeuralRenderingPage(RenderMenuContext& ctx)
 {
     const char* gpuName = ctx.primaryGpu ? ctx.primaryGpu->name.c_str() : Neurotic::UiLiteral("ingame.dlssnr-menu.detecting_graphics_card_5066a0c7", "Detecting graphics card...");
+    if(ctx.neuralPage==6){
+        Neurotic::EnglishPreview englishExperimental;
+        const auto target=DlssNr::RenderAdvancedPipeline(ctx.config,false);
+        if(target==DlssNr::PipelineView::Stage::Sr||target==DlssNr::PipelineView::Stage::Fg){
+            auto* root=ImGui::GetCurrentWindow()->RootWindow;
+            root->StateStorage.SetInt(ImHashStr("##SelectedMainPage",0,root->ID),target==DlssNr::PipelineView::Stage::Sr?1:3);
+        }
+        DlssNr::RenderMenu(ctx.config,ctx.menuResScale,std::nullopt,gpuName,DlssNr::MenuPage::Preflight);
+        return;
+    }
+    if(ctx.neuralPage==7){
+        DlssNr::RenderCompareMenu(ctx.config,ctx.menuResScale);
+        ImGui::Separator();DlssNr::RenderScreenshotMenu(ctx.config);return;
+    }
+    if(ctx.neuralPage==0){
+        const char* labels[]={"Rendering","Color","Multi Pass","Object Rules","Overrides","Inspector"};
+        if(ImGui::BeginTabBar("##NrModelImageSections",ImGuiTabBarFlags_FittingPolicyScroll)){
+            constexpr int tabOrder[]={0,1,2,4,5,3};
+            for(int i:tabOrder){
+                const bool lamp=i==0||i==2||i==4||i==5;
+                const bool on=i==0?ctx.config->GetDlssNrRuntimeSnapshot().enabled:i==2?ctx.config->DlssNrMultipassEnabled.value_or_default():i==4?DlssNr::ExperimentalPolicy::Capture(*ctx.config).active:ctx.config->CharacterInspectorEnabled.value_or_default();
+                if(lamp)ImGui::SetNextItemWidth(ImGui::CalcTextSize(labels[i]).x+ImGui::GetStyle().FramePadding.x*2+Neurotic::Sleek::PilotReserve());
+                const bool selected=ImGui::BeginTabItem(labels[i]);
+                if(lamp)Neurotic::Sleek::TabPilotLight(on?Neurotic::Sleek::PilotState::On:Neurotic::Sleek::PilotState::Off);
+                if(selected){
+                const auto sectionIdentity=ImGui::GetCurrentWindow()->IDStack.back();
+                ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4(0,0,0,0));
+                const bool bodyVisible=ImGui::BeginChild("##NrModelImageSectionBody",{0,0},ImGuiChildFlags_NavFlattened);
+                ImGui::PopStyleColor();
+                if(bodyVisible){
+                // Keep every existing control/popup ID under its selected tab.
+                ImGui::PushOverrideID(sectionIdentity);
+                if(i==0||i==1||i==2)DlssNr::RenderMenu(ctx.config,ctx.menuResScale,std::nullopt,gpuName,i==0?DlssNr::MenuPage::Overview:i==1?DlssNr::MenuPage::Color:DlssNr::MenuPage::Multipass);
+                else if(i==3)Neurotic::Semantic::Rules::DrawGameEditor(*ctx.config);
+                else if(i==4)RenderNeuralRenderingExperimentalSettings(ctx);
+                else Neurotic::Semantic::Character::RenderInspectorMenu(*ctx.config,false);
+                ImGui::PopID();
+                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+        return;
+    }
     if (ctx.neuralPage == 2 || ctx.neuralPage == 5)
     {
         ImGui::PushFont(nullptr, ImGui::GetFontSize() * 1.35f);
@@ -7482,20 +7531,35 @@ void MenuCommon::RenderFrameGenerationPage(RenderMenuContext& ctx)
     }
     else if (ctx.childPage == 1)
     {
-        Neurotic::Sleek::ContentCard card("##FgSetup", Neurotic::UiLiteral("ingame.menu-common.next_launch_route_6bcb3d22", "Next-launch route"));
-        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.choose_the_game_s_fg_input_and_the_replacement_o_40c542c4", "Choose the game's FG input and the replacement output. Save and restart to change the running route."));
+        Neurotic::Sleek::ContentCard card("##FgSetup", Neurotic::Sleek::flatContentCards?nullptr:Neurotic::UiLiteral("ingame.menu-common.next_launch_route_6bcb3d22", "Next-launch route"));
+        if(!Neurotic::Sleek::flatContentCards)ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.choose_the_game_s_fg_input_and_the_replacement_o_40c542c4", "Choose the game's FG input and the replacement output. Save and restart to change the running route."));
         const char* inputs[] = { Neurotic::UiLiteral("ingame.menu-common.none_331505ff", "None"), Neurotic::UiLiteral("ingame.menu-common.upscaler_d43a2f2b", "Upscaler"), Neurotic::UiLiteral("ingame.menu-common.streamline_dlssg_df928059", "Streamline DLSSG"), Neurotic::UiLiteral("ingame.menu-common.nvngx_dlssg_c530efe9", "Nvngx DLSSG"), Neurotic::UiLiteral("ingame.menu-common.fsr_3_1_93c8f581", "FSR 3.1"), Neurotic::UiLiteral("ingame.menu-common.fsr_3_0_1f9ee7df", "FSR 3.0"), Neurotic::UiLiteral("ingame.menu-common.xefg_5c446cf1", "XeFG"), Neurotic::UiLiteral("ingame.menu-common.force_xell_cb2ccfdf", "Force XeLL") };
         const char* outputs[] = { Neurotic::UiLiteral("ingame.menu-common.none_331505ff", "None"), Neurotic::UiLiteral("ingame.menu-common.fsr_fg_745644b6", "FSR FG"), Neurotic::UiLiteral("ingame.menu-common.dlssg_86366b33", "DLSSG"), Neurotic::UiLiteral("ingame.menu-common.xefg_5c446cf1", "XeFG") };
         const auto input = static_cast<size_t>(ctx.state.activeFgInput), output = static_cast<size_t>(ctx.state.activeFgOutput);
         ImGui::Text(Neurotic::UiLiteral("ingame.menu-common.running_input_s_output_s_4ca8badb", "Running input: %s / output: %s"),Neurotic::Translate(input < std::size(inputs) ? inputs[input] : Neurotic::UiLiteral("ingame.menu-common.unknown_d80d0833", "Unknown")).c_str(),Neurotic::Translate(output < std::size(outputs) ? outputs[output] : Neurotic::UiLiteral("ingame.menu-common.unknown_d80d0833", "Unknown")).c_str());
         RenderFrameGenerationSelection(ctx);
+        ImGui::BeginDisabled(!Neurotic::FgRoutePersistence::Dirty(*ctx.config));
+        if(ImGui::Button("Save settings##FgRoute")){
+            DlssNr::CancelAdvisorAnalysis(ctx.config);
+            ctx.config->SaveIni();
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!Neurotic::FgRoutePersistence::CanCancel(*ctx.config));
+        if(ImGui::Button("Cancel##FgRoute")){
+            Neurotic::FgRoutePersistence::Cancel(*ctx.config);
+        }
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        if(Neurotic::Sleek::flatContentCards)ImGui::TextWrapped("Save route changes, then restart the game. OptiFG requires an active upscaler.");
+        if(ctx.state.activeFgInput!=ctx.config->FGInput.value_or_default()||ctx.state.activeFgOutput!=ctx.config->FGOutput.value_or_default()||ctx.state.activeFgNvngx!=ctx.config->FGNvngxReplacement.value_or_default())
+            ImGui::TextWrapped("GAME RESTART required to apply the saved route.");
         if (ctx.state.activeFgInput == FGInput::ForceXeLL)
             ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.force_xell_owns_the_current_route_change_it_unde_a2fae908", "Force XeLL owns the current route. Change it under Pacing & Latency, then save and restart."));
     }
     else if (ctx.childPage == 2)
     {
-        Neurotic::Sleek::ContentCard card("##FgReplacement", Neurotic::UiLiteral("ingame.menu-common.running_replacement_6d94814f", "Running replacement"));
-        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.controls_apply_to_the_active_replacement_backend_e7fdb9ac", "Controls apply to the active replacement backend. Provider activity does not establish displayed frame delivery."));
+        Neurotic::Sleek::ContentCard card("##FgReplacement", Neurotic::Sleek::flatContentCards?nullptr:Neurotic::UiLiteral("ingame.menu-common.running_replacement_6d94814f", "Running replacement"));
+        if(!Neurotic::Sleek::flatContentCards)ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.controls_apply_to_the_active_replacement_backend_e7fdb9ac", "Controls apply to the active replacement backend. Provider activity does not establish displayed frame delivery."));
         if (!ctx.state.currentFG && ctx.state.activeFgInput == FGInput::NoFG)
             ImGui::TextWrapped(Neurotic::UiLiteral("ingame.menu-common.no_replacement_fg_is_active_select_a_route_in_se_1590b250", "No replacement FG is active. Select a route in Setup or use Game FG / Native MFG for the game's own path."));
         RenderFrameGenerationRuntimeSettings(ctx);
@@ -7600,13 +7664,17 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if(forceDiagnostics){storage.SetInt(neuralKey,ctx.neuralPage);storage.SetInt(diagnosticsKey,entered.diagnosticsChild);}
     storage.SetInt(selectedKey,selected);
     if (selected == 2) {
-        const auto readiness = DlssNr::MenuPreflightState(ctx.config);
+        DlssNr::RenderWorkspaceStatus(ctx.config);
+        bool pipelineSelection=false;
+        const auto stage=DlssNr::RenderAdvancedPipeline(ctx.config,true,&pipelineSelection);
+        if(pipelineSelection){
+            using Stage=DlssNr::PipelineView::Stage;
+            if(stage==Stage::Sr){storage.SetInt(selectedKey,1);}
+            else if(stage==Stage::Fg){storage.SetInt(selectedKey,3);}
+            else ctx.neuralPage=stage==Stage::Render||stage==Stage::Inputs?6:stage==Stage::Nr?0:7;
+        }
         NeuralNavigation(ctx.neuralPage,ctx.config->GetDlssNrRuntimeSnapshot().enabled,
-            ctx.config->DlssNrMultipassEnabled.value_or_default(),
-            DlssNr::ExperimentalPolicy::Capture(*ctx.config).active,
-            ctx.config->CharacterInspectorEnabled.value_or_default(),destination.forceNeural||entered.forceNeural,
-            readiness == DlssNr::MenuReadiness::Ready ? PilotState::On :
-            readiness == DlssNr::MenuReadiness::Blocked ? PilotState::Blocked : PilotState::Degraded);
+            false,false,false,pipelineSelection||destination.forceNeural||entered.forceNeural);
         storage.SetInt(neuralKey,ctx.neuralPage);
     }
     else if (ChildPageCount(selected)>0) {
@@ -7623,7 +7691,10 @@ void MenuCommon::RenderMainMenuTabs(RenderMenuContext& ctx)
     if (selected == 2) ImGui::PushID(ctx.neuralPage);
     else if (ChildPageCount(selected)>0) ImGui::PushID(ctx.childPage);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0,0,0,0));
-    const bool pageVisible = ImGui::BeginChild("##MainMenuPageContent",{0,contentHeight},ImGuiChildFlags_None);
+    const bool fixedModelImage=selected==2&&ctx.neuralPage==0;
+    if(fixedModelImage)ImGui::SetNextWindowScroll({0,0});
+    const bool pageVisible = ImGui::BeginChild("##MainMenuPageContent",{0,contentHeight},ImGuiChildFlags_None,
+        fixedModelImage?Neurotic::Sleek::FixedShellFlags:ImGuiWindowFlags_None);
     ImGui::PopStyleColor();
     if (pageVisible)
     {
@@ -7681,8 +7752,20 @@ void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
         // Readouts have their own fixed header row, so their text cannot shrink
         // either graph or shift one plot down when data becomes unavailable.
         ImGui::TableNextColumn();
-        DlssNr::StatusPanel::Linef("##FrameGraphReadout", ImGui::GetStyleColorVec4(ImGuiCol_Text),
-            Neurotic::UiLiteral("ingame.menu-common.frame_time_7_2f_ms_6_1f_fps_b5fe0163", "Frame Time: %7.2f ms / %6.1f fps"), frameTime, frameRate);
+        if (ctx.gameTiming.owner && !ctx.gameTiming.count)
+            DlssNr::StatusPanel::Line("##FrameGraphReadout", Neurotic::UiLiteral("ingame.timing.game_graph_waiting", "Game: waiting"), ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        else
+        {
+            const auto fullReadout = StrFmt(ctx.gameTiming.owner
+                ? Neurotic::UiLiteral("ingame.timing.game_graph", "Game: %7.2f ms / %6.1f FPS")
+                : Neurotic::UiLiteral("ingame.timing.callback_graph", "Callbacks: %7.2f ms / %6.1f FPS"), frameTime, frameRate);
+            const bool compact = ImGui::CalcTextSize(fullReadout.c_str()).x > ImGui::GetContentRegionAvail().x;
+            const auto readout = compact ? StrFmt(ctx.gameTiming.owner
+                ? Neurotic::UiLiteral("ingame.timing.game_graph_compact", "Game: %.2f ms")
+                : Neurotic::UiLiteral("ingame.timing.callback_graph_compact", "Callbacks: %.2f ms"), frameTime) : fullReadout;
+            DlssNr::StatusPanel::Line("##FrameGraphReadout", readout.c_str(), ImGui::GetStyleColorVec4(ImGuiCol_Text));
+            if (compact && Neurotic::ItemHelpHovered(ImGui::GetID("##FrameGraphReadoutHelp"))) ImGui::SetTooltip("%s", fullReadout.c_str());
+        }
         ImGui::TableNextColumn();
         if (timingAvailable)
             DlssNr::StatusPanel::Linef("##UpscalerGraphReadout", ImGui::GetStyleColorVec4(ImGuiCol_Text),
@@ -7693,8 +7776,8 @@ void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
                 ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TableNextColumn();
         ImGui::PlotLines(
-            "##FrameTimePlot", [](void* rb, int idx) -> float
-            { return static_cast<RingBuffer<float, plotWidth>*>(rb)->At(idx); }, &gFrameTimes, plotWidth,
+            "##FrameTimePlot", FramePlotValue, &ctx.gameTiming,
+            ctx.gameTiming.owner ? static_cast<int>(ctx.gameTiming.count) : plotWidth,
             0, nullptr, FLT_MAX, FLT_MAX, ImVec2((std::max)(1.0f, ImGui::GetContentRegionAvail().x), graphHeight));
         ImGui::TableNextColumn();
         ImGui::PlotLines(
@@ -7703,6 +7786,9 @@ void MenuCommon::RenderMainMenuGraphs(RenderMenuContext& ctx)
             timingAvailable ? plotWidth : 0, 0, nullptr, FLT_MAX, FLT_MAX, ImVec2((std::max)(1.0f, ImGui::GetContentRegionAvail().x), graphHeight));
 
         ImGui::EndTable();
+        ImGui::TextDisabled("%s", Neurotic::UiLiteral("ingame.timing.cpu_not_display", "CPU timing. Display pacing unavailable."));
+        if (Neurotic::ItemHelpHovered(ImGui::GetID("##CallbackTimingHelp")))
+            ImGui::SetTooltip(Neurotic::UiLiteral("ingame.timing.callback_detail", "Output callback average: %.2f ms. FG callbacks can arrive in bursts."), ctx.callbackFrameTime);
     }
 }
 
@@ -8359,7 +8445,6 @@ bool MenuCommon::RenderMenu(float drawWidth, float drawHeight)
 
     // 2) Prepare one-shot notifications and start a new ImGui frame only when needed.
     UpdateVersionAndStartupNotifications(ctx);
-    BeginMenuFrameIfNeeded(ctx);
     if (DlssNr::ExperimentalSession::ConsumeRecoveryNotice(ctx.now))
     {
         ImGuiToast notification { ImGuiToastType::Warning, 12000,
@@ -8381,6 +8466,7 @@ bool MenuCommon::RenderMenu(float drawWidth, float drawHeight)
         notification.setTitle(Neurotic::UiLiteral("ingame.menu-common.neurotic_experimental_safety_c6a5a790", "NeuRotic experimental safety"));
         ImGui::InsertNotification(notification);
     }
+    BeginMenuFrameIfNeeded(ctx);
     OptiInput::EndFrame(_isVisible && (!_rendererOwnsCapture || _rendererCaptureAvailable));
 
     // 3) Draw lightweight overlay windows first, preserving the original order.

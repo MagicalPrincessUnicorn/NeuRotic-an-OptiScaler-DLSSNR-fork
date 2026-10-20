@@ -19,8 +19,32 @@ struct GpuRequest {
     D3D12_RESOURCE_STATES depthState=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     D3D12_RESOURCE_STATES motionState=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     NativeSourceView source;
+    // Synchronous Prepare input only. PreparedFrame owns an explicit child
+    // lease and retains the execution caller; it never stores this pointer.
+    const GpuSafety::LocalRecordingAction* recordingOwner=nullptr;
 };
-struct GpuRecordResult {bool recorded=false,possibleEffects=false;HRESULT result=E_FAIL;std::optional<NativeDispatchOutcome> output;};
+struct GpuRecordResult {bool recorded=false,possibleEffects=false;HRESULT result=E_FAIL;std::optional<NativeDispatchOutcome> output;bool refusedBeforeEffects=false;};
+// Synchronous, nonretained admission at the actual carry recording boundary.
+// Runs after preparation and LocalRecordingAction validation, before commands.
+struct RecordBoundary {
+    void* context=nullptr;
+    bool (*beforeRecord)(void*) noexcept=nullptr;
+    // Pure interval observation after our commands, before foreign final
+    // LocalAction validation and release. No resource ownership is retained.
+    void (*beforeCompletion)(void*) noexcept=nullptr;
+    // Session releases every prepared owner before validating this interval
+    // and publishing carry output or committing the carry policy event.
+    bool (*afterRetirement)(void*) noexcept=nullptr;
+};
+// Optional full-output capture has its own synchronous preparation/retirement
+// boundaries. These callbacks never outlive CompleteFull.
+struct CaptureBoundary {
+    RecordBoundary record{};
+    bool available=true;
+    void (*afterPreparation)(void*)=nullptr;
+    void (*beforeRetirement)(void*,bool recorded,bool possibleEffects) noexcept=nullptr;
+    bool (*afterRetirement)(void*) noexcept=nullptr;
+};
 struct GpuMeasurement {
     SourceRef source;
     std::uint64_t association=0;
@@ -49,8 +73,8 @@ class Renderer {
     Renderer& operator=(const Renderer&)=delete;
     std::unique_ptr<PreparedFrame> PrepareCapture(const GpuRequest&);
     std::unique_ptr<PreparedFrame> PrepareCarry(const GpuRequest&);
-    GpuRecordResult RecordCapture(PreparedFrame&);
-    GpuRecordResult RecordCarry(PreparedFrame&);
+    GpuRecordResult RecordCapture(PreparedFrame&,const RecordBoundary& = {});
+    GpuRecordResult RecordCarry(PreparedFrame&,const RecordBoundary& = {});
     // Output acceptance comes from the caller's current-output transaction.
     // Recording alone cannot publish an anchor as accepted output.
     bool AcceptCapture(const SourceRef&);

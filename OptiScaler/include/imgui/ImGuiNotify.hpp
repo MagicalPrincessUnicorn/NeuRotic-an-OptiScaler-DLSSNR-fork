@@ -491,6 +491,14 @@ namespace ImGui
         pendingNotifications.push_back(toast);
     }
 
+    // Only the render owner reads the active vector. Producers append under
+    // pendingNotificationsMutex; observing pending work never drains that queue.
+    inline bool HasNotifications()
+    {
+        std::scoped_lock lock(pendingNotificationsMutex);
+        return !notifications.empty() || !pendingNotifications.empty();
+    }
+
     /**
      * @brief Removes a notification from the list of notifications.
      * 
@@ -508,6 +516,12 @@ namespace ImGui
      */
     inline void RenderNotifications(ImGuiToastPos toastPos, float scale, bool toneMap = false)
     {
+        // A producer may enqueue after the menu skipped its frame. Keep that
+        // work pending until a valid render frame can own its toast windows.
+        const auto* context = GetCurrentContext();
+        if (!context || !context->WithinFrameScope)
+            return;
+
         // Only this render owner mutates notifications or holds pointers into it.
         {
             std::vector<ImGuiToast> incoming;

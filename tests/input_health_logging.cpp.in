@@ -1,0 +1,55 @@
+// Executes the production health function and acquisition resolver with the real
+// input state. The foreground-window boundary is fixed so desktop focus changes
+// cannot create unrelated diagnostic events in this deterministic test.
+#include "menu/input/input_system_internal.h"
+#include <iostream>
+#include <string>
+static std::uint64_t healthMessages = 0, warningMessages = 0;
+#define LOG_DEBUG(...) (++healthMessages)
+#define LOG_WARN(...) (++warningMessages)
+static HWND FixtureForegroundWindow() { return nullptr; }
+#define GetForegroundWindow FixtureForegroundWindow
+namespace OptiInput {
+InputState _state;
+std::uint32_t CountTrackedWindowsHooksLocked() { return 0; }
+// PRODUCTION_RESOLVER
+// PRODUCTION_HEALTH
+}
+static bool Check(bool value, const char* message) {
+    if (!value) std::cerr << "FAIL " << message << " (health=" << healthMessages << ")\n";
+    return value;
+}
+int main(int argc, char** argv) {
+    using namespace OptiInput;
+    const std::string mode = argc > 1 ? argv[1] : "steady";
+    if (mode == "steady") {
+        _state.ReceivedRawInputThisFrame = true;
+        for (int frame = 0; frame < 30000; ++frame)
+            LogInputHealthSnapshotLocked("fixture");
+        std::cout << "steady hidden-menu raw input: 30000 frames, " << healthMessages << " health messages\n";
+        return Check(healthMessages == 51, "unchanged active acquisition must not log every frame") ? 0 : 1;
+    }
+    if (mode == "transitions") {
+        LogInputHealthSnapshotLocked("fixture");
+        if (!Check(healthMessages == 0, "unchanged empty state should stay quiet")) return 1;
+        _state.ReceivedRawInputThisFrame = true;
+        LogInputHealthSnapshotLocked("fixture");
+        LogInputHealthSnapshotLocked("fixture");
+        if (!Check(healthMessages == 1, "raw acquisition entry must log once")) return 1;
+        _state.ReceivedRawInputThisFrame = false;
+        _state.ReceivedWindowMessageThisFrame = true;
+        LogInputHealthSnapshotLocked("fixture");
+        LogInputHealthSnapshotLocked("fixture");
+        if (!Check(healthMessages == 2, "raw-to-window transition must log once")) return 1;
+        _state.MenuVisible = true;
+        LogInputHealthSnapshotLocked("fixture");
+        LogInputHealthSnapshotLocked("fixture");
+        if (!Check(healthMessages == 3, "menu visibility change must remain observable")) return 1;
+        _state.ReceivedWindowMessageThisFrame = false;
+        LogInputHealthSnapshotLocked("fixture");
+        if (!Check(healthMessages == 4, "active-to-none transition must remain observable")) return 1;
+        std::cout << "PASS input mode and menu visibility transitions remain observable\n";
+        return 0;
+    }
+    return 2;
+}

@@ -15,6 +15,11 @@ void MakeExecutable(const std::filesystem::path& path){
  IMAGE_OPTIONAL_HEADER64 optional{};optional.Magic=IMAGE_NT_OPTIONAL_HDR64_MAGIC;IMAGE_SECTION_HEADER section{};
  std::ofstream file(path,std::ios::binary|std::ios::trunc);file.write((char*)&dos,sizeof(dos));DWORD signature=IMAGE_NT_SIGNATURE;file.write((char*)&signature,sizeof(signature));file.write((char*)&header,sizeof(header));file.write((char*)&optional,sizeof(optional));file.write((char*)&section,sizeof(section));
 }
+void MakeExecutable32(const std::filesystem::path& path){
+ IMAGE_DOS_HEADER dos{};dos.e_magic=IMAGE_DOS_SIGNATURE;dos.e_lfanew=sizeof(dos);IMAGE_FILE_HEADER header{};header.Machine=IMAGE_FILE_MACHINE_I386;header.NumberOfSections=1;header.Characteristics=IMAGE_FILE_EXECUTABLE_IMAGE;header.SizeOfOptionalHeader=sizeof(IMAGE_OPTIONAL_HEADER32);
+ IMAGE_OPTIONAL_HEADER32 optional{};optional.Magic=IMAGE_NT_OPTIONAL_HDR32_MAGIC;IMAGE_SECTION_HEADER section{};
+ std::ofstream file(path,std::ios::binary|std::ios::trunc);file.write((char*)&dos,sizeof(dos));DWORD signature=IMAGE_NT_SIGNATURE;file.write((char*)&signature,sizeof(signature));file.write((char*)&header,sizeof(header));file.write((char*)&optional,sizeof(optional));file.write((char*)&section,sizeof(section));
+}
 nh::Json Inspection(const std::filesystem::path& exe,const char* proxy="winmm.dll"){
  return {{"target",{{"executable",nh::Utf8(exe.wstring())}}},{"state",{{"kind","neurotic-game-install"},{"schemaVersion",3},{"status","Installed"},{"proxy",proxy}}},{"configRevision","fixture-config-revision"},{"runtime","NotAttempted"},{"recoveryRequired",false},{"conflicts",nh::Json::array()},{"missing",nh::Json::array()},
  {"settings",nh::Json::array({{{"section","Neural"},{"key","Enabled"},{"group","Neural"},{"available",true},{"value","true"},{"values",nh::Json::array({"true","false"})}}})}};
@@ -24,11 +29,12 @@ void StopInspect(nh::HubModel& model){
 }
 // Exercise ProcessJob::Poll's real installer-receipt branch with a completed
 // harmless child. The installer protocol remains unchanged.
-void Feed(nh::HubModel& model,const std::filesystem::path& receipt,const nh::Json& result){
- StopInspect(model);Write(receipt,result.dump());wchar_t system[MAX_PATH];GetSystemDirectoryW(system,MAX_PATH);auto exe=std::filesystem::path(system)/L"cmd.exe";auto command=nh::Quote(exe.wstring())+L" /d /c exit 0";
+void FeedBytes(nh::HubModel& model,const std::filesystem::path& receipt,const std::string& bytes,bool discovery=false,bool writeReceipt=true){
+ StopInspect(model);if(writeReceipt)Write(receipt,bytes);else std::filesystem::remove(receipt);wchar_t system[MAX_PATH];GetSystemDirectoryW(system,MAX_PATH);auto exe=std::filesystem::path(system)/L"cmd.exe";auto command=nh::Quote(exe.wstring())+L" /d /c exit 0";
  STARTUPINFOW start{sizeof(start)};PROCESS_INFORMATION child{};if(!CreateProcessW(exe.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&start,&child))throw std::runtime_error("Game status fixture child could not start");
- CloseHandle(child.hThread);WaitForSingleObject(child.hProcess,5000);model.installer.process=child.hProcess;model.installer.result=receipt;model.installer.discovery=model.installer.preflight=false;model.installer.busy=true;model.installer.error.clear();model.Poll();
+ CloseHandle(child.hThread);WaitForSingleObject(child.hProcess,5000);auto& job=discovery?model.discovery:model.installer;job.process=child.hProcess;job.result=receipt;job.discovery=discovery;job.preflight=false;job.busy=true;job.started=GetTickCount64();job.error.clear();if(discovery)job.text=bytes;model.Poll();
 }
+void Feed(nh::HubModel& model,const std::filesystem::path& receipt,const nh::Json& result,bool discovery=false){FeedBytes(model,receipt,result.dump(),discovery);}
 bool Junction(const std::filesystem::path& path,const std::filesystem::path& target){
  CreateDirectoryW(path.c_str(),nullptr);auto handle=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS,nullptr);if(handle==INVALID_HANDLE_VALUE)return false;
  // A directory junction does not require symbolic-link privilege.
@@ -36,6 +42,155 @@ bool Junction(const std::filesystem::path& path,const std::filesystem::path& tar
  auto put16=[&](size_t at,USHORT value){memcpy(bytes.data()+at,&value,2);};DWORD tag=IO_REPARSE_TAG_MOUNT_POINT;memcpy(bytes.data(),&tag,4);put16(4,(USHORT)(8+pathBytes));put16(8,0);put16(10,(USHORT)(substitute.size()*2));put16(12,(USHORT)((substitute.size()+1)*2));put16(14,(USHORT)(print.size()*2));
  memcpy(bytes.data()+16,substitute.c_str(),(substitute.size()+1)*2);memcpy(bytes.data()+16+(substitute.size()+1)*2,print.c_str(),(print.size()+1)*2);DWORD returned=0;bool ok=DeviceIoControl(handle,FSCTL_SET_REPARSE_POINT,bytes.data(),(DWORD)bytes.size(),nullptr,0,&returned,nullptr)!=FALSE;CloseHandle(handle);return ok;
 }
+}
+int RunFreshOperationInspectionTests(){
+ int failed=0;auto check=[&](bool ok,const char* label){std::cout<<(ok?"PASS ":"FAIL ")<<"NH-FRESH-OPERATION-INSPECTION: "<<label<<'\n';failed+=!ok;};
+ auto fixture=nh::UserRoot()/L"fresh-operation-inspection";std::filesystem::create_directories(fixture);
+ auto one=fixture/L"Game.exe",two=fixture/L"Other.exe",receipt=fixture/L"receipt.json";MakeExecutable(one);MakeExecutable(two);
+ nh::Json genuine;{std::ifstream file("tests/hub/fixtures/control-install-cd94d8e1.json");genuine=nh::Json::parse(file);}
+ check(genuine.at("inspection").at("settings").size()==421,"preserved producer fixture contains all 421 settings rows");
+ for(int kind=0;kind<5;++kind){
+  nh::HubModel model;model.games={{"one","One","Manual",nh::Utf8(fixture.wstring()),nh::InspectExecutable(one)}};model.selected=0;
+  model.installer.action="Inspect";Feed(model,receipt,{{"status","FailedWithoutChanges"},{"reason","Fixture prior check failed"}});
+  check(model.SelectedInspectionFailure()=="Fixture prior check failed","real ProcessJob establishes target-bound failed check");
+  auto result=genuine;result["inspection"]["target"]["executable"]=nh::Utf8(one.wstring());
+  if(kind==1)result.erase("inspection");
+  if(kind==2)result["inspection"]["settings"]=nh::Json::object();
+  if(kind==3)result["inspection"]["target"]["executable"]=nh::Utf8(two.wstring());
+  if(kind==4)result["inspection"].erase("target");
+  model.installer.action="Execute";Feed(model,receipt,result);
+  if(kind==0)check(model.settings.size()==421&&!model.inspectionCached&&model.SelectedInspectionFailure().empty(),"accepted same-target Execute inspection resolves previous failed check");
+  else check(model.SelectedInspectionFailure()=="Fixture prior check failed"&&(kind==1||model.inspection.is_null()),
+    kind==1?"success without inspection does not resolve failed check":kind==2?"malformed operation inspection does not resolve failed check":kind==3?"foreign-target operation inspection does not resolve failed check":"targetless operation inspection does not resolve failed check");
+  StopInspect(model);
+ }
+ return failed;
+}
+int RunInspectionPresentationTests(){
+ int failed=0;auto check=[&](bool ok,const char* label){std::cout<<(ok?"PASS ":"FAIL ")<<"NH-INSPECTION-PRESENTATION: "<<label<<'\n';failed+=!ok;};
+ auto fixture=nh::UserRoot()/L"inspection-presentation";std::filesystem::create_directories(fixture/L"one");std::filesystem::create_directories(fixture/L"two");
+ auto one=fixture/L"one/Game.exe",two=fixture/L"two/Game.exe",receipt=fixture/L"receipt.json";MakeExecutable(one);MakeExecutable(two);
+ nh::HubModel model;model.games={{"one","One","Manual",nh::Utf8(one.parent_path().wstring()),nh::InspectExecutable(one)},{"two","Two","Manual",nh::Utf8(two.parent_path().wstring()),nh::InspectExecutable(two)}};model.selected=0;
+ {
+  nh::HubModel background;background.games=model.games;background.selected=0;
+  Write(one.parent_path()/L"OptiScaler.ini","[Fixture]\nEnabled=true\n");Write(one.parent_path()/L"OptiScaler.log","background scan log\n");
+  background.installer.busy=background.installer.readOnlyInstaller=true;background.installer.action="Inspect";background.inspectionRefreshing=true;
+  check(background.CanCollectGameDiagnostics()&&background.CanOpenSelectedIni()&&background.CanStartGame(),"background Inspect leaves known-path diagnostics, INI and Play available before a snapshot");
+  auto preview=nh::ReadGameDiagnostics(nh::Utf8(one.wstring()),nh::Json());
+  check(preview.text.find("background scan log")!=std::string::npos,"quick preview reads the ordinary game log without installation metadata");
+  nh::SettingsField draft;draft.available=true;draft.original="true";strcpy_s(draft.draft.data(),draft.draft.size(),"false");background.settings.push_back(draft);background.proxy=2;
+  auto oldMessage=background.message;background.Select(0);
+  check(background.installer.error.empty()&&background.message==oldMessage,"same-game selection does not cancel its running inspection");
+  background.installer.busy=false;background.inspectionRefreshing=false;background.Select(0);
+  check(!background.installer.busy&&background.settings.size()==1&&std::string(background.settings[0].draft.data())=="false"&&background.proxy==2,"idle same-game selection preserves draft and proxy without restarting inspection");
+  StopInspect(background);
+  background.CollectGameDiagnostics();const bool started=background.gameDiagnosticsBusy;auto deadline=GetTickCount64()+5000;
+  while(background.gameDiagnosticsBusy&&GetTickCount64()<deadline){background.Poll();Sleep(1);}
+  check(started&&!background.gameDiagnosticsBusy&&background.gameDiagnosticsText.find("background scan log")!=std::string::npos,"asynchronous first log preview owns its target session without an inspection snapshot");
+  background.installer.busy=true;background.installer.readOnlyInstaller=false;background.installer.action="Execute";
+  check(!background.CanCollectGameDiagnostics()&&!background.CanOpenSelectedIni()&&!background.CanStartGame(),"mutation ownership still protects selected-game actions");background.installer.busy=false;
+  background.SetExecutable(0,two);
+  const bool reloadedTarget=nh::GamePathKey(background.games[0].target.path)==nh::GamePathKey(nh::Utf8(two.wstring()));
+  if(!reloadedTarget||!background.installer.busy||background.installer.action!="Inspect")std::cout<<"NH-SCAN-RELOAD facts: actual="<<background.games[0].target.path<<" expected="<<nh::Utf8(two.wstring())<<" busy="<<background.installer.busy<<" action="<<background.installer.action<<" message="<<background.message<<" targetReason="<<background.games[0].target.reason<<'\n';
+  check(reloadedTarget&&background.installer.busy&&background.installer.action=="Inspect","explicit executable change reloads the same row despite selection idempotence");StopInspect(background);
+ }
+ // A real discovery can observe changed executable bitness before its old
+ // Inspect child drains. Clicking that row must preserve mandatory reload.
+ {
+  nh::HubModel queued;queued.games=model.games;queued.selected=0;queued.RefreshSelected();
+  MakeExecutable32(one);
+  queued.MergeDiscovery({{"protocolVersion",2},{"kind","DiscoveryResult"},{"games",nh::Json::array({{{"id","one"},{"title","One"},{"store","Manual"},{"installRoot",nh::Utf8(one.parent_path().wstring())},{"executable",nh::Utf8(one.wstring())}}})},{"errors",nh::Json::array()}});
+  std::cout<<"NH-P2-RELOAD "<<nh::Json{{"target",queued.games[0].target.path},{"bitness",queued.games[0].target.bitness},{"busy",queued.installer.busy},{"action",queued.installer.action},{"error",queued.installer.error},{"message",queued.message}}.dump()<<'\n';
+  check(nh::GamePathKey(queued.games[0].target.path)==nh::GamePathKey(nh::Utf8(one.wstring()))&&queued.games[0].target.bitness==32&&queued.installer.busy&&!queued.installer.error.empty(),"discovery observes real changed target bitness while the old Inspect remains owned");
+  queued.Select(0);Feed(queued,receipt,{{"status","Cancelled"}});
+  nh::Json next;if(queued.installer.busy){std::ifstream file(queued.installer.request);file>>next;}
+  check(queued.selected==0&&queued.games[0].target.bitness==32&&queued.installer.busy&&queued.installer.action=="Inspect"&&next.value("gameExecutable","")==queued.games[0].target.path,"same-row click preserves mandatory changed-target reload until the old child drains");StopInspect(queued);MakeExecutable(one);
+ }
+ {
+  nh::HubModel optional;optional.games=model.games;optional.selected=0;optional.RefreshSelected();optional.Select(1);optional.Select(0);Feed(optional,receipt,{{"status","Cancelled"}});
+  check(optional.selected==0&&!optional.installer.busy,"same-row click still cancels an optional pending different-game selection");StopInspect(optional);
+ }
+ for(bool pending:{false,true})for(bool changedBitness:{false,true}){
+  nh::HubModel previewOnly;previewOnly.games=model.games;previewOnly.selected=0;
+  Write(one.parent_path()/L"OptiScaler.log",pending?"pending preview survives reselection\n":"completed preview survives reselection\n");
+  previewOnly.CollectGameDiagnostics();const bool started=previewOnly.gameDiagnosticsBusy;
+  if(!pending){auto until=GetTickCount64()+5000;while(previewOnly.gameDiagnosticsBusy&&GetTickCount64()<until){previewOnly.Poll();Sleep(1);}}
+  // Without Poll, even a ready future remains an authentic unconsumed result.
+  previewOnly.Select(-1);if(changedBitness)MakeExecutable32(one);previewOnly.Select(0);
+  const bool freshInspect=previewOnly.installer.busy&&previewOnly.installer.action=="Inspect"&&!previewOnly.inspectionCached&&previewOnly.inspection.is_null();
+  StopInspect(previewOnly);auto until=GetTickCount64()+5000;while(previewOnly.gameDiagnosticsBusy&&GetTickCount64()<until){previewOnly.Poll();Sleep(1);}
+  const auto expected=pending?"pending preview survives reselection":"completed preview survives reselection";
+  if(changedBitness)check(started&&freshInspect&&!previewOnly.gameDiagnosticsBusy&&previewOnly.gameDiagnosticsText.empty(),pending?"changed executable bitness invalidates a pending diagnostics-only result":"changed executable bitness invalidates a completed diagnostics-only preview");
+  else check(started&&freshInspect&&!previewOnly.gameDiagnosticsBusy&&previewOnly.gameDiagnosticsText.find(expected)!=std::string::npos,pending?"pending diagnostics-only preview retains its generation across reselection and fresh Inspect":"completed diagnostics-only preview survives reselection without fabricating cached inspection");
+  MakeExecutable(one);
+ }
+ model.installer.action="Inspect";Feed(model,receipt,{{"status","FailedWithoutChanges"},{"reason","Initial inspection refused"}});
+ check(model.inspection.is_null()&&!model.inspectionCached&&model.SelectedInspectionFailure()=="Initial inspection refused","first failure has target-bound error without inventing a snapshot");
+ model.selected=1;check(model.SelectedInspectionFailure().empty(),"another selected target cannot inherit the first inspection failure");model.selected=0;
+ auto first=Inspection(one);first["state"]=nullptr;first["settings"]=nh::Json::array();
+ for(const char* status:{"Failed","FailedWithoutChanges","Cancelled"}){
+  model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",first}});
+  check(model.SelectedInspectionFailure().empty()&&!model.inspectionCached,"accepted inspection clears prior failure");
+  model.RefreshSelected();check(model.SelectedInspectionFailure().empty()&&model.inspectionCached,"starting a refresh clears failure and retains advisory snapshot");
+  Feed(model,receipt,{{"status",status},{"reason","Fixture check did not complete"}});
+  check(model.inspection==first&&model.inspectionCached&&(model.SelectedInspectionFailure().empty()==(std::string(status)=="Cancelled")),"failed and cancelled inspections retain snapshot with distinct error semantics");
+ }
+ model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",first}});
+ Feed(model,receipt,{{"games",nh::Json::array({nh::Json::object()})}},true);
+ const bool unrelatedDiscovery=model.inspection.is_null()&&model.SelectedInspectionFailure().empty()&&model.message.find("Operation receipt could not be read")!=std::string::npos;
+ if(!unrelatedDiscovery)std::cout<<"NH-INSPECTION-PRESENTATION facts: inspectionNull="<<model.inspection.is_null()<<" failure="<<model.SelectedInspectionFailure()<<" message="<<model.message<<" discoveryError="<<model.discovery.error<<'\n';
+ check(unrelatedDiscovery,"unrelated malformed discovery after completed Inspect never becomes an inspection failure");
+ model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",first}});
+ model.installer.action="Install";Feed(model,receipt,{{"status","FailedWithoutChanges"},{"reason","Install refused"}});
+ check(model.SelectedInspectionFailure().empty(),"unrelated operation failure is not an inspection failure");
+ for(int kind=0;kind<3;++kind){
+  model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",first}});model.RefreshSelected();
+  nh::Json request;{std::ifstream file(model.installer.request);request=nh::Json::parse(file);}
+  const bool realInspectRequest=request.value("kind","")=="Inspect"&&model.installer.action=="Inspect";
+  if(kind==2)model.installer.request=fixture/L"missing-inspect-request.json";
+  FeedBytes(model,receipt,"{",false,kind!=1);
+  const auto expected=kind==2?"RecoveryRequired":"FailedWithoutMutation";
+  const bool failure=realInspectRequest&&model.lastResult.value("status","")==expected&&model.inspection==first&&model.inspectionCached&&!model.SelectedInspectionFailure().empty();
+  if(!failure)std::cout<<"NH-INSPECTION-PRESENTATION transport facts: kind="<<kind<<" status="<<model.lastResult.value("status","")<<" cached="<<model.inspectionCached<<" failure="<<model.SelectedInspectionFailure()<<'\n';
+  check(failure,kind==0?"actual invalid JSON reply preserves advisory snapshot with check failure":kind==1?"actual missing reply file preserves advisory snapshot with check failure":"unreadable original request retains RecoveryRequired classification and check failure");
+ }
+ auto malformedSettings=first;malformedSettings["settings"]=nh::Json::object();
+ auto malformedField=Inspection(one);malformedField["settings"][0]["section"]=false;
+ const std::vector<nh::Json> badProjections={{{"status","Inspected"}},{{"status","Inspected"},{"inspection",nullptr}},{{"status","Inspected"},{"inspection",nh::Json::object()}},{{"status","Inspected"},{"inspection",nh::Json::array()}},{{"status","Inspected"},{"inspection",malformedSettings}},{{"status","Inspected"},{"inspection",malformedField}}};
+ for(size_t kind=0;kind<badProjections.size();++kind){
+  const bool drafted=kind+1==badProjections.size();auto prior=drafted?Inspection(one):first;
+  model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",prior}});
+  if(drafted){strcpy_s(model.settings[0].draft.data(),model.settings[0].draft.size(),"false");model.proxy=2;}
+  model.RefreshSelected();Feed(model,receipt,badProjections[kind]);
+  const bool draftPreserved=!drafted||(model.settings.size()==1&&model.settings[0].available&&model.settings[0].original=="true"&&std::string(model.settings[0].draft.data())=="false"&&model.proxy==2&&model.inspection.value("configRevision","")=="fixture-config-revision");
+  const bool failure=model.inspection==prior&&model.inspectionCached&&!model.SelectedInspectionFailure().empty()&&draftPreserved;
+  if(!failure)std::cout<<"NH-INSPECTION-PRESENTATION projection facts: kind="<<kind<<" inspectionNull="<<model.inspection.is_null()<<" cached="<<model.inspectionCached<<" failure="<<model.SelectedInspectionFailure()<<'\n';
+  check(failure,"missing/null/malformed inspected projection cannot replace the prior advisory snapshot or clear failure");
+ }
+ for(int kind=0;kind<2;++kind){
+  auto prior=Inspection(one);model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",prior}});
+  strcpy_s(model.settings[0].draft.data(),model.settings[0].draft.size(),"false");model.proxy=2;model.RefreshSelected();
+  auto malformed=prior;if(kind==0)malformed["configRevision"]=false;else malformed["state"]["status"]=false;
+  Feed(model,receipt,{{"status","Inspected"},{"inspection",malformed}});
+  auto saved=nh::LoadGameProfile(model.games[0].target.path);
+  const bool preserved=model.inspection==prior&&model.inspectionCached&&!model.SelectedInspectionFailure().empty()&&model.settings.size()==1&&model.settings[0].available&&model.settings[0].original=="true"&&std::string(model.settings[0].draft.data())=="false"&&model.proxy==2&&saved&&saved->inspection==prior;
+  if(!preserved)std::cout<<"NH-INSPECTION-PRESENTATION consumed-type facts: kind="<<kind<<" inspectionNull="<<model.inspection.is_null()<<" fields="<<model.settings.size()<<" cachedProfile="<<bool(saved)<<" failure="<<model.SelectedInspectionFailure()<<'\n';
+  check(preserved,kind==0?"wrong-type revision preserves unsaved draft, original revision, proxy and saved profile":"wrong-type installation status fails before session or profile publication");
+ }
+ // Keep the independent stale-target controls on their original draft-free
+ // snapshot, after proving that a failed same-target parse retained the draft.
+ for(auto& field:model.settings)strncpy_s(field.draft.data(),field.draft.size(),field.original.c_str(),_TRUNCATE);
+ model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",first}});
+ auto unknown=first;unknown["state"]={{"status","Future observed status"}};
+ model.installer.action="Inspect";Feed(model,receipt,{{"status","Inspected"},{"inspection",unknown}});
+ check(model.inspection==unknown&&!model.inspectionCached&&model.SelectedInspectionFailure().empty(),"valid unknown state remains a fresh observed unknown without a state allowlist");
+ model.RefreshSelected();const bool queued=model.TrySelectLibraryGame(1);Feed(model,receipt,{{"status","FailedWithoutChanges"},{"reason","Old target check failed"}});
+ check(queued&&model.selected==1&&model.SelectedInspectionFailure().empty(),"late inspection result drains before queued selection without contaminating new target");StopInspect(model);
+ model.Select(0);StopInspect(model);model.installer.action="Inspect";
+ auto foreign=Inspection(two);Feed(model,receipt,{{"status","Inspected"},{"inspection",foreign}});
+ check(model.inspection.is_null()&&!model.SelectedInspectionFailure().empty(),"foreign successful-looking inspection is refused and never displayed as current");
+ model.Select(-1);check(model.SelectedInspectionFailure().empty(),"leaving selected game clears inspection failure");StopInspect(model);
+ return failed;
 }
 int RunGameStatusTests(){
  int failed=0;auto check=[&](bool ok,const char* label){std::cout<<(ok?"PASS ":"FAIL ")<<label<<'\n';if(!ok)++failed;};

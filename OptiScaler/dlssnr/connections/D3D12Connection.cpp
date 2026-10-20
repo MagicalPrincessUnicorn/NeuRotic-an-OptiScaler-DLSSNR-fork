@@ -1,5 +1,7 @@
 #include "GpuBudget.h"
 #include "D3D12Connection.h"
+#include "D3D12DepthPlane.h"
+#include <nr/context/PreparedGuideNormalization.h>
 #include "../FgLifecycle.h"
 #include <d3dcompiler.h>
 #include <array>
@@ -22,20 +24,12 @@ bool Completed(ID3D12Fence* f,UINT64 n) {
     bool ok=SUCCEEDED(f->SetEventOnCompletion(n,event))&&WaitForSingleObject(event,2000)==WAIT_OBJECT_0;
     CloseHandle(event);v=f->GetCompletedValue();return ok&&v!=UINT64_MAX&&v>=n;
 }
-void Transition(ID3D12GraphicsCommandList* l,ID3D12Resource* r,D3D12_RESOURCE_STATES a,D3D12_RESOURCE_STATES b) {
+void Transition(ID3D12GraphicsCommandList* l,ID3D12Resource* r,D3D12_RESOURCE_STATES a,D3D12_RESOURCE_STATES b,UINT subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) {
     if(a==b)return;D3D12_RESOURCE_BARRIER x{};x.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    x.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,a,b};l->ResourceBarrier(1,&x);
+    x.Transition={r,subresource,a,b};l->ResourceBarrier(1,&x);
 }
-DXGI_FORMAT DepthView(DXGI_FORMAT f) {
-    switch(f){case DXGI_FORMAT_R32_FLOAT:case DXGI_FORMAT_D32_FLOAT:case DXGI_FORMAT_R32_TYPELESS:return DXGI_FORMAT_R32_FLOAT;
-    case DXGI_FORMAT_D16_UNORM:case DXGI_FORMAT_R16_TYPELESS:case DXGI_FORMAT_R16_UNORM:return DXGI_FORMAT_R16_UNORM;
-    case DXGI_FORMAT_D24_UNORM_S8_UINT:case DXGI_FORMAT_R24G8_TYPELESS:return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;default:return DXGI_FORMAT_UNKNOWN;}
-}
-DXGI_FORMAT DepthRaw(DXGI_FORMAT f) {
-    switch(DepthView(f)){case DXGI_FORMAT_R32_FLOAT:return DXGI_FORMAT_R32_TYPELESS;
-    case DXGI_FORMAT_R16_UNORM:return DXGI_FORMAT_R16_TYPELESS;
-    case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:return DXGI_FORMAT_R24G8_TYPELESS;default:return DXGI_FORMAT_UNKNOWN;}
-}
+DXGI_FORMAT DepthView(DXGI_FORMAT f) { return D3D12DepthPlane::View(f); }
+DXGI_FORMAT DepthRaw(DXGI_FORMAT f) { return D3D12DepthPlane::Raw(f); }
 bool Shape(ID3D12Resource* r,UINT w,UINT h) {
     if(!r)return false;auto d=r->GetDesc();return d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==w&&d.Height==h&&d.DepthOrArraySize==1&&d.MipLevels==1&&d.SampleDesc.Count==1;
 }
@@ -61,6 +55,8 @@ struct D3D12Connection::Impl {
     nrpg::CpuMainlineClient::GpuOutput heldOutput;
     std::array<std::uint64_t,11> diagnosedEpisode{};
     bool restart=false;
+    Mixed::History mixedHistory{};
+    uint64_t mixedPolicyRevision=0;
     explicit Impl(ID3D12Device* d):device(d){}
     bool Quarantine(std::string& reason,const char* boundary,HRESULT operationResult,const char* why) {
         if(!restart) {
@@ -185,6 +181,104 @@ float4 ps(float4 p:SV_Position):SV_Target { return image.Load(int3(p.xy,0)); })"
 D3D12Connection::D3D12Connection(ID3D12Device* d):impl_(std::make_unique<Impl>(d)){}
 D3D12Connection::~D3D12Connection(){if(impl_->restart)(void)impl_.release();}
 bool D3D12Connection::RequiresRestart()const{return impl_->restart;}
+bool D3D12Connection::CaptureMixed(const D3D12ObservedFrame& anchor,const Mixed::Anchor& identity,
+    std::span<const D3D12SignalOffer> offers,const Mixed::Policy& policy,PendingFrame& out,
+    Mixed::Selection& selected,std::string& reason) {
+    namespace P=Neurotic::Feed::Prepared;
+    auto& owner=*impl_;selected={};
+    if(policy.strict&&(policy.color==Source::None||policy.depth==Source::None||policy.motion==Source::None)){
+        if(policy.color==Source::None)selected.colorReason=Mixed::Reason::IntentionallyDisabled;
+        if(policy.depth==Source::None)selected.depthReason=Mixed::Reason::IntentionallyDisabled;
+        if(policy.motion==Source::None)selected.motionReason=Mixed::Reason::IntentionallyDisabled;
+        return Refuse(reason,Mixed::ReasonText(Mixed::Reason::IntentionallyDisabled));
+    }
+    if(owner.restart||owner.active||out.ownerLease)return Refuse(reason,"Mixed capture owner is unavailable");
+    const auto& ad=anchor.description;
+    if(offers.size()>Mixed::MaxOffers||identity.frame.session!=ad.session||identity.frame.device!=ad.device||
+       identity.frame.generation!=ad.generation||identity.frame.capture!=ad.capture||
+       identity.width!=ad.color.width||identity.height!=ad.color.height||
+       !anchor.statesKnown||!anchor.lease||!OnDevice(anchor.color.Get(),owner.device.Get())||
+       !OnDevice(anchor.sourceQueue.Get(),owner.device.Get()))return Refuse(reason,"Mixed anchor identity or ownership unavailable");
+    // A supplemental producer never makes Present wait for optional work. Both
+    // device ownership and the real fence are verified here, not by a UI flag.
+    const auto completed=[&](const D3D12ObservedFrame& f) {
+        if(!f.producer||!f.producerValue||f.producerValue==UINT64_MAX||!OnDevice(f.producer.Get(),owner.device.Get()))return false;
+        const auto value=f.producer->GetCompletedValue();return value!=UINT64_MAX&&value>=f.producerValue;
+    };
+    if(!completed(anchor))return Refuse(reason,"Mixed anchor completion unavailable");
+    std::array<Mixed::Offer,Mixed::MaxOffers> facts{};
+    for(size_t n=0;n<offers.size();++n){
+        const auto& source=offers[n];auto& fact=facts[n];fact=source.info;
+        const auto& f=source.frame;const auto& d=f.description;
+        const bool color=fact.signal==Mixed::Signal::Color,depth=fact.signal==Mixed::Signal::Depth;
+        fact.immutableLease=bool(f.lease);
+        // A legacy coherent bundle has no scene identity. It may select its own
+        // components, but cannot join resources acquired under another lease.
+        if(identity.frame.scope==Mixed::IdentityScope::CoherentCapture&&f.lease!=anchor.lease)
+            fact.immutableLease=false;
+        fact.synchronized=completed(f);
+        if(!OnDevice(color?f.color.Get():depth?f.depth.Get():f.motion.Get(),owner.device.Get())||
+           (!color&&!depth&&!OnDevice(f.distrust.Get(),owner.device.Get())))fact.frame.device=0;
+        const auto& raster=color?d.color:depth?d.depth:d.motion;
+        const P::Raster full{identity.width,identity.height,0,0,identity.width,identity.height};
+        // Only the existing zero-jitter, SDR, full-raster profile is transformed.
+        // All interpretation fields move with their selected resource.
+        fact.conventionsKnown=fact.conventionsKnown&&f.statesKnown&&raster==full&&
+            d.size==sizeof(d)&&d.version==P::Version&&
+            d.session==ad.session&&d.capture==ad.capture&&d.generation==ad.generation&&d.device==ad.device&&
+            d.sourceApi==P::C::GraphicsApi::D3D12&&ad.sourceApi==d.sourceApi&&
+            d.rasterOrigin==P::C::RasterOrigin::TopLeft&&d.color==ad.color&&
+            d.colorDomain==ad.colorDomain&&(d.flags&P::ZeroJitterPolicy)&&(ad.flags&P::ZeroJitterPolicy)&&
+            (color?(d.colorDomain==P::C::ColorDomain::EncodedDisplay&&Shape(f.color.Get(),identity.width,identity.height)&&SdrColor(f.color->GetDesc().Format)):depth?(d.depthKind==P::C::DepthKind::Device&&d.depthReversed<=1):
+                (!f.deriveMotion&&!f.invertMotionY&&d.previousCapture==ad.previousCapture&&
+                 d.motionDirection==P::C::MotionDirection::CurrentToPrevious&&d.motionUnits==P::C::MotionUnits::Pixels&&
+                 d.scaleX==1&&d.scaleY==1&&d.motionGridWidth==1&&d.motionGridHeight==1&&
+                 (d.flags&P::HasDistrust)&&d.maskCapture==d.capture&&d.distrust==full));
+        fact.observed=(color?d.colorOrigin:depth?d.depthOrigin:d.motionOrigin)==P::C::SourceClass::HostObserved;
+    }
+    selected=Mixed::Select(identity,{facts.data(),offers.size()},policy,owner.mixedHistory);
+    if(selected.color<0||selected.depth<0||(!selected.ready&&!selected.requestMotion))
+        return Refuse(reason,Mixed::ReasonText(selected.color<0?selected.colorReason:selected.depth<0?selected.depthReason:selected.motionReason));
+    const auto& depth=offers[selected.depth].frame;
+    auto assembled=anchor;auto& d=assembled.description;
+    const auto& color=offers[selected.color].frame;
+    // Output remains the anchor's destination even when color comes from a
+    // different producer. Selected source pixels and semantics travel together.
+    assembled.outputTarget=anchor.outputTarget?anchor.outputTarget:anchor.color;
+    assembled.color=color.color;assembled.colorState=color.colorState;
+    d.color=color.description.color;d.colorDomain=color.description.colorDomain;d.colorOrigin=color.description.colorOrigin;
+    d.flags|=color.description.flags&P::Reset;
+    assembled.depth=depth.depth;assembled.depthState=depth.depthState;
+    d.depth=depth.description.depth;d.depthKind=depth.description.depthKind;
+    d.depthReversed=depth.description.depthReversed;d.depthOrigin=depth.description.depthOrigin;
+    d.flags|=depth.description.flags&P::Reset;
+    struct Leases {std::shared_ptr<void> anchor,color,depth,motion;};
+    auto leases=std::make_shared<Leases>();leases->anchor=anchor.lease;leases->color=color.lease;leases->depth=depth.lease;
+    assembled.deriveMotion=selected.motion<0;
+    if(selected.motion>=0){
+        const auto& motion=offers[selected.motion].frame;const auto& md=motion.description;
+        assembled.motion=motion.motion;assembled.distrust=motion.distrust;
+        assembled.motionState=motion.motionState;assembled.distrustState=motion.distrustState;
+        d.motion=md.motion;d.distrust=md.distrust;d.motionOrigin=md.motionOrigin;d.maskOrigin=md.maskOrigin;
+        d.motionUnits=md.motionUnits;d.motionDirection=md.motionDirection;d.motionGridWidth=md.motionGridWidth;d.motionGridHeight=md.motionGridHeight;
+        d.scaleX=md.scaleX;d.scaleY=md.scaleY;d.maskCapture=md.maskCapture;
+        d.flags|=P::HasDistrust|(md.flags&P::Reset);leases->motion=motion.lease;
+    }
+    const Mixed::History next{offers[selected.depth].info.source,
+        selected.motion>=0?offers[selected.motion].info.source:Source::BuiltIn,
+        offers[selected.depth].info.providerGeneration,selected.motion>=0?offers[selected.motion].info.providerGeneration:ad.generation,offers[selected.color].info.source,offers[selected.color].info.providerGeneration};
+    if(next.color!=owner.mixedHistory.color||next.colorGeneration!=owner.mixedHistory.colorGeneration||next.depth!=owner.mixedHistory.depth||next.motion!=owner.mixedHistory.motion||
+       next.depthGeneration!=owner.mixedHistory.depthGeneration||next.motionGeneration!=owner.mixedHistory.motionGeneration||
+       owner.mixedPolicyRevision!=policy.revision)d.flags|=P::Reset;
+    // The assembled content must pass the same normalization used by NR. The
+    // existing estimator validates its prospective motion when requested.
+    if(!assembled.deriveMotion){const auto normalized=Neurotic::Context::NormalizePreparedGuides(d);
+        if(!normalized){reason=normalized.reason;return false;}}
+    assembled.lease=std::move(leases);
+    if(!Capture(assembled,out,reason))return false;
+    owner.mixedHistory=next;owner.mixedPolicyRevision=policy.revision;
+    return true;
+}
 bool D3D12Connection::Capture(const D3D12ObservedFrame& f,PendingFrame& out,std::string& r) {
     auto& i=*impl_;if(i.restart)return Refuse(r,"capture quarantined; restart required");
     if(!i.Healthy(r,"capture-entry"))return false;
@@ -245,19 +339,24 @@ bool D3D12Connection::Capture(const D3D12ObservedFrame& f,PendingFrame& out,std:
     D3D12_RESOURCE_STATES states[]{f.colorState,f.depthState,f.motionState,f.distrustState};
     DXGI_FORMAT formats[]{cf,DepthView(df),f.deriveMotion?DXGI_FORMAT_R16G16_FLOAT:mf,f.deriveMotion?DXGI_FORMAT_R8_UNORM:kf};
     for(UINT n=0;n<(f.deriveMotion?2u:4u);++n) {
-        Transition(i.list.Get(),sources[n],states[n],D3D12_RESOURCE_STATE_COPY_SOURCE);i.list->CopyResource(raw[n],sources[n]);
-        Transition(i.list.Get(),sources[n],D3D12_RESOURCE_STATE_COPY_SOURCE,states[n]);
-        Transition(i.list.Get(),raw[n],D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if(n==1) D3D12DepthPlane::Copy(i.list.Get(),raw[n],sources[n],states[n]);
+        else {
+            Transition(i.list.Get(),sources[n],states[n],D3D12_RESOURCE_STATE_COPY_SOURCE);i.list->CopyResource(raw[n],sources[n]);
+            Transition(i.list.Get(),sources[n],D3D12_RESOURCE_STATE_COPY_SOURCE,states[n]);
+        }
+        Transition(i.list.Get(),raw[n],D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            n==1?D3D12DepthPlane::Subresource:D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
     }
     auto cpu=i.heap->GetCPUDescriptorHandleForHeapStart();const UINT step=i.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    for(UINT n=0;n<4;++n){D3D12_SHADER_RESOURCE_VIEW_DESC v{};v.Format=formats[n];v.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;v.Texture2D.MipLevels=1;v.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    for(UINT n=0;n<4;++n){D3D12_SHADER_RESOURCE_VIEW_DESC v{};v.Format=formats[n];v.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;v.Texture2D.MipLevels=1;v.Texture2D.PlaneSlice=0;v.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         i.device->CreateShaderResourceView(raw[n],&v,cpu);cpu.ptr+=step;}
     for(auto* resource:canonical){Transition(i.list.Get(),resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         D3D12_UNORDERED_ACCESS_VIEW_DESC v{};v.Format=resource->GetDesc().Format;v.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;i.device->CreateUnorderedAccessView(resource,nullptr,&v,cpu);cpu.ptr+=step;}
     ID3D12DescriptorHeap* heaps[]{i.heap.Get()};i.list->SetDescriptorHeaps(1,heaps);i.list->SetComputeRootSignature(i.root.Get());i.list->SetPipelineState(i.pso.Get());
     i.list->SetComputeRootDescriptorTable(0,i.heap->GetGPUDescriptorHandleForHeapStart());i.list->SetComputeRoot32BitConstant(1,(f.deriveMotion?0u:1u)|(f.invertMotionY?2u:0u),0);i.list->Dispatch((w+7)/8,(h+7)/8,1);
     for(auto* resource:canonical)Transition(i.list.Get(),resource,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    for(auto* resource:raw)if(resource)Transition(i.list.Get(),resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
+    for(UINT n=0;n<4;++n)if(raw[n])Transition(i.list.Get(),raw[n],D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST,
+        n==1?D3D12DepthPlane::Subresource:D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
     if(!i.End(r,"capture-normalize")){if(!i.restart)i.active.reset();return false;}
     out.textures.description=d;auto luid=i.device->GetAdapterLuid();std::memcpy(&out.textures.adapterLuid,&luid,sizeof(luid));
     auto& n=out.textures.normalized;n.device=i.device;n.color=s->color;n.depth=s->depth;n.producer=i.fence;n.value=i.value;n.lease=s;

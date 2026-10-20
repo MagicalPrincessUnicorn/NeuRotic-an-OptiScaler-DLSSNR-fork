@@ -5,6 +5,8 @@
 #include "../diagnostics/FrameProbe.h"
 #include "ComparisonOutput.h"
 #include "SnapshotFile.h"
+#include "HdrSnapshot.h"
+#include "CaptureColor.h"
 #include "InteractionPolicy.h"
 #include "../control/WorkerWake.h"
 #include <dwmapi.h>
@@ -67,21 +69,6 @@ bool Candidate(HWND hwnd, WindowIdentity& id, std::string& reason, bool allowUna
     id.x = rect.left; id.y = rect.top; id.width = static_cast<uint32_t>(rect.right - rect.left); id.height = static_cast<uint32_t>(rect.bottom - rect.top);
     return true;
 }
-ComPtr<IDXGIAdapter> SourceAdapter(HWND hwnd) {
-    ComPtr<IDXGIFactory1> factory; ComPtr<IDXGIAdapter> selected;
-    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return selected;
-    HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    for (UINT ai = 0; ; ++ai) {
-        ComPtr<IDXGIAdapter1> adapter;
-        if (factory->EnumAdapters1(ai, &adapter) == DXGI_ERROR_NOT_FOUND || !adapter) break;
-        for (UINT oi = 0; ; ++oi) {
-            ComPtr<IDXGIOutput> output;
-            if (adapter->EnumOutputs(oi, &output) == DXGI_ERROR_NOT_FOUND || !output) break;
-            DXGI_OUTPUT_DESC desc{}; if (SUCCEEDED(output->GetDesc(&desc)) && desc.Monitor == monitor) { adapter.As(&selected); return selected; }
-        }
-    }
-    return selected;
-}
 bool SameDevice(ID3D11Texture2D* texture, ID3D11Device* device) {
     ComPtr<ID3D11Device> owner; texture->GetDevice(&owner); return owner.Get() == device;
 }
@@ -127,6 +114,12 @@ bool ClientCrop(HWND hwnd, SizeInt32 content, D3D11_BOX& crop, std::string& reas
 
 struct CaptureHost::Impl {
     CaptureOptions options;
+    color::DesktopObserver sourceObserver,outputObserver;
+    color::DesktopObservation sourceColor,outputColor;
+    color::Representation representation;
+    uint64_t colorEpoch=1,outputColorEpoch=1;
+    DXGI_FORMAT swapFormat=DXGI_FORMAT_UNKNOWN;
+    DirectXPixelFormat PoolFormat()const{return color::Hdr(representation)?DirectXPixelFormat::R16G16B16A16Float:DirectXPixelFormat::B8G8R8A8UIntNormalized;}
     mutable CaptureStatistics statistics;
     std::shared_ptr<std::atomic_uint64_t> arrivals=std::make_shared<std::atomic_uint64_t>(0);
     // Callbacks retain their own event owner through unsubscribe/Stop races.
@@ -290,6 +283,28 @@ struct CaptureHost::Impl {
         }
         return true;
     }
+    bool RefreshColor(std::string& reason) {
+        color::DesktopObservation source,currentOutput;
+        if(!sourceObserver.Observe(reinterpret_cast<HWND>(options.target.hwnd),source,reason))return false;
+        if(output&&!outputObserver.Observe(output,currentOutput,reason))return false;
+        const bool sourceChanged=!sourceColor.SameSourceConfiguration(source);
+        const bool outputChanged=!outputColor.SameOutputConfiguration(currentOutput);
+        if(!sourceChanged&&!outputChanged)return true;
+        if(!Drain(reason))return false;
+        if(sourceChanged){
+            const auto next=color::NextEpoch(colorEpoch);if(!next){reason="Capture color generation exhausted";return false;}
+            const auto requested=source.Capture(*next);
+            // A dropped old pool generation never becomes a newly labeled image.
+            pool.Recreate(wrapped,color::Hdr(requested)?DirectXPixelFormat::R16G16B16A16Float:DirectXPixelFormat::B8G8R8A8UIntNormalized,2,extent);
+            colorEpoch=*next;representation=requested;sourceColor=std::move(source);reset=true;
+        }
+        if(outputChanged||sourceChanged){
+            const auto next=color::NextEpoch(outputColorEpoch);if(!next){reason="Output color generation exhausted";return false;}
+            outputColorEpoch=*next;outputColor=std::move(currentOutput);
+            if(output)ShowWindow(output,SW_HIDE);
+        }
+        return true;
+    }
     bool Output(std::string& reason) {
         WNDCLASSW cls{}; cls.lpfnWndProc = WindowProc; cls.hInstance = GetModuleHandleW(nullptr); cls.lpszClassName = OutputClass; cls.hCursor = LoadCursor(nullptr, IDC_ARROW);
         if (!RegisterClassW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) { reason = "register output class failed"; return false; }
@@ -304,11 +319,13 @@ struct CaptureHost::Impl {
         HRESULT hr = device.As(&dxgiDevice);
         if (SUCCEEDED(hr)) hr = dxgiDevice->GetAdapter(&adapter);
         if (SUCCEEDED(hr)) hr = adapter->GetParent(IID_PPV_ARGS(&factory));
-        DXGI_SWAP_CHAIN_DESC1 desc{}; desc.Width = extent.Width; desc.Height = extent.Height; desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        DXGI_SWAP_CHAIN_DESC1 desc{}; desc.Width = extent.Width; desc.Height = extent.Height; desc.Format = color::TextureFormat(representation);
         desc.SampleDesc.Count = 1; desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; desc.BufferCount = 2;
         desc.SwapEffect = options.overlay?DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL:DXGI_SWAP_EFFECT_FLIP_DISCARD; desc.Scaling = DXGI_SCALING_STRETCH;
         if (SUCCEEDED(hr)) hr = options.overlay?factory->CreateSwapChainForComposition(device.Get(),&desc,nullptr,&swapchain):factory->CreateSwapChainForHwnd(device.Get(), output, &desc, nullptr, nullptr, &swapchain);
         if (FAILED(hr)) { reason = Failure("output swapchain creation failed", hr); return false; }
+        if(!color::ConfigureOutputColor(swapchain.Get(),representation,reason))return false;
+        swapFormat=desc.Format;
         if(options.overlay){
             hr=DCompositionCreateDevice(dxgiDevice.Get(),IID_PPV_ARGS(&composition));
             if(SUCCEEDED(hr))hr=composition->CreateTargetForHwnd(output,TRUE,&compositionTarget);
@@ -355,17 +372,21 @@ bool CaptureHost::Start(const CaptureOptions& options, std::string& reason) {
     auto& p = *impl_; p.thread = GetCurrentThreadId();
     if (!options.session) { reason = "nonzero capture session is required"; return false; }
     if (!Validate(options.target, reason)) return false;
-    p.options = options;
+    p.options = options;p.options.processing={}; // device/context are adopted below, not retained in options
     HRESULT apartment = RoInitialize(RO_INIT_MULTITHREADED);
     if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) { reason = Failure("WinRT initialization failed", apartment); return false; }
     p.apartment = SUCCEEDED(apartment);
     const char* phase = "support probe";
     try {
         if (!GraphicsCaptureSession::IsSupported()) { reason = "Windows Graphics Capture is unsupported"; Stop(); return false; }
-        phase = "D3D11 device";
-        auto adapter = SourceAdapter(reinterpret_cast<HWND>(options.target.hwnd)); D3D_FEATURE_LEVEL level{};
-        winrt::check_hresult(D3D11CreateDevice(adapter.Get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, nullptr,
-            D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &p.device, &level, &p.context));
+        phase = "processing device binding";
+        const auto& binding=options.processing;
+        if(!binding.adapter||!binding.device||!binding.context)throw std::runtime_error("Select an owned hardware processing device before capture.");
+        adapters::Identity actual;winrt::check_hresult(adapters::ReadIdentity(binding.device.Get(),actual));
+        if(!adapters::PinnedMatch(binding.id,actual,options.session,binding.session))throw std::runtime_error("Capture processing-device session or adapter changed.");
+        ComPtr<ID3D11Device> contextDevice;binding.context->GetDevice(&contextDevice);
+        if(contextDevice.Get()!=binding.device.Get()||binding.context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE)throw std::runtime_error("Capture requires the selected device immediate context.");
+        p.device=binding.device;p.context=binding.context;
         phase = "completion fence";
         p.InitializeCompletion();
         phase = "WinRT D3D11 device wrapping";
@@ -380,8 +401,11 @@ bool CaptureHost::Start(const CaptureOptions& options, std::string& reason) {
         if (!Validate(options.target, reason)) { Stop(); return false; }
         p.extent = p.item.Size();
         if (p.extent.Width <= 0 || p.extent.Height <= 0) { reason = "capture item extent is empty"; Stop(); return false; }
+        phase = "actual desktop color observation";
+        if(!p.sourceObserver.Observe(reinterpret_cast<HWND>(options.target.hwnd),p.sourceColor,reason)){Stop();return false;}
+        p.representation=p.sourceColor.Capture(p.colorEpoch);
         phase = "WGC frame pool";
-        p.pool = Direct3D11CaptureFramePool::CreateFreeThreaded(p.wrapped, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, p.extent);
+        p.pool = Direct3D11CaptureFramePool::CreateFreeThreaded(p.wrapped, p.PoolFormat(), 2, p.extent);
         // Magpie subscribes even when the callback has no frame-copy work.
         // Free-threaded delivery likewise needs an event consumer; copy remains owner-thread only.
         p.frameToken = p.pool.FrameArrived([count=p.arrivals,wake=p.wake](const auto&, const auto&) {count->fetch_add(1,std::memory_order_relaxed);wake->Signal();}); p.frameSubscribed = true;
@@ -393,7 +417,9 @@ bool CaptureHost::Start(const CaptureOptions& options, std::string& reason) {
         else if(options.overlay)throw std::runtime_error("Overlay requires cursor capture control on Windows 10 2004 or later");
         if (!p.Output(reason)) { Stop(); return false; }
         phase = "WGC StartCapture";
-        p.session.StartCapture(); p.active = true; return true;
+        p.session.StartCapture(); p.active = true;
+        if(!p.outputObserver.Observe(p.output,p.outputColor,reason)){Stop();return false;}
+        return true;
     } catch (const winrt::hresult_error& e) { reason = Failure(phase, e.code()); Stop(); return false; }
       catch (const std::exception& e) { reason = e.what(); Stop(); return false; }
 }
@@ -409,6 +435,7 @@ bool CaptureHost::Next(CapturedFrame& result, std::string& reason) {
         p.active = false; p.fatal = reason; return false;
     }
     try {
+        if(!p.RefreshColor(reason)){p.fatal=reason;p.active=false;return false;}
         // At most two polls: keep the newest of the bounded two-buffer WGC pool.
         // Consume before polling: arrivals racing with/after the poll stay signaled.
         p.wake->Consume();
@@ -418,7 +445,7 @@ bool CaptureHost::Next(CapturedFrame& result, std::string& reason) {
         SizeInt32 size = frame.ContentSize();
         if (size.Width <= 0 || size.Height <= 0) { frame.Close(); reason = "source frame has empty extent"; p.active = false; return false; }
         if (size.Width != p.extent.Width || size.Height != p.extent.Height) {
-            frame.Close(); p.pool.Recreate(p.wrapped, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size); p.extent = size; ++p.geometryEpoch; p.reset = true; return false;
+            frame.Close(); p.pool.Recreate(p.wrapped, p.PoolFormat(), 2, size); p.extent = size; ++p.geometryEpoch; p.reset = true; return false;
         }
         D3D11_BOX crop{};
         if (!ClientCrop(reinterpret_cast<HWND>(p.options.target.hwnd), size, crop, reason)) {
@@ -442,13 +469,13 @@ bool CaptureHost::Next(CapturedFrame& result, std::string& reason) {
         auto access = p.inFlightFrame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
         winrt::check_hresult(access->GetInterface(IID_PPV_ARGS(&p.inFlightSource)));
         D3D11_TEXTURE2D_DESC sourceDesc{}; p.inFlightSource->GetDesc(&sourceDesc);
-        if (sourceDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM || sourceDesc.Width < static_cast<UINT>(size.Width) || sourceDesc.Height < static_cast<UINT>(size.Height)) winrt::throw_hresult(E_INVALIDARG);
+        if (sourceDesc.Format != color::TextureFormat(p.representation) || sourceDesc.Width < static_cast<UINT>(size.Width) || sourceDesc.Height < static_cast<UINT>(size.Height)) winrt::throw_hresult(E_INVALIDARG);
         D3D11_TEXTURE2D_DESC desc{}; desc.Width = p.clientWidth; desc.Height = p.clientHeight; desc.MipLevels = 1; desc.ArraySize = 1;
-        desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; desc.SampleDesc.Count = 1; desc.Usage = D3D11_USAGE_DEFAULT; desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+        desc.Format = color::TextureFormat(p.representation); desc.SampleDesc.Count = 1; desc.Usage = D3D11_USAGE_DEFAULT; desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
         auto slot=p.snapshots.TryAcquire();
         if(!slot){p.inFlightFrame.Close();p.inFlightFrame=nullptr;p.inFlightSource.Reset();p.reset=true;reason.clear();return false;}
         if(slot->texture){D3D11_TEXTURE2D_DESC previous{};slot->texture->GetDesc(&previous);
-            if(previous.Width!=desc.Width||previous.Height!=desc.Height)slot->texture.Reset();}
+            if(previous.Width!=desc.Width||previous.Height!=desc.Height||previous.Format!=desc.Format)slot->texture.Reset();}
         if(!slot->texture)winrt::check_hresult(p.device->CreateTexture2D(&desc,nullptr,&slot->texture));
         p.inFlightSnapshot=slot->texture;p.inFlightCaptureLease=slot;
         p.pendingGpu = true; p.context->CopySubresourceRegion(p.inFlightSnapshot.Get(), 0, 0, 0, 0, p.inFlightSource.Get(), 0, &p.crop);
@@ -457,12 +484,13 @@ bool CaptureHost::Next(CapturedFrame& result, std::string& reason) {
         LARGE_INTEGER qpc{}; QueryPerformanceCounter(&qpc);
         p.latestTimestamp = sourceQpc;result.acquiredQpc=static_cast<uint64_t>(qpc.QuadPart);
         result.stamp = {p.options.session, ++p.sequence, p.latestTimestamp, desc.Width, desc.Height, p.reset,p.streamEpoch,p.geometryEpoch,1};
+        result.stamp.colorEpoch=p.colorEpoch;result.stamp.outputColorEpoch=p.outputColorEpoch;result.color=p.representation;result.sdrWhiteScale=p.outputColor.sdrWhiteScale;
         slot->stamp=result.stamp;slot->retired=true;result.ownership=slot;
         result.texture = std::move(snapshot); p.reset = false; return true;
     } catch (const winrt::hresult_error& e) { reason = p.fatal = Failure("capture frame failed", e.code()); p.active = false; return false; }
 }
 uint64_t CaptureHost::OutputEpoch() const {return impl_&&impl_->swapchain?impl_->outputEpoch:0;}
-bool CaptureHost::Present(const CapturedFrame& original, ID3D11Texture2D* processed, float split, std::string& reason, int stripes, SnapshotResult* snapshot, int direction, std::shared_ptr<void> processedOwnership,FrameProbe* probe) {
+bool CaptureHost::Present(const CapturedFrame& original, ID3D11Texture2D* processed, float split, std::string& reason, int stripes, SnapshotResult* snapshot, int direction, std::shared_ptr<void> processedOwnership,FrameProbe* probe, const color::Representation* processedColor) {
     reason.clear(); auto& p = *impl_;
     struct MeasurementFrameScope {
         FrameProbe* probe;bool accepted=false;
@@ -477,6 +505,9 @@ bool CaptureHost::Present(const CapturedFrame& original, ID3D11Texture2D* proces
         p.active = false; p.fatal = reason; return false;
     }
     if (p.itemClosed->load(std::memory_order_acquire)) { reason = p.fatal = "capture item closed"; p.active = false; return false; }
+    try{if(!p.RefreshColor(reason)){p.active=false;p.fatal=reason;return false;}}catch(const winrt::hresult_error& e){p.active=false;p.fatal=reason=Failure("Output color transition",e.code());return false;}
+    if(original.stamp.colorEpoch!=p.colorEpoch||original.stamp.outputColorEpoch!=p.outputColorEpoch||!color::SameDomain(original.color,p.representation)){reason.clear();return false;}
+    if(processed&&((processedColor&&!color::PairCompatible(original.color,*processedColor))||(!processedColor&&color::Hdr(original.color)))){reason="Processed output color representation differs from its source";return false;}
     if (!original.texture || original.stamp.session != p.options.session || !original.stamp.sequence || (original.pairedDepthOutput ? (original.stamp.sequence>p.sequence||original.stamp.timestampQpc>p.latestTimestamp||original.stamp.streamEpoch!=p.streamEpoch||original.stamp.geometryEpoch!=p.geometryEpoch) : (original.stamp.sequence!=p.sequence||original.stamp.timestampQpc!=p.latestTimestamp)) || original.stamp.width != p.clientWidth || original.stamp.height != p.clientHeight) { reason = original.pairedDepthOutput?"":"original frame has stale session, sequence, timestamp or extent"; return false; }
     if(original.pairedDepthOutput){LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);if(!depth::PublicationFresh(original.stamp.timestampQpc,uint64_t(now.QuadPart),uint64_t(frequency.QuadPart)))return false;D3D11_BOX currentCrop{};if(!ClientCrop(reinterpret_cast<HWND>(p.options.target.hwnd),p.extent,currentCrop,reason)||currentCrop.left!=p.crop.left||currentCrop.top!=p.crop.top||currentCrop.right!=p.crop.right||currentCrop.bottom!=p.crop.bottom){++p.geometryEpoch;p.reset=true;reason.clear();return false;}}
     if(!p.Follow(reason,original.stamp.width,original.stamp.height))return false;
@@ -486,18 +517,19 @@ bool CaptureHost::Present(const CapturedFrame& original, ID3D11Texture2D* proces
     auto compatible = [&](ID3D11Texture2D* texture) {
         if (!texture || !SameDevice(texture, p.device.Get())) return false;
         D3D11_TEXTURE2D_DESC desc{}; texture->GetDesc(&desc);
-        return desc.Width == original.stamp.width && desc.Height == original.stamp.height && desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM && desc.SampleDesc.Count == 1 && desc.ArraySize == 1 && desc.MipLevels == 1;
+        return desc.Width == original.stamp.width && desc.Height == original.stamp.height && desc.Format == color::TextureFormat(original.color) && desc.SampleDesc.Count == 1 && desc.ArraySize == 1 && desc.MipLevels == 1;
     };
-    if (!compatible(original.texture.Get()) || (processed && !compatible(processed))) { reason = "present requires completed BGRA8 textures of matching extent on the capture device"; return false; }
+    if (!compatible(original.texture.Get()) || (processed && !compatible(processed))) { reason = "Present requires completed matching color textures on the capture device"; return false; }
     if (!processed && (split < 1 || stripes)) { reason = "processed output is unavailable"; return false; }
     try {
-        if (p.swapWidth != original.stamp.width || p.swapHeight != original.stamp.height) {
+        if (p.swapWidth != original.stamp.width || p.swapHeight != original.stamp.height || p.swapFormat!=color::TextureFormat(original.color)) {
             p.context->ClearState(); p.pendingGpu = true; if (!p.Drain(reason)) return false;
-            winrt::check_hresult(p.swapchain->ResizeBuffers(2, original.stamp.width, original.stamp.height, DXGI_FORMAT_B8G8R8A8_UNORM, 0));
-            p.swapWidth = original.stamp.width; p.swapHeight = original.stamp.height;++p.outputEpoch;
+            winrt::check_hresult(p.swapchain->ResizeBuffers(2, original.stamp.width, original.stamp.height, color::TextureFormat(original.color), 0));
+            p.swapWidth = original.stamp.width; p.swapHeight = original.stamp.height;p.swapFormat=color::TextureFormat(original.color);++p.outputEpoch;
             RECT window{0, 0, static_cast<LONG>(p.swapWidth), static_cast<LONG>(p.swapHeight)};
             if (!p.options.overlay && AdjustWindowRect(&window, WS_OVERLAPPEDWINDOW, FALSE)) SetWindowPos(p.output, nullptr, 0, 0, window.right - window.left, window.bottom - window.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
+        if(!color::ConfigureOutputColor(p.swapchain.Get(),original.color,reason)){p.active=false;p.fatal=reason;return false;}
         winrt::check_hresult(p.swapchain->GetBuffer(0, IID_PPV_ARGS(&p.inFlightBackbuffer)));
         p.inFlightSnapshot = original.texture; p.inFlightCaptureLease=original.ownership; p.inFlightProcessedLease=std::move(processedOwnership); p.inFlightProcessed = processed; p.pendingGpu = true;
         p.comparison.Compose(p.context.Get(),p.inFlightBackbuffer.Get(),original.texture.Get(),processed,original.stamp.width,original.stamp.height,split,stripes,direction);
@@ -532,13 +564,15 @@ bool CaptureHost::Present(const CapturedFrame& original, ID3D11Texture2D* proces
             }
             if(!p.InteractionAvailable()){p.PauseInteraction();reason.clear();return false;}
             if(!p.Follow(reason,original.stamp.width,original.stamp.height))return false;
+            if(!p.RefreshColor(reason)){p.active=false;p.fatal=reason;return false;}
+            if(original.stamp.colorEpoch!=p.colorEpoch||original.stamp.outputColorEpoch!=p.outputColorEpoch){p.snapshotReadback.Reset();return false;}
             if(!p.paused)ShowWindow(p.output,SW_SHOWNOACTIVATE);
         }
         if(finished&&snapshot&&p.snapshotReadback) {
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if(FAILED(p.context->Map(p.snapshotReadback.Get(),0,D3D11_MAP_READ,0,&mapped)))snapshot->error="Snapshot readback failed";
             else {
-                try{snapshot->path=SaveSnapshot(mapped.pData,original.stamp.width,original.stamp.height,mapped.RowPitch);}
+                try{snapshot->color=original.color;snapshot->encoding=color::Hdr(original.color)?"jpeg-xr-rgba-half-scrgb":"png-bgra8-srgb";snapshot->path=color::Hdr(original.color)?SaveSnapshotHdrJxr(mapped.pData,original.stamp.width,original.stamp.height,mapped.RowPitch,original.color):SaveSnapshot(mapped.pData,original.stamp.width,original.stamp.height,mapped.RowPitch);}
                 catch(const std::exception& error){snapshot->error=error.what();}
                 p.context->Unmap(p.snapshotReadback.Get(),0);
             }
@@ -559,7 +593,7 @@ bool CaptureHost::Pump() {
     const bool unavailable=!IsWindowVisible(source)||IsIconic(source)||FAILED(DwmGetWindowAttribute(source,DWMWA_CLOAKED,&cloaked,sizeof(cloaked)))||cloaked||!p.InteractionAvailable();
     if(unavailable){if(!IsWindowVisible(source)||IsIconic(source)||cloaked)p.statistics.interactionReason="source-hidden-minimized-or-cloaked";p.PauseInteraction();return true;}
     if(p.paused){
-        try{p.pool.Recreate(p.wrapped,DirectXPixelFormat::B8G8R8A8UIntNormalized,2,p.extent);}
+        try{p.pool.Recreate(p.wrapped,p.PoolFormat(),2,p.extent);}
         catch(const winrt::hresult_error& e){p.fatal=Failure("resume frame pool failed",e.code());p.active=false;return false;}
         // Keep the pre-pause raster hidden until a new matching Present completes.
         p.paused=false;p.reset=true;
@@ -567,6 +601,9 @@ bool CaptureHost::Pump() {
     }
     if(!p.Follow(reason)){p.fatal=reason;p.active=false;return false;}
     return true;
+}
+void CaptureHost::RetainSharedGeneration() noexcept {
+    if(impl_){impl_->unknownGpu=true;impl_->active=false;} // destructor retains COM/WGC owners without draining
 }
 void CaptureHost::Stop() {
     if (!impl_) return;
@@ -596,18 +633,25 @@ bool CaptureHost::Paused()const{return impl_->paused;}
 HANDLE CaptureHost::WakeHandle()const{return impl_->wake->Handle();}
 CaptureStatistics CaptureHost::Statistics()const{auto result=impl_->statistics;result.arrivals=impl_->arrivals->load(std::memory_order_relaxed);result.outputVisible=impl_->output&&IsWindowVisible(impl_->output);return result;}
 bool CaptureHost::CursorCaptured()const{return impl_->cursorCaptured;}
-FrameStamp CaptureHost::ObservedIdentity()const{const auto& p=*impl_;return {p.options.session,p.sequence,p.latestTimestamp,p.clientWidth,p.clientHeight,p.reset,p.streamEpoch,p.geometryEpoch,1};}
+FrameStamp CaptureHost::ObservedIdentity()const{const auto& p=*impl_;FrameStamp stamp{p.options.session,p.sequence,p.latestTimestamp,p.clientWidth,p.clientHeight,p.reset,p.streamEpoch,p.geometryEpoch,1};stamp.colorEpoch=p.colorEpoch;stamp.outputColorEpoch=p.outputColorEpoch;return stamp;}
 bool CaptureHost::DisengageHotkeyAvailable()const{return impl_->hotkeyRegistered;}
 void CaptureHost::Disengage(){if(!impl_)return;std::string ignored;if(impl_->Owner(ignored))impl_->EndInteraction();}
 ID3D11DeviceContext* CaptureHost::Context() const { return impl_->context.Get(); }
+adapters::CaptureIdentity CaptureHost::AdapterIdentity() const {
+    adapters::CaptureIdentity result;if(!impl_)return result;
+    adapters::ReadIdentity(impl_->device.Get(),result.capture);
+    ComPtr<ID3D11Device> output;
+    if(impl_->swapchain&&SUCCEEDED(impl_->swapchain->GetDevice(IID_PPV_ARGS(&output))))adapters::ReadIdentity(output.Get(),result.output);
+    return result;
+}
 #ifdef NRW_CAPTURE_TEST
 bool TestCaptureCompletionFailures() {
-    for(int fault=0;fault<=6;++fault) {
+    for(auto format:{DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT})for(int fault=0;fault<=6;++fault) {
         auto p=std::make_unique<CaptureHost::Impl>();
         winrt::check_hresult(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&p->device,nullptr,&p->context));
         p->InitializeCompletion();
         D3D11_TEXTURE2D_DESC desc{};desc.Width=17;desc.Height=9;desc.MipLevels=desc.ArraySize=1;
-        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
+        desc.Format=format;desc.SampleDesc.Count=1;
         desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
         winrt::check_hresult(p->device->CreateTexture2D(&desc,nullptr,&p->inFlightSource));
         winrt::check_hresult(p->device->CreateTexture2D(&desc,nullptr,&p->inFlightSnapshot));

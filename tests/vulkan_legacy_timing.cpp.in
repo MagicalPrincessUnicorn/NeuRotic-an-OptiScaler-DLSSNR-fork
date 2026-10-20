@@ -1,0 +1,46 @@
+#include <vulkan/vulkan.h>
+#include <atomic>
+#include <deque>
+#include <mutex>
+#include <thread>
+#include <cassert>
+#include <iostream>
+#include <cstdlib>
+static std::atomic<unsigned> gpuCalls=0;
+#define LOG_INFO(...) ((void)0)
+struct State {
+    std::mutex frameTimeMutex;
+    std::deque<double> upscaleTimes=std::deque<double>(300,0.0);
+    static State& Instance(){static State state;return state;}
+};
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateQueryPool(VkDevice,const VkQueryPoolCreateInfo*,const VkAllocationCallbacks*,VkQueryPool* pool) {
+    ++gpuCalls;*pool=reinterpret_cast<VkQueryPool>(1);return VK_SUCCESS;
+}
+VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceProperties(VkPhysicalDevice,VkPhysicalDeviceProperties* p) {++gpuCalls;p->limits.timestampPeriod=1;}
+VKAPI_ATTR void VKAPI_CALL vkCmdResetQueryPool(VkCommandBuffer,VkQueryPool,uint32_t,uint32_t){++gpuCalls;}
+VKAPI_ATTR void VKAPI_CALL vkCmdWriteTimestamp(VkCommandBuffer,VkPipelineStageFlagBits,VkQueryPool,uint32_t){++gpuCalls;}
+VKAPI_ATTR VkResult VKAPI_CALL vkGetQueryPoolResults(VkDevice,VkQueryPool,uint32_t,uint32_t,size_t,void* output,VkDeviceSize,VkQueryResultFlags) {
+    ++gpuCalls;auto* values=static_cast<uint64_t*>(output);values[0]=100;values[1]=200;return VK_SUCCESS;
+}
+// PRODUCTION_HEADER
+// PRODUCTION_SOURCE
+template<class T> bool unavailable(bool vk,bool bridge) {
+    if constexpr(requires {T::UnavailableFor(vk,bridge);}) return T::UnavailableFor(vk,bridge);
+    else return false;
+}
+int main(){
+    const auto initial=State::Instance().upscaleTimes;
+    auto dev=reinterpret_cast<VkDevice>(1);auto pd=reinterpret_cast<VkPhysicalDevice>(2);
+    auto cmd=reinterpret_cast<VkCommandBuffer>(3);
+    UpscalerTimeVk::Init(dev,pd);
+    UpscalerTimeVk::UpscaleStart(cmd);UpscalerTimeVk::UpscaleEnd(cmd);UpscalerTimeVk::ReadUpscalingTime(dev);
+    if(gpuCalls!=0){std::cerr<<"FAIL legacy Vulkan timing still creates/injects GPU queries: "<<gpuCalls<<'\n';return 1;}
+    std::thread writer([&]{for(int i=0;i<10000;++i){UpscalerTimeVk::UpscaleStart(cmd);UpscalerTimeVk::UpscaleEnd(cmd);}});
+    for(int i=0;i<10000;++i)UpscalerTimeVk::ReadUpscalingTime(dev);
+    writer.join();UpscalerTimeVk::Init(reinterpret_cast<VkDevice>(4),pd);
+    assert(gpuCalls==0 && initial==State::Instance().upscaleTimes);
+    assert(unavailable<UpscalerTimeVk>(true,false));
+    assert(!unavailable<UpscalerTimeVk>(true,true));
+    assert(!unavailable<UpscalerTimeVk>(false,false));
+    std::cout<<"PASS legacy timer records zero GPU commands, creates no pool, publishes no fabricated timing; native Vulkan unavailable, DX12 bridge retained\n";
+}

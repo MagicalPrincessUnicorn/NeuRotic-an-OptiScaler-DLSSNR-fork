@@ -2,6 +2,8 @@
 #include "../OptiScaler/dlssnr/NrGpuSafety.cpp"
 #include "../OptiScaler/dlssnr/DlssNr_PresentGuides.h"
 #include <d3d12sdklayers.h>
+#include <d3dcompiler.h>
+#include <cmath>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -10,6 +12,71 @@ namespace Safety = DlssNr::GpuSafety;
 namespace Guides = DlssNr::PresentGuides;
 using Microsoft::WRL::ComPtr;
 static void Check(HRESULT hr) { assert(SUCCEEDED(hr)); }
+
+// This public shader consumes the actual private Present-bound SRVs. It is not NR.
+struct SceneRead {
+    ComPtr<ID3D12RootSignature> root;
+    ComPtr<ID3D12PipelineState> pipeline;
+    ComPtr<ID3D12DescriptorHeap> heap;
+    ComPtr<ID3D12Resource> output;
+};
+static SceneRead ReadScene(ID3D12Device* device, ID3D12GraphicsCommandList* list,
+                          const Guides::Inputs& inputs, ID3D12Resource* readback, UINT64 sceneOffset) {
+    SceneRead keep;
+    D3D12_DESCRIPTOR_RANGE ranges[2] {};
+    ranges[0]={D3D12_DESCRIPTOR_RANGE_TYPE_SRV,2,0,0,0};
+    ranges[1]={D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,2};
+    D3D12_ROOT_PARAMETER parameter {}; parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameter.DescriptorTable={2,ranges}; parameter.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_ROOT_SIGNATURE_DESC desc {}; desc.NumParameters=1;desc.pParameters=&parameter;
+    ComPtr<ID3DBlob> serialized,error,code;
+    Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&error));
+    Check(device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&keep.root)));
+    constexpr char source[]=R"(
+Texture2D<float> depth:register(t0); Texture2D<float2> motion:register(t1);
+RWStructuredBuffer<float4> scene:register(u0);
+[numthreads(8,4,1)] void main(uint3 id:SV_DispatchThreadID) {
+ if(id.x>=6||id.y>=2)return;
+ int3 at=int3(id.xy+uint2(1,1),0);
+ scene[id.y*6+id.x]=float4(depth.Load(at),motion.Load(at),1);
+})";
+    const auto compiled=D3DCompile(source,sizeof(source)-1,nullptr,nullptr,nullptr,"main","cs_5_0",
+                                  D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error);
+    if(FAILED(compiled)&&error)std::fputs(static_cast<const char*>(error->GetBufferPointer()),stderr);
+    Check(compiled);
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pd {}; pd.pRootSignature=keep.root.Get();
+    pd.CS={code->GetBufferPointer(),code->GetBufferSize()};
+    Check(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&keep.pipeline)));
+    D3D12_HEAP_PROPERTIES memory {}; memory.Type=D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC buffer {}; buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width=512;buffer.Height=1;buffer.DepthOrArraySize=1;buffer.MipLevels=1;
+    buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    buffer.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    Check(device->CreateCommittedResource(&memory,D3D12_HEAP_FLAG_NONE,&buffer,
+          D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&keep.output)));
+    D3D12_DESCRIPTOR_HEAP_DESC hd {};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    hd.NumDescriptors=3;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&keep.heap)));
+    const UINT stride=device->GetDescriptorHandleIncrementSize(hd.Type);
+    auto handle=keep.heap->GetCPUDescriptorHandleForHeapStart();
+    for(auto* input:{inputs.depth.Get(),inputs.motion.Get()}) {
+        D3D12_SHADER_RESOURCE_VIEW_DESC view {};view.Format=input->GetDesc().Format;
+        view.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;view.Texture2D.MipLevels=1;
+        view.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        device->CreateShaderResourceView(input,&view,handle);handle.ptr+=stride;
+    }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav {};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
+    uav.Buffer.NumElements=32;uav.Buffer.StructureByteStride=16;
+    device->CreateUnorderedAccessView(keep.output.Get(),nullptr,&uav,handle);
+    auto* heap=keep.heap.Get();list->SetDescriptorHeaps(1,&heap);
+    list->SetComputeRootSignature(keep.root.Get());list->SetPipelineState(keep.pipeline.Get());
+    list->SetComputeRootDescriptorTable(0,keep.heap->GetGPUDescriptorHandleForHeapStart());list->Dispatch(1,1,1);
+    D3D12_RESOURCE_BARRIER barrier {};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={keep.output.Get(),0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1,&barrier);list->CopyBufferRegion(readback,sceneOffset,keep.output.Get(),0,512);
+    return keep; // GPU objects stay alive through the actual queue completion below.
+}
+
 int main(int argc, char** argv)
 {
     const bool hardware = argc == 2 && std::strcmp(argv[1], "--hardware") == 0;
@@ -54,12 +121,12 @@ int main(int argc, char** argv)
                     D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&result)));
         return result;
     };
-    auto buffer = [&](D3D12_HEAP_TYPE type)
+    auto buffer = [&](D3D12_HEAP_TYPE type, UINT64 bytes = 4096)
     {
         D3D12_HEAP_PROPERTIES heap {}; heap.Type = type;
         D3D12_RESOURCE_DESC desc {};
         desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Width = 4096; desc.Height = 1; desc.DepthOrArraySize = 1; desc.MipLevels = 1;
+        desc.Width = bytes; desc.Height = 1; desc.DepthOrArraySize = 1; desc.MipLevels = 1;
         desc.SampleDesc.Count = 1; desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         ComPtr<ID3D12Resource> result;
         Check(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
@@ -102,6 +169,7 @@ int main(int argc, char** argv)
     frame.DepthInverted = true; frame.Reset = true;
     frame.MvScaleX = 8; frame.MvScaleY = -4; frame.JitterX = 0.25f; frame.JitterY = -0.25f;
     frame.RenderSubrectWidth = 8; frame.RenderSubrectHeight = 4;
+    frame.NativeFeatureHandle=17; frame.NativeFeatureGeneration=41; frame.JitterSupplied=true;
     frame.ExposureTexture = reinterpret_cast<void*>(1); // must never travel to Present
     auto capture = [&]
     {
@@ -122,9 +190,11 @@ int main(int argc, char** argv)
     submit(producer.Get());
     assert(!bind(selected, inputs, other.Get())); // no fabricated queue dependency
     assert(bind(selected, inputs, queue.Get(), 1)); // DXGI index rotated between Native and Present
+    const auto originalReaderSlot = selected.slot;
     assert(inputs.depth.Get() != depth.Get() && inputs.motion.Get() != motion.Get());
     assert(inputs.frame.DepthInverted && inputs.frame.Reset && inputs.frame.MvScaleY == -4 &&
            inputs.frame.JitterX == 0.25f && inputs.frame.RenderSubrectWidth == 8 && !inputs.frame.ExposureTexture);
+    assert(inputs.frame.NativeFeatureHandle==17 && inputs.frame.NativeFeatureGeneration==41 && inputs.frame.JitterSupplied);
     assert(!bind(selected, inputs)); // cannot consume twice
     for (auto* image : {inputs.depth.Get(), inputs.motion.Get()})
         transition(consumer.Get(), image, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
@@ -159,7 +229,7 @@ int main(int argc, char** argv)
         handoff.Capture(producer.Get(), depth.Get(), motion.Get(), frame, device.Get(), 2, 16, 8,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             true, nullptr, 123);
-        const auto packet = handoff.BeginPresent();
+        const auto packet = handoff.BeginPresent(123);
         assert(!handoff.MatchMetadata(packet, targetQueue, device.Get(), 0, 16, 8, 123)); // not submitted
         submit(producer.Get());
         assert(!handoff.MatchMetadata(packet, other.Get(), device.Get(), 0, 16, 8, 123)); // not sealed
@@ -202,7 +272,8 @@ int main(int argc, char** argv)
     bridge.Enable(false); bridge.Enable(true);
     assert(!bind(selected, inputs)); // stale toggle generation
     Check(producer->Close()); reset(producer.Get(), pa.Get());
-    // Bound exhaustion: complete-but-unsealed writers cannot be reclaimed or overwritten.
+    // Retained copies cannot be reclaimed or overwritten. A distinct ninth
+    // capture may allocate within the same existing memory budget.
     std::array<ComPtr<ID3D12CommandAllocator>, 7> heldAlloc;
     std::array<ComPtr<ID3D12GraphicsCommandList>, 7> heldList;
     const auto beforeHeld = bridge.Inspect().captures;
@@ -217,11 +288,20 @@ int main(int argc, char** argv)
     assert(Safety::Drain(5000));
     assert(bridge.Inspect().captures == beforeHeld + 7);
     const auto before = bridge.Inspect().captures;
-    capture(); assert(bridge.Inspect().captures == before);
-    assert(bridge.Inspect().status.find("busy") != std::string::npos);
-    bridge.BeginPresent();
-    consumer.Reset(); // sealing the original reader, not its writer, frees the eighth slot
     capture(); assert(bridge.Inspect().captures == before + 1);
+    const auto grown = bridge.BeginPresent();
+    assert(grown.count == 1 && grown.slot >= 8 && grown.captureError.empty());
+    const auto grownGeneration = grown.generation;
+    bridge.Invalidate();
+    assert(!bridge.Inspect().captureOccupancy.known);
+    const auto invalidatedSelection = bridge.BeginPresent();
+    assert(invalidatedSelection.generation != grownGeneration);
+    assert(!invalidatedSelection.captureOccupancy.known && invalidatedSelection.slot < 0);
+    consumer.Reset(); // actual reader lifetime still retires the original slot
+    capture(); assert(bridge.Inspect().captures == before + 2);
+    const auto retiredReaderSelection = bridge.BeginPresent();
+    assert(retiredReaderSelection.count == 1 && retiredReaderSelection.slot == originalReaderSlot &&
+           retiredReaderSelection.captureError.empty()); // reuse original slot, not another append
     for (auto& list : heldList) list.Reset(); // seal completed writes
     Check(producer->Close()); reset(producer.Get(), pa.Get());
     bridge.BeginPresent();
@@ -269,11 +349,21 @@ int main(int argc, char** argv)
         upload->Unmap(0, nullptr); readback->Unmap(0, nullptr);
         reset(producer.Get(), pa.Get()); reset(consumer.Get(), ca.Get());
     }
-    // Wilds reports format 19 (R32G8X24_TYPELESS). Its stencil plane must not be
+    // Planar depth families retain their own original stencil plane; it must not be
     // mistaken for depth or transitioned from the depth plane's independent state.
-    for (auto df : {DXGI_FORMAT_R32G8X24_TYPELESS, DXGI_FORMAT_D32_FLOAT_S8X24_UINT})
+    for (auto df : {DXGI_FORMAT_R32G8X24_TYPELESS, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, DXGI_FORMAT_R24G8_TYPELESS, DXGI_FORMAT_D24_UNORM_S8_UINT})
     {
         Guides::Bridge planar; planar.Enable(true);
+        const bool d24=df==DXGI_FORMAT_R24G8_TYPELESS||df==DXGI_FORMAT_D24_UNORM_S8_UINT;
+        auto active=frame;
+        if(d24){
+            active.RenderSubrectWidth=6;active.RenderSubrectHeight=2;
+            active.DepthSubrectX=active.MotionSubrectX=1;
+            active.DepthSubrectY=active.MotionSubrectY=1;
+            Check(upload->Map(0,nullptr,reinterpret_cast<void**>(&data)));
+            for(UINT y=0;y<4;++y)for(UINT x=0;x<8;++x){data[256+y*64+2*x]=0.5f;data[257+y*64+2*x]=-0.25f;}
+            upload->Unmap(0,nullptr);
+        }
         D3D12_HEAP_PROPERTIES heap {}; heap.Type = D3D12_HEAP_TYPE_DEFAULT;
         auto desc = depth->GetDesc(); desc.Format = df;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -283,7 +373,7 @@ int main(int argc, char** argv)
         D3D12_DESCRIPTOR_HEAP_DESC hd {}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; hd.NumDescriptors = 1;
         ComPtr<ID3D12DescriptorHeap> dsvHeap;
         Check(device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&dsvHeap)));
-        D3D12_DEPTH_STENCIL_VIEW_DESC vd {}; vd.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+        D3D12_DEPTH_STENCIL_VIEW_DESC vd {}; vd.Format = d24?DXGI_FORMAT_D24_UNORM_S8_UINT:DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
         vd.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
         auto handle = dsvHeap->GetCPUDescriptorHandleForHeapStart();
         device->CreateDepthStencilView(ds.Get(), &vd, handle);
@@ -295,19 +385,43 @@ int main(int argc, char** argv)
         db.Transition = {ds.Get(), 0, D3D12_RESOURCE_STATE_DEPTH_WRITE,
                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
         producer->ResourceBarrier(1, &db); // stencil stays DEPTH_WRITE
-        auto rg16 = texture(DXGI_FORMAT_R16G16_FLOAT);
+        auto rg16 = texture(d24?DXGI_FORMAT_R32G32_FLOAT:DXGI_FORMAT_R16G16_FLOAT);
         copyTexture(producer.Get(), rg16.Get(), upload.Get(), 1024, true);
         transition(producer.Get(), rg16.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        planar.Capture(producer.Get(), ds.Get(), rg16.Get(), frame, device.Get(), 2, 16, 8,
+        planar.Capture(producer.Get(), ds.Get(), rg16.Get(), active, device.Get(), 2, 16, 8,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         auto choice = planar.BeginPresent();
+        std::printf("DEPTH_FAMILY=%u SLOT=%d ERROR=%s\n",df,choice.slot,choice.captureError.c_str());std::fflush(stdout);
         assert(choice.slot >= 0 && choice.captureError.empty());
         Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&gate)));
         Check(queue->Wait(gate.Get(), 1)); submit(producer.Get());
         Guides::Inputs typed;
         assert(planar.Bind(choice, consumer.Get(), queue.Get(), device.Get(), 2, 16, 8, typed));
-        assert(typed.depth->GetDesc().Format == DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS);
+        assert(typed.depth->GetDesc().Format == (d24?DXGI_FORMAT_R24_UNORM_X8_TYPELESS:DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS));
+        const auto copiedDesc=typed.depth->GetDesc();
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT privateDepth{},originalDepth{},originalStencil{};
+        UINT depthRows=0,originalRows=0,stencilRows=0;
+        const auto aligned=[](UINT64 value){return (value+511)&~UINT64{511};};
+        device->GetCopyableFootprints(&copiedDesc,0,1,0,&privateDepth,&depthRows,nullptr,nullptr);
+        const UINT64 originalDepthOffset=aligned(privateDepth.Offset+UINT64(privateDepth.Footprint.RowPitch)*depthRows);
+        device->GetCopyableFootprints(&desc,0,1,originalDepthOffset,&originalDepth,&originalRows,nullptr,nullptr);
+        const UINT64 stencilOffset=aligned(originalDepth.Offset+UINT64(originalDepth.Footprint.RowPitch)*originalRows);
+        device->GetCopyableFootprints(&desc,1,1,stencilOffset,&originalStencil,&stencilRows,nullptr,nullptr);
+        const UINT64 sceneOffset=aligned(originalStencil.Offset+UINT64(originalStencil.Footprint.RowPitch)*stencilRows);
+        auto planarReadback=buffer(D3D12_HEAP_TYPE_READBACK,sceneOffset+512);
+        assert(depthRows==4&&originalRows==4&&stencilRows==4);
+        assert(privateDepth.Offset+UINT64(privateDepth.Footprint.RowPitch)*depthRows<=originalDepth.Offset);
+        assert(originalDepth.Offset+UINT64(originalDepth.Footprint.RowPitch)*originalRows<=originalStencil.Offset);
+        assert(originalStencil.Offset+UINT64(originalStencil.Footprint.RowPitch)*stencilRows<=sceneOffset);
+        std::printf("READBACK private=%llu original=%llu stencil=%llu scene=%llu capacity=%llu\n",
+            privateDepth.Offset,originalDepth.Offset,originalStencil.Offset,sceneOffset,planarReadback->GetDesc().Width);
+        SceneRead scene;
+        if(d24){
+            assert(typed.frame.DepthSubrectX==1&&typed.frame.DepthSubrectY==1&&typed.frame.MotionSubrectX==1&&typed.frame.MotionSubrectY==1);
+            assert(typed.frame.RenderSubrectWidth==6&&typed.frame.RenderSubrectHeight==2);
+            scene=ReadScene(device.Get(),consumer.Get(),typed,planarReadback.Get(),sceneOffset);
+        }
         hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         ComPtr<ID3D12DescriptorHeap> srvHeap;
         Check(device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&srvHeap)));
@@ -315,43 +429,103 @@ int main(int argc, char** argv)
         srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; srv.Texture2D.MipLevels = 1;
         device->CreateShaderResourceView(typed.depth.Get(), &srv, srvHeap->GetCPUDescriptorHandleForHeapStart());
-        // GetCopyableFootprints exposes plane-zero float layout; never guess an
-        // interleaved 64-bit depth/stencil texel or copy a stencil plane into NR.
+        // Use the API plane-zero footprint; never guess a packed depth/stencil
+        // layout or copy a stencil plane into the depth input.
         D3D12_TEXTURE_COPY_LOCATION src {}, dst {};
         src.pResource = typed.depth.Get(); src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        dst.pResource = readback.Get(); dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        const auto copiedDesc = typed.depth->GetDesc();
-        device->GetCopyableFootprints(&copiedDesc, 0, 1, 0, &dst.PlacedFootprint, nullptr, nullptr, nullptr);
+        dst.pResource = planarReadback.Get(); dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.PlacedFootprint=privateDepth;
         std::printf("Depth plane footprint format=%u rowPitch=%u\n", dst.PlacedFootprint.Footprint.Format,
                     dst.PlacedFootprint.Footprint.RowPitch); std::fflush(stdout);
         assert(dst.PlacedFootprint.Footprint.Format == DXGI_FORMAT_R32_TYPELESS);
         const UINT depthPitch = dst.PlacedFootprint.Footprint.RowPitch;
-        const UINT64 stencilOffset = (UINT64(depthPitch) * 4 + 511) & ~511ull;
         db.Transition = {typed.depth.Get(), 0, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                          D3D12_RESOURCE_STATE_COPY_SOURCE};
         consumer->ResourceBarrier(1, &db);
         consumer->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         std::swap(db.Transition.StateBefore, db.Transition.StateAfter); consumer->ResourceBarrier(1, &db);
+        // Read original DEPTH as well: the transition validates its restored prior state.
+        src.pResource=ds.Get();src.SubresourceIndex=0;
+        dst.PlacedFootprint=originalDepth;
+        const UINT originalDepthPitch=dst.PlacedFootprint.Footprint.RowPitch;
+        db.Transition={ds.Get(),0,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};
+        consumer->ResourceBarrier(1,&db);consumer->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
+        std::swap(db.Transition.StateBefore,db.Transition.StateAfter);consumer->ResourceBarrier(1,&db);
         // Read ORIGINAL stencil, proving its independent state and values survived capture.
         src.pResource = ds.Get(); src.SubresourceIndex = 1;
-        device->GetCopyableFootprints(&desc, 1, 1, stencilOffset, &dst.PlacedFootprint, nullptr, nullptr, nullptr);
+        dst.PlacedFootprint=originalStencil;
         const UINT stencilPitch = dst.PlacedFootprint.Footprint.RowPitch;
-        assert(stencilOffset + UINT64(stencilPitch) * 4 <= readback->GetDesc().Width);
+        assert(stencilOffset + UINT64(stencilPitch) * 4 <= planarReadback->GetDesc().Width);
         db.Transition = {ds.Get(), 1, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE};
         consumer->ResourceBarrier(1, &db);
         consumer->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         std::swap(db.Transition.StateBefore, db.Transition.StateAfter); consumer->ResourceBarrier(1, &db);
         submit(consumer.Get()); assert(!Safety::Drain(0)); Check(gate->Signal(1)); assert(Safety::Drain(5000));
-        Check(readback->Map(0, nullptr, reinterpret_cast<void**>(&data)));
+        Check(planarReadback->Map(0, nullptr, reinterpret_cast<void**>(&data)));
         for (UINT y = 0; y < 4; ++y) for (UINT x = 0; x < 8; ++x)
         {
-            assert(data[y * (depthPitch / sizeof(float)) + x] == (x < 4 ? 0.25f : 0.75f));
+            assert(std::memcmp(reinterpret_cast<const char*>(data)+y*depthPitch+x*4,
+                               reinterpret_cast<const char*>(data)+originalDepth.Offset+y*originalDepthPitch+x*4,4)==0);
+            if(!d24)assert(data[y * (depthPitch / sizeof(float)) + x] == (x < 4 ? 0.25f : 0.75f));
             assert(reinterpret_cast<unsigned char*>(data)[stencilOffset + y * stencilPitch + x] == (x < 4 ? 0xA5 : 0x5A));
         }
-        readback->Unmap(0, nullptr);
+        if(d24)for(UINT y=0;y<2;++y)for(UINT x=0;x<6;++x){
+            const float* pixel=data+sceneOffset/sizeof(float)+(y*6+x)*4;
+            assert(std::abs(pixel[0]-(x<3?0.25f:0.75f))<=1.0f/16777215.0f);
+            assert(pixel[1]==0.5f&&pixel[2]==-0.25f&&pixel[3]==1.0f);
+        }
+        planarReadback->Unmap(0, nullptr);
+        std::printf("PASS depth family%u copied plane0 and preserved independent original depth/stencil%s\n",df,d24?" with actual active scene SRVs":"");
         reset(producer.Get(), pa.Get()); reset(consumer.Get(), ca.Get());
     }
-    std::puts("D32S8 depth-plane copies PASS: format 19/20, exact float depth, independent stencil, RG16 motion, delayed queue.");
+    std::puts("D24S8/D32S8 depth-plane copies PASS: typed/typeless, independent original stencil and depth state, delayed queue; D24 active scene SRVs.");
+    // D16 is an existing supported family, consumed through the same private SRV path.
+    for(auto format:{DXGI_FORMAT_R16_TYPELESS,DXGI_FORMAT_D16_UNORM}){
+        Guides::Bridge control;control.Enable(true);
+        D3D12_HEAP_PROPERTIES heap {};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        auto d=depth->GetDesc();d.Format=format;d.Flags=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        ComPtr<ID3D12Resource> original;
+        Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,D3D12_RESOURCE_STATE_DEPTH_WRITE,nullptr,IID_PPV_ARGS(&original)));
+        D3D12_DESCRIPTOR_HEAP_DESC hd {};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_DSV;hd.NumDescriptors=1;
+        ComPtr<ID3D12DescriptorHeap> dsv;Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&dsv)));
+        D3D12_DEPTH_STENCIL_VIEW_DESC view {};view.Format=DXGI_FORMAT_D16_UNORM;view.ViewDimension=D3D12_DSV_DIMENSION_TEXTURE2D;
+        auto handle=dsv->GetCPUDescriptorHandleForHeapStart();device->CreateDepthStencilView(original.Get(),&view,handle);
+        producer->ClearDepthStencilView(handle,D3D12_CLEAR_FLAG_DEPTH,0.5f,0,0,nullptr);
+        transition(producer.Get(),original.Get(),D3D12_RESOURCE_STATE_DEPTH_WRITE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        auto mv=texture(DXGI_FORMAT_R32G32_FLOAT);copyTexture(producer.Get(),mv.Get(),upload.Get(),1024,true);
+        transition(producer.Get(),mv.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        auto active=frame;active.RenderSubrectWidth=6;active.RenderSubrectHeight=2;
+        active.DepthSubrectX=active.MotionSubrectX=1;active.DepthSubrectY=active.MotionSubrectY=1;
+        control.Capture(producer.Get(),original.Get(),mv.Get(),active,device.Get(),2,16,8,
+                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        auto choice=control.BeginPresent();assert(choice.slot>=0&&choice.captureError.empty());submit(producer.Get());
+        Guides::Inputs bound;assert(control.Bind(choice,consumer.Get(),queue.Get(),device.Get(),2,16,8,bound));
+        assert(bound.depth->GetDesc().Format==DXGI_FORMAT_R16_UNORM);
+        auto scene=ReadScene(device.Get(),consumer.Get(),bound,readback.Get(),0);
+        submit(consumer.Get());assert(Safety::Drain(5000));
+        Check(readback->Map(0,nullptr,reinterpret_cast<void**>(&data)));
+        for(UINT i=0;i<12;++i){const auto* pixel=data+i*4;
+            assert(std::abs(pixel[0]-0.5f)<=1.0f/65535.0f);assert(pixel[1]==0.5f&&pixel[2]==-0.25f&&pixel[3]==1.0f);}
+        readback->Unmap(0,nullptr);reset(producer.Get(),pa.Get());reset(consumer.Get(),ca.Get());
+        active.DepthSubrectX=UINT_MAX;
+        control.Capture(producer.Get(),original.Get(),mv.Get(),active,device.Get(),2,16,8,
+                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        assert(control.BeginPresent().captureError.find("subrect exceeds")!=std::string::npos);
+        std::printf("PASS D16 family%u actual active scene SRVs and out-of-range refusal\n",format);
+    }
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ms {};
+    ms.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;ms.SampleCount=4;
+    if(SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,&ms,sizeof(ms)))&&ms.NumQualityLevels){
+        D3D12_HEAP_PROPERTIES heap {};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        auto d=depth->GetDesc();d.Format=ms.Format;d.SampleDesc.Count=4;d.Flags=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        ComPtr<ID3D12Resource> image;
+        Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,D3D12_RESOURCE_STATE_DEPTH_WRITE,nullptr,IID_PPV_ARGS(&image)));
+        Guides::Bridge negative;negative.Enable(true);
+        negative.Capture(producer.Get(),image.Get(),motion.Get(),frame,device.Get(),2,16,8,
+                         D3D12_RESOURCE_STATE_DEPTH_WRITE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        const auto refused=negative.BeginPresent();assert(refused.slot<0&&refused.captureError.find("unsupported depth")!=std::string::npos);
+        std::puts("PASS actual D24 MSAA4 refuses before recording a guide copy");
+    }else std::puts("UNTESTED D24 MSAA4: adapter did not expose the capability");
     // The exact capture failure and input descriptors must survive BeginPresent/Bind, even
     // after a later frame changes the live telemetry. This reproduced the hidden-cause defect.
     Guides::Bridge errors; errors.Enable(true);
@@ -412,10 +586,35 @@ int main(int argc, char** argv)
     assert(inputs.frame.DepthSubrectX == 3 && inputs.frame.MotionSubrectY == 2);
     submit(consumer.Get()); assert(Safety::Drain(5000));
     reset(producer.Get(), pa.Get()); reset(consumer.Get(), ca.Get());
+    // RR/SR may carry render-sized depth but output-sized motion. Both active
+    // regions, including independent origins, must survive the actual copy/bind.
+    subrect.DepthSubrectWidth = 4; subrect.DepthSubrectHeight = 2;
+    subrect.MotionSubrectWidth = 6; subrect.MotionSubrectHeight = 2;
+    offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 6, 2,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    const auto highMotion = offsets.BeginPresent(); submit(producer.Get());
+    assert(offsets.Bind(highMotion, consumer.Get(), queue.Get(), device.Get(), 2, 6, 2, inputs));
+    assert(inputs.frame.DepthSubrectWidth==4 && inputs.frame.MotionSubrectWidth==6 &&
+        inputs.frame.DepthSubrectX==3 && inputs.frame.MotionSubrectX==2);
+    submit(consumer.Get()); assert(Safety::Drain(5000));
+    reset(producer.Get(), pa.Get()); reset(consumer.Get(), ca.Get());
+    offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 6, 2,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    offsets.RejectNative("RR evaluation failed");
+    const auto failedRr = offsets.BeginPresent(); submit(producer.Get());
+    assert(failedRr.captureError=="RR evaluation failed" && failedRr.slot<0);
+    assert(!offsets.Bind(failedRr, consumer.Get(), queue.Get(), device.Get(), 2, 6, 2, inputs));
+    assert(!offsets.MatchMetadata(failedRr, queue.Get(), device.Get(), 2, 6, 2));
+    assert(Safety::Drain(5000)); reset(producer.Get(), pa.Get());
     subrect.DepthSubrectX = UINT_MAX;
     offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     assert(offsets.BeginPresent().captureError.find("subrect exceeds") != std::string::npos);
+    subrect=frame; subrect.MotionVectorsJittered=true;
+    offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    const auto jittered=offsets.BeginPresent();
+    assert(jittered.slot<0 && jittered.captureError.find("jittered motion-vector")!=std::string::npos);
     subrect = frame; subrect.JitterX = NAN;
     offsets.Capture(producer.Get(), depth.Get(), motion.Get(), subrect, device.Get(), 2, 16, 8,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

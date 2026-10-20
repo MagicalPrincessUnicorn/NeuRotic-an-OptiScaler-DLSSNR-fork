@@ -1,13 +1,19 @@
 #include "NativeD3D12Guides.h"
+#include "connections/D3D12DepthPlane.h"
 #include "NativeGuideProcessor.h"
 #include "NativeGuideRoute.h"
 #include "FinalFallbackControl.h"
 #include "NativeIdentity.h"
 #ifndef NR_NATIVE12_TESTING
+#include <Config.h>
+#include <NrConfigSnapshot.h>
+#include "DlssNr_PresentInputPolicy.h"
+#include "PresentSourcePolicy.h"
 #include "HdrObservation.h"
 #include "PreparedGuideStatusV2.h"
 #include "connections/ConnectionPolicy.h"
 #include "connections/D3D12Connection.h"
+#include "connections/PreparedInputComposition.h"
 #include <SysUtils.h>
 #endif
 #include <detours/detours.h>
@@ -34,7 +40,7 @@ constexpr uint64_t MaxSourceBytes=1024ull*1024*1024;
 struct Budget {std::atomic<uint64_t> bytes{0};uint64_t limit=MaxSourceBytes;};
 struct Resource {ComPtr<ID3D12Resource> image;std::shared_ptr<Budget> budget;uint64_t bytes=0,lastUse=0;~Resource(){if(budget)budget->bytes.fetch_sub(bytes);}};
 struct Image {std::shared_ptr<Resource> owner;ID3D12Resource* Get()const{return owner?owner->image.Get():nullptr;}ID3D12Resource*operator->()const{return Get();}explicit operator bool()const{return bool(owner);}void Reset(){owner.reset();}};
-struct Event {Kind kind{};Image image;uint64_t draws=0;int direction=-1;D3D12_RESOURCE_STATES state{};bool known=false;D3D12_RESOURCE_STATES before{};};
+struct Event {Kind kind{};Image image;uint64_t draws=0;int direction=-1;D3D12_RESOURCE_STATES state{};D3D12_RESOURCE_BARRIER_FLAGS flags{};D3D12_RESOURCE_STATES before{};UINT subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;};
 struct Recording {ComPtr<ID3D12GraphicsCommandList> owner;Image depth;std::vector<Event> events;bool closed=false,unsupported=false;};
 struct Candidate {Image image;uint64_t draws=0;int direction=-1;D3D12_RESOURCE_STATES state{};bool known=false;ComPtr<ID3D12CommandQueue> queue;};
 struct Owner {
@@ -111,7 +117,7 @@ void STDMETHODCALLTYPE ViewHook(ID3D12Device* dev,ID3D12Resource* image,const D3
  originalView(dev,image,desc,handle);if(internal||!Observing())return;auto& s=State();std::lock_guard lock(s.mutex);if(!DeviceMatches(dev))return;
  s.descriptors.erase(handle.ptr);if(!image||!DescriptorRoom())return;
  const auto shape=image->GetDesc();if(shape.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||shape.MipLevels!=1||shape.DepthOrArraySize!=1||shape.SampleDesc.Count!=1)return;
- if(desc&&(desc->ViewDimension!=D3D12_DSV_DIMENSION_TEXTURE2D||desc->Texture2D.MipSlice))return;
+ if(!Connections::D3D12DepthPlane::ValidDsv(shape,desc))return;
  auto retained=Retain(image);if(retained)s.descriptors[handle.ptr]=retained;
 }
 void CopyViews(ID3D12Device* dev,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src){
@@ -142,7 +148,7 @@ void STDMETHODCALLTYPE ClearHook(ID3D12GraphicsCommandList* list,D3D12_CPU_DESCR
  originalClear(list,ds,flags,depth,stencil,n,rects);
 }
 void STDMETHODCALLTYPE BarrierHook(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers){
- if(!internal&&Observing()){std::lock_guard lock(State().mutex);if(auto* r=Record(list))for(UINT i=0;i<count;++i){const auto& b=barriers[i];if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_TRANSITION&&b.Transition.pResource){const auto shape=b.Transition.pResource->GetDesc();if(shape.Flags&D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)Append(*r,{Kind::Barrier,Retain(b.Transition.pResource),0,-1,b.Transition.StateAfter,b.Flags==D3D12_RESOURCE_BARRIER_FLAG_NONE&&(b.Transition.Subresource==0||b.Transition.Subresource==D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES),b.Transition.StateBefore});}else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING)Unsupported(*r);}}
+ if(!internal&&Observing()){std::lock_guard lock(State().mutex);if(auto* r=Record(list))for(UINT i=0;i<count;++i){const auto& b=barriers[i];if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_TRANSITION&&b.Transition.pResource){const auto shape=b.Transition.pResource->GetDesc();if((shape.Flags&D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)&&Connections::D3D12DepthPlane::AffectsDepth(b.Transition.Subresource))Append(*r,{Kind::Barrier,Retain(b.Transition.pResource),0,-1,b.Transition.StateAfter,b.Flags,b.Transition.StateBefore,b.Transition.Subresource});}else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING)Unsupported(*r);}}
  originalBarriers(list,count,barriers);
 }
 HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* a,ID3D12PipelineState* p){const auto hr=originalReset(list,a,p);if(!internal&&Observing()){auto& s=State();std::lock_guard lock(s.mutex);s.recordings.erase(list);ComPtr<ID3D12Device> device;if(SUCCEEDED(hr)&&list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT&&SUCCEEDED(list->GetDevice(IID_PPV_ARGS(&device)))&&DeviceMatches(device.Get())){if(s.recordings.size()>=MaxRecordings)s.recordingPressure=true;else {Recording r;r.owner=list;s.recordings.emplace(list,std::move(r));s.recordingPressure=false;}}}return hr;}
@@ -159,7 +165,7 @@ void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,ID3D12Co
  for(UINT i=0;i<count;++i){ComPtr<ID3D12GraphicsCommandList> list;if(FAILED(lists[i]->QueryInterface(IID_PPV_ARGS(&list))))continue;auto* r=Record(list.Get());if(!r||!r->closed||r->unsupported){s.submitted.clear();s.excludedLast=1;s.recordings.erase(list.Get());s.recordingPressure=s.recordings.size()>=MaxRecordings;continue;}
   for(const auto& e:r->events){auto f=s.submitted.find(e.image.Get());if(f==s.submitted.end()){if(s.submitted.size()>=MaxResources)continue;f=s.submitted.emplace(e.image.Get(),Candidate{}).first;f->second.image=e.image;}
    auto& c=f->second;if(c.queue&&c.queue.Get()!=queue){c.known=false;c.draws=0;}c.queue=queue;
-   if(e.kind==Kind::Barrier){const bool matches=!c.known||c.state==e.before;c.state=e.state;c.known=e.known&&matches;}else if(e.kind==Kind::Clear){c.draws=0;c.direction=e.direction;}else if(e.draws>UINT64_MAX-c.draws){c.draws=0;c.known=false;}else c.draws+=e.draws;
+   if(e.kind==Kind::Barrier){Connections::D3D12DepthPlane::ObserveTransition(e.subresource,e.flags,e.before,e.state,c.state,c.known);}else if(e.kind==Kind::Clear){c.draws=0;c.direction=e.direction;}else if(e.draws>UINT64_MAX-c.draws){c.draws=0;c.known=false;}else c.draws+=e.draws;
   }
   // Observation metadata is consumed once, independently of the application's
   // GPU lifetime. Replays need a fresh Reset/recording or are safely excluded.
@@ -220,7 +226,14 @@ bool CanYieldOutput(std::string& reason){
 }
 void Present(IDXGISwapChain* swapchain,ID3D12CommandQueue* queue,bool enabled){
 #ifndef NR_NATIVE12_TESTING
- if(!Observing()||!swapchain||!queue||internal)return;enabled=enabled&&Selected();auto& s=State();std::lock_guard lock(s.mutex);Guard guard;
+ if(!Observing()||!swapchain||!queue||internal)return;
+ const auto settings=TryNrConfigSnapshot(*Config::Instance());
+ const auto policy=Connections::SignalPreferences();
+ const auto inputPolicy=settings?PresentInput::Selected(*settings):PresentInput::Policy::Invalid;
+ const bool captureRequested=settings&&
+  (inputPolicy==PresentInput::Policy::RequireGuides||inputPolicy==PresentInput::Policy::AutoGuides)&&
+  PresentSources::AllowsGuidedSource(policy,Connections::Source::BuiltIn);
+ enabled=enabled&&Selected()&&captureRequested;auto& s=State();std::lock_guard lock(s.mutex);Guard guard;
  s.status.guideReady=s.status.outputValid=s.status.modelPreparing=0;
  auto identity=NativeIdentity::ResolveSwapchainIdentity(swapchain);ComPtr<IUnknown> chainIdentity;if(!identity.object||FAILED(identity.object.As(&chainIdentity)))return;
  if(s.selectedChain&&s.selectedChain.Get()!=chainIdentity.Get()){Publish("Another swapchain is selected; source transfer requires restart");return;}
@@ -252,7 +265,7 @@ void Present(IDXGISwapChain* swapchain,ID3D12CommandQueue* queue,bool enabled){
  if(s.capture>=UINT64_MAX-1||s.serial>=UINT64_MAX-1||s.generation>=UINT64_MAX-1){s.unsafe=true;Publish("Source identity/timeline exhausted; restart required");return;}
  if(s.device&&!NativeIdentity::CompareDevices(s.device.Get(),device.Get()).equal){s.unsafe=true;Publish("Device changed; restart required");return;}
  if(!s.connection){s.device=device;s.queue=queue;s.selectedChain=chainIdentity;if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&s.fence)))){s.unsafe=true;Publish("Source fence allocation failed");return;}s.connection=std::make_unique<C::D3D12Connection>(device.Get());}
- C::D3D12ObservedFrame frame;frame.color=frame.outputTarget=color;frame.depth=selected->image.Get();frame.colorState=frame.outputState=D3D12_RESOURCE_STATE_PRESENT;frame.depthState=selected->state;frame.statesKnown=true;frame.sourceQueue=queue;frame.producer=s.fence;
+ C::D3D12ObservedFrame frame;frame.color=frame.outputTarget=color;frame.depth=selected->image.Get();frame.colorState=frame.outputState=D3D12_RESOURCE_STATE_PRESENT;frame.depthState=selected->state;/* Known depth plane0 only; stencil is neither read nor changed. */frame.statesKnown=true;frame.sourceQueue=queue;frame.producer=s.fence;
  frame.lease=std::make_shared<ComPtr<ID3D12Resource>>(frame.depth);
  const auto epoch=FinalFallback::CurrentInputEpoch();
  const bool reset=s.inputEpoch!=epoch||s.width!=desc.Width||s.height!=desc.Height||s.status.candidateId!=reinterpret_cast<uint64_t>(frame.depth.Get());
@@ -261,7 +274,21 @@ void Present(IDXGISwapChain* swapchain,ID3D12CommandQueue* queue,bool enabled){
  auto& d=frame.description;d.producer=d.session=d.stream=Token;d.device=reinterpret_cast<uint64_t>(device.Get());d.generation=s.generation;d.previousCapture=reset?0:s.capture;d.capture=++s.capture;d.flags=P::ZeroJitterPolicy|P::HudIncluded|(reset?P::Reset:0u);d.depthReversed=direction;d.sourceApi=P::C::GraphicsApi::D3D12;d.color=d.depth={s.width,s.height,0,0,s.width,s.height};
  for(auto& [_,c]:s.submitted)c.draws=0;
  frame.producerValue=++s.serial;if(FAILED(queue->Signal(s.fence.Get(),s.serial))){s.unsafe=true;Publish("Source submission fence failed");return;}
- std::string reason;if(!s.connection->Capture(frame,s.pending,reason)){s.unsafe=s.connection->RequiresRestart();Publish(reason.c_str());return;}
+ // This mandatory source boundary already waited for its queue in Capture.
+ // Complete that same boundary before the shared selector checks the real fence.
+ // Supplemental producers are never waited on by CaptureMixed.
+ if(s.fence->GetCompletedValue()<s.serial){
+  HANDLE completion=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+  const bool completed=completion&&SUCCEEDED(s.fence->SetEventOnCompletion(s.serial,completion))&&WaitForSingleObject(completion,2000)==WAIT_OBJECT_0;
+  if(completion)CloseHandle(completion);
+  if(!completed){s.unsafe=true;Publish("Source completion unavailable; restart required");return;}
+ }
+ C::SignalStatusWireV2 signals;std::string reason;
+ if(!C::CapturePreparedInputs(*s.connection,frame,C::Source::BuiltIn,C::Source::BuiltIn,C::Source::BuiltIn,policy,s.pending,signals,reason)){
+  NeuRotic_PublishInputSignalsV2(2,Token,&signals,sizeof(signals));
+  s.unsafe=s.connection->RequiresRestart();Publish(reason.c_str());return;
+ }
+ NeuRotic_PublishInputSignalsV2(2,Token,&signals,sizeof(signals));
  ++s.status.inputFrames;s.status.guideReady=1;s.status.depthOrigin=PreparedGuides::Origin::Observed;s.status.motionOrigin=PreparedGuides::Origin::Derived;
  s.status.captureWidth=s.width;s.status.captureHeight=s.height;s.status.depthDirection=direction;s.status.candidateId=reinterpret_cast<uint64_t>(frame.depth.Get());s.status.generation=s.generation;s.status.candidateConfidence=1;
  const auto outcome=s.processor.ProcessTextures(s.pending.textures,s.output,reason);
@@ -269,6 +296,8 @@ void Present(IDXGISwapChain* swapchain,ID3D12CommandQueue* queue,bool enabled){
  if(outcome!=NativeGuides::Outcome::Delivered){s.status.modelPreparing=outcome==NativeGuides::Outcome::Preparing;std::string retirement;if(!s.connection->Cancel(s.pending,retirement)){s.unsafe=true;reason=retirement;}Publish(reason.c_str());return;}
  ++s.status.modelCompletions;C::CopybackReceipt receipt;
  if(!s.connection->Finish(s.pending,s.output,receipt,reason)||!receipt.completed||receipt.capture!=s.capture){s.unsafe=true;Publish(reason.c_str());NeuRotic_RetirePreparedConnectionV1(2,Token,0);return;}
+ signals.consumed=1;if(signals.motionReason==uint32_t(C::Mixed::Reason::NeedsActivation))signals.motionReason=uint32_t(C::Mixed::Reason::Ready);
+ NeuRotic_PublishInputSignalsV2(2,Token,&signals,sizeof(signals));
  ++s.status.copybackCompletions;s.status.outputWidth=s.width;s.status.outputHeight=s.height;s.status.modelPreparing=0;
  Publish("Captured submitted scene depth and derived motion; exact output copied back (estimated scene association)",true);
 #else

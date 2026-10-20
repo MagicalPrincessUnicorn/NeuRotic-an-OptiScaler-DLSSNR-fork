@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeProfilePreparation.h b/after/OptiScaler/nr/protocol/NativeProfilePreparation.h
+--- a/before/OptiScaler/nr/protocol/NativeProfilePreparation.h
++++ b/after/OptiScaler/nr/protocol/NativeProfilePreparation.h
+@@ -134,7 +134,7 @@
+             p.runtime=input.runtime;
+             const auto* semantic=S::ResolveMetadata(input.semantic,store);if(!semantic)return {{},Symbol("RENDER.Profile.SourceDisappeared")};
+             p.semanticCertificate=Reference<C::ContractId::C04>(*semantic);p.inputSemantic=input.semantic;
+-            if(!BuildFrameControls(*context,evidence,store,p.bindingPlan)||!SettingsBindings(*settings,p.bindingPlan)||
++            if(!BuildFrameControls(*context,evidence,store,p.bindingPlan)||
+                !ClearOptionalResources(evidence,p.bindingPlan))return {{},Symbol("RENDER.Profile.ControlBindingInvalid")};
+             const auto* depth=S::ResolveOptional(context->depth,store);
+             if(!depth||!Scalar(p.bindingPlan,Purpose::DepthGuide,"DLSSNR.DepthInverted",C::ScalarValue{std::uint64_t(depth->reversed.KnownPart()->value)},evidence)||

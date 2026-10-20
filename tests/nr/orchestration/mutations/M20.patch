@@ -1,0 +1,14 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeTemporalRuntime.h b/after/OptiScaler/nr/protocol/NativeTemporalRuntime.h
+--- a/before/OptiScaler/nr/protocol/NativeTemporalRuntime.h
++++ b/after/OptiScaler/nr/protocol/NativeTemporalRuntime.h
+@@ -143,7 +143,9 @@
+         if(facts_.modelAttempted||!facts_.failure.Empty()||
+            (history_&&!history_->Attempt(evaluation_,resetRequested,currentHistory_,sample_)))
+         {Fail("Native.HistoryAdmissionRejected");return false;}
+-        facts_.commandsRecorded=true;facts_.modelAttempted=true;facts_.actualResetRequested=resetRequested;return true;
++        facts_.commandsRecorded=true;facts_.modelAttempted=true;facts_.actualResetRequested=resetRequested;
++        if(resetRequested&&admission_)facts_.resetAcknowledgments.Push({Symbol("ResetAcknowledgment"),admission_->Product()->recipe.header.record,1});
++        return true;
+     }
+   public:
+     // CPU evidence observer only. An admitted production observer must cross

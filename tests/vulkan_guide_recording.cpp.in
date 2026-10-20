@@ -1,0 +1,130 @@
+#define GUIDE_RECORDING_TEST
+// Use the same actual helper and instrumented Vulkan allocator as the focused test.
+#include "tests/vulkan_guide_sample_copy.cpp"
+#include <optional>
+#include <string>
+#include <mutex>
+#include "dlssnr/VulkanNrGuideLayout.h"
+using DlssNr::ResolveVkNrGuideLayout;
+#define LOG_INFO(...) ((void)0)
+constexpr auto NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW=1;
+struct VkNrUseId {};
+struct VkNrGuideImages {uint64_t bytes=0;NVSDK_NGX_Resource_VK depth{},motion{};std::vector<uint32_t> concurrentFamilies;virtual void Abandon(){};virtual ~VkNrGuideImages()=default;};
+struct Temporal {VkNrRect depth{},motion{};};
+struct Contract {uint64_t deviceGeneration=10;std::optional<Temporal> temporal;};
+struct VkFrameRequest {NVSDK_NGX_Resource_VK* depth=nullptr;NVSDK_NGX_Resource_VK* motion=nullptr;VkDevice device{};VkPhysicalDevice physicalDevice{};VkCommandBuffer commandBuffer{};Contract contract;bool ngxSrInputContract=true;bool ngxGuideInputIdentity=true;bool ngxGuideInputReadContract=false;};
+struct VkNrGuideCreation {std::shared_ptr<VkNrGuideImages> images;bool recorded=false,ready=false;std::string reason;};
+struct VkNrImageRights {struct {VkImageUsageFlags usage=0;VkFormat format{};} image;struct {VkImageSubresourceRange range{};} view;VkImageAspectFlags copyAspect=0,barrierAspect=0;};
+namespace VkFrame {struct Failure{};bool ValidateRect(const char*,NVSDK_NGX_Resource_VK* source,uint32_t x,uint32_t y,uint32_t w,uint32_t h,bool,Failure&){return w&&h&&x+w<=source->Resource.ImageViewInfo.Width&&y+h<=source->Resource.ImageViewInfo.Height;}}
+namespace vk_state {
+struct CommandBufferState {bool Recording=true,InRenderPass=false;std::unordered_map<VkImage,VkImageLayout> ImageLayouts;std::unordered_map<VkImage,VkImageSubresourceRange> ImageLayoutRanges;};
+struct ReplayParams {uint32_t RequiredGraphicsSetMask=0;bool ReplayComputeToo=false,ReplayVertexIndex=false,ReplayPushConstants=true;};
+}
+static bool qualified=true,restore=true,capture=true;
+static unsigned restores=0,dispatches=0,copies=0,sourceBarriers=0,visibilityBarriers=0;
+static unsigned completedReadBarriers=0,orderedReadBarriers=0;
+static std::vector<uint32_t> createdFamilies{0,1};
+struct Registry {std::vector<uint32_t> CreatedQueueFamilies(VkDevice){return createdFamilies;}};
+Registry& GetVulkanPresentRegistry(){static Registry r;return r;}
+static vk_state::CommandBufferState sourceState;
+namespace Vulkan_wDx12 {struct Tracker {
+bool CaptureNrState(VkCommandBuffer,vk_state::CommandBufferState& s){s=sourceState;return capture;}
+bool ReplaySaved(VkCommandBuffer,const vk_state::CommandBufferState& saved,const vk_state::ReplayParams& p){assert(saved.ImageLayouts==sourceState.ImageLayouts&&p.ReplayComputeToo&&!p.ReplayPushConstants);++restores;return restore;}
+} cmdBufferStateTracker;}
+struct Recordings {bool BindingsQualified(VkCommandBuffer){return qualified;}uint32_t CommandFamily(VkCommandBuffer){return 0;}};
+Recordings& VulkanNrRecordings(){static Recordings r;return r;}
+static VkNrImageRights depthRights{},motionRights{};
+static VkImage sourceDepth{},sourceMotion{};
+struct Facts {std::optional<VkNrImageRights> Rights(VkDevice,const NVSDK_NGX_Resource_VK&,VkImageUsageFlags usage,bool depth,const char**){assert(usage==VK_IMAGE_USAGE_SAMPLED_BIT);if(!(depth?depthRights:motionRights).image.usage)return {};return depth?depthRights:motionRights;}
+ std::optional<VkNrImageRights> NgxDepthRights(VkDevice d,const NVSDK_NGX_Resource_VK& r,bool authenticated,const char** reason){assert(authenticated);return Rights(d,r,VK_IMAGE_USAGE_SAMPLED_BIT,true,reason);}
+ std::string Describe(VkDevice,const NVSDK_NGX_Resource_VK&){return "observed-creation-facts";}};
+Facts& VulkanNrImageFacts(){static Facts f;return f;}
+static VkQueueFlags queueFlags=VK_QUEUE_COMPUTE_BIT;
+static std::unordered_map<VkImage,VkImageCreateInfo> createdImages;
+extern "C" {
+VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceFormatProperties(VkPhysicalDevice,VkFormat,VkFormatProperties* p){*p={};p->optimalTilingFeatures=VK_FORMAT_FEATURE_TRANSFER_SRC_BIT|VK_FORMAT_FEATURE_TRANSFER_DST_BIT|VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT|VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;}
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateImage(VkDevice,const VkImageCreateInfo* p,const VkAllocationCallbacks*,VkImage* out){*out=Handle<VkImage>();createdImages[*out]=*p;return VK_SUCCESS;}
+VKAPI_ATTR void VKAPI_CALL vkDestroyImage(VkDevice,VkImage i,const VkAllocationCallbacks*){createdImages.erase(i);}
+VKAPI_ATTR void VKAPI_CALL vkGetImageMemoryRequirements(VkDevice,VkImage,VkMemoryRequirements* p){*p={4096,256,1};}
+VKAPI_ATTR VkResult VKAPI_CALL vkBindImageMemory(VkDevice,VkImage,VkDeviceMemory,VkDeviceSize){return VK_SUCCESS;}
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateImageView(VkDevice,const VkImageViewCreateInfo*,const VkAllocationCallbacks*,VkImageView* out){*out=Handle<VkImageView>();return VK_SUCCESS;}
+VKAPI_ATTR void VKAPI_CALL vkDestroyImageView(VkDevice,VkImageView,const VkAllocationCallbacks*){}
+VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier(VkCommandBuffer,VkPipelineStageFlags srcStage,VkPipelineStageFlags dstStage,VkDependencyFlags,uint32_t memoryCount,const VkMemoryBarrier* memory,uint32_t,const VkBufferMemoryBarrier*,uint32_t imageCount,const VkImageMemoryBarrier* images){if(memoryCount){assert(memory[0].srcAccessMask==VK_ACCESS_MEMORY_WRITE_BIT&&memory[0].dstAccessMask==VK_ACCESS_SHADER_READ_BIT);++visibilityBarriers;}for(uint32_t i=0;i<imageCount;++i){if(images[i].image==sourceDepth||images[i].image==sourceMotion)++sourceBarriers;if(images[i].srcAccessMask==VK_ACCESS_MEMORY_WRITE_BIT&&images[i].dstAccessMask==VK_ACCESS_SHADER_READ_BIT){assert(srcStage==VK_PIPELINE_STAGE_ALL_COMMANDS_BIT&&dstStage==VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);++orderedReadBarriers;}if(images[i].srcAccessMask==0&&images[i].dstAccessMask==VK_ACCESS_SHADER_READ_BIT){assert(srcStage==VK_PIPELINE_STAGE_ALL_COMMANDS_BIT&&dstStage==VK_PIPELINE_STAGE_ALL_COMMANDS_BIT&&images[i].oldLayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL&&images[i].newLayout==images[i].oldLayout&&images[i].srcQueueFamilyIndex==VK_QUEUE_FAMILY_IGNORED&&images[i].dstQueueFamilyIndex==VK_QUEUE_FAMILY_IGNORED);++completedReadBarriers;}}}
+VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice,uint32_t* count,VkQueueFamilyProperties* out){*count=1;if(out){*out={};out->queueFlags=queueFlags;}}
+VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceProperties(VkPhysicalDevice,VkPhysicalDeviceProperties* out){*out={};out->limits.maxComputeWorkGroupCount[0]=out->limits.maxComputeWorkGroupCount[1]=65535;}
+VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer,VkPipelineBindPoint,VkPipeline pipeline){assert(pipeline);}
+VKAPI_ATTR void VKAPI_CALL vkCmdBindDescriptorSets(VkCommandBuffer,VkPipelineBindPoint,VkPipelineLayout layout,uint32_t,uint32_t count,const VkDescriptorSet* sets,uint32_t,const uint32_t*){assert(layout&&count==1&&sets[0]);}
+VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer,uint32_t x,uint32_t y,uint32_t z){assert(x&&y&&z==1);++dispatches;}
+VKAPI_ATTR void VKAPI_CALL vkCmdCopyImage(VkCommandBuffer,VkImage,VkImageLayout,VkImage,VkImageLayout,uint32_t,const VkImageCopy*){++copies;}
+}
+static void ConfigureNgxGuideIdentity(VkFrameRequest& frame,bool sr,bool isRrRoute,bool publicScope=false){
+ struct {bool selectedSr;} nrAdmission{sr};
+ struct PublicScope {bool providerFrameKnown;uint64_t providerGeneration;};
+ std::optional<PublicScope> nrTemporal=PublicScope{publicScope,publicScope?1ull:0ull};
+ // PRODUCTION_NGX_GUIDE_IDENTITY
+}
+// PRODUCTION_COPY_GUIDES
+struct VkNrGuideLease {std::shared_ptr<VkNrGuideImages> images;VkCommandBuffer consumerCommand{};bool completedProducer=false,orderedProducer=false;};
+static bool bindAccepted=true;static std::mutex guideMutex;
+struct GuideBinder {bool Bind(const VkNrGuideLease&,VkNrUseId,VkQueue){return bindAccepted;}};
+GuideBinder& Guides(){static GuideBinder g;return g;}
+// PRODUCTION_BIND_GUIDES
+int main(){
+ auto device=Handle<VkDevice>();auto physical=Handle<VkPhysicalDevice>();
+ NVSDK_NGX_Resource_VK d{},m{};sourceDepth=d.Resource.ImageViewInfo.Image=Handle<VkImage>();sourceMotion=m.Resource.ImageViewInfo.Image=Handle<VkImage>();
+ d.Resource.ImageViewInfo.ImageView=Handle<VkImageView>();m.Resource.ImageViewInfo.ImageView=Handle<VkImageView>();
+ d.Resource.ImageViewInfo.Width=m.Resource.ImageViewInfo.Width=1920;d.Resource.ImageViewInfo.Height=m.Resource.ImageViewInfo.Height=1080;
+ depthRights.image={VK_IMAGE_USAGE_SAMPLED_BIT,VK_FORMAT_D32_SFLOAT_S8_UINT};depthRights.copyAspect=VK_IMAGE_ASPECT_DEPTH_BIT;depthRights.barrierAspect=VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;depthRights.view.range={VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1};
+ motionRights.image={VK_IMAGE_USAGE_SAMPLED_BIT,VK_FORMAT_R16G16_SFLOAT};motionRights.copyAspect=motionRights.barrierAspect=VK_IMAGE_ASPECT_COLOR_BIT;motionRights.view.range={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+ VkFrameRequest request{&d,&m,device,physical,Handle<VkCommandBuffer>(),{10,Temporal{{7,9,1280,720},{0,0,1920,1080}}},true};
+ depthRights.image.usage=0;auto unavailable=CopyGuides(request,{},1024*1024);
+ assert(!unavailable.recorded&&!unavailable.images&&dispatches==0&&unavailable.reason.find("observed-creation-facts")!=std::string::npos);
+ depthRights.image.usage=VK_IMAGE_USAGE_SAMPLED_BIT;
+ auto copied=CopyGuides(request,{},1024*1024);assert(copied.ready&&copied.recorded&&copied.images);
+ assert(dispatches==2&&restores==1&&copies==0&&sourceBarriers==0&&visibilityBarriers==1);
+ assert(copied.images->depth.Resource.ImageViewInfo.Format==VK_FORMAT_R32_SFLOAT&&copied.images->motion.Resource.ImageViewInfo.Format==VK_FORMAT_R32G32B32A32_SFLOAT);
+ assert(createdImages[copied.images->depth.Resource.ImageViewInfo.Image].usage==(VK_IMAGE_USAGE_STORAGE_BIT|VK_IMAGE_USAGE_SAMPLED_BIT));
+ const auto& created=createdImages[copied.images->depth.Resource.ImageViewInfo.Image];
+ assert(created.sharingMode==VK_SHARING_MODE_CONCURRENT&&created.queueFamilyIndexCount==2&&created.pQueueFamilyIndices[0]==0&&created.pQueueFamilyIndices[1]==1);
+ // RR wrapper provenance does not authorize a SuperSampling layout convention.
+ ConfigureNgxGuideIdentity(request,false,false);assert(!request.ngxSrInputContract&&!request.ngxGuideInputIdentity);
+ ConfigureNgxGuideIdentity(request,true,false);assert(request.ngxSrInputContract&&request.ngxGuideInputIdentity);
+ ConfigureNgxGuideIdentity(request,false,true);assert(!request.ngxSrInputContract&&request.ngxGuideInputIdentity);
+ sourceState.ImageLayouts[sourceDepth]=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+ sourceState.ImageLayoutRanges[sourceDepth]={VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1};
+ sourceState.ImageLayouts[sourceMotion]=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+ sourceState.ImageLayoutRanges[sourceMotion]={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+ auto rr=CopyGuides(request,{},1024*1024);assert(rr.ready&&rr.recorded&&rr.images);
+ ReleaseImages(*rr.images);rr.images.reset();dispatches-=2;restores-=1;
+ sourceState={};auto unprovedRr=CopyGuides(request,{},1024*1024);
+ assert(!unprovedRr.recorded&&!unprovedRr.images&&unprovedRr.reason.find("layout")!=std::string::npos);
+ // Authenticated public Streamline RR also supplies a readable input convention.
+ ConfigureNgxGuideIdentity(request,false,true,true);
+ auto scopedRr=CopyGuides(request,{},1024*1024);assert(scopedRr.ready&&scopedRr.recorded&&scopedRr.images);
+ ReleaseImages(*scopedRr.images);scopedRr.images.reset();dispatches-=2;restores-=1;
+ sourceState.ImageLayouts[sourceDepth]=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+ sourceState.ImageLayoutRanges[sourceDepth]={VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1};
+ auto conflictingRr=CopyGuides(request,{},1024*1024);assert(!conflictingRr.recorded&&!conflictingRr.images);
+ sourceState={};request.ngxGuideInputReadContract=false;request.ngxSrInputContract=true;
+ VkNrGuideLease completed{copied.images,request.commandBuffer,true};bindAccepted=false;
+ assert(!BindVulkanPresentGuides(completed,{},{}));assert(completedReadBarriers==0);
+ bindAccepted=true;assert(BindVulkanPresentGuides(completed,{},{}));assert(completedReadBarriers==2&&sourceBarriers==0);
+ completed.completedProducer=false;completed.orderedProducer=true;assert(BindVulkanPresentGuides(completed,{},{}));assert(orderedReadBarriers==2&&sourceBarriers==0);
+ completed.images.reset();
+ ReleaseImages(*copied.images);copied.images.reset();
+ qualified=false;auto refused=CopyGuides(request,{},1024*1024);assert(!refused.images&&!refused.recorded&&dispatches==2);qualified=true;
+ queueFlags=VK_QUEUE_TRANSFER_BIT;refused=CopyGuides(request,{},1024*1024);assert(!refused.images&&dispatches==2);queueFlags=VK_QUEUE_COMPUTE_BIT;
+ failAllocate=true;refused=CopyGuides(request,{},1024*1024);assert(!refused.images&&dispatches==2);failAllocate=false;
+ sourceState.ImageLayouts[sourceDepth]=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;sourceState.ImageLayoutRanges[sourceDepth]={VK_IMAGE_ASPECT_DEPTH_BIT,0,1,0,1};refused=CopyGuides(request,{},1024*1024);assert(!refused.images&&dispatches==2);sourceState={};
+ restore=false;copied=CopyGuides(request,{},1024*1024);assert(copied.images&&copied.recorded&&!copied.ready&&dispatches==4);ReleaseImages(*copied.images);restore=true;
+ // Fully observed transferable inputs retain the direct copy path.
+ createdFamilies={0};
+ depthRights.image.usage|=VK_IMAGE_USAGE_TRANSFER_SRC_BIT;motionRights.image.usage|=VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+ sourceState.ImageLayouts[sourceDepth]=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;sourceState.ImageLayoutRanges[sourceDepth]={depthRights.barrierAspect,0,1,0,1};
+ sourceState.ImageLayouts[sourceMotion]=VK_IMAGE_LAYOUT_GENERAL;sourceState.ImageLayoutRanges[sourceMotion]={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+ copied=CopyGuides(request,{},1024*1024);assert(copied.ready&&copies==2&&dispatches==4&&sourceBarriers==4);
+ assert(createdImages[copied.images->depth.Resource.ImageViewInfo.Image].sharingMode==VK_SHARING_MODE_EXCLUSIVE);ReleaseImages(*copied.images);
+ createdFamilies={1};refused=CopyGuides(request,{},1024*1024);assert(!refused.images&&!refused.recorded&&copies==2&&dispatches==4);
+ guideCopyPrograms.clear();
+ std::cout<<"PASS actual CopyGuides: sampled-only depth/stencil and motion, two dispatches, source layouts untouched, visibility, restore, refusals before recording, retained failure resources, transfer preference\n";
+}

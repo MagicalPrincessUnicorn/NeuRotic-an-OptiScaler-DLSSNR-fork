@@ -124,17 +124,11 @@ inline MfgQualification QualifyMfgProvider(const MfgProviderImages& images,
         images.boundProviderIdentity != p.imageIdentity ||
         images.boundWrapperIdentity != w.imageIdentity ||
         p.abiVersion < 1 || p.abiVersion > 5 ||
-        w.abiVersion < 1 || w.abiVersion > 5 || !p.temporalProfile ||
+        w.abiVersion < 1 || w.abiVersion > 5 || p.temporalProfile < 1 || p.temporalProfile > 3 ||
         !p.snapshotFingerprint || !w.snapshotFingerprint) return result;
-    const bool canonical = p.version.major == 310 && p.version.minor == 8 &&
-        p.version.patch == 0 && w.version.major == 2 && w.version.minor == 13 &&
-        w.version.patch == 0 && p.temporalProfile == 1;
-    const bool current = p.version.major == 310 && p.version.minor == 9 &&
-        w.version.major == 2 && w.version.minor == 14 && p.temporalProfile == 2;
-    const bool legacyWrapper = w.version.major == 2 && w.version.minor == 7 &&
-        w.version.patch == 32 && w.version.build == 0 &&
-        MfgProviderTemporalProfile(p.version) == p.temporalProfile;
-    if (!canonical && !current && !legacyWrapper) return result;
+    // Native admission follows the independently matched temporal program and
+    // gate structure, not a provider/wrapper version cohort. Keep metadata for
+    // diagnostics and current-byte fingerprints for ownership.
 
     // Source lineage: MFGAdaUnlock-RenoDx 1.1.5, MIT, ImDreamt and contributors.
     // The provider architecture compares are 3D/81 FD with 0x1b0 immediate.
@@ -163,7 +157,6 @@ inline MfgQualification QualifyMfgProvider(const MfgProviderImages& images,
     const auto secondArchitectureSites = count(p.bytes, p.size, archB, sizeof archB);
     result.architectureSites = firstArchitectureSites + secondArchitectureSites;
     const auto fiveFrameSites = count(w.bytes, w.size, ceiling5, sizeof ceiling5);
-    if (legacyWrapper && fiveFrameSites) return result;
     result.wrapperSites = count(w.bytes, w.size, ceiling3, sizeof ceiling3) + fiveFrameSites;
     const size_t expectedSecond = p.temporalProfile == 3 ? 0 : 1;
     if (firstArchitectureSites != 1 || secondArchitectureSites != expectedSecond ||

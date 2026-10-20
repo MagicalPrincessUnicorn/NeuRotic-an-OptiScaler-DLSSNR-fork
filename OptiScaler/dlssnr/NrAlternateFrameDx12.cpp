@@ -2,6 +2,7 @@
 #include "pch.h"
 #endif
 #include "NrAlternateFrameDx12.h"
+#include <nr/d3d12/NativeRecordingInterfaces.h>
 #include <wrl/client.h>
 #include <dxgi1_6.h>
 #include <cstring>
@@ -148,6 +149,7 @@ bool SceneResource(ID3D12Resource* r,const NativeSourceView& v){
 }
 struct PreparedFrame::Impl {
     GpuRequest request;
+    ComPtr<ID3D12GraphicsCommandList> executionCaller;
     std::shared_ptr<Slot> slot,anchor;
     std::unique_ptr<GpuSafety::LocalRecordingAction> action;
     std::unique_ptr<GpuSafety::DerivedReadLease> read;
@@ -193,11 +195,24 @@ struct Renderer::Impl {
             if(!buffers){reason=Reason::ResourceCapacity;return {};}
             slot=std::make_shared<Slot>();slot->buffers=std::move(buffers);}
         auto p=std::make_unique<PreparedFrame::Impl>();p->request=r;p->slot=slot;p->carry=carry;p->anchor=carry?accepted:nullptr;
+        p->request.recordingOwner=nullptr;p->executionCaller=r.list;
         std::vector<ID3D12Resource*> resources{r.target,r.depth,r.motion};if(!carry)resources.push_back(r.base);
         const auto own=slot->buffers->Resources();resources.insert(resources.end(),own.begin(),own.end());
         if(carry){const auto other=accepted->buffers->Resources();resources.insert(resources.end(),other.begin(),other.end());}
-        auto ticket=GpuSafety::Record(r.list);p->action=GpuSafety::BeginLocalAction(ticket,r.list,resources);
+        if(r.recordingOwner) {
+            // Observation joins the existing lifetime owner; execution and
+            // resource arguments remain on the actual caller interface.
+            const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(r.list);
+            if(FAILED(interfaces.result)||interfaces.terminal.Get()!=r.recordingOwner->CommandList()) {
+                reason=Reason::ReaderReservationUnavailable;return {};
+            }
+            p->action=GpuSafety::BorrowLocalAction(*r.recordingOwner,resources);
+        } else {
+            const auto ticket=GpuSafety::Record(r.list);
+            p->action=GpuSafety::BeginLocalAction(ticket,r.list,resources);
+        }
         if(!p->action){reason=Reason::ReaderReservationUnavailable;return {};}
+        const auto ticket=p->action->RecordingTicket();
         auto inputsRetained=std::make_shared<std::vector<ComPtr<ID3D12Resource>>>();
         for(auto* resource:resources)inputsRetained->emplace_back(resource);
         if(!GpuSafety::RetainDerivedUse(*p->action,inputsRetained)){reason=Reason::ReaderReservationUnavailable;return {};}
@@ -252,9 +267,18 @@ std::unique_ptr<PreparedFrame> Renderer::PrepareCarry(const GpuRequest& r){
     try{auto p=impl_->Prepare(r,true);return p?std::unique_ptr<PreparedFrame>(new PreparedFrame(std::move(p))):nullptr;}
     catch(...){impl_->reason=Reason::ResourceCapacity;return {};}}
 namespace {
-template<class Prepared>GpuRecordResult Record(Prepared& p,bool carry){
+template<class Prepared>GpuRecordResult Record(Prepared& p,bool carry,const RecordBoundary& boundary={}){
     if(p.recorded||p.carry!=carry||!p.action||!p.action->Current())return {};
+    if(boundary.beforeRecord&&!boundary.beforeRecord(boundary.context)){
+        GpuRecordResult refused;refused.result=E_ABORT;refused.refusedBeforeEffects=true;return refused;
+    }
     p.recorded=true;const auto& r=p.request;auto* list=r.list;auto& b=*p.slot->buffers;
+    bool completionObserved=false;
+    const auto observeCompletion=[&]()noexcept{
+        if(completionObserved)return;
+        completionObserved=true;
+        if(boundary.beforeCompletion)boundary.beforeCompletion(boundary.context);
+    };
     // All storage, descriptors, constants and read rights were acquired above.
     // Once this timestamp is recorded, any failure is after possible effects.
     try {
@@ -298,6 +322,7 @@ template<class Prepared>GpuRecordResult Record(Prepared& p,bool carry){
         Barrier(list,b.counts.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         list->EndQuery(b.query.Get(),D3D12_QUERY_TYPE_TIMESTAMP,1);
         list->ResolveQueryData(b.query.Get(),D3D12_QUERY_TYPE_TIMESTAMP,0,2,b.readback.Get(),64);
+        observeCompletion();
         const bool current=p.action->Current();p.slot->recorded=current;p.slot->measurementTaken=!current;
         GpuRecordResult result{current,true,current?S_OK:E_FAIL};
         if(carry) {
@@ -305,11 +330,11 @@ template<class Prepared>GpuRecordResult Record(Prepared& p,bool carry){
             result.output->ObserveDispatchPossible();if(current)result.output->ObserveDispatchRecorded();
         }
         p.action.reset();return result;
-    }catch(...){p.action.reset();return {false,true,E_FAIL};}
+    }catch(...){observeCompletion();p.action.reset();return {false,true,E_FAIL};}
 }
 }
-GpuRecordResult Renderer::RecordCapture(PreparedFrame& p){auto result=Record(*p.impl_,false);if(result.recorded)impl_->candidate=p.impl_->slot;return result;}
-GpuRecordResult Renderer::RecordCarry(PreparedFrame& p){return Record(*p.impl_,true);}
+GpuRecordResult Renderer::RecordCapture(PreparedFrame& p,const RecordBoundary& boundary){auto result=Record(*p.impl_,false,boundary);if(result.recorded)impl_->candidate=p.impl_->slot;return result;}
+GpuRecordResult Renderer::RecordCarry(PreparedFrame& p,const RecordBoundary& boundary){return Record(*p.impl_,true,boundary);}
 bool Renderer::AcceptCapture(const SourceRef& source){
     if(!impl_->candidate||!impl_->candidate->recorded||impl_->candidate->metadata.source.source!=source)return false;
     impl_->candidate->accepted=true;impl_->accepted=impl_->candidate;impl_->candidate.reset();return true;

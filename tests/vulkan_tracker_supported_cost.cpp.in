@@ -1,0 +1,54 @@
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <new>
+#include <thread>
+#include <dlssnr/VulkanNrImageFacts.h>
+static thread_local bool countAllocations=false;
+static thread_local unsigned allocations=0;
+void* operator new(std::size_t n) {if(countAllocations)++allocations;if(auto p=std::malloc(n?n:1))return p;throw std::bad_alloc();}
+void operator delete(void* p) noexcept {std::free(p);}
+void operator delete(void* p,std::size_t) noexcept {std::free(p);}
+#define LOG_DEBUG(...) ((void)0)
+#define LOG_WARN(...) ((void)0)
+#define LOG_ERROR(...) ((void)0)
+struct Feature {bool IsWithDx12()const{return false;}};
+struct State {Feature* currentFeature=nullptr;static State& Instance(){static State s;return s;}};
+// PRODUCTION_TRACKER
+static void Check(bool value,const char* message){if(!value){std::fprintf(stderr,"FAIL: %s\n",message);std::exit(1);}}
+int main(){
+ vk_state::CommandBufferStateTracker tracker;tracker.EnableNativeObservations();
+ auto cmd=reinterpret_cast<VkCommandBuffer>(1);auto pool=reinterpret_cast<VkCommandPool>(2);
+ auto layout=reinterpret_cast<VkPipelineLayout>(3);auto other=reinterpret_cast<VkPipelineLayout>(4);
+ auto set=reinterpret_cast<VkDescriptorSet>(5);uint32_t offset=4,constant=1;
+ tracker.OnAllocateCommandBuffers(reinterpret_cast<VkDevice>(1),pool,1,&cmd,0);vk_state::VulkanCmdFns fns{};tracker.SetFunctionTable(fns);
+ VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};tracker.OnBegin(cmd,&begin);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,&set,1,&offset);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,&constant);
+ allocations=0;countAllocations=true;auto start=std::chrono::steady_clock::now();
+ for(uint32_t n=0;n<100000;++n){constant=n;offset=n*4;set=reinterpret_cast<VkDescriptorSet>(uintptr_t(n+6));
+  tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,&set,1,&offset);
+  tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,&constant);
+ }
+ countAllocations=false;auto elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+ vk_state::CommandBufferState saved;Check(tracker.CaptureNrState(cmd,saved),"capture actual supported state");
+ std::printf("Repeated supported calls=200000 allocations=%u descriptors=%zu pushes=%zu host_ms=%.3f (synthetic; no game timing)\n",allocations,saved.BP[1].DescriptorBindCalls.size(),saved.PushConstantHistory.size(),elapsed);
+ Check(saved.BP[1].DescriptorBindCalls.size()==1&&saved.PushConstantHistory.size()==1,"fully superseded adjacent calls must not accumulate restore history");
+ Check(allocations==0,"same-shape adjacent updates reuse warmed storage");
+ uint32_t observed=0;std::memcpy(&observed,saved.PushConstantHistory[0].Data.data(),4);
+ Check(observed==99999&&saved.BP[1].Sets[0].Set==set&&saved.BP[1].DescriptorBindCalls[0].DynamicOffsets[0]==399996,"latest values retained");
+ // Different layouts, binding ranges, stages and overlaps must preserve chronology.
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,other,0,1,&set,1,&offset);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,1,1,&set,1,&offset);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,&set,1,&offset);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,other,VK_SHADER_STAGE_COMPUTE_BIT,0,4,&constant);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,layout,VK_SHADER_STAGE_FRAGMENT_BIT,0,4,&constant);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,4,4,&constant);
+ Check(tracker.CaptureNrState(cmd,saved),"capture interleaved state");
+ Check(saved.BP[1].DescriptorBindCalls.size()==4&&saved.PushConstantHistory.size()==4,"distinct layout/range/stage entries preserve chronology");
+ Check(saved.BP[1].Sets[0].BindCallIndex==3&&saved.BP[1].Sets[1].BindCallIndex==2,"live descriptor indices remain correct");
+ tracker.OnBegin(cmd,&begin);Check(tracker.CaptureNrState(cmd,saved)&&saved.PushConstantHistory.empty()&&saved.BP[1].DescriptorBindCalls.empty(),"new recording resets state");
+ std::puts("PASS actual supported tracker: bounded adjacent history, zero warmed allocations, latest values and distinct chronology intact");
+}

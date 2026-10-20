@@ -36,7 +36,9 @@ int main()
     Check(Classify(pq.colorSpace) == ColorClass::Hdr10 && IsHdr(Classify(pq.colorSpace)),
           "HDR10 classification is explicit");
 
-    registry.Register(chain2, DXGI_FORMAT_R16G16B16A16_FLOAT);
+    const auto floating = registry.Register(chain2, DXGI_FORMAT_R16G16B16A16_FLOAT);
+    Check(!floating.colorSpaceObserved && floating.colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
+          "float creation uses documented linear709 default, not observed SDR");
     registry.RecordColorSpace(chain2, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709, S_OK);
     Check(registry.Read(chain1).colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
           "a second swapchain cannot overwrite the first swapchain");

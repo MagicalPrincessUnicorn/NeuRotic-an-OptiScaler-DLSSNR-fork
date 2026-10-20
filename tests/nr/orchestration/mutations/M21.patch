@@ -1,0 +1,24 @@
+diff --git a/before/OptiScaler/nr/orchestration/RoutingRules.h b/after/OptiScaler/nr/orchestration/RoutingRules.h
+--- a/before/OptiScaler/nr/orchestration/RoutingRules.h
++++ b/after/OptiScaler/nr/orchestration/RoutingRules.h
+@@ -162,7 +162,7 @@
+ {
+     if(!Context::ValidValues(intent)||intent.source.owner!=C::OwnerDomain::Configuration||!intent.promotionFrames||
+        intent.promotionFrames>1000000||intent.warmupFrames>1000000)return false;
+-    if(intent.mode.View()!="Shadow"&&intent.mode.View()!="FixedLegacy"&&intent.mode.View()!="LockCurrent")return false;
++    if(intent.mode.View()!="Shadow"&&intent.mode.View()!="FixedLegacy"&&intent.mode.View()!="LockCurrent"&&intent.mode.View()!="Auto")return false;
+     if(intent.tier.View()!="Basic"&&intent.tier.View()!="Advanced"&&intent.tier.View()!="Unrestricted")return false;
+     for(const auto* list:{&intent.require,&intent.forbid,&intent.prefer})
+         for(std::size_t i=0;i<list->Size();++i){if(list->Get(i)->Empty())return false;for(std::size_t j=0;j<i;++j)if(*list->Get(i)==*list->Get(j))return false;}
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.h b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.h
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.h
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.h
+@@ -84,7 +84,7 @@
+         const std::shared_ptr<Store>& store)
+     {
+         if(!store||input.scope!=enrolled.scope||input.incumbent.current||input.legacyEffective||
+-            input.intent.mode.View()!="FixedLegacy"||!input.intent.fixedStrategy||
++            (input.intent.mode.View()!="FixedLegacy"&&input.intent.mode.View()!="Auto")||!input.intent.fixedStrategy||
+             input.intent.fixedStrategy->View()!="NativeTemporal"||
+             !input.intent.fixedPlacement||*input.intent.fixedPlacement!=request.placement||
+             (request.placement!=C::Placement::NativeBefore&&request.placement!=C::Placement::NativeAfter)||

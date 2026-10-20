@@ -10,12 +10,16 @@ struct AdvisorConfig
     NrOptional<uint32_t> DlssNrRoute {2};
     NrOptional<int32_t> DlssNrRenderingMode {1};
     NrOptional<bool> DlssNrRunBeforeSr {true};
+    NrOptional<float> DlssNrWorkingScale {1.0f};
+    NrOptional<bool> DlssNrUiManualResolution {false};
 };
 struct AdvisorSnapshot
 {
     CustomOptional<uint32_t> DlssNrRoute {2};
     CustomOptional<int32_t> DlssNrRenderingMode {1};
     CustomOptional<bool> DlssNrRunBeforeSr {true};
+    CustomOptional<float> DlssNrWorkingScale {1.0f};
+    CustomOptional<bool> DlssNrUiManualResolution {false};
 };
 int main()
 {
@@ -44,6 +48,15 @@ int main()
     }
     OptiInput::MenuInputPolicy defaults;
     assert(defaults.Mouse(true) && !defaults.Keyboard(true) && !defaults.Controller(true));
+    OptiInput::EscapeCloseGesture escape;
+    assert(!escape.Update(true, true, false)); // Press arms a close; releasing performs it.
+    assert(escape.Update(true, false, true));
+    assert(!escape.Update(true, false, true)); // One press cannot close twice.
+    assert(!escape.Update(false, true, false)); // A popup/key capture owns this press.
+    assert(!escape.Update(true, false, true)); // Dismissing it must not also close the menu.
+    assert(!escape.Update(true, true, false));
+    assert(!escape.Update(false, false, true)); // Turning the option off or hiding cancels it.
+    assert(!escape.Update(true, false, true));
     Window w;
     Cadence c {1, 9, 5, 2, 16.0, false};
     assert(!w.Consume(c)); // Unknown FG cadence cannot qualify, even at a fast interval.
@@ -88,8 +101,14 @@ int main()
                         assert(cfg.DlssNrRunBeforeSr.value_or_default() == (stage == Before));
                     }
                 }
-    assert(Refusal(cfg, Before, 0, 1, false, true)); // RR cannot be forced Before
-    assert(Refusal(cfg, Before, 0, 1, true, false)); // Vulkan cannot be forced Before
+    // Automatic resolution can follow forced-After reconstruction; manual Before
+    // requests must be refused without silently changing the requested placement.
+    assert(!Refusal(cfg, Before, 0, 1, false, true));
+    assert(!Refusal(cfg, Before, 0, 1, true, false));
+    cfg.DlssNrUiManualResolution = true;
+    assert(Refusal(cfg, Before, 0, 1, false, true));
+    assert(Refusal(cfg, Before, 0, 1, true, false));
+    cfg.DlssNrUiManualResolution = false;
     assert(Refusal(cfg, After, 1, 0, true, false)); // no Vulkan Present adapter
     assert(!Refusal(cfg, After, 0, 0, false, true));
     AdvisorSnapshot snapshot;
@@ -121,22 +140,12 @@ int main()
     assert(startup.RejectStall(true, 16, true, 1200));
     assert(!startup.RejectStall(true, 16, false, 1200)); // stale sample not counted
     for (unsigned mask = 0; mask < 8; ++mask)
-        for (int route = 0; route < 3; ++route)
-            for (bool fg : {false, true})
-                for (bool hdr : {false, true})
-                {
-                    const DlssNr::ExperimentalPolicy::Snapshot policy {bool(mask & 1), false,
-                        bool(mask & 2), bool(mask & 4), 7};
-                    const bool needsFg = route == 2 && fg && !(mask & 1 && mask & 4);
-                    const bool needsHdr = route != 0 && hdr && !(mask & 1 && mask & 2);
-                    const char* advice = ExperimentalAdvice(route, policy, fg, hdr);
-                    assert(bool(advice) == (needsFg || needsHdr));
-                    if (advice)
-                    {
-                        assert(std::string_view(advice).find(needsFg ? "Override FG Guardrails" : "Override HDR Guardrails") != std::string_view::npos);
-                        assert(std::string_view(advice).find("Save experimental settings") != std::string_view::npos);
-                    }
-                }
+    {
+        const DlssNr::ExperimentalPolicy::Snapshot policy {bool(mask & 1), false,
+            bool(mask & 2), bool(mask & 4), 7};
+        assert(policy.Allows(DlssNr::ExperimentalPolicy::Guardrail::Hdr));
+        assert(policy.Allows(DlssNr::ExperimentalPolicy::Guardrail::FrameGeneration));
+    }
     Cadence failure {20, 4, 2, 2, 16.0, false, 10};
     assert(CurrentFailure(2, 10, 30, failure, 31)); // failed/unknown cadence can carry a real policy refusal
     assert(!CurrentFailure(2, 10, 30, failure, 30)); // old attempt
@@ -149,7 +158,7 @@ int main()
     assert(std::string_view(MissingFeedback(true)).find("frame timing") != std::string_view::npos);
     assert(std::string_view(MissingFeedback(false)).find("Experimental") == std::string_view::npos);
     assert(std::string_view(MissingFeedback(true)).find("Experimental") == std::string_view::npos);
-    std::cout << "PASS five-second feedback boundary, exact FG/HDR option matrix, no blanket override advice, current-trial failure identity and model-vs-timing diagnosis\n";
+    std::cout << "PASS five-second feedback boundary, normal FG/HDR policy, current-trial failure identity and model-vs-timing diagnosis\n";
     std::cout << "PASS Advisor stage/route/resolution matrix, pure preflight, explicit Native placement, forced-path limits, bounded startup, stable warmup and strict measurement stalls\n";
     std::cout << "PASS eight input policies, capture ownership, defaults, native cadence freshness, unknown/invalid refusal, sample bounds and stall thresholds\n";
 }

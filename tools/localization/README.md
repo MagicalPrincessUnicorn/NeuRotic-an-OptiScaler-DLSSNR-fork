@@ -1,45 +1,17 @@
-# Neurotic UI localization
+# Shared UI language packs
 
-English (default), Spanish, French, German and Portuguese are bundled in the DLL.
-Translations were directly authored by the coding assistant from its language
-knowledge at the user's request. They are not professional/native-speaker-reviewed
-translations. No Google or downloaded-model translation is included. Neither the
-runtime nor the catalog maintenance tool calls a translation service.
+`localization/english.json` is the canonical current candidate inventory with stable IDs, semantic revisions, context, complete templates, typed placeholders and preserved product terms. `inventory.py generate` emits both selected consumer inventories: native common and desktop shipping-localization. The ten desktop closing IDs and `desktop.startup.loading` stay desktop-only; all other canonical entries remain available to both. Project source selections stay distinct. `inventory.py sync-bindings` preserves dormant IDs and advances revisions for changed English. Discovery includes menu `.inl` files. `audit_bindings.py` checks actual balanced presentation calls and IDs separately from candidate counts. Source/provider exemptions and rendered coverage are recorded in the community-languages evidence directory.
 
-`OptiScaler/menu/locales/en.json` is the frozen, indexed source inventory.
-`authored.tsv` holds four translations per inventory index; `=` deliberately keeps
-technical notation unchanged and `@N` reuses an earlier row. `extra.tsv` adds keys
-without renumbering the original inventory. Do not reorder `en.json`.
+The old indexed `OptiScaler/menu/locales/en.json`, authored.tsv and catalog.inc stay ordered for migration and legacy contract fixtures. They are not the current user selection or a full-current-UI coverage claim. `catalog.py verify` checks those preserved inputs; do not reorder them or recreate obsolete interface pages.
 
-From the repository root, with Python 3:
+One data-only .nrlang format1 pack covers desktop and in_game sections. The validator bounds input, rejects structural/executable/asset fields and reports invalid entries individually. Resolution is local edit, selected community pack, applicable bundled locale, English. Valid stale translations remain usable with Needs review. Immutable catalogs load at startup or explicit Apply, not on each drawn label. Stable original labels continue to own ImGui identity; copied prose and dynamic formats resolve explicit IDs before formatting.
 
-```
-python tools/localization/catalog.py materialize
-python tools/localization/catalog.py build
-python tools/localization/catalog.py verify
-tests\Run-Localization.cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\Test-NeuroticUi.ps1
-```
+Manage Languages supports additional BCP47 locales, partial imports, an English template with context, second-window editing and independent edited exports. Save Draft does not activate edits. Base updates preserve local edits/conflicts and obsolete data. Shared packs/drafts/Active.json live once in the application user-data Languages folder; the App updates after Apply and the overlay reads the same catalog on its next launch. CMD remains English. Packs do not carry executable behavior or font paths.
 
-Materialize regenerates the keyed language JSON; build validates all keys and
-format arguments and generates ASCII C++ with explicit UTF-8 byte escapes. Edit
-the TSV source to retain changes across materialization, or edit keyed JSON and
-run build alone. New UI strings require an explicit catalog entry. Technical
-names, paths, API identifiers and unknown strings intentionally retain English.
+Nine included draft packs target zh-CN, ru, es, pt-BR, de, ja, fr, pl and ko. Their persistent build inputs are `localization/bundled/*.nrlang`. `bundles.py` validates these documents, then emits V6 per-pack chunks and `EmbeddedPacks` tables for both selected consumers. It never rewrites the source packs, reassembles translations by English text, or advances translation review revisions. Native keeps its release locale order and excludes only the ten desktop closing entries. Regenerate with `python tools/localization/inventory.py generate` followed by `python tools/localization/bundles.py`.
 
-The presentation hooks operate after ImGui has resolved widget IDs and formatted
-values. Measurement and drawing share the same translated text; nested calls are
-guarded. Original labels, IDs, printf arguments, configuration keys and rendering
-decisions are not translated. Dynamic templates preserve numbers and translate
-known nested status words. Cache size is bounded and language state is thread-local.
-Arial from Windows supplies accented Latin glyphs; no font download is required.
+Saved machine drafts, SOURCE.json, authored tables and older mappings remain provenance/import material. Reconcile a new import against stable IDs, current placeholder contracts and semantic revisions before changing persistent source packs; do not blindly rerun the historical assembly. The integrated sources retain released layout/closing translations and donor input-source translations unchanged. Changed English retains usable stale translations with Needs review; newly bound timing strings fall back to English until supplied. No native-speaker review or current rendered coverage is implied. Existing local edits and saved active language data are preserved; explicit selection/Apply loads updated included data. Historical LAUNCH_COVERAGE.json describes its recorded checkpoint rather than current generated coverage.
 
-`[Menu] Language=en|es|fr|de|pt` is persisted by Save Settings. Unknown codes fall
-back to English; `pt-br` is accepted as Portuguese. The choice changes the next
-menu frame. English text remains the fallback for uncatalogued future messages.
+Both surfaces and the owned editor share fixed Windows font fallbacks followed by embedded licensed Noto Sans and Noto Sans CJK. See localization/fonts/NOTICES.md and source hashes. Font atlases change between frames and preserve dynamic texture retirement. Initial scripts are Latin, Cyrillic, Simplified Chinese, Japanese and Korean; adding another locale is not shaping/RTL qualification.
 
-The standalone tests exercise the actual modified ImGui sources, stable IDs,
-translated widths, dynamic readouts, UTF-8 glyph coverage and representative
-header rows at 0.5x, 1x and 2x. They do not constitute in-game visual or NR/MFG
-runtime validation. Check all tabs, tooltips, dropdowns, live readouts and saved
-language after the user authorizes installation.
+Run inventory fixtures/audits, LanguagePacks, LanguageRuntime, LanguageStore, TranslationEditor and Run-Localization.cmd (which includes glyph checks), plus affected native UI fixtures and production-page captures. Successful fixture rendering cannot establish game NR, displayed frame generation or native-speaker translation quality.

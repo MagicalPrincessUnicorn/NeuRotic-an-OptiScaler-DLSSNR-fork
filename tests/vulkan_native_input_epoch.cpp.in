@@ -1,0 +1,71 @@
+#include "NrConfigFixture.h"
+#include "dlssnr/VulkanNrNativeObservation.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include <cstdio>
+#include <cstring>
+#include <mutex>
+struct Parameters final:NVSDK_NGX_Parameter {
+ NVSDK_NGX_Resource_VK output{};
+ Parameters(){output.Type=NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW;output.ReadWrite=true;
+  auto& i=output.Resource.ImageViewInfo;i.Image=reinterpret_cast<VkImage>(1);i.ImageView=reinterpret_cast<VkImageView>(2);
+  i.Width=3840;i.Height=2160;i.Format=VK_FORMAT_R16G16B16A16_SFLOAT;i.SubresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};}
+ void Set(const char*,unsigned long long)override{} void Set(const char*,float)override{}
+ void Set(const char*,double)override{} void Set(const char*,unsigned int)override{}
+ void Set(const char*,int)override{} void Set(const char*,ID3D11Resource*)override{}
+ void Set(const char*,ID3D12Resource*)override{} void Set(const char*,void*)override{}
+ NVSDK_NGX_Result Get(const char*,unsigned long long*)const override{return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char* key,float* v)const override{
+  if(!std::strcmp(key,NVSDK_NGX_Parameter_Jitter_Offset_X)||!std::strcmp(key,NVSDK_NGX_Parameter_Jitter_Offset_Y)){*v=0;return NVSDK_NGX_Result_Success;}
+  if(!std::strcmp(key,NVSDK_NGX_Parameter_MV_Scale_X)||!std::strcmp(key,NVSDK_NGX_Parameter_MV_Scale_Y)||!std::strcmp(key,NVSDK_NGX_Parameter_DLSS_Pre_Exposure)){*v=1;return NVSDK_NGX_Result_Success;}
+  return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char*,double*)const override{return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char*,unsigned int*)const override{return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char*,int*)const override{return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char*,ID3D11Resource**)const override{return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char*,ID3D12Resource**)const override{return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ NVSDK_NGX_Result Get(const char* key,void** v)const override{if(!std::strcmp(key,NVSDK_NGX_Parameter_Output)){*v=const_cast<NVSDK_NGX_Resource_VK*>(&output);return NVSDK_NGX_Result_Success;}return NVSDK_NGX_Result_FAIL_InvalidParameter;}
+ void Reset()override{}
+};
+namespace DlssNr {
+std::mutex g_vkMutex;
+VkNrNativeRawStatus g_nativeRawVk;
+struct StateProjection {VkNrNativeSelectedStatus<NrConfigSnapshot<TestConfig>> nativeStatus;VkNrResetRevision resetState{1};} g_nativeVk;
+// ACTUAL_NATIVE_TERMINAL
+}
+unsigned checks=0,failed=0;
+void Check(bool good,const char* name){++checks;failed+=!good;std::printf("%s %s\n",good?"PASS":"FAIL",name);}
+int main(){using namespace DlssNr;
+ TestConfig config;config.SetDlssNrEnabled(true);config.DlssNrRoute=0u;config.DlssNrNativeResolution=1u;
+ config.DlssNrRunBeforeSr=false;config.DlssNrWorkingScale=1.f;config.DlssNrUiManualResolution=false;
+ const NrConfigSnapshot<TestConfig> cfg(config);Parameters params;
+ Check(g_nativeVk.resetState.Acknowledge(g_nativeVk.resetState.Capture()),"actual reset owner acknowledges the fixture baseline before duplicate preservation is measured");
+ VkNrTemporalMetadata temporal;temporal.color=temporal.depth=temporal.motion={0,0,1600,900};temporal.featureGeneration=7;temporal.frameToken=11;
+ FinalFallback::inputInterruptionEpoch=2;FinalFallback::renderDepth=1;FinalFallback::admittedInputEpoch=2;
+ auto capture=[&](uint64_t invocation,uint64_t epoch){return CaptureVkNrNativeObservation(&params,&temporal,cfg,false,
+  {reinterpret_cast<VkCommandBuffer>(3),1,invocation,7},reinterpret_cast<VkDevice>(8),epoch,[]{return true;});};
+ auto result=[](const VkNrNativeObservation& value){VkRecordResult r{VkRecordStatus::Complete,"",true,true};
+  auto f=value.frame;f.deviceGeneration=9;f.routeEpoch=4;r.nativeRecording=VkNrNativeRecordingReceipt{f,{31},5};return r;};
+ auto a=capture(11,2);ObserveNativeResultVk(a,cfg,result(a),false,false,true,true);
+ Check(g_nativeRawVk.observations==1&&g_nativeVk.nativeStatus.accepted,"actual terminal publishes one genuine current-lifetime selected success");
+ const auto selectedCount=g_nativeVk.nativeStatus.observations;auto duplicate=capture(12,2);
+ ObserveNativeResultVk(duplicate,cfg,{},false,false,true,false);
+ Check(g_nativeRawVk.observations==2&&g_nativeVk.nativeStatus.observations==selectedCount&&!g_nativeVk.resetState.Pending(),"actual duplicate terminal advances raw only without resetting selected history");
+ auto failure=capture(13,2);ObserveNativeResultVk(failure,cfg,result(failure),false,false,false,false);
+ Check(!g_nativeVk.nativeStatus.accepted&&g_nativeVk.resetState.Pending()&&g_nativeRawVk.observations==3,"actual failed unselected SR terminal invalidates selected history and preserves supplied inputs");
+ FinalFallback::inputInterruptionEpoch=3;
+ Check(FinalFallback::CurrentInputEpoch()==2,"actual admitted callback still carries its authentic old input epoch");
+ auto oldTail=capture(14,2);ObserveNativeResultVk(oldTail,cfg,result(oldTail),false,false,true,true);
+ Check(g_nativeRawVk.observations==3&&g_nativeVk.nativeStatus.latestInvocation==13&&!g_nativeVk.nativeStatus.accepted,"production terminal cannot publish an old admitted tail after global input lifetime changed");
+ const auto reset=g_nativeVk.resetState.Capture();auto oldFailure=capture(15,2);
+ ObserveNativeResultVk(oldFailure,cfg,result(oldFailure),false,false,false,true);
+ Check(g_nativeVk.nativeStatus.latestInvocation==13&&g_nativeVk.resetState.Capture()>reset,"stale failed tail preserves newer publication while retaining authentic history recovery");
+ FinalFallback::renderDepth=0;auto next=capture(16,3);ObserveNativeResultVk(next,cfg,result(next),false,false,true,true);
+ Check(g_nativeRawVk.Current(3)&&g_nativeRawVk.observations==1&&g_nativeVk.nativeStatus.accepted&&g_nativeVk.nativeStatus.latestInvocation==16,"fresh current-lifetime terminal publishes after the input transition");
+ const auto observed=g_nativeVk.nativeStatus.observations;const auto resetNow=g_nativeVk.resetState.Capture();
+ config.DlssNrRoute=1u;const NrConfigSnapshot<TestConfig> present(config);
+ auto inactive=CaptureVkNrNativeObservation(&params,&temporal,present,false,
+  {reinterpret_cast<VkCommandBuffer>(3),1,17,7},reinterpret_cast<VkDevice>(8),3,[]{return true;});
+ ObserveNativeResultVk(inactive,present,{},false,false,false,false);
+ Check(g_nativeRawVk.observations==2&&g_nativeVk.nativeStatus.observations==observed&&g_nativeVk.resetState.Capture()==resetNow,"Present failure updates raw diagnostics without inventing Native failure or reset");
+ std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}

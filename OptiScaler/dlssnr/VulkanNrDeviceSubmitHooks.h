@@ -64,6 +64,7 @@ template<class Info> class VkNrDeviceSubmitHooks
     struct Slot { Function target=nullptr,original=nullptr; HMODULE module=nullptr; };
     template<size_t Index> static VkResult VKAPI_CALL Invoke(VkQueue queue,uint32_t count,const Info* info,VkFence fence)
     {
+        Neurotic::HostCost::VulkanScope nrCost(Neurotic::HostCost::Kind::VkSubmitHook);
         const auto original=slots_[Index].original;
         VkNrObservationScope scope(VkNrObservation::Submit,reinterpret_cast<uintptr_t>(queue));
         if(!scope.Observe()||!info)return NativeFg::QueueCall(original,queue,count,info,fence);

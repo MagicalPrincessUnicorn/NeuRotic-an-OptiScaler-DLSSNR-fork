@@ -21,6 +21,7 @@
 #endif
 #include <nr/diagnostics/HostCost.h>
 #include <dlssnr/DlssNrFeature_Vk.h>
+#include <inputs/VulkanNativeFeatures.h>
 #include <dlssnr/DlssNr.h>
 #include <dlssnr/DlssNr_Present.h>
 #include <dlssnr/PreparedGuideRoute.h>
@@ -189,14 +190,20 @@ static PFN_vkDestroyFramebuffer nr_DestroyFramebuffer=nullptr;
 #endif
 
 static VkResult VKAPI_CALL nrQueueWaitIdle(VkQueue queue){
+    Neurotic::HostCost::VulkanScope hookCost(Neurotic::HostCost::Kind::VkQueueIdleHook);
     if(!DlssNr::NativeFg::Internal()&&!DlssNr::NativeFg::DrainQueue(queue,false))return VK_ERROR_DEVICE_LOST;
+    Neurotic::HostCost::VulkanScope callCost(Neurotic::HostCost::Kind::VkQueueIdleCall);
     const auto result=DlssNr::NativeFg::QueueCall(nr_QueueWaitIdle,queue);
+    callCost.Finish();
     if(result==VK_SUCCESS&&!DlssNr::NativeFg::Internal())DlssNr::NativeFg::DrainQueue(queue);
     return result; // WSI retirement is separate from queue idle; pending is not device loss.
 }
 static VkResult VKAPI_CALL nrDeviceWaitIdle(VkDevice device){
+    Neurotic::HostCost::VulkanScope hookCost(Neurotic::HostCost::Kind::VkDeviceIdleHook);
     if(!DlssNr::NativeFg::Internal()&&!DlssNr::NativeFg::DrainDevice(device,false))return VK_ERROR_DEVICE_LOST;
+    Neurotic::HostCost::VulkanScope callCost(Neurotic::HostCost::Kind::VkDeviceIdleCall);
     const auto result=DlssNr::NativeFg::QueueCall(nr_DeviceWaitIdle,device);
+    callCost.Finish();
     if(result==VK_SUCCESS&&!DlssNr::NativeFg::Internal())DlssNr::NativeFg::DrainDevice(device);
     return result;
 }
@@ -231,6 +238,9 @@ static void VKAPI_CALL nrDestroyDevice(VkDevice device, const VkAllocationCallba
         DlssNr::VulkanLoaderWsiDevices().Device(device).generation,(uintptr_t)device,0,0,0,0,true);
     MenuOverlayVk::ShutdownDevice(device);
     DlssNr::RetryShutdownVk(device);
+    // Revoke the old CPU source identities before the real destroy call can
+    // return and permit same-address device/feature reuse on another thread.
+    const auto sourceRetirementGeneration=VulkanNativeFeatures::BeginDeviceRetirement(reinterpret_cast<uintptr_t>(device));
     if (!DlssNr::ObserveVkNrDeviceDestroy(device,[&]{
         DlssNr::NativeVulkanGuides::DeviceDestroyed(device);
         DlssNr::VulkanGuidesDeviceDestroyed(device);DlssNr::VulkanNrImageFacts().DeviceDestroyed(device);
@@ -245,7 +255,7 @@ static void VKAPI_CALL nrDestroyDevice(VkDevice device, const VkAllocationCallba
     }))
         LOG_WARN("Vulkan NR: owned completion drain was unproved at device destruction");
     // Completion/recording owners have processed the actual destruction return.
-    DlssNr::DeviceDestroyedVk(device);
+    DlssNr::DeviceDestroyedVk(device,sourceRetirementGeneration);
 }
 static VkResult VKAPI_CALL nrCreateImage(VkDevice device,const VkImageCreateInfo* info,const VkAllocationCallbacks* allocator,VkImage* image)
 {
@@ -957,10 +967,12 @@ static VkResult VKAPI_CALL hkvkAcquireNextImageKHR(VkDevice device, VkSwapchainK
     if(DlssNr::NativeFg::Internal())return target(device,swapchain,timeout,semaphore,fence,pImageIndex);
     if(DlssNr::VkWsiForwardScope::Matches(DlssNr::VkWsiOperation::Acquire,(uintptr_t)device,pImageIndex))
         return target(device,swapchain,timeout,semaphore,fence,pImageIndex);
+    Neurotic::HostCost::VulkanScope hookCost(Neurotic::HostCost::Kind::VkAcquireHook);
     const auto result=DlssNr::VkFlight::Call(DlssNr::VkFlight::CallSite::Acquire,(uintptr_t)swapchain,[&]{
         DlssNr::VkWsiForwardScope scope(DlssNr::VkWsiOperation::Acquire,(uintptr_t)device,pImageIndex);
         DlssNr::VkWsiTargetScope<PFN_vkAcquireNextImageKHR> clear(nullptr);
         if(const auto result=DlssNr::NativeFg::Acquire(device,swapchain,timeout,semaphore,fence,pImageIndex))return *result;
+        Neurotic::HostCost::VulkanScope originalCost(Neurotic::HostCost::Kind::VkAcquireOriginal);
         return target(device,swapchain,timeout,semaphore,fence,pImageIndex);});
     if ((result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) && pImageIndex != nullptr)
     {
@@ -982,12 +994,14 @@ static VkResult VKAPI_CALL hkvkAcquireNextImage2KHR(VkDevice device, const VkAcq
     if(DlssNr::NativeFg::Internal())return target(device,pAcquireInfo,pImageIndex);
     if(DlssNr::VkWsiForwardScope::Matches(DlssNr::VkWsiOperation::Acquire2,(uintptr_t)device,pAcquireInfo))
         return target(device,pAcquireInfo,pImageIndex);
+    Neurotic::HostCost::VulkanScope hookCost(Neurotic::HostCost::Kind::VkAcquireHook);
     const auto result=DlssNr::VkFlight::Call(DlssNr::VkFlight::CallSite::Acquire,(uintptr_t)device,[&]{
         DlssNr::VkWsiForwardScope scope(DlssNr::VkWsiOperation::Acquire2,(uintptr_t)device,pAcquireInfo);
         DlssNr::VkWsiTargetScope<PFN_vkAcquireNextImage2KHR> clear(nullptr);
         if(pAcquireInfo&&DlssNr::NativeFg::Owns(pAcquireInfo->swapchain)){
             if(pAcquireInfo->pNext||pAcquireInfo->deviceMask!=1)return VK_ERROR_FEATURE_NOT_PRESENT;
             return *DlssNr::NativeFg::Acquire(device,pAcquireInfo->swapchain,pAcquireInfo->timeout,pAcquireInfo->semaphore,pAcquireInfo->fence,pImageIndex);}
+        Neurotic::HostCost::VulkanScope originalCost(Neurotic::HostCost::Kind::VkAcquireOriginal);
         return target(device,pAcquireInfo,pImageIndex);});
     if ((result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) && pAcquireInfo && pImageIndex)
     {
@@ -1059,6 +1073,7 @@ static void ReportVkPresentResult(VkQueue queue, const VkPresentInfoKHR& info,
 // Rows are cumulative sampled elapsed times; overlapping categories are not additive.
 static void ReportVulkanHostCosts()
 {
+    if(loggerClosed.load(std::memory_order_relaxed))return;
     using namespace Neurotic::HostCost;
     static ReportGate gate;
     static std::atomic_flag reporting = ATOMIC_FLAG_INIT;
@@ -1077,6 +1092,7 @@ static void ReportVulkanHostCosts()
             "sampleStride=64:tracker-binding,tracker-barrier,tracker-other,recording-work,observation-scope;1:others "
             "trackerBeforeLockIncludesLookup=true",
             now, runtime.enabled, settings ? settings->DlssNrRoute.value_or_default() : 0);
+        if(VulkanDetailEnabled()) spdlog::trace("NR_HOST_COST Vulkan detail active; elapsed host only; queue-call beforeLock=elapsed to shared gate acquisition including bookkeeping/descheduling; queue-idle-call/device-idle-call include that gate; categories overlap; no GPU or scanout timing");
         for (size_t i=0; i<previous.size(); ++i) {
             const auto v=Read(static_cast<Kind>(i));
             if(v.samples==previous[i]) continue;
@@ -1158,6 +1174,9 @@ static VkResult LoaderQueuePresent(VkQueue queue,const VkPresentInfoKHR* info,PF
         if(originalCalled)*originalCalled=true;
         Neurotic::HostCost::Scope nrDriverCost(Neurotic::HostCost::Kind::PresentOriginal);
         return DlssNr::NativeFg::CallPresent(target,queue,&local);});
+    // All physical paths reach this boundary, including FG overlay-only bypass.
+    // This is call activity, not NR completion, frame cadence, or scanout proof.
+    DlssNr::GetVulkanPresentStatus().ObserveGamePresent(true,DlssNr::VkWsiSelectedPresentResult(true,result,local));
     if (composedOverlay) MenuOverlayVk::GeneratedPresentationFinished(lock, result);
     if(observed){
         DlssNr::VkFlight::Current().Write(DlssNr::VkFlight::Kind::Wsi,5,device.generation,
@@ -1219,6 +1238,9 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
         standaloneFrame.swap=pPresentInfo->pSwapchains[0];
     }
     Neurotic::HostCost::Activate();
+    bool nrDetailedTrace=false;
+    if(!loggerClosed.load(std::memory_order_relaxed))try { nrDetailedTrace=spdlog::should_log(spdlog::level::trace); } catch(...) {}
+    Neurotic::HostCost::SetVulkanDetail(nrDetailedTrace);
     Neurotic::HostCost::Scope nrHostCost(Neurotic::HostCost::Kind::PresentHook);
     // Same-thread, same-queue entry spacing includes game work between Presents.
     // It is neither GPU time nor proof of a displayed frame.
@@ -1247,6 +1269,7 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
             // Provider-owned Present has no semantic acquisition snapshot here.
             // Release completed private work using only its real device/queue;
             // unresolved WSI waits remain owned until an exact proof is available.
+            Neurotic::HostCost::VulkanScope maintenanceCost(Neurotic::HostCost::Kind::VkNrMaintenance);
             const auto device=DlssNr::VulkanLoaderWsiDevices().ForQueue(queue);
             DlssNr::RetireInactiveVulkanPresentGuides(device.device);
             DlssNr::VkObservedPresent maintenance{};maintenance.device=device.device;maintenance.queue=queue;
@@ -1282,6 +1305,7 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
     const auto& host = State::Instance();
     const bool fgActive = host.dlssgLastSetMode.load() != sl::DLSSGMode::eOff ||
         host.activeFgInput != FGInput::NoFG || host.activeFgOutput != FGOutput::NoFG;
+    Neurotic::HostCost::VulkanScope guideCost(Neurotic::HostCost::Kind::VkGuideSelection);
     // Consume scalar observations at entry, even while NR is disabled. A new SR
     // observation arriving during a slow Present belongs to the next interval.
     auto observed = DlssNr::GetVulkanPresentRegistry().SnapshotForPresent(queue, *pPresentInfo,
@@ -1299,6 +1323,7 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
     const auto nativeGuides=observed?DlssNr::SelectVulkanPresentGuides(
         DlssNr::MakeVulkanGuidePresentContract(*observed,guideSelection.get()),guideSelection.get(),observed->image):std::nullopt;
     DlssNr::Connections::SetNativeUsable(nativeGuides.has_value());
+    guideCost.Finish();
     // get upscaler time
     UpscalerTimeVk::ReadUpscalingTime(_device);
 
@@ -1368,6 +1393,7 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
         ~NrPacingEnd(){DlssNr::GetVulkanPresentStatus().FinishCall(token,adapter,std::chrono::duration<double,std::milli>(NrClock::now()-start).count(),original,failed);}
     } nrPacing{nrCall,nrHookStart};
     if(observed&&nrSettings){
+        Neurotic::HostCost::VulkanScope maintenanceCost(Neurotic::HostCost::Kind::VkNrMaintenance);
         DlssNr::PollVkNrCompletions();
         DlssNr::GetVulkanPresentExecutor().Maintain(*observed,!nrPresentEnabled||(nrRoute!=1&&nrRoute!=2));
         DlssNr::RetireInactiveVk(observed->device,nrPresentEnabled,nrRoute);
@@ -1407,7 +1433,8 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
     if(execution.handoff.state==DlssNr::VkPresentHandoffState::Accepted&&!execution.record.preparationOnly)
         DlssNr::GetVulkanPresentStatus().ExpectGpu(nrCall,execution.record.use,execution.record.requestedPasses,nrNowMs());
     // LoaderQueuePresent owns the only overlay attempt and its wait array lifetime.
-    ReflexHooks::update(false, true);
+    { Neurotic::HostCost::VulkanScope reflexCost(Neurotic::HostCost::Kind::PresentReflex);
+      ReflexHooks::update(false, true); }
 
     // original call
     ScopedVulkanCreatingSC scopedVulkanCreatingSC {};
@@ -1447,8 +1474,10 @@ static VkResult VKAPI_CALL hkvkQueuePresentKHR(VkQueue queue, const VkPresentInf
             observed?DlssNr::GetVulkanPresentRegistry().LastPresentSerial(observed->swapchain,observed->request.imageIndex):0);
 
     // Unsure about Vulkan Reflex fps limit and if that could be causing an issue here
-    if (!State::Instance().reflexLimitsFps)
+    if (!State::Instance().reflexLimitsFps) {
+        Neurotic::HostCost::VulkanScope limiterCost(Neurotic::HostCost::Kind::PresentLimiter);
         FrameLimit::sleep(false);
+    }
 
     LOG_FUNC_RESULT(result);
     return result;
@@ -1714,9 +1743,12 @@ static VkResult VKAPI_CALL hkvkWaitForFences(VkDevice device,uint32_t count,cons
 {
     auto target=DlssNr::VkWsiTargetScope<PFN_vkWaitForFences>::Get(o_WaitForFences);
     if(DlssNr::VkWsiForwardScope::Matches(DlssNr::VkWsiOperation::FenceWait,(uintptr_t)device,fences))return target(device,count,fences,waitAll,timeout);
+    Neurotic::HostCost::VulkanScope hookCost(Neurotic::HostCost::Kind::VkFenceWaitHook);
     return DlssNr::ObserveVkAcquireFenceWait(device,count,fences,waitAll,[&]{
         DlssNr::VkWsiForwardScope forward(DlssNr::VkWsiOperation::FenceWait,(uintptr_t)device,fences);
-        DlssNr::VkWsiTargetScope<PFN_vkWaitForFences> clear(nullptr);return target(device,count,fences,waitAll,timeout);
+        DlssNr::VkWsiTargetScope<PFN_vkWaitForFences> clear(nullptr);
+        Neurotic::HostCost::VulkanScope originalCost(Neurotic::HostCost::Kind::VkFenceWaitOriginal);
+        return target(device,count,fences,waitAll,timeout);
     },[&](VkFence fence){return o_GetFenceStatus?o_GetFenceStatus(device,fence):VK_NOT_READY;});
 }
 static VkResult VKAPI_CALL hkvkResetFences(VkDevice device,uint32_t count,const VkFence* fences)

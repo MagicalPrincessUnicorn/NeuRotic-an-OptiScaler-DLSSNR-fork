@@ -1,0 +1,67 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-009",
+  "case_input_sha256": "beff006024632d115e2dc70504dd5b0e5bf66da3c6d91cbc0517843744b480af",
+  "revision": 1,
+  "transport_checks": [
+    {
+      "check_id": "T-UNKNOWN-PRESERVED",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/unknown-flags-flags-frame/source_contract_inputs/creation_flags",
+      "comparison": "exact",
+      "expected": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_OBSERVED"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    },
+    {
+      "check_id": "T-TYPED-INPUT-REFUSAL",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "flags",
+      "actual_pointer": "/operations/unknown-flags-flags-frame:event-0/status",
+      "comparison": "exact",
+      "expected": "refused",
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "10_RUNNER_CONTRACT.md"
+      ],
+      "domain": "transport"
+    }
+  ],
+  "qualifications": [],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

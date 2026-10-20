@@ -1,0 +1,604 @@
+[
+  {
+    "id": "M01",
+    "suite": "kernel",
+    "detector": "disabled_non_native",
+    "description": "skip explicit initial opt-in",
+    "patch": "mutations/M01.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "d325e06849bcad28459934be1e8cc79317ac5a7610348f1290ae90be2085b154"
+      }
+    ],
+    "patch_sha256": "0d3799a17894f879a62633d34a186f8f3a5aea65130d7e8fef242e3e346506ac",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "0d3799a17894f879a62633d34a186f8f3a5aea65130d7e8fef242e3e346506ac"
+  },
+  {
+    "id": "M02",
+    "suite": "kernel",
+    "detector": "busy_is_not_issue",
+    "description": "journal prepared record promoted without canonical issuance",
+    "patch": "mutations/M02.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "f17616c15665ec5673263879923c9689ad232076c01a1c14ca3fb18d3f462310"
+      }
+    ],
+    "patch_sha256": "b1b20ba293682e30e8dfc0b212affff5e71f4113795b709b2f8286b1f64fc442",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "b1b20ba293682e30e8dfc0b212affff5e71f4113795b709b2f8286b1f64fc442"
+  },
+  {
+    "id": "M03",
+    "suite": "kernel",
+    "detector": "real_commit_owner",
+    "description": "publish incomplete commitment",
+    "patch": "mutations/M03.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "b82833ad0fa4ddf4027b84fbc46118e886e2be9bde6c6814e8e1b3ddb11d6481"
+      }
+    ],
+    "patch_sha256": "35a6d61559a001dfa21478c26cd275247035b4c5ad45081ee24975cf7e456919",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "35a6d61559a001dfa21478c26cd275247035b4c5ad45081ee24975cf7e456919"
+  },
+  {
+    "id": "M04",
+    "suite": "kernel",
+    "detector": "no_reincarnation",
+    "description": "revocation resets durable slot",
+    "patch": "mutations/M04.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "b0d953a64204500b727f85a98f270bf6a829218048a0c73f58eb63644eb2dbba"
+      }
+    ],
+    "patch_sha256": "25e7ecf745cb1f41b2ea0e00cd0315693727931d5524e920b29b3b99682218e6",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "25e7ecf745cb1f41b2ea0e00cd0315693727931d5524e920b29b3b99682218e6"
+  },
+  {
+    "id": "M05",
+    "suite": "admission",
+    "detector": "full_identity",
+    "description": "route generation integer-only comparison",
+    "patch": "mutations/M05.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "ea497911a536819a16f46ff9f65fc2e2f38f51cc81a9042ddcbb80b453fab7d3"
+      }
+    ],
+    "patch_sha256": "ad96510229d2be9d786244934922a98c249fffa612ef8d25e7b2bd98301e2d17",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "ad96510229d2be9d786244934922a98c249fffa612ef8d25e7b2bd98301e2d17"
+  },
+  {
+    "id": "M06",
+    "suite": "admission",
+    "detector": "revoke_before_model_gate",
+    "description": "ignore live route phase at the current ledger-backed model start gate",
+    "patch": "mutations/M06.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "b1b8e98a4032003f9022dff743ffeb80fd9459a49a799853a21d5734888b3a81"
+      }
+    ],
+    "patch_sha256": "6450a2959121320739aeeb26859951e132016da6e894f35bc88a8abbe539f00b",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "6450a2959121320739aeeb26859951e132016da6e894f35bc88a8abbe539f00b"
+  },
+  {
+    "id": "M07-type",
+    "suite": "admission",
+    "detector": "exact_commit_type",
+    "description": "ignore C05 wire type",
+    "patch": "mutations/M07-type.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "1d193685148a369e317b04aa6df4297e15b41642d082726d515256f33526badf"
+      }
+    ],
+    "patch_sha256": "49f85f73e5e8b949e26aae2b5e732dc11ad3f81e5032c4eb01db7e319eb9956f",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "49f85f73e5e8b949e26aae2b5e732dc11ad3f81e5032c4eb01db7e319eb9956f"
+  },
+  {
+    "id": "M07-key",
+    "suite": "admission",
+    "detector": "exact_commit_key",
+    "description": "ignore C05 record key",
+    "patch": "mutations/M07-key.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "058627df114456b330c70a8e00a722b846e96da8008a6e21d23554676e0acf8d"
+      }
+    ],
+    "patch_sha256": "07b8d44ca8299c1e3e0dd8fffc67489ae23154295297bd74cb7ab8352ce99128",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "07b8d44ca8299c1e3e0dd8fffc67489ae23154295297bd74cb7ab8352ce99128"
+  },
+  {
+    "id": "M07-revision",
+    "suite": "admission",
+    "detector": "exact_commit_reference",
+    "description": "ignore C05 revision",
+    "patch": "mutations/M07-revision.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "688823a65609bdf34e834ad16cd44cbf9e5067966f58992e59313e790d513bf2"
+      }
+    ],
+    "patch_sha256": "f29afb3c2406a125e2661e2a4f7106967490b2c66d3be9b466e6eb1d680b217e",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "f29afb3c2406a125e2661e2a4f7106967490b2c66d3be9b466e6eb1d680b217e"
+  },
+  {
+    "id": "M08-plan",
+    "suite": "admission",
+    "detector": "mandatory_native_bindings.0",
+    "description": "allow missing C03 plan",
+    "patch": "mutations/M08-plan.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "ed3c53df640f439446039285ed90dc8f490d3d4339bc18c27fa32fe99236a64a"
+      }
+    ],
+    "patch_sha256": "2679deb050ed29370b15757f88f94ef65a9180f0dd4e313d85b663ac54b603c0",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "2679deb050ed29370b15757f88f94ef65a9180f0dd4e313d85b663ac54b603c0"
+  },
+  {
+    "id": "M08-profile",
+    "suite": "admission",
+    "detector": "mandatory_native_bindings.1",
+    "description": "allow missing C03 profile",
+    "patch": "mutations/M08-profile.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "ad34d615bb3ea328476f619415646500b1e804b22b3bef8d7078ed7ece4c7712"
+      }
+    ],
+    "patch_sha256": "fb712950c8407a3f09d9baa67750c1d3d44d546b508e8b66ca0f37dd51a18882",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "fb712950c8407a3f09d9baa67750c1d3d44d546b508e8b66ca0f37dd51a18882"
+  },
+  {
+    "id": "M08-route",
+    "suite": "admission",
+    "detector": "mandatory_native_bindings.2",
+    "description": "allow missing C03 route",
+    "patch": "mutations/M08-route.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "911c0527098b493d2dc2b557dd2a1e7cec0b87b7cd161bb3cc5ed0ee7f747c30"
+      }
+    ],
+    "patch_sha256": "1656f58ba8d76dfdb5934d18132e3356674382083069b2a8ee2e3a6722866c8f",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "1656f58ba8d76dfdb5934d18132e3356674382083069b2a8ee2e3a6722866c8f"
+  },
+  {
+    "id": "M09",
+    "suite": "admission",
+    "detector": "current_profile_revision",
+    "description": "ignore fresh C04 revision",
+    "patch": "mutations/M09.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "ccb7499766a8dd4421f7da9b7d0ce6a7ca87c2e5f0e107d7949b9bdfa4a0a18d"
+      }
+    ],
+    "patch_sha256": "12b539bb49c0952303cbc0c0b4429fc5f1eb4795ae7abfca1c7afb1cc0edfe3f",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "12b539bb49c0952303cbc0c0b4429fc5f1eb4795ae7abfca1c7afb1cc0edfe3f"
+  },
+  {
+    "id": "M10-evaluation",
+    "suite": "admission",
+    "detector": "current_evaluation",
+    "description": "ignore current evaluation",
+    "patch": "mutations/M10-evaluation.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "9145369660cbfc721a2f068fe33fda6ee887781667b189c7e29b604c024a29cc"
+      }
+    ],
+    "patch_sha256": "9116d1a8d624ba0d6c1915206fe5ed9cf640c4c9ac2f38c30f474cd6abd7ae97",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "9116d1a8d624ba0d6c1915206fe5ed9cf640c4c9ac2f38c30f474cd6abd7ae97"
+  },
+  {
+    "id": "M10-consumer",
+    "suite": "admission",
+    "detector": "operation_isolation",
+    "description": "ignore consumer",
+    "patch": "mutations/M10-consumer.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "5f4836e5b0f8c54e7c232c4c489a53cfe47f32d3cd2de0c12a3271bb4bef3798"
+      }
+    ],
+    "patch_sha256": "240768dda09f1f874c190cce1cdbe927a110f8aeacc1cc8ee459924d679986d3",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "240768dda09f1f874c190cce1cdbe927a110f8aeacc1cc8ee459924d679986d3"
+  },
+  {
+    "id": "M10-purpose",
+    "suite": "admission",
+    "detector": "current_purpose",
+    "description": "ignore intended purpose",
+    "patch": "mutations/M10-purpose.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "c2787de1d5679590feec9ea85d224288bec0c2b2bda1db8e374d63bc39b1c1fe"
+      }
+    ],
+    "patch_sha256": "9510feb5016a24360b2ae06fa814204c66641c43300d3f0ea469c45fc3afde4f",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "9510feb5016a24360b2ae06fa814204c66641c43300d3f0ea469c45fc3afde4f"
+  },
+  {
+    "id": "M10-recording",
+    "suite": "admission",
+    "detector": "recording_isolation",
+    "description": "ignore recording",
+    "patch": "mutations/M10-recording.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "ee4ddcb58a76d040f7880ff3e2ac30185246e8e4f77db8386d0d9e53ee9e1a7e"
+      }
+    ],
+    "patch_sha256": "83de4eeba32526c7aef590b0327c358c0b4a91c3234bee2f50a33eaf8842e2ef",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "83de4eeba32526c7aef590b0327c358c0b4a91c3234bee2f50a33eaf8842e2ef"
+  },
+  {
+    "id": "M10-reservation",
+    "suite": "admission",
+    "detector": "current_reservation",
+    "description": "ignore reservation",
+    "patch": "mutations/M10-reservation.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "0ceca67d309011ef9d755741690a42e45d10ff7ae764704f5e0de68f0a26f8ee"
+      }
+    ],
+    "patch_sha256": "d6eab407923cb86f6ef808e3fd2c27f406eaa047968c0b70cef41789727f416e",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "d6eab407923cb86f6ef808e3fd2c27f406eaa047968c0b70cef41789727f416e"
+  },
+  {
+    "id": "M11",
+    "suite": "races",
+    "detector": "existing_primary_not_fresh",
+    "description": "allow duplicate Native sample admission at the current ledger ordinal authority before an existing primary can be reused",
+    "patch": "mutations/M11.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/lifecycle/NativeExecutionLedger.h",
+        "before_sha256": "cfebaa203ad819b190732e2579d57c05eb8918c3ff69fc841f1256d566a84d96",
+        "before_raw_sha256": "021c228368065c58618815bac4be2f32a798e8a4e7f7508f0aa09e23090f4eae",
+        "after_sha256": "f1419b223bf61a4dea9ad0d7ccfd81bd33b35c4bb75f28f70cab4271275be865"
+      }
+    ],
+    "patch_sha256": "29828802d4ae0a6f29c6965894ba6b76a10dceac05a203d869c2ec94d4845785",
+    "semantic_refresh": "The named races detector now rejects the duplicate at Admit, before ClaimInvocation; target the actual NativeExecutionLedger::Reserve gate.",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "29828802d4ae0a6f29c6965894ba6b76a10dceac05a203d869c2ec94d4845785"
+  },
+  {
+    "id": "M12",
+    "suite": "admission",
+    "detector": "recording_isolation",
+    "description": "skip fresh owner snapshot recheck",
+    "patch": "mutations/M12.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "a295e81ac9978cab37619131900aa33e6c1726fbf5e03d9dc715fdd42d84723f"
+      }
+    ],
+    "patch_sha256": "e045689697c4fb4ee620e24fd5e8cbe489c5ca0889a02b03d98295bdc0decf0a",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "e045689697c4fb4ee620e24fd5e8cbe489c5ca0889a02b03d98295bdc0decf0a"
+  },
+  {
+    "id": "M13",
+    "suite": "admission",
+    "detector": "winning_start_truth",
+    "description": "allow repeated model start/call at the current Native execution ledger gates",
+    "patch": "mutations/M13.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/lifecycle/NativeExecutionLedger.h",
+        "before_sha256": "cfebaa203ad819b190732e2579d57c05eb8918c3ff69fc841f1256d566a84d96",
+        "before_raw_sha256": "021c228368065c58618815bac4be2f32a798e8a4e7f7508f0aa09e23090f4eae",
+        "after_sha256": "ce48a2c76bdd118f75e339e0543ff4e0ccf694b0d790a9098412b06cfd587383"
+      }
+    ],
+    "patch_sha256": "430077f5191a68e4dbe3e3c37afa9175faac6a9f4cd8247d87a6acaff584b329",
+    "semantic_refresh": "The coordinator delegates started/called authority to NativeExecutionLedger; remove those current duplicate guards, not obsolete Operation fields.",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "430077f5191a68e4dbe3e3c37afa9175faac6a9f4cd8247d87a6acaff584b329"
+  },
+  {
+    "id": "M14",
+    "suite": "admission",
+    "detector": "fresh_frames_stable_route",
+    "description": "issue route generation per admitted frame",
+    "patch": "mutations/M14.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "ee9940ba5aead39e10ee859e66857adf9d19e0cb65e08b80b108a27c562e34fb"
+      }
+    ],
+    "patch_sha256": "2e2674d67514f8be6b94fb0d1ed20bb222b724e1d363f789b2d2176f50f1b85d",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "2e2674d67514f8be6b94fb0d1ed20bb222b724e1d363f789b2d2176f50f1b85d"
+  },
+  {
+    "id": "M15",
+    "suite": "races",
+    "detector": "sustained_bounded_reuse",
+    "description": "bind evergreen first-frame profile evaluation",
+    "patch": "mutations/M15.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeRouteAdmission.cpp",
+        "before_sha256": "79eb38fa51787b6a09db33b41b5570b32efa0b2675c682cfb207634830e9a4e3",
+        "before_raw_sha256": "4f053b807c8cd3700f2962131bf67a51fdf5ad4162fcd5416dceff52c8d10e68",
+        "after_sha256": "18ccaa15982fee7eb76b4d68b4446bd7fb885c6a43caaf8cc47f0445b6644827"
+      }
+    ],
+    "patch_sha256": "75ff6a96398b717ca2642eef13360bf6f92135ba3024690432b38f0ad558d8a6",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "75ff6a96398b717ca2642eef13360bf6f92135ba3024690432b38f0ad558d8a6"
+  },
+  {
+    "id": "M16",
+    "suite": "races",
+    "detector": "metadata_lifetime",
+    "description": "drop original metadata pin on publication",
+    "patch": "mutations/M16.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "e47ea84f8b1bac33f358b50c816345b5ba4a59db2184ef5fdf2632c007a780e1"
+      }
+    ],
+    "patch_sha256": "7466ec6ddd21d94a45b43d6cb2ca63f0a7cf08dababd83cdd05e621e0b8432f1",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "7466ec6ddd21d94a45b43d6cb2ca63f0a7cf08dababd83cdd05e621e0b8432f1"
+  },
+  {
+    "id": "M17",
+    "suite": "admission",
+    "detector": "stop_does_not_strand_seal",
+    "description": "global finalizer stop before outstanding claim tail",
+    "patch": "mutations/M17.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "c7f825347db8daa32122910c8dd45eac1b68b8ae1dd4feebc336651bd3ec8ae6"
+      }
+    ],
+    "patch_sha256": "61479c468cf314dad6df56041ba8a1e9920f75f0a0b6d7106c6a09b099b85ed3",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "61479c468cf314dad6df56041ba8a1e9920f75f0a0b6d7106c6a09b099b85ed3"
+  },
+  {
+    "id": "M18",
+    "suite": "kernel",
+    "detector": "aggregate_not_finalizer_only",
+    "description": "ignore unknown external owner retirement",
+    "patch": "mutations/M18.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "b3207909f7dfdfa4dfaf9a84d4ad7a3d71095a2b05dccf544088617abc90cad1"
+      }
+    ],
+    "patch_sha256": "014af7e84f6e41917c17368ccbbaa52ab845f95ad98e9c279b5ce26241751c86",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "014af7e84f6e41917c17368ccbbaa52ab845f95ad98e9c279b5ce26241751c86"
+  },
+  {
+    "id": "M19",
+    "suite": "races",
+    "detector": "capacity_fail_closed",
+    "description": "reuse occupied operation slots",
+    "patch": "mutations/M19.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "ec2ee03e8da5c6e5ed8904bc12cc8f98d522ee609d61d756c1f6ede79bf52317"
+      }
+    ],
+    "patch_sha256": "aabf92d1bc781060fde0c250a57c3038c7314a8eee2e0faf4399e41f242ceb55",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "aabf92d1bc781060fde0c250a57c3038c7314a8eee2e0faf4399e41f242ceb55"
+  },
+  {
+    "id": "M20",
+    "suite": "protocol",
+    "detector": "reset_not_acknowledged",
+    "description": "fabricate reset acknowledgment on request",
+    "patch": "mutations/M20.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeTemporalRuntime.h",
+        "before_sha256": "52a5a9aa7bd8428864172a0abe6d126fd84545c9ee27d0b070c52dbac2979557",
+        "before_raw_sha256": "d195eb454ff6ba15322b06d87ca0fde33565b92caaa94e544938412dc8359946",
+        "after_sha256": "32ab2321780931a1b3e70ffecb2091f86ac13f38891f7de76dc4113e57eaa565"
+      }
+    ],
+    "patch_sha256": "2f241537e97e5f45ee102b4f013900291ef67fc1a3d69043db90375b4ecc67b3",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "2f241537e97e5f45ee102b4f013900291ef67fc1a3d69043db90375b4ecc67b3"
+  },
+  {
+    "id": "M21",
+    "suite": "kernel",
+    "detector": "fixed_lineage_only",
+    "description": "enable Auto through two initial selection guards",
+    "patch": "mutations/M21.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/RoutingRules.h",
+        "before_sha256": "fbd18bf3be8de55ba60d3f5b665b0e82d27cfa718a953ef0d580a32d3fec095e",
+        "before_raw_sha256": "9a9d0cf04c0fc07c981ed1d1c6db35d3895a084728375e4b91f8f251cafe8bc2",
+        "after_sha256": "231fc8f2c82d415d8b8bd882b16ad771edf651c32c53294ed2028c80e4b0e5cb"
+      },
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.h",
+        "before_sha256": "8f18979e60f146db9cb085658d1171d28bf6074aae822739e877ff81fa957002",
+        "before_raw_sha256": "13f5358f9ce2754fbe4dfe10929a652aa529de63a91145690a44dbd368dba935",
+        "after_sha256": "7ceccf48785f3d9fd06cf4cacba81bf1b7ae89ed44a7b72f8346d729e91c24fe"
+      }
+    ],
+    "patch_sha256": "0094b8b2d72700662c5be7bd9f46c6e8ef6834098fc357517e36af00a14a2f36",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "0094b8b2d72700662c5be7bd9f46c6e8ef6834098fc357517e36af00a14a2f36"
+  },
+  {
+    "id": "M22-issued",
+    "suite": "kernel",
+    "detector": "issued_failure_no_retry",
+    "description": "retry after canonical issuance failure",
+    "patch": "mutations/M22-issued.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "7f4eefe81e8e44f08813cd0eca0e78b7a52404dc81426762e24bb4cf772ac8f5"
+      }
+    ],
+    "patch_sha256": "bb31089bd1e97ccec4361b569f3c838732ef3825b3c07bb43ebacef1cd81c816",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "bb31089bd1e97ccec4361b569f3c838732ef3825b3c07bb43ebacef1cd81c816"
+  },
+  {
+    "id": "M22-busy",
+    "suite": "kernel",
+    "detector": "busy_fresh_retry",
+    "description": "consume retry after nonissuing Busy",
+    "patch": "mutations/M22-busy.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "02902ae85f656a1880a76aae907fe7d6bb495d76e6c2a3f3547484b84234143a"
+      }
+    ],
+    "patch_sha256": "084e573cd0b0c6594ebf47e288567532ef3cd2d9f39db3ee9c158d458ccdcc0c",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "084e573cd0b0c6594ebf47e288567532ef3cd2d9f39db3ee9c158d458ccdcc0c"
+  },
+  {
+    "id": "M23",
+    "suite": "profile",
+    "detector": "preparation_late_binding_refusal",
+    "description": "skip settings binding refusal",
+    "patch": "mutations/M23.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/protocol/NativeProfilePreparation.h",
+        "before_sha256": "aa91c9fa095a3e09235a0888dde839d63c260480653ea215037a8f6dfa0653fd",
+        "before_raw_sha256": "d9650e10955f824e625a8938f7c3e42aaeefdcf298e8620c9efa356ef4662dcc",
+        "after_sha256": "9195a421222ae7ed63d917b97d7dd425ca441c9db84a2a0390f173892bdeaf30"
+      }
+    ],
+    "patch_sha256": "98c68083a89d819606e0d08c90a996a735a2d2ebf7d8418637f666635c6f703d",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "98c68083a89d819606e0d08c90a996a735a2d2ebf7d8418637f666635c6f703d"
+  },
+  {
+    "id": "M24",
+    "suite": "admission",
+    "detector": "continuation_exhausted",
+    "description": "remove finite continuation budget",
+    "patch": "mutations/M24.patch",
+    "files": [
+      {
+        "path": "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+        "before_sha256": "63a23f00e6ea6556bf3ad00bb934a505525e1940ddcfbee22e8e82920434cf0c",
+        "before_raw_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+        "after_sha256": "56374eb084e776b9e05015fe9eb111c5a3683a36155c592e6b93c87de67e5f82"
+      }
+    ],
+    "patch_sha256": "d5f7a7a128e2f8835ab38f0d33897c5bcb2876eae964cbbd53231c20c6045315",
+    "hash_normalization": "CRLF-to-LF-only",
+    "patch_raw_sha256": "d5f7a7a128e2f8835ab38f0d33897c5bcb2876eae964cbbd53231c20c6045315"
+  }
+]

@@ -22,7 +22,7 @@ static Capabilities Baseline(Api api, bool tenBit = false)
     value.directQueue = true;
     value.singleSample = true;
     value.flipModel = true;
-    value.sdr = true;
+    value.colorSupported = true;
     value.texture2D = true;
     value.nonZeroExtent = true;
     value.sameDevice = true;
@@ -76,9 +76,20 @@ int main()
               "failed admission leaves output untouched and performs zero model work");
     };
 
+    auto hdr = Baseline(Api::D3D12, true);
+    hdr.hdrCarrier = true;
+    Check(!Admit(hdr).supported, "missing FP16 support denies PQ before effects");
+    hdr.fp16ShaderLoad = hdr.fp16TypedStore = true;
+    Check(Admit(hdr).supported, "PQ conversion with FP16 carrier is supported");
+    hdr.rgb10 = false; hdr.fp16 = true;
+    Check(Admit(hdr).path == PixelPath::Fp16Direct, "scRGB copies its signed FP16 carrier directly");
+    hdr.fp16ShaderLoad = false;
+    Check(!Admit(hdr).supported, "scRGB missing shader load refuses");
+    hdr.fp16ShaderLoad = true; hdr.fp16TypedStore = false;
+    Check(!Admit(hdr).supported, "scRGB missing typed store refuses");
     auto value = Baseline(Api::D3D12);
-    value.sdr = false;
-    CheckRejectedUntouched(value, "HDR or non-SDR color space is unsupported", "HDR fails closed");
+    value.colorSupported = false;
+    CheckRejectedUntouched(value, "Present color representation is unsupported", "HDR fails closed");
     value = Baseline(Api::D3D12);
     value.singleSample = false;
     CheckRejectedUntouched(value, "target is not single-sample flip-model", "MSAA fails closed");

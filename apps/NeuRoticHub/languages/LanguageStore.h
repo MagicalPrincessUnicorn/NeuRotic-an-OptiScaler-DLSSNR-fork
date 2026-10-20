@@ -25,7 +25,7 @@ class LanguageStore {
  Json ReadPack(std::string_view id)const;
  Json ReadDraft(std::string_view id)const;
  bool Conflicted(std::string_view pack,std::string_view entry)const;
- std::vector<InstalledLanguage> List()const;
+ std::vector<InstalledLanguage> List(std::string* listingError=nullptr)const;
  std::string ActiveLocale()const;
  Neurotic::Localization::LanguagePack ActivePack()const;
  const std::filesystem::path& Root()const{return root;}

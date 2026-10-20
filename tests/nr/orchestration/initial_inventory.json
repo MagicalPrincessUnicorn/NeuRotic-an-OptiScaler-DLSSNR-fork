@@ -1,0 +1,468 @@
+{
+  "work_order": "NR-ORCH-002-INIT",
+  "suites": {
+    "initial-profile-preparation": [
+      {
+        "id": "preparation_without_fake_commit",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "profile_owner_preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "complete_prepared_bindings",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "executable_guard_preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "postcommit_build",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "preparation_binding_equivalence",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "preparation_semantic_refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "preparation_late_binding_refusal",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "initial-fixed-native-kernel": [
+      {
+        "id": "cold_empty",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "disabled_non_native",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "fixed_lineage_only",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "legacy_boundary_excluded",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "real_initial_commit",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "real_commit_owner",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "one_slot_one_budget",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "known_revoked_record",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "no_reincarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "preissue_failures",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "preissue_cleanup_retry",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "busy_is_not_issue",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "busy_fresh_retry",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "issued_failure_terminal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "issued_failure_no_retry",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "aggregate_not_finalizer_only",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unknown_unsealed_quarantine",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "owner_proven_close",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "closed_history_readable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.3",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.4",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.5",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.6",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.7",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.8",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.9",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "every_required_owner.10",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "diagnostic_independence",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "global_stop_topology",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "initial-native-admission": [
+      {
+        "id": "producer",
+        "binding": "FIXTURE_PRECONDITION"
+      },
+      {
+        "id": "fresh_operation_authority",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "claim_exactly_once",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_route_active",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_native_without_final_claim",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_duplicate_sample_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_duplicate_skips_preparation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_retired_duplicate_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_next_sample_admitted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_owner_guarded_model_start",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unknown_input_content_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "stale_input_content_refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "delivery_kind_bound_to_route",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "owner_guard_spans_action",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "revoke_before_model_gate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "stop_does_not_strand_seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "winning_start_truth",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "continuation_only",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "fresh_frames_stable_route",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "exact_commit_reference",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "full_identity",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "profile_key_mapping",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "structural_certificate_not_admission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "recording_isolation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "operation_isolation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "mandatory_native_bindings.0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "mandatory_native_bindings.1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "mandatory_native_bindings.2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "continuation_exhausted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "exact_commit_type",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "exact_commit_key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "current_profile_revision",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "current_evaluation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "current_purpose",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "current_reservation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "current_metadata_owner",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "initial-native-races": [
+      {
+        "id": "atomic_visibility",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "preissue_revoke_no_issue",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "lock_order_no_callback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "host_lifetime",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "metadata_lifetime",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "no_root_ledger_cycle",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "capacity_fail_closed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "sustained_bounded_reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "existing_primary_not_fresh",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "threaded_revoke_before_start",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "new_genuine_scope",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unknown_preparation_pins_retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unknown_preparation_blocks_close",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "proven_preparation_cleanup",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "winning_start_retains_exact_owner",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "revoke_wins_no_new_call",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "simultaneous_revoke_start_linearized",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "initial-native-protocol": [
+      {
+        "id": "admission",
+        "binding": "FIXTURE_PRECONDITION"
+      },
+      {
+        "id": "producer_to_protocol_model",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "revoked_actual_not_notattempted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "no_second_executor",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "revoke_before_claim_result",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "unknown_claim_retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "resource_change_classification",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "history_reset_not_route",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "hostreturn_protocol_admission",
+        "binding": "FIXTURE_PRECONDITION"
+      },
+      {
+        "id": "hostreturn_protocol_no_c13_submission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "default_off_unchanged",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "reset_not_acknowledged",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "local_undelivered_admission",
+        "binding": "FIXTURE_PRECONDITION"
+      },
+      {
+        "id": "local_undelivered_retains_reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "entry_refusal_admission",
+        "binding": "FIXTURE_PRECONDITION"
+      },
+      {
+        "id": "refused_provider_activation_is_not_model_call",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "initial-profile-preparation": {
+      "emitted_suite": "initial-profile-preparation"
+    },
+    "initial-fixed-native-kernel": {
+      "emitted_suite": "initial-fixed-native-kernel"
+    },
+    "initial-native-admission": {
+      "emitted_suite": "initial-native-admission"
+    },
+    "initial-native-races": {
+      "emitted_suite": "initial-native-races"
+    },
+    "initial-native-protocol": {
+      "emitted_suite": "initial-native-protocol"
+    }
+  }
+}

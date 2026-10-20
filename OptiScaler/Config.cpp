@@ -11,8 +11,10 @@
 #include "dlssnr/DlssNr_PresentInputPolicy.h"
 #include "dlssnr/FrameTrace.h"
 #include "dlssnr/DlssNr_StageUi.h"
+#include "dlssnr/FreshInstallDefaults.h"
 #include "dlssnr/NrExperimentalPolicy.h"
 #include "dlssnr/NativeGuideRoute.h"
+#include "dlssnr/connections/ConnectionPolicy.h"
 #include "nr/semantic/character/CharacterInspectorSettings.h"
 #include "nr/semantic/object_rules/ObjectRules.h"
 
@@ -25,17 +27,16 @@
 #include <SimpleIni.h>
 #include "CheckedIniFile.h"
 
+#include "ConfigFgRoutePersistence.inl"
+
 static CSimpleIniA ini;
 
 namespace
 {
 template<class Edit> bool SaveIniSubset(const std::filesystem::path& path, Edit&& edit)
 {
-    CSimpleIniA partial;
-    if (partial.LoadFile(path.c_str()) != SI_OK) return false;
-    edit(partial);
-    if (!Neurotic::CheckedIniFile::Save(partial, path)) return false;
-    return ini.LoadFile(path.c_str()) == SI_OK;
+    return Neurotic::FgRoutePersistence::Detail::SaveSubset(path, std::forward<Edit>(edit),
+        [&] { return ini.LoadFile(path.c_str()) == SI_OK; });
 }
 }
 
@@ -69,8 +70,12 @@ static inline bool isFloat(const std::string& str, float& value)
 
 Config::Config()
 {
-    absoluteFileName = Util::DllPath().parent_path() / fileName;
-    Reload(absoluteFileName);
+    {
+        std::lock_guard routeLock(Neurotic::FgRoutePersistence::Detail::TransactionMutex());
+        absoluteFileName = Util::DllPath().parent_path() / fileName;
+        Neurotic::FgRoutePersistence::Detail::SetDestination(absoluteFileName);
+        Reload(absoluteFileName);
+    }
     FGDLSSGNativeMfgAtStartup = FGDLSSGNativeMfgExperimental.value_or_default();
     Neurotic::Mfg::Experimental::BeginSession({FGDLSSGExperimentalUnlockRTX30.value_or_default(), FGDLSSGExperimentalUnlockRTX20.value_or_default()});
 }
@@ -79,6 +84,7 @@ void Config::SetDlssNrEnabled(bool enabled)
 {
     const bool wasEnabled = _dlssNrState.Snapshot().enabled;
     _dlssNrState.SetEnabled(DlssNrEnabled, enabled);
+    if(wasEnabled!=enabled)DlssNr::Connections::InvalidateSignalReceipts();
     DlssNr::FrameTrace::OnNrEnable(wasEnabled, enabled);
 }
 
@@ -101,11 +107,16 @@ NrConfigSnapshot<Config> Config::GetDlssNrConfigSnapshot() const
 
 bool Config::Reload(std::filesystem::path iniPath)
 {
+    std::lock_guard routeLock(Neurotic::FgRoutePersistence::Detail::TransactionMutex());
     auto pathWStr = iniPath.wstring();
 
     LOG_INFO("Trying to load ini from: {0}", wstring_to_string(pathWStr));
     if (ini.LoadFile(iniPath.c_str()) == SI_OK)
     {
+        // Independent untouched disk image: the shared INI can contain merged
+        // scratch from an earlier failed save and is migrated below.
+        CSimpleIniA routeBaseline;
+        const bool freshRouteBaseline = routeBaseline.LoadFile(iniPath.c_str()) == SI_OK;
         Neurotic::MenuConfig::DiscardRetiredKeys(ini);
         State::Instance().nvngxIniDetected = exists(iniPath.parent_path() / "nvngx.ini");
         _log.clear();
@@ -394,7 +405,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
             NrConfigSynchronization::InvalidateProfileEdits();
             _dlssNrState.LoadEnabled(DlssNrEnabled, readBool("DlssNr", "Enabled"));
+            DlssNr::Connections::InvalidateSignalReceipts();
             DlssNrVulkanPrepare.set_from_config(readBool("DlssNr", "VulkanPrepare"));
+            DlssNrVulkanPresentSameFrameInit.set_from_config(readBool("DlssNr", "VulkanPresentSameFrameInit"));
             const auto multipassEnabled = readBool("DlssNr", "MultipassEnabled");
             DlssNrMultipassEnabled.set_from_config(multipassEnabled);
             DlssNrNativeProtocol.set_from_config(readBool("DlssNr", "NativeProtocol"));
@@ -406,6 +419,12 @@ bool Config::Reload(std::filesystem::path iniPath)
             const auto inputSource=readInt("DlssNr", "InputSource");
             DlssNrInputSource.set_from_config(inputSource);
             DlssNrInputTransport.set_from_config(readInt("DlssNr", "InputTransport"));
+            DlssNrColorSource.set_from_config(readInt("DlssNr", "ColorSource"));
+            DlssNrDepthSource.set_from_config(readInt("DlssNr", "DepthSource"));
+            DlssNrMotionSource.set_from_config(readInt("DlssNr", "MotionSource"));
+            DlssNrSignalStrict.set_from_config(readBool("DlssNr", "SignalStrict"));
+            DlssNr::Connections::RequestSavedSignalPreferences(DlssNrDepthSource.value_or_default(),
+                DlssNrMotionSource.value_or_default(),DlssNrSignalStrict.value_or_default(),DlssNrColorSource.value_or_default());
             DlssNrAllowCpuFallback.set_from_config(readBool("DlssNr", "AllowCpuFallback"));
             DlssNr::NativeGuides::ConfigureInput(inputSource.value_or(-1),
                 DlssNrInputTransport.value_or_default(),DlssNrAllowCpuFallback.value_or_default());
@@ -424,8 +443,12 @@ bool Config::Reload(std::filesystem::path iniPath)
                 [&](const char* key) { return readFloat("DlssNrBasic", key); },
                 multipassEnabled.has_value() || DlssNrSecondLayer.has_value() ||
                 readUInt("DlssNr", "Passes").has_value() || ini.GetSectionSize("DlssNrLayer2") > 0));
+            const auto selectionDefaults = DlssNr::FreshInstallDefaults::Missing(
+                DlssNr::FreshInstallDefaults::HasSavedSelection([&](const char* key) {
+                    return ini.GetValue("DlssNr", key) != nullptr;
+                }));
             const auto savedRoute = readUInt("DlssNr", "Route");
-            DlssNr::StageUi::LoadRoute(*this, savedRoute);
+            DlssNr::FreshInstallDefaults::LoadRoute(*this, savedRoute, selectionDefaults.route);
             DlssNrAnythingScale.set_from_config(readUInt("DlssNr", "AnythingScale"));
             DlssNrUiAnythingResolutionPreset.set_from_config(readUInt("DlssNr", "UiAnythingResolutionPreset"));
             DlssNrUiAnythingManualScale.set_from_config(readUInt("DlssNr", "UiAnythingManualScale"));
@@ -445,10 +468,10 @@ bool Config::Reload(std::filesystem::path iniPath)
                 renderingMode = std::clamp(renderingMode.value(), 0, 1);
             else if (performanceMode.has_value())
                 renderingMode = performanceMode.value() ? 1 : 0;
-            // New configurations intentionally default to Performance. Existing profiles retain their
-            // explicit legacy PerformanceMode/RunBeforeSR selection until the user selects a mode.
+            // Only absent route/resolution preferences use the fresh Post-SR default.
+            // Saved partial/auto profiles retain the historical missing-placement fallback.
             else
-                renderingMode = 1;
+                renderingMode = selectionDefaults.renderingMode;
             NrConfigState::LoadRoutingMode(DlssNrRenderingMode, DlssNrRunBeforeSr, renderingMode.value());
             DlssNrPreDlaa.set_from_config(readBool("DlssNr", "PreDlaa"));
             DlssNrPreSrSoftReset.set_from_config(readBool("DlssNr", "PreSrSoftReset"));
@@ -472,6 +495,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCompareTags.set_from_config(readBool("DlssNr", "CompareTags"));
             DlssNrTagScale.set_from_config(readFloat("DlssNr", "TagScale"));
             DlssNrWorkingScale.set_from_config(readFloat("DlssNr", "WorkingScale"));
+            DlssNr::NativeResolution::LoadSelection(*this,
+                readUInt("DlssNr", "NativeResolution").value_or(selectionDefaults.nativeResolution));
             DlssNr::StageUi::LoadHints(*this, readBool("DlssNr", "UiManualResolution"),
                 readFloat("DlssNr", "UiManualScale"), readUInt("DlssNr", "UiAfterMethod"));
             const auto manualMemory = [&](const char* key) -> std::optional<float> {
@@ -1133,8 +1158,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             FfxVkPath.set_from_config(readWString("Libraries", "FfxVkPath"));
 
             XeSSLibrary.set_from_config(readWString("Libraries", "XeSSPath"));
-            XeSSLibrary.set_from_config(readWString("Libraries", "XeFGPath"));
-            XeSSLibrary.set_from_config(readWString("Libraries", "XeLLPath"));
+            XeFGLibrary.set_from_config(readWString("Libraries", "XeFGPath"));
+            XeLLLibrary.set_from_config(readWString("Libraries", "XeLLPath"));
             XeSSDx11Library.set_from_config(readWString("Libraries", "XeSSDx11Path"));
         }
 
@@ -1146,9 +1171,11 @@ bool Config::Reload(std::filesystem::path iniPath)
         LOG_INFO("DLSS-NR config load: path={} success=true enabledIntent={} VulkanPrepare={} route={}",
             wstring_to_string(pathWStr), DlssNrEnabled.value_or_default(),
             DlssNrVulkanPrepare.value_or_default(), DlssNrRoute.value_or_default());
+        Neurotic::FgRoutePersistence::Detail::ObserveLoaded(iniPath, freshRouteBaseline ? &routeBaseline : nullptr, absoluteFileName);
         return true;
     }
 
+    Neurotic::FgRoutePersistence::Detail::ObserveLoadFailure(iniPath);
     LOG_WARN("DLSS-NR config load: path={} success=false; existing/default intent retained",
         wstring_to_string(pathWStr));
     return false;
@@ -1156,12 +1183,15 @@ bool Config::Reload(std::filesystem::path iniPath)
 
 bool Config::LoadFromPath(const wchar_t* InPath)
 {
+    std::lock_guard routeLock(Neurotic::FgRoutePersistence::Detail::TransactionMutex());
     std::filesystem::path iniPath(InPath);
-    auto newPath = iniPath / fileName;
+    // Select a concrete destination once; later CWD changes cannot retarget it.
+    auto newPath = Neurotic::FgRoutePersistence::Detail::ResolveDestination(iniPath / fileName);
+    if (newPath.empty()) return false;
 
     if (Reload(newPath))
     {
-        absoluteFileName = newPath;
+        // Reload committed the prepared destination and route baseline together.
         return true;
     }
 
@@ -1210,6 +1240,7 @@ std::string GetFloatValue(std::optional<float> value)
 
 bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraft)
 {
+    std::lock_guard routeLock(Neurotic::FgRoutePersistence::Detail::TransactionMutex());
     // Upscalers
     {
         auto SaveUpscaler = [&](const char* key, auto& upscalerSetting)
@@ -1278,6 +1309,7 @@ bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraf
                 FGNvngxReplacementString = "Combo";
         }
         ini.SetValue("FrameGen", "FGNvngxReplacement", FGNvngxReplacementString.c_str());
+        Neurotic::FgRoutePersistence::Detail::PreserveOpaque(*Instance(), ini, absoluteFileName);
 
         std::optional<int> ftInput;
         if (Instance()->FTInput.has_value())
@@ -1505,6 +1537,7 @@ bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraf
     NrConfigSynchronization::Guard nrLock(NrConfigSynchronization::Mutex());
     ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
     ini.SetValue("DlssNr", "VulkanPrepare", GetBoolValue(Instance()->DlssNrVulkanPrepare.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "VulkanPresentSameFrameInit", GetBoolValue(Instance()->DlssNrVulkanPresentSameFrameInit.value_for_config()).c_str());
     ini.SetValue("DlssNr", "MultipassEnabled",
                  GetBoolValue(Instance()->DlssNrMultipassEnabled.value_for_config()).c_str());
     ini.SetBoolValue("DlssNr", "ExperimentalMode", Instance()->DlssNrExperimentalMode.value_or_default());
@@ -1512,6 +1545,10 @@ bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraf
     ini.SetBoolValue("DlssNr", "NativeGuides", Instance()->DlssNrNativeGuides.value_or_default());
     ini.SetLongValue("DlssNr", "InputSource", Instance()->DlssNrInputSource.value_or_default());
     ini.SetLongValue("DlssNr", "InputTransport", Instance()->DlssNrInputTransport.value_or_default());
+    ini.SetLongValue("DlssNr", "ColorSource", Instance()->DlssNrColorSource.value_or_default());
+    ini.SetLongValue("DlssNr", "DepthSource", Instance()->DlssNrDepthSource.value_or_default());
+    ini.SetLongValue("DlssNr", "MotionSource", Instance()->DlssNrMotionSource.value_or_default());
+    ini.SetBoolValue("DlssNr", "SignalStrict", Instance()->DlssNrSignalStrict.value_or_default());
     ini.SetBoolValue("DlssNr", "AllowCpuFallback", Instance()->DlssNrAllowCpuFallback.value_or_default());
     ini.SetBoolValue("DlssNr", "NativeFrameGeneration", Instance()->DlssNrNativeFrameGeneration.value_or_default());
     ini.SetBoolValue("DlssNr", "NativeVulkanRenderer", Instance()->DlssNrNativeVulkanRenderer.value_or_default());
@@ -1560,7 +1597,7 @@ bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraf
         ini.SetValue(section.c_str(), "ReversibleMode", GetIntValue(layer.reversibleMode.value_for_config()).c_str());
         ini.SetValue(section.c_str(), "ApplyModel", GetBoolValue(layer.applyModel.value_for_config()).c_str());
     }
-    ini.SetValue("DlssNr", "Route", GetIntValue(Instance()->DlssNrRoute.value_for_config()).c_str());
+    DlssNr::FreshInstallDefaults::SaveRoute(ini, *Instance());
     ini.SetValue("DlssNr", "AnythingScale", GetIntValue(Instance()->DlssNrAnythingScale.value_for_config()).c_str());
     ini.SetValue("DlssNr", "UiAnythingResolutionPreset", GetIntValue(Instance()->DlssNrUiAnythingResolutionPreset.value_for_config()).c_str());
     ini.SetValue("DlssNr", "UiAnythingManualScale", GetIntValue(Instance()->DlssNrUiAnythingManualScale.value_for_config()).c_str());
@@ -2122,7 +2159,7 @@ bool Config::SaveIni(const DlssNr::ExperimentalPolicy::UiDraft* experimentalDraf
 
     LOG_INFO("Trying to save ini to: {0}", wstring_to_string(pathWStr));
 
-    const auto saveResult = Neurotic::CheckedIniFile::SaveDetailed(ini, absoluteFileName);
+    const auto saveResult = Neurotic::FgRoutePersistence::Detail::WritePublished(ini, absoluteFileName);
     const bool saved = saveResult.succeeded;
     ConfigPersistence::Current().Publish(absoluteFileName,saved,saveResult.errorCode,saveResult.stage,
         [](const ConfigPersistence::Snapshot& failure) {
@@ -2183,6 +2220,7 @@ bool Config::SaveExperimentalSettings(bool multipass, bool hdr, bool frameGenera
 
 bool Config::SaveXeFG()
 {
+    std::lock_guard routeLock(Neurotic::FgRoutePersistence::Detail::TransactionMutex());
     ini.SetValue("XeFG", "DepthInverted", GetBoolValue(Instance()->FGXeFGDepthInverted.value_for_config()).c_str());
     ini.SetValue("XeFG", "JitteredMV", GetBoolValue(Instance()->FGXeFGJitteredMV.value_for_config()).c_str());
     ini.SetValue("XeFG", "HighResMV", GetBoolValue(Instance()->FGXeFGHighResMV.value_for_config()).c_str());
@@ -2190,7 +2228,7 @@ bool Config::SaveXeFG()
     auto pathWStr = absoluteFileName.wstring();
     LOG_INFO("Trying to save ini to: {0}", wstring_to_string(pathWStr));
 
-    return Neurotic::CheckedIniFile::Save(ini, absoluteFileName);
+    return Neurotic::FgRoutePersistence::Detail::WritePublished(ini, absoluteFileName).succeeded;
 }
 
 void Config::CheckUpscalerFiles()

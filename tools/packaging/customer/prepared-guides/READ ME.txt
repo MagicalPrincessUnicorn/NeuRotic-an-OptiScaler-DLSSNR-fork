@@ -1,0 +1,69 @@
+NEUROTIC - UNIVERSAL GUIDES PERSONAL TEST
+
+Extract ALL files into a fresh folder outside the game directory.
+1. Close the game. Run NeuRotic-Setup.cmd and select the real game EXE.
+   Choose the proxy filename you normally use. Update preserves existing settings.
+2. DETROIT / VULKAN: run ReShade-Setup.cmd. In the official ReShade window,
+   select the same game and Vulkan. This registers ReShade's Vulkan layer.
+   The included addon runtime, motion provider and shaders are already supplied.
+3. Keep your existing NVIDIA NR model beside the game EXE: nvngx_dlssnr.dll.
+4. DETROIT / VULKAN: run Start-Vulkan-Prepared-Test.cmd.
+   Fully exit Steam using Steam > Exit before this remembered-game launcher.
+   DirectX games use Start-Prepared-Test.cmd. Insert opens NeuRotic; Home opens ReShade.
+   Select a valid depth buffer in ReShade's Add-ons / Generic Depth section.
+   Enable DisplayDepth briefly to check it, then turn DisplayDepth off.
+   Prepared technique order is DRME, then NeuRotic_PreparedGuides.
+5. For comparison, close the game and use Start-Vulkan-Baseline-Test.cmd.
+   DirectX games use Start-Baseline-Test.cmd.
+
+Launch buttons remember the game selected by Setup. They configure the test,
+set its environment only for the child process and restore settings on exit.
+If the launch was interrupted, close the game and use Restore-Test-Settings.cmd.
+Do not use Hub Start game for this experiment: it does not set the prepared
+route environment. The complete Hub/direct installer is included for normal use.
+
+Steam: fully exit Steam (Steam > Exit) before using a remembered-game button,
+so the new Steam process can inherit the experimental environment. No process
+is terminated automatically. Alternatively set Steam Launch Options to:
+"C:\your extracted folder\NeuRotic\Start-Vulkan-Prepared-Test.cmd" %command%
+Use the baseline CMD instead for comparison. Game arguments remain literal.
+
+Start-D3D12-Flow-Test.cmd selects integrated FidelityFX software flow (D3D12).
+Start-Vulkan-Shared-Test.cmd requests the shared GPU route with CPU fallback.
+Start-Vulkan-Transport-Only.cmd tests GPU transport without evaluating NR.
+Use Start-Vulkan-Prepared-Test.cmd first for Detroit. HDR is unsupported here.
+Vulkan buttons use the registered ReShade layer and disable duplicate proxy loading.
+The test restricts NeuRotic hooks to the selected game, keeping its crash reporter
+in pass-through mode. The prepared addon includes older C++ runtime mutex support.
+
+Logs from each paired test are saved under this extracted folder's reviews/.
+Collect-Diagnostics.cmd provides the normal core diagnostic ZIP too. Send the
+test's OptiScaler.log and ReShade.log when reporting missing output or artifacts.
+This update connects cross-API ReShade captures to NeuRotic's main renderer.
+The default Vulkan route reads captured color/depth/motion back, uploads owned
+textures on the same GPU adapter, runs NeuRotic normalization and node rendering,
+then copies completed output back to ReShade. This CPU transport prioritizes
+compatibility and can be expensive at high resolution. Shared-GPU transport
+remains an explicit experiment. Public NGX helper evaluation is also separate.
+
+In NeuRotic, look for "ReShade prepared inputs" under input readiness. It shows
+captured depth, estimated motion, the current stage/reason and separate input,
+model-completed and copyback-completed counts. A blocked or stale source stays
+labelled that way. Native camera/jitter indicators are not reassigned to ReShade.
+Observation exports include these readings under prepared_external_inputs.
+Keep DisplayDepth off for the prepared run, with DRME and NeuRotic_PreparedGuides
+both enabled in that order. A depth outline alone does not prove processing.
+
+No standalone frame generator or 60 FPS unlock is added. This experiment has
+passed build/CPU/WARP fixture checks; Detroit, model execution, shader effect
+compilation, image quality and performance are not yet established.
+
+Uninstall: close the game and run NeuRotic-Uninstall.cmd. Existing files are
+backed up/restored by the original installer; the private model is kept.
+Vulkan layer registration is owned by official ReShade Setup. Use that tool
+to uninstall its Vulkan registration if you no longer need ReShade.
+
+Bundled DRME is CC BY-NC 4.0, by Jakob Wapenhensch, for this personal,
+noncommercial test. Its original sources/notices and attribution are included.
+ReShade is BSD-3-Clause; NeuRotic and other components retain their own licenses.
+No private NVIDIA model is bundled. External components are not relicensed.

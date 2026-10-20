@@ -1,3 +1,4 @@
+#include "../../../dlssnr/NrDiagnosticSignals.h"
 #pragma once
 #include "CapabilityStatusCollector.h"
 #include "../candidate/Contract.h"
@@ -10,6 +11,7 @@ struct OwnerContribution {
     bool Any() const noexcept {return depth || motion || jitter || preExposure;}
 };
 struct UsableInputEvidence {
+    DiagnosticSignals::Readings signals{};
     bool contextMatched=false,requestedEnabled=false,nativeRoute=false,ownerRunning=false,ownerFailed=false;
     bool resetPending=false,lifecycleOpen=false,presentGuided=false,finiteJitter=false,finitePreExposure=false;
     uint64_t lifecycle=0,resources=0,completedBefore=0,completedAfter=0,parametersBefore=0,parametersAfter=0;
@@ -17,15 +19,18 @@ struct UsableInputEvidence {
 inline OwnerContribution NormalizeUseEvidence(const UsableInputEvidence& evidence) noexcept {
     OwnerContribution result;
     if(!evidence.contextMatched || !evidence.requestedEnabled || !evidence.ownerRunning || evidence.ownerFailed ||
-       evidence.resetPending || evidence.completedAfter<=evidence.completedBefore)return result;
-    if(evidence.nativeRoute) {
-        if(evidence.lifecycleOpen && evidence.lifecycle && evidence.parametersAfter>evidence.parametersBefore) {
-            result.jitter=evidence.finiteJitter;result.preExposure=evidence.finitePreExposure;
-        }
-    }else if(evidence.presentGuided && evidence.resources)result.depth=result.motion=true;
+       evidence.completedAfter<=evidence.completedBefore)return result;
+    using S=SignalReceipts::Signal;
+    result.depth=DiagnosticSignals::Used(evidence.signals,S::Depth);
+    result.motion=DiagnosticSignals::Used(evidence.signals,S::Motion);
+    result.jitter=DiagnosticSignals::Used(evidence.signals,S::Jitter);
+    result.preExposure=DiagnosticSignals::Used(evidence.signals,S::PreExposure);
     return result;
 }
 struct ObservationReportBundle {
+    DiagnosticSignals::Readings signals{};
+    uint32_t signalRoute=0;
+    bool signalOwnerSupported=false;
     CollectionResult observation;
     CandidateObserver::Snapshot discovery;
     OwnerContribution owner;

@@ -1,0 +1,13 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -94,7 +94,8 @@
+                     // noncallback leaf; no finalizer/model/owner callback here.
+                     issued=p.root.owners_->Route()->CommittedChange(event);
+                 }
+-                if(issued.status==Lifecycle::IdentityStatus::Busy)result=InitStatus::Busy;
++                if(issued.status==Lifecycle::IdentityStatus::Busy)
++                {p.record=prepared->record_;prepared->consumed_=true;p.state.phase=RoutePhase::Active;result=InitStatus::Activated;}
+                 else
+                 {
+                     // Even an indeterminate non-Busy outcome consumes INIT.

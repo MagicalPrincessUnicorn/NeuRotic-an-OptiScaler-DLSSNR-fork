@@ -1,0 +1,65 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "AdapterDescriptor",
+  "adapter_id": "source-contract-cpu-v2",
+  "interface_version": "2.0.0",
+  "layer": "L1",
+  "evidence_scope": "source_policy_only",
+  "contract_refs": [
+    {
+      "owner": "source_contract",
+      "contract_id": "source-native-inputs-v1",
+      "version": "baseline-alpha-0.9.6",
+      "sha256": {
+        "state": "known",
+        "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+      }
+    },
+    {
+      "owner": "source_contract",
+      "contract_id": "source-present-compat-v1",
+      "version": "baseline-alpha-0.9.6",
+      "sha256": {
+        "state": "known",
+        "value": "49104dd7e3fb3f6f09878ce34e3c463a5a794c77b8d53363b0b44a688a257cb1"
+      }
+    },
+    {
+      "owner": "source_contract",
+      "contract_id": "source-readiness-v1",
+      "version": "baseline-alpha-0.9.6",
+      "sha256": {
+        "state": "known",
+        "value": "3ce7a2b18c50e4a6dc06cb2971f463e41fa3caaf79e1ce3893c50baca201e3d3"
+      }
+    },
+    {
+      "owner": "source_contract",
+      "contract_id": "source-present-history-v1",
+      "version": "baseline-alpha-0.9.6",
+      "sha256": {
+        "state": "known",
+        "value": "a83f86c3ff56f3322cdbffcfcf5a91e4637942aef6890c377b274009bba76b0a"
+      }
+    }
+  ],
+  "operations": [
+    "native.fits",
+    "native.resolve_flags",
+    "native.guide_rect",
+    "native.authoritative",
+    "present.admit",
+    "readiness.evaluate",
+    "history.read",
+    "history.complete",
+    "history.invalidate"
+  ],
+  "requires_gpu": false,
+  "requires_provider": false,
+  "state_lifetime": "one_case",
+  "implementation_sha256": {
+    "state": "not_observed",
+    "reason_id": "GYM.NOT_OBSERVED"
+  },
+  "qualification_status": "NOT_RUN"
+}

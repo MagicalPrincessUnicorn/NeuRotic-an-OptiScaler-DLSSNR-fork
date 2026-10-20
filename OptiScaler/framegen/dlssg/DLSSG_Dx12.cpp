@@ -47,24 +47,25 @@ bool DLSSG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
             *swapChain = State::Instance().currentFGSwapchain;
             return result;
         }
-        // Game is creating new swapchain without releasing old one,
-        // we need to release it to avoid errors
+        // Retire only the provider-owned state. The caller keeps its old
+        // swapchain references until it releases them through the normal path.
         else if (readyToRelease)
         {
-            LOG_INFO("Releasing old swapchain");
-            ReleaseSwapchain(_hwnd);
-
-            // Not sure why but XeFG sometimes doesn't release the swapchain properly
-            // so we force release it here to be able to recreate swapchain for same hwnd
-            if (State::Instance().currentRealSwapchain != nullptr)
+            auto& state = State::Instance();
+            auto* previousSwapchain = state.currentFGSwapchain;
+            auto* previousRealSwapchain = state.currentRealSwapchain;
+            if (!ReleaseSwapchain(_hwnd))
             {
-                UINT release = 0;
-                do
-                {
-                    release = State::Instance().currentRealSwapchain->Release();
-                    LOG_DEBUG("Releasing swapchain, ref count: {}", release);
-                } while (release > 0);
+                LOG_WARN("Previous FG swapchain retirement is pending; replacement deferred");
+                return false;
             }
+
+            // Both state fields are borrowed aliases, not Release ownership.
+            // Do not erase another identity installed by a reentrant callback.
+            if (state.currentFGSwapchain == previousSwapchain)
+                state.currentFGSwapchain = nullptr;
+            if (state.currentRealSwapchain == previousRealSwapchain)
+                state.currentRealSwapchain = nullptr;
         }
         else
         {
@@ -153,24 +154,25 @@ bool DLSSG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
             *swapChain = (IDXGISwapChain1*) State::Instance().currentFGSwapchain;
             return result;
         }
-        // Game is creating new swapchain without releasing old one,
-        // we need to release it to avoid errors
+        // Retire only the provider-owned state. The caller keeps its old
+        // swapchain references until it releases them through the normal path.
         else if (readyToRelease)
         {
-            LOG_INFO("Releasing old swapchain");
-            ReleaseSwapchain(_hwnd);
-
-            // Not sure why but XeFG sometimes doesn't release the swapchain properly
-            // so we force release it here to be able to recreate swapchain for same hwnd
-            if (State::Instance().currentRealSwapchain != nullptr)
+            auto& state = State::Instance();
+            auto* previousSwapchain = state.currentFGSwapchain;
+            auto* previousRealSwapchain = state.currentRealSwapchain;
+            if (!ReleaseSwapchain(_hwnd))
             {
-                UINT release = 0;
-                do
-                {
-                    release = State::Instance().currentRealSwapchain->Release();
-                    LOG_DEBUG("Releasing swapchain, ref count: {}", release);
-                } while (release > 0);
+                LOG_WARN("Previous FG swapchain retirement is pending; replacement deferred");
+                return false;
             }
+
+            // Both state fields are borrowed aliases, not Release ownership.
+            // Do not erase another identity installed by a reentrant callback.
+            if (state.currentFGSwapchain == previousSwapchain)
+                state.currentFGSwapchain = nullptr;
+            if (state.currentRealSwapchain == previousRealSwapchain)
+                state.currentRealSwapchain = nullptr;
         }
         else
         {

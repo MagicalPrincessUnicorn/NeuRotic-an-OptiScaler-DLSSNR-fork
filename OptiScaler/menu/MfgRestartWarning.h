@@ -1,3 +1,4 @@
+#include <menu/ItemHelp.h>
 #include <menu/Localization.h>
 #pragma once
 #include <mfg/MfgSetup.h>
@@ -37,7 +38,7 @@ inline void DrawMfgRestartWarning(bool required)
         draw->AddText({start.x+.5f,start.y}, red, message.c_str());
         draw->PopClipRect();
         if (ImGui::CalcTextSize(message.c_str()).x > width-warningX &&
-            ImGui::IsMouseHoveringRect(start, end))
+            Neurotic::RegionHelpHovered(ImGui::GetID("##MfgRestartHelp"),start,end))
         { ImGui::BeginTooltip(); ImGui::TextUnformatted(message.c_str()); ImGui::EndTooltip(); }
     }
     ImGui::Spacing();

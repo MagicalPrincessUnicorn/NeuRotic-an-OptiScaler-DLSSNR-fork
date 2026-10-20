@@ -22,19 +22,16 @@ from LoggingProfile import verify_logging_profile
 from InspectorLayout import component as inspector_component
 from LanguageResources import resource as pe_resource
 from PublicPayload import REMOVED, ROOT_FILES, public_dataset, encode as public_encode, pick
+from OfflineDependencies import ACCEPTED_ARCHIVE_SHA256, dependency_kind
 
 ROOT = Path(__file__).resolve().parents[3]
 WORK = ROOT / 'builds/release-bundle'
 EVIDENCE = ROOT / 'docs/implementation-evidence/release-readiness-20261004'
 PACKAGE = 'packages/current/'
 WORKER = PACKAGE + 'payload/' + inspector_component()['relativeRoot'] + '/'
-SUPPORT = (
-    'NeuRotic-InstallReceipt.ps1', 'NeuRotic-LegacyReceipt.ps1', 'NeuRotic-Uninstall.ps1', 'NeuRotic-Game-Uninstall.cmd', 'NeuRotic-InstallDefaults.ps1', 'NeuRotic-InstallProfiles.ps1', 'NeuRotic-RenderingRequirements.json', 'NeuRotic-InstallCore.ps1',
-    'NeuRotic-SimpleFileIo.cs', 'NeuRotic-GameCatalog.json',
-    'NeuRotic-Setup-Engine.ps1', 'NeuRotic-Prerequisites.ps1', 'NeuRotic-RuntimeFiles.ps1', 'NeuRotic-HubProtocol.ps1', 'NeuRotic-HubSettings.ps1', 'NeuRotic-ObjectRules.ps1', 'object-rules-v1.schema.json', 'NeuRotic-HubJson.cs',
-    'NeuRotic-HubAntiCheat.ps1', 'NeuRotic-AntiCheatCollector.cs',
-    'NeuRotic-AntiCheatPolicy.ps1', 'NeuRotic-AntiCheatProviders.json',
-    'neurotic_anticheat_rules.json', 'exe_names.txt', 'Collect-NR-Review.ps1')
+SUPPORT = tuple(json.loads(Path(__file__).with_name('SupportInventory.json').read_bytes())['files'])
+if not SUPPORT or len(set(SUPPORT))!=len(SUPPORT) or any(not re.fullmatch(r'[A-Za-z0-9_.-]+',n) for n in SUPPORT):
+    raise ValueError('Invalid canonical support inventory')
 
 
 def require(condition, message):
@@ -233,7 +230,16 @@ def verify_release(files, *, verification_evidence=None):
                 len(files[name]) == row['bytes'], 'Inherited dependency differs: ' + name)
         dependency_names.add(name)
     require(components['dependencies']['archive_sha256'] ==
-            '2d7618859cccb628b93da9475118440083fe297be24a775b86795a2e1feaae67', 'Dependency archive differs')
+            ACCEPTED_ARCHIVE_SHA256, 'Dependency archive differs')
+    require(all(dependency_kind(name) is not None for name in dependency_names),
+            'First-party/unknown file incorrectly declared inherited')
+    require(original_package['version']=='0.9.9 DEVELOPMENT' and original_package['kind']=='neurotic-internal-development',
+            'Internal development identity missing')
+    development=components.get('development',{})
+    require(development.get('publication_authorized') is False and development.get('version')=='0.9.9 DEVELOPMENT' and
+            re.fullmatch('[0-9a-f]{64}',development.get('native_manifest_sha256','')) and
+            re.fullmatch('[0-9a-f]{64}',development.get('component_manifest_sha256','')),
+            'Fresh internal source-content provenance missing')
     for row in components['app_and_worker']['files']:
         name = safe_name(row['path'])
         require(name in files and sha(files[name]) == row['sha256'] and len(files[name]) == row['bytes'],

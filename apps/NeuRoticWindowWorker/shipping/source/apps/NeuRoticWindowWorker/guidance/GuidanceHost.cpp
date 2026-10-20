@@ -4,6 +4,7 @@
 #include "DepthTensor.h"
 #include "ImageMotion.h"
 #include "dav2/Dav2Host.h"
+#include "AnalysisProxy.h"
 #include <dxgi1_6.h>
 #include <mutex>
 namespace nrw {
@@ -21,6 +22,14 @@ struct GuidanceHost::Impl {
     std::mutex mutex;
     GuidanceOptions options;
     std::unique_ptr<depth::Dav2Host> dav2;
+    std::unique_ptr<AnalysisProxy> analysis;
+    CapturedFrame inFlightAnalysis;
+    CapturedFrame PrepareAnalysis(const CapturedFrame& frame){
+        if(!color::Hdr(frame.color))return frame;
+        if(!analysis)analysis=std::make_unique<AnalysisProxy>();
+        try{return analysis->Prepare(frame,device.Get(),context.Get());}
+        catch(...){if(analysis->RequiresRestart())quarantined=true;throw;}
+    }
     bool initialized=false,quarantined=false,depthReady=false;
     std::string depthReason,hardwareReason;
     ComPtr<ID3D11Device> device;
@@ -34,6 +43,7 @@ struct GuidanceHost::Impl {
     ComPtr<ID3D12Fence> fence;
     uint64_t fenceValue=0;
     std::unique_ptr<guidance::DepthRuntime> runtime;
+    uint64_t analysisOwnedBytes=0;double analysisHostMs=0;
     FrameStamp previousStamp{};
     uint32_t previousWidth=0,previousHeight=0;
     std::vector<float> previous;
@@ -52,8 +62,10 @@ struct GuidanceHost::Impl {
     }
     void StopLocked() {
         initialized=false;depthReady=false;ResetHistory();
+        if(quarantined)return; // unknown analysis work retains the entire shared generation; no more provider/GPU entry
         if(dav2){dav2->Stop();if(dav2->RequiresRestart()){quarantined=true;return;}dav2.reset();}
         if(quarantined || !Drain())return;
+        analysis.reset();inFlightAnalysis={};
         runtime.reset();fence.Reset();queue.Reset();depthDevice.Reset();bundle.reset();
         readback.Reset();inFlight.Reset();staging.Reset();context.Reset();device.Reset();
         depthReason.clear();hardwareReason.clear();fenceValue=0;
@@ -77,11 +89,15 @@ struct GuidanceHost::Impl {
         if(!Drain()){depthReason="Depth initialization GPU work is uncertain; restart worker required";return false;}
         return ready;
     }
-    bool Read(const CapturedFrame& frame,std::vector<uint8_t>& rgb,std::string& reason) {
+    bool Read(const CapturedFrame& original,std::vector<uint8_t>& rgb,std::string& reason) {
+        CapturedFrame frame;try{frame=PrepareAnalysis(original);}catch(const std::exception& e){reason=e.what();return false;}
+        if(!AnalysisMatches(frame)){reason="Analysis sidecar provenance or completion mismatch";return false;}
+        analysisOwnedBytes=frame.analysis?frame.analysis->ownedBytes:0;analysisHostMs=frame.analysis?frame.analysis->hostMilliseconds:0;
+        auto texture=frame.analysis?frame.analysis->texture:frame.texture;
         if(!frame.texture || !frame.stamp.session || !frame.stamp.sequence || !frame.stamp.width || !frame.stamp.height || frame.stamp.width>3840 || frame.stamp.height>2160) {
             reason="Captured guidance input absent, unstamped or beyond bounded 3840x2160 profile";return false;
         }
-        D3D11_TEXTURE2D_DESC d{};frame.texture->GetDesc(&d);ComPtr<ID3D11Device> parent;frame.texture->GetDevice(&parent);
+        D3D11_TEXTURE2D_DESC d{};texture->GetDesc(&d);ComPtr<ID3D11Device> parent;texture->GetDevice(&parent);
         if(!Same(parent.Get(),device.Get()) || d.Width!=frame.stamp.width || d.Height!=frame.stamp.height || d.Format!=DXGI_FORMAT_B8G8R8A8_UNORM || d.SampleDesc.Count!=1 || d.MipLevels!=1 || d.ArraySize!=1) {
             reason="Captured guidance texture device/format/extent differs from frame stamp";return false;
         }
@@ -91,7 +107,7 @@ struct GuidanceHost::Impl {
             if(FAILED(device->CreateTexture2D(&d,nullptr,&staging))){reason="Guidance staging creation failed";return false;}
         }
         if(!readback) {D3D11_QUERY_DESC query{D3D11_QUERY_EVENT,0};if(FAILED(device->CreateQuery(&query,&readback))){reason="Guidance completion query creation failed";return false;}}
-        inFlight=frame.texture;context->CopyResource(staging.Get(),inFlight.Get());context->End(readback.Get());context->Flush();
+        inFlightAnalysis=frame;inFlight=texture;context->CopyResource(staging.Get(),inFlight.Get());context->End(readback.Get());context->Flush();
         const auto start=GetTickCount64();
         for(;;) {
             BOOL completed=FALSE;HRESULT status=context->GetData(readback.Get(),&completed,sizeof(completed),D3D11_ASYNC_GETDATA_DONOTFLUSH);
@@ -99,7 +115,7 @@ struct GuidanceHost::Impl {
             if(FAILED(status) || GetTickCount64()-start>=5000){quarantined=true;reason="Guidance readback completion uncertain; owned resources retained until worker exit";return false;}
             Sleep(1);
         }
-        inFlight.Reset();D3D11_MAPPED_SUBRESOURCE mapped{};
+        inFlight.Reset();inFlightAnalysis={};D3D11_MAPPED_SUBRESOURCE mapped{};
         HRESULT status=context->Map(staging.Get(),0,D3D11_MAP_READ,D3D11_MAP_FLAG_DO_NOT_WAIT,&mapped);
         if(FAILED(status)){reason="Completed guidance staging map failed";return false;}
         struct Unmap {ID3D11DeviceContext* context;ID3D11Texture2D* texture;~Unmap(){context->Unmap(texture,0);}} unmap{context.Get(),staging.Get()};
@@ -141,7 +157,7 @@ bool GuidanceHost::Initialize(ID3D11Device* device,ID3D11DeviceContext* context,
     return true;
 }
 GuideResult GuidanceHost::Process(const CapturedFrame& frame) {
-    std::lock_guard lock(impl_->mutex);auto& p=*impl_;GuideResult result;result.stamp=frame.stamp;
+    std::lock_guard lock(impl_->mutex);auto& p=*impl_;GuideResult result;result.stamp=frame.stamp;result.analysisRecipe=AnalysisRecipe(frame.color);
     if(!p.initialized){result.reason="Guidance host stopped/uninitialized";return result;}
     if(p.dav2){result.reason=p.depthReason;result.depthProvider=p.dav2->Ready()?"depth-anything-v2-small-tensorrt-gpu-v1":"";return result;}
     if(p.options.mode==GuideMode::Off){result.reason="Guidance Off";return result;}
@@ -149,6 +165,7 @@ GuideResult GuidanceHost::Process(const CapturedFrame& frame) {
     if(!p.options.motion && !p.depthReady){result.reason=p.depthReason.empty()?"No guide channels selected":p.depthReason;return result;}
     std::vector<uint8_t> rgb;
     if(!p.Read(frame,rgb,result.reason)){p.ResetHistory();return result;}
+    result.analysisOwnedBytes=p.analysisOwnedBytes;result.analysisHostMs=p.analysisHostMs;
     if(p.depthReady){result.width=518;result.height=294;}
     else {
         double scale=std::min({1.,320./frame.stamp.width,180./frame.stamp.height});
@@ -164,23 +181,23 @@ GuideResult GuidanceHost::Process(const CapturedFrame& frame) {
     if(p.options.motion) {
         auto luma=guidance::Luma(rgb,frame.stamp.width,frame.stamp.height,result.width,result.height);
         bool adjacent=!frame.stamp.reset && !p.previous.empty() && frame.stamp.session==p.previousStamp.session && p.previousStamp.sequence!=UINT64_MAX && frame.stamp.sequence==p.previousStamp.sequence+1 &&
-            frame.stamp.width==p.previousStamp.width && frame.stamp.height==p.previousStamp.height && result.width==p.previousWidth && result.height==p.previousHeight && frame.stamp.timestampQpc>p.previousStamp.timestampQpc;
+            frame.stamp.colorEpoch==p.previousStamp.colorEpoch && frame.stamp.streamEpoch==p.previousStamp.streamEpoch && frame.stamp.geometryEpoch==p.previousStamp.geometryEpoch && frame.stamp.configEpoch==p.previousStamp.configEpoch && frame.stamp.width==p.previousStamp.width && frame.stamp.height==p.previousStamp.height && result.width==p.previousWidth && result.height==p.previousHeight && frame.stamp.timestampQpc>p.previousStamp.timestampQpc;
         if(adjacent) {
             result.motionXY=guidance::Motion(luma,p.previous,result.width,result.height);
-            result.motionCompleted=!result.motionXY.empty();if(result.motionCompleted)result.motionProvider="cpu-block-match-sdr-v1";
+            result.motionCompleted=!result.motionXY.empty();if(result.motionCompleted)result.motionProvider=color::Hdr(frame.color)?"cpu-block-match-core-hdr-proxy-v1":"cpu-block-match-sdr-v1";
         }
         p.previous=std::move(luma);p.previousStamp=frame.stamp;p.previousWidth=result.width;p.previousHeight=result.height;
         if(!result.reason.empty())result.reason+="; ";
         result.reason+=adjacent?"Estimated CPU image displacement current->previous in guide pixels; search +/-12, jitter unknown":"Motion reference reset/first observation; no pair estimate";
         result.reason+="; "+p.hardwareReason;
     }
-    if(result.depthCompleted){if(!result.reason.empty())result.reason+="; ";result.reason+="Estimated relative inverse-depth; larger is nearer, metric scale/projection unknown; CPU SDR bicubic preparation";}
+    if(result.depthCompleted){if(!result.reason.empty())result.reason+="; ";result.reason+="Estimated relative inverse-depth; larger is nearer, metric scale/projection unknown; CPU encoded-sRGB bicubic preparation";}
     return result;
 }
 void GuidanceHost::Stop(){std::lock_guard lock(impl_->mutex);impl_->StopLocked();}
-void GuidanceHost::OfferDepth(const CapturedFrame& frame,uint64_t sourceId){std::lock_guard lock(impl_->mutex);if(impl_->dav2)impl_->dav2->Offer(frame,sourceId);}
-void GuidanceHost::ObserveDepthEpochs(const FrameStamp& stamp,uint64_t sourceId,uint64_t configEpoch){std::lock_guard lock(impl_->mutex);if(impl_->dav2)impl_->dav2->ObserveEpochs({sourceId,stamp.streamEpoch,stamp.sequence,stamp.geometryEpoch,configEpoch});}
-bool GuidanceHost::PollDepth(depth::DepthFrame& frame,std::string& reason){std::lock_guard lock(impl_->mutex);if(!impl_->dav2)return false;auto result=impl_->dav2->Poll(reason);impl_->depthReason=reason;if(impl_->dav2->RequiresRestart())impl_->quarantined=true;if(!result)return false;frame=std::move(*result);return true;}
+void GuidanceHost::OfferDepth(const CapturedFrame& frame,uint64_t sourceId){std::lock_guard lock(impl_->mutex);if(impl_->dav2&&!impl_->quarantined){try{impl_->dav2->Offer(impl_->PrepareAnalysis(frame),sourceId);}catch(const std::exception& e){impl_->depthReason=e.what();}}}
+void GuidanceHost::ObserveDepthEpochs(const FrameStamp& stamp,uint64_t sourceId,uint64_t configEpoch){std::lock_guard lock(impl_->mutex);if(impl_->dav2)impl_->dav2->ObserveSourceEpochs(sourceId,stamp.streamEpoch,stamp.sequence,stamp.geometryEpoch,configEpoch,stamp.colorEpoch);}
+bool GuidanceHost::PollDepth(depth::DepthFrame& frame,std::string& reason){std::lock_guard lock(impl_->mutex);if(impl_->quarantined){reason=impl_->depthReason.empty()?"Analysis completion unknown; restart worker required":impl_->depthReason;return false;}if(!impl_->dav2)return false;auto result=impl_->dav2->Poll(reason);impl_->depthReason=reason;if(impl_->dav2->RequiresRestart())impl_->quarantined=true;if(!result)return false;frame=std::move(*result);return true;}
 bool GuidanceHost::DepthReady()const{return impl_->dav2&&impl_->dav2->Ready();}
 bool GuidanceHost::DepthBusy()const{return impl_->dav2&&impl_->dav2->Busy();}
 uint64_t GuidanceHost::DepthFresh()const{return impl_->dav2?impl_->dav2->Fresh():0;}

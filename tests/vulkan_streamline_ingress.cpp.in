@@ -1,0 +1,69 @@
+#include "dlssnr/VulkanNrStreamline.h"
+#include <cstdio>
+#include <cstdlib>
+#define NR_FRAME_TRACE(...) ((void)0)
+#define LOG_INFO(fmt,provider,frame,viewport,command,count,accepted,result,reason,calls) std::fprintf(stderr,"tag accepted=%d reason=%s\n",accepted,reason.c_str())
+using namespace DlssNr;
+struct Token:sl::FrameToken {operator uint32_t() const override{return 0;}};
+unsigned forwards=0,observations=0,ledger=0;bool replaceExpected=false,failOriginal=false,changeProvider=false;
+void Check(bool ok,const char* reason){if(!ok){std::fprintf(stderr,"FAIL: %s\n",reason);std::exit(1);}}
+namespace DlssNr {
+void ObserveVulkanPresentTags(uint64_t provider,uint64_t frame,uint32_t viewport,const sl::ResourceTag* tags,uint32_t count,bool ok){
+ ++observations;Check(provider==8&&frame==0&&viewport==0&&count==1,"authentic public tag identity forwarded");
+ Check(tags[0].resource->native==reinterpret_cast<void*>(5),"Present association observes original game image");
+ Check(ok!=failOriginal,"original provider outcome controls guide publication");
+}
+}
+sl::Result Original(const sl::FrameToken&,const sl::ViewportHandle&,const sl::ResourceTag* resources,uint32_t count,sl::CommandBuffer*){
+ ++forwards;Check(count==1,"original call count preserved");
+ if(resources[0].resource->native!=reinterpret_cast<void*>(uintptr_t(replaceExpected?6:5)))std::fprintf(stderr,"forward %u expected replacement=%d\n",forwards,replaceExpected);
+ Check(resources[0].resource->native==reinterpret_cast<void*>(uintptr_t(replaceExpected?6:5)),"real adapter substitution reaches original provider");
+ if(replaceExpected)Check(resources[0].lifecycle==sl::eOnlyValidNow,"replacement uses public volatile-copy contract");
+ if(changeProvider)VulkanNrStreamlineAdapter().Provider(9,true);
+ return failOriginal?sl::Result::eErrorInvalidParameter:sl::Result::eOk;
+}
+auto o_slSetTagForFrame=&Original;
+sl::Result PublicTags(const sl::FrameToken& frame,const sl::ViewportHandle& viewport,const sl::ResourceTag* resources,uint32_t numResources,sl::CommandBuffer* cmdBuffer){
+ auto renderApi=sl::RenderAPI::eVulkan;
+ // PUBLIC_VULKAN_TAG_BOUNDARY
+ return sl::Result::eErrorInvalidParameter;
+}
+namespace LedgerAdapter {
+auto setTags=&PublicTags;
+struct ProviderSnapshot { uint64_t generation = 1; };
+ProviderSnapshot Provider(){return {};}
+void ObserveTags(uint32_t frame,uint32_t viewport,uint64_t generation){++ledger;Check(frame==0&&viewport==0&&generation==1,"ledger identity preserved");}
+// PRODUCTION_LEDGER_TAGS
+}
+int main(){
+ auto& recordings=VulkanNrRecordings();auto cb=reinterpret_cast<VkCommandBuffer>(2);
+ recordings.OnAllocate(reinterpret_cast<VkDevice>(1),reinterpret_cast<VkCommandPool>(4),cb,0);
+ recordings.OnBegin(cb,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,VK_SUCCESS);
+ auto& adapter=VulkanNrStreamlineAdapter();adapter.Provider(8,true);
+ sl::Resource resource;resource.native=reinterpret_cast<void*>(5);resource.width=resource.height=64;resource.nativeFormat=VK_FORMAT_R8G8B8A8_UNORM;
+ sl::ResourceTag tag(&resource,sl::kBufferTypeHUDLessColor,sl::eValidUntilPresent);Token token;
+ Check(adapter.BeforeTags(&token,sl::ViewportHandle(0),{&tag,1},reinterpret_cast<sl::CommandBuffer*>(cb)).reason=="Vulkan FG has no successful options for this viewport","missing native options is reported at the executable tag boundary");
+ auto invoke=[&]{return LedgerAdapter::Tags(token,sl::ViewportHandle(0),&tag,1,reinterpret_cast<sl::CommandBuffer*>(cb));};
+ invoke();Check(forwards==1&&observations==1&&ledger==1,"native unqualified tag traverses both real hooks exactly once");
+ VkNrRecordedOutput output;output.use=*recordings.Reserve(cb,1);output.commandSerial=recordings.CommandSerial(cb);
+ output.frame.deviceGeneration=1;output.frame.routeEpoch=1;output.frame.queue=reinterpret_cast<VkQueue>(3);output.frame.output={64,64};
+ output.frame.temporal=VkNrTemporalMetadata{};output.frame.temporal->providerFrameKnown=true;output.frame.temporal->providerGeneration=8;
+ output.frame.temporal->viewport=0;output.frame.temporal->frameToken=0;output.gameInput=reinterpret_cast<VkImage>(5);
+ output.contentRevision=42;output.requestedPasses=output.completedPasses=2;output.memory=reinterpret_cast<VkDeviceMemory>(9);
+ output.resource.Type=NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW;auto& image=output.resource.Resource.ImageViewInfo;
+ image.Image=reinterpret_cast<VkImage>(6);image.ImageView=reinterpret_cast<VkImageView>(7);image.Format=VK_FORMAT_R8G8B8A8_UNORM;
+ image.Width=image.Height=64;image.SubresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+ adapter.LookupOutput([&](VkCommandBuffer command){Check(command==cb,"exact recording reaches producer");return std::optional(output);});
+ sl::DLSSGOptions options;options.mode=sl::DLSSGMode::eOn;options.numFramesToGenerate=1;options.enableUserInterfaceRecomposition=sl::eFalse;
+ options.queueParallelismMode=sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue;
+ sl::DLSSGState state;state.status=sl::DLSSGStatus::eOk;state.numFramesToGenerateMax=1;
+ adapter.Options(0,options,true);adapter.State(0,state,true);replaceExpected=true;
+ invoke();Check(forwards==2&&observations==2&&ledger==2,"qualified native pre-FG substitution and both observers execute once");
+ Check(VulkanNrFgContributions().AcceptedContributions()==1,"successful public copy accepts real contribution");
+ output.use=*recordings.Reserve(cb,1);++output.contentRevision;
+ failOriginal=true;invoke();Check(forwards==3&&observations==3&&ledger==2,"failed public tag publishes no success to ledger");
+ Check(VulkanNrFgContributions().AcceptedContributions()==1,"failed public copy is not accepted");
+ output.use=*recordings.Reserve(cb,1);++output.contentRevision;
+ failOriginal=false;changeProvider=true;invoke();Check(forwards==4&&observations==3,"generation change suppresses stale Present association");
+ std::puts("PASS actual dual tag hooks: native ingress, volatile substitution, one publication, failed return and stale generation");
+}

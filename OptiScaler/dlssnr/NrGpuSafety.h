@@ -79,6 +79,9 @@ bool CancelOwnedUnsubmittedRecording(ID3D12GraphicsCommandList* list,const Ticke
 // Reuse requires both GPU completion and Reset/destruction of the old recording, since a
 // closed list may be replayed. A reset of an unsubmitted list cancels that recording safely.
 bool Reusable(const Ticket& ticket);
+// Read-only owner identity for bounded diagnostic joins. Nonzero conveys no
+// submission, completion, retirement, resource access or reuse permission.
+uint64_t TicketIdentity(const Ticket& ticket);
 // Read-only handoff proof. Caller gates new work before querying; no tickets
 // are removed and no resources are released by this observation.
 bool CanYieldOutput();
@@ -140,6 +143,8 @@ class LocalRecordingAction
         ID3D12GraphicsCommandList*,ID3D12Resource*);
     friend std::unique_ptr<LocalRecordingAction> BeginLocalAction(const Ticket&,
         ID3D12GraphicsCommandList*,std::span<ID3D12Resource* const>);
+    friend std::unique_ptr<LocalRecordingAction> BorrowLocalAction(const LocalRecordingAction&,
+        std::span<ID3D12Resource* const>);
     struct Impl;
     std::unique_ptr<Impl> impl_;
     explicit LocalRecordingAction(std::unique_ptr<Impl>);
@@ -160,6 +165,13 @@ std::unique_ptr<LocalRecordingAction> BeginLocalAction(const Ticket& ticket,
 // One list borrow retaining each exact resource participating in an owned pass.
 std::unique_ptr<LocalRecordingAction> BeginLocalAction(const Ticket& ticket,
     ID3D12GraphicsCommandList* list,std::span<ID3D12Resource* const> resources);
+// Explicit subordinate use of this owner's exact recording. Each child retains
+// its own validated resource set and the same exclusive lease; either handle
+// may retire first. Ordinary Begin still refuses every already-active owner.
+// No child/lease may be retained in the recording ticket's GPU payloads.
+#define NR_GPU_EXPLICIT_LOCAL_BORROW_V1 1
+std::unique_ptr<LocalRecordingAction> BorrowLocalAction(const LocalRecordingAction& owner,
+    std::span<ID3D12Resource* const> resources);
 // GPU consumer ordering only, NOT permission to reuse/free. Exactly one observed submission,
 // on the consumer's queue; no CPU wait and no inferred cross-queue dependency.
 bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue);

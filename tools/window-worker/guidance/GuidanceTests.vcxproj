@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations"><ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration></ItemGroup>
+  <PropertyGroup Label="Globals"><ProjectGuid>{A580A0E5-9FBD-461F-972D-70C3A0DA10AD}</ProjectGuid><WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion><VCProjectVersion>17.0</VCProjectVersion></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><PlatformToolset>v145</PlatformToolset><UseDebugLibraries>false</UseDebugLibraries></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup><OutDir>$(MSBuildThisFileDirectory)..\..\..\builds\window-worker\guidance\</OutDir><IntDir>$(OutDir)intermediate\</IntDir><TargetName>GuidanceTests</TargetName></PropertyGroup>
+  <ItemDefinitionGroup><ClCompile><WarningLevel>Level4</WarningLevel><Optimization>MaxSpeed</Optimization><LanguageStandard>stdcpp20</LanguageStandard><PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NOMINMAX;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions><RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary><ExceptionHandling>Sync</ExceptionHandling><AdditionalIncludeDirectories>..\..\..\apps\NeuRoticWindowWorker\guidance\vendor;..\..\..\external\nlohmann;..\..\..\builds\depth-anything-v2\shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile><Link><AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;bcrypt.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies><SubSystem>Console</SubSystem></Link></ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="..\..\..\tests\window-worker\GuidanceTests.cpp"/><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\guidance\GuidanceHost.cpp"/><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\nr\NrPolicy.cpp"/><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\guidance\dav2\Dav2Host.cpp"/><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\guidance\dav2\Dav2Module.cpp"/></ItemGroup>
+  <Target Name="DepthShaders" BeforeTargets="ClCompile"><Exec Command="&quot;$(MSBuildThisFileDirectory)..\..\depth-anything-v2\Build-Shaders.cmd&quot;" /></Target>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

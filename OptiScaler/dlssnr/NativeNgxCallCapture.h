@@ -1,4 +1,5 @@
 #pragma once
+#include <nr/d3d12/NativeRecordingInterfaces.h>
 #include "NativeIdentity.h"
 #include "StreamlineSourceScope.h"
 #include <inputs/universal_feeder/PreparedNgxOrigin.h>
@@ -44,6 +45,7 @@ class NativeNgxCallCapture
     std::array<std::optional<float>,floatKeys.size()> floats_;
     std::array<ResourceCapture,resourceKeys.size()> resources_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list_;
+    std::shared_ptr<const Neurotic::D3D12::NativeRecordingInterfaces> recordingInterfaces_;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     std::shared_ptr<const StreamlineSourceScope::Observation> sourceFrame_;
     bool preparedSource_=false;
@@ -61,6 +63,10 @@ class NativeNgxCallCapture
             // Capture the actual enclosing API call before any parameter-owner
             // Get can reenter. This observation is not a canonical game frame.
             capture->sourceFrame_=StreamlineSourceScope::CaptureFor(capture->list_.Get());
+            auto recordingInterfaces=std::make_shared<const Neurotic::D3D12::NativeRecordingInterfaces>(
+                Neurotic::D3D12::NativeRecordingInterfaces::Resolve(capture->list_.Get()));
+            if(SUCCEEDED(recordingInterfaces->result)&&recordingInterfaces->terminal)
+                capture->recordingInterfaces_=std::move(recordingInterfaces);
             capture->preparedSource_=Neurotic::Feed::DeclaresPreparedNgxSource(parameters,success);
             for(std::size_t i=0;i<integerKeys.size();++i)
             {unsigned value=0;if(parameters->Get(integerKeys[i],&value)==success)capture->integers_[i]=value;}
@@ -175,6 +181,12 @@ class NativeNgxCallCapture
         if(FAILED(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO,&info,sizeof(info)))||info.PlaneCount!=1)
             return {};
         return CallerOutputRegionValue{output,x,y,width,height,0,description->Format};
+    }
+    bool MatchesRecordingInterfaces(const std::shared_ptr<const Neurotic::D3D12::NativeRecordingInterfaces>& value)const noexcept
+    {
+        return value&&recordingInterfaces_&&value->caller.Get()==list_.Get()&&
+            recordingInterfaces_->caller.Get()==value->caller.Get()&&
+            recordingInterfaces_->terminal.Get()==value->terminal.Get();
     }
     ID3D12GraphicsCommandList* CommandList()const noexcept{return list_.Get();}
     ID3D12Device* Device()const noexcept{return device_.Get();}

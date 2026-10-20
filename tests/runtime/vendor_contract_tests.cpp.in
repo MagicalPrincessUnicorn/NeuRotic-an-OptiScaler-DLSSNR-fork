@@ -1,0 +1,113 @@
+#include <Windows.h>
+#include <algorithm>
+#include <atomic>
+#include <cstdio>
+#include <fstream>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+#include "runtime/NgxCallGate.h"
+#include "runtime/BoundedFileSearch.h"
+#include "inputs/FG/FgOwnerScope.h"
+int failures=0,checks=0;
+void check(bool ok,const char* message){++checks;if(!ok){++failures;std::printf("FAIL: %s\n",message);}}
+enum class API{DX12};
+constexpr int NVSDK_NGX_Result_Success=0;
+using NVSDK_NGX_Result=int;
+constexpr int NVSDK_NGX_Result_FAIL_PlatformError=9;
+struct NVSDK_NGX_Handle{int id=1;};
+static int releaseResult=0,releaseCalls=0;
+static bool releaseAvailable=true;
+int NativeRelease(NVSDK_NGX_Handle*){++releaseCalls;return releaseResult;}
+struct NVNGXProxy{static auto D3D12_ReleaseFeature(){return releaseAvailable?&NativeRelease:nullptr;}};
+struct DLSSFeatureDx12{NVSDK_NGX_Handle* _p_dlssHandle=nullptr;bool initialized=true;void SetInit(bool value){initialized=value;}NVSDK_NGX_Result ReleaseProvider();};
+struct DLSSDFeatureDx12{NVSDK_NGX_Handle* _p_dlssdHandle=nullptr;bool initialized=true;void SetInit(bool value){initialized=value;}NVSDK_NGX_Result ReleaseProvider();};
+// RELEASE_FUNCTIONS
+enum class FG_ResourceValidity{ValidNow,UntilPresent,ValidButMakeCopy};
+struct PublishResource{void* cmdList=nullptr;FG_ResourceValidity validity=FG_ResourceValidity::ValidNow;};
+struct PublishProvider{
+ bool copied=false,called=false,result=true;
+ bool SetResource(PublishResource* r){called=true;copied=r->validity==FG_ResourceValidity::ValidButMakeCopy;return result;}
+};
+struct PublishFixture{
+ bool _haveConstants=false;PublishResource res;PublishProvider* fgOutput;
+ bool Publish(){
+  // PUBLISH_FUNCTION
+  return publish();
+ }
+};
+struct NVSDK_NGX_Parameter {
+ std::map<std::string,unsigned> values;
+ virtual ~NVSDK_NGX_Parameter()=default;
+ int Get(const char* key,unsigned* value)const{auto it=values.find(key);if(it==values.end())return 1;*value=it->second;return 0;}
+ void Set(const char* key,unsigned value){values[key]=value;}
+};
+struct NVNGX_Parameters:NVSDK_NGX_Parameter{NVNGX_Parameters(API,bool){}};
+// SCHEMA_DEFINES
+// SCHEMA_FUNCTION
+struct Recording {bool complete=false,sealed=false;};
+namespace DlssNr::GpuSafety {bool Reusable(const std::shared_ptr<Recording>& p){return !p || (p->complete&&p->sealed);}}
+struct Feature {
+ bool _unobservedUse=false;std::vector<std::shared_ptr<Recording>> _recordedUses;
+ // RETIRE_FUNCTION
+};
+struct ImGuiToast {int id;};
+namespace NotificationFixture {
+ // NOTIFICATION_STORAGE
+ // NOTIFICATION_INSERT
+}
+int main(){
+ PublishProvider provider;PublishFixture pending{false,{&provider,FG_ResourceValidity::ValidNow},&provider};
+ check(pending.Publish()&&provider.called&&provider.copied,"pre-constants short-lived source is copied synchronously inside tag call");
+ provider={};pending._haveConstants=true;pending.res.validity=FG_ResourceValidity::ValidNow;
+ check(pending.Publish()&&provider.called&&!provider.copied,"constants-first route preserves ordinary immediate resource contract");
+ provider={};pending._haveConstants=false;pending.res={nullptr,FG_ResourceValidity::UntilPresent};
+ check(pending.Publish()&&!provider.copied&&pending.res.validity==FG_ResourceValidity::UntilPresent,"no-list UntilPresent tag retains only original lifetime rights");
+ provider.result=false;check(!pending.Publish(),"copy/tag failure propagates for eligibility revocation");
+ NVSDK_NGX_Handle nativeHandle;
+ DLSSFeatureDx12 sr;DLSSDFeatureDx12 rr;sr._p_dlssHandle=&nativeHandle;rr._p_dlssdHandle=&nativeHandle;
+ releaseResult=17;
+ check(sr.ReleaseProvider()==17&&sr._p_dlssHandle==&nativeHandle&&sr.initialized,"SR release failure retains handle and initialized state");
+ check(rr.ReleaseProvider()==17&&rr._p_dlssdHandle==&nativeHandle&&rr.initialized,"RR release failure retains handle and initialized state");
+ releaseAvailable=false;
+ check(sr.ReleaseProvider()==9&&sr._p_dlssHandle==&nativeHandle,"missing release entry retains handle");
+ releaseAvailable=true;releaseResult=0;
+ check(sr.ReleaseProvider()==0&&!sr._p_dlssHandle&&!sr.initialized,"successful SR retry consumes handle exactly once");
+ check(rr.ReleaseProvider()==0&&!rr._p_dlssdHandle&&!rr.initialized,"successful RR retry consumes handle exactly once");
+ auto released=releaseCalls;check(sr.ReleaseProvider()==0&&rr.ReleaseProvider()==0&&releaseCalls==released,"destructor retry cannot double-release cleared handles");
+ NVSDK_NGX_Parameter borrowed;
+ for(auto key:{NVSDK_NGX_Parameter_Width,NVSDK_NGX_Parameter_Height,NVSDK_NGX_Parameter_OutWidth,NVSDK_NGX_Parameter_OutHeight,NVSDK_NGX_Parameter_PerfQualityValue,NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags})borrowed.Set(key,17u);
+ borrowed.Set("DLSS.Denoise.Mode",3u);borrowed.Set("RayReconstruction.Hint.Render.Preset.Quality",7u);
+ auto owned=SnapshotCreateParameters(borrowed);borrowed.values.clear();unsigned value=0;
+ check(owned&&owned->Get(NVSDK_NGX_Parameter_Width,&value)==0&&value==17,"snapshot survives caller mutation");
+ check(owned->Get("DLSS.Denoise.Mode",&value)==0&&value==3,"RR denoise field retained");
+ check(owned->Get("RayReconstruction.Hint.Render.Preset.Quality",&value)==0&&value==7,"RR preset retained");
+ check(owned->Get("DLSS.Use.HW.Depth",&value)!=0,"absent optional field remains absent");
+ check(!SnapshotCreateParameters(borrowed),"missing required fields reject snapshot");
+ Feature f;check(f.CanRetire(),"observed empty feature can retire");
+ auto use=std::make_shared<Recording>();f._recordedUses.push_back(use);
+ check(!f.CanRetire(),"unsubmitted executable recording retains feature without timer");
+ use->complete=true;check(!f.CanRetire(),"completed replayable recording retains feature");
+ use->sealed=true;check(f.CanRetire(),"exact completion and nonreplayability permit retirement");
+ f._recordedUses.push_back({});check(!f.CanRetire(),"null ticket is not release proof");
+ f._recordedUses.clear();f._unobservedUse=true;check(!f.CanRetire(),"unobserved work remains retained");
+ {Neurotic::Runtime::NgxCallLease lease;check(bool(lease),"vendor operation admitted");Neurotic::Runtime::NgxCallLease nested;check(!nested,"new reentrant provider operation refused");}
+ std::atomic<int> active=0,maximum=0;
+ auto work=[&]{for(int i=0;i<100;++i){Neurotic::Runtime::NgxCallLease lease;if(!lease){++failures;return;}int count=++active;maximum.store(std::max(maximum.load(),count));std::this_thread::yield();--active;}};
+ std::thread a(work),b(work);a.join();b.join();check(maximum==1,"independent native calls serialize");
+ {Neurotic::Runtime::FgOwnerTransition transition;check(bool(transition)&&Neurotic::Runtime::FgOwnerChanging(),"FG teardown closes feeder admission");}
+ check(!Neurotic::Runtime::FgOwnerChanging(),"FG teardown guard restores admission");
+ NotificationFixture::notifications.push_back({41});auto* held=&NotificationFixture::notifications[0];
+ std::thread producer([]{for(int i=0;i<2000;++i)NotificationFixture::InsertNotification({i});});producer.join();
+ check(held==&NotificationFixture::notifications[0]&&held->id==41&&NotificationFixture::notifications.size()==1,"producer cannot invalidate render pointer");
+ check(NotificationFixture::pendingNotifications.size()==2000,"producer copies retained for render drain");
+ std::filesystem::path root="discovery-fixture";std::filesystem::create_directories(root/"a");std::ofstream(root/"a"/"provider.dll")<<"fixture";
+ auto found=Neurotic::Runtime::FindDependency(root,"provider.dll",[](const auto&){return true;});check(found&&*found==root/"a"/"provider.dll","bounded search finds ordinary nested dependency");
+ check(!Neurotic::Runtime::FindDependency(root,"../provider.dll",[](const auto&){return true;}),"search rejects traversing filename");
+ auto deep=root;for(int i=0;i<10;++i)deep/="deep";std::filesystem::create_directories(deep);std::ofstream(deep/"hidden.dll")<<"fixture";
+ check(!Neurotic::Runtime::FindDependency(root,"hidden.dll",[](const auto&){return true;}),"search obeys depth budget");
+ std::printf("Vendor contracts: %d checks, %d failures\n",checks,failures);return failures?1:0;
+}

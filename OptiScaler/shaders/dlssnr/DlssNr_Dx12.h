@@ -1,4 +1,6 @@
 #pragma once
+#include <dlssnr/NativeSelectedUse.h>
+namespace DlssNr { class LegacyPostEffectContext; }
 
 // The composition pass for Neural Rendering.
 //
@@ -79,7 +81,10 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
                   bool nativePreSrRoute = false,
                   Neurotic::Protocol::NativeExecutionObserver* observer = nullptr,
                   DlssNr::NativeRendererInvocationBorrow* rendererBorrow = nullptr,
-                  unsigned int* completedPasses = nullptr, bool* preparationRecorded = nullptr);
+                  unsigned int* completedPasses = nullptr, bool* preparationRecorded = nullptr,
+                  const D3D12_RESOURCE_STATES* explicitOutputArrival = nullptr,
+                  DlssNr::NativeSelectedUse::Witness* selectedUse = nullptr,
+                  DlssNr::LegacyPostEffectContext* insertion = nullptr);
 
     // Records one pass. Resources that a given mode does not read may be null; a stand-in is bound in
     // their place so every descriptor in the table is valid.
@@ -91,5 +96,6 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
                   // nothing reads it now and every caller passes nullptr. Kept only so the binding
                   // table keeps its shape -- not evidence that temporal accumulation exists.
                   ID3D12Resource* InPrevEdit, ID3D12Resource* OutTarget,
-                  ID3D12Resource* OutKeep, DlssNr::NativeDispatchOutcome* outcome = nullptr);
+                  ID3D12Resource* OutKeep, DlssNr::NativeDispatchOutcome* outcome = nullptr,
+                  DlssNr::LegacyPostEffectContext* insertion = nullptr);
 };

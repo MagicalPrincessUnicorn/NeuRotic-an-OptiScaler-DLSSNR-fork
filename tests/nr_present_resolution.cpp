@@ -1,4 +1,7 @@
+#include <iostream>
 #include "../OptiScaler/dlssnr/DlssNr_PresentResolution.h"
+#include "../OptiScaler/dlssnr/DlssNr_PresentInputPolicy.h"
+#include "../OptiScaler/dlssnr/DlssNr_PresentInputDecision.h"
 #include "../OptiScaler/dlssnr/DlssNr_PresentHistory.h"
 #include "../OptiScaler/dlssnr/DlssNr_MenuStatus.h"
 #include "../OptiScaler/dlssnr/DlssNr_StageUi.h"
@@ -22,6 +25,7 @@ struct Config
     NrOptional<bool> DlssNrRunBeforeSr {false}, DlssNrUiManualResolution {false};
     NrOptional<float> DlssNrWorkingScale {1.0f}, DlssNrUiManualScale {1.0f};
     NrOptional<uint32_t> DlssNrRoute {2};
+    NrOptional<uint32_t> DlssNrPresentInputPolicy {2};
     NrOptional<uint32_t> DlssNrPresentResolution {1}, DlssNrPresentCustomScale {0};
     NrOptional<uint32_t> DlssNrEnhancedResolution {0}, DlssNrEnhancedCustomScale {0};
 };
@@ -35,6 +39,89 @@ void Load(CSimpleIniA& ini, Config& cfg)
 }
 int main()
 {
+    namespace I = DlssNr::PresentInput;
+    assert(I::Resolve(std::nullopt, 1, true) == I::Policy::ImageOnly);
+    assert(I::Resolve(std::nullopt, 2, true) == I::Policy::RequireGuides);
+    assert(I::Resolve(std::nullopt, 2, false) == I::Policy::AutoGuides);
+    assert(I::Resolve(2u, 1, true) == I::Policy::AutoGuides);
+    assert(I::Resolve(99u, 2, true) == I::Policy::Invalid);
+    {
+        namespace D = DlssNr::PresentInputDecision;
+        const auto requested = R::Policy{R::FollowNative, 0};
+        const auto guided = D::Choose(I::Policy::AutoGuides, true, true, requested);
+        assert(guided.input == D::InputClass::Guided && guided.resolution.mode == R::FollowNative);
+        const auto missing = D::Choose(I::Policy::AutoGuides, false, false, requested);
+        assert(missing.input == D::InputClass::ImageOnly && missing.resolution.mode == R::FullOutput &&
+               missing.workloadFallback);
+        // Returned FG capture: alternating fresh Native metadata and image-only
+        // fallback must not toggle 1704x960 <-> 2560x1440 and rebuild every frame.
+        // The caller supplies only a workload from the same live resource context.
+        auto allocated = R::Resolve(guided.resolution, 2560, 1440, 1706, 960);
+        unsigned rebuilds = 0;
+        for (unsigned frame = 0; frame < 1000; ++frame)
+        {
+            const auto choice = frame % 2 ? guided : missing;
+            const auto workload = D::ResolveWorkload(choice, 2560, 1440, 1706, 960, allocated);
+            const auto next = workload.size;
+            assert(workload.retained == (frame % 2 == 0));
+            assert(choice.input == (frame % 2 ? D::InputClass::Guided : D::InputClass::ImageOnly));
+            rebuilds += next.width != allocated.width || next.height != allocated.height;
+            allocated = next;
+        }
+        if (rebuilds != 0)
+        {
+            std::cerr << "FAIL: missing Native metadata caused " << rebuilds
+                      << " workload rebuilds after a valid matched allocation\n";
+            return 1;
+        }
+        // No allocation or invalidated owner/generation: caller withholds admitted.
+        const auto cold = D::ResolveWorkload(missing, 2560, 1440, 0, 0);
+        assert(!cold.retained && cold.size.width == 2560 && cold.size.height == 1440);
+        for (const auto bad : {R::Size{0,0}, R::Size{7,960}, R::Size{1704,0},
+                              R::Size{3000,960}, R::Size{1704,2000}, R::Size{1704,960,"invalid"}})
+            assert(!D::ResolveWorkload(missing, 2560, 1440, 0, 0, bad).retained);
+        const auto changed = D::ResolveWorkload(guided, 2560, 1440, 1280, 720, allocated);
+        assert(!changed.retained && changed.size.width == 1280 && changed.size.height == 720);
+        const auto malformed = D::ResolveWorkload(guided, 2560, 1440, 4000, 960, allocated);
+        assert(malformed.size.reason && !malformed.retained);
+        for (const auto request : {R::Policy{R::FullOutput,0}, R::Policy{R::Manual,50}})
+        {
+            const auto selected = D::Choose(I::Policy::AutoGuides, false, false, request);
+            const auto work = D::ResolveWorkload(selected, 2560, 1440, 0, 0, allocated);
+            assert(!work.retained);
+            assert(work.size.width == (request.mode == R::Manual ? 1280u : 2560u));
+        }
+        const auto strict = D::Choose(I::Policy::RequireGuides, false, false, requested);
+        assert(strict.input == D::InputClass::Refused);
+        assert(D::ResolveWorkload(strict,2560,1440,0,0,allocated).size.width == 0);
+        const auto invalid = D::Choose(I::Policy::Invalid, true, true, requested);
+        assert(invalid.input == D::InputClass::Refused);
+        const auto legacy = D::Choose(I::Policy::ImageOnly, true, true, requested);
+        assert(legacy.input == D::InputClass::ImageOnly && legacy.resolution.mode == R::FollowNative);
+        assert(D::ChangesHistory(D::InputClass::Guided, D::InputClass::ImageOnly));
+        assert(D::ChangesHistory(D::InputClass::ImageOnly, D::InputClass::Guided));
+        assert(!D::ChangesHistory(D::InputClass::ImageOnly, D::InputClass::ImageOnly));
+    }
+    {
+        Config legacy; legacy.DlssNrRoute = 1u;
+        I::LoadConfig(legacy, std::nullopt, false, true);
+        assert(I::Selected(legacy) == I::Policy::ImageOnly);
+        const auto oldImage = legacy.DlssNrPresentResolution.value_or_default();
+        const auto oldEnhanced = legacy.DlssNrEnhancedResolution.value_or_default();
+        CSimpleIniA viewOnly;
+        assert(viewOnly.GetValue("DlssNr", "PresentInputPolicy") == nullptr);
+        assert(legacy.DlssNrPresentResolution.value_or_default() == oldImage &&
+               legacy.DlssNrEnhancedResolution.value_or_default() == oldEnhanced);
+        legacy.DlssNrPresentInputPolicy = 2u;
+        I::SaveConfig(viewOnly, legacy);
+        assert(viewOnly.GetLongValue("DlssNr", "PresentInputPolicy") == 2);
+        Config future; future.DlssNrRoute = 2u;
+        I::LoadConfig(future, 99u, true, true);
+        assert(I::Selected(future) == I::Policy::Invalid);
+        Config malformed; malformed.DlssNrRoute = 2u;
+        I::LoadConfig(malformed, std::nullopt, true, true);
+        assert(I::Selected(malformed) == I::Policy::Invalid);
+    }
     namespace U = DlssNr::StageUi;
     for (uint32_t route : {1u, 2u})
     {
@@ -55,7 +142,10 @@ int main()
     {
         Config native; native.DlssNrRoute = 0u; native.DlssNrRenderingMode = 1;
         assert(U::ResolutionRefusal(native, 0) && !U::ResolutionRefusal(native, 1));
-        assert(U::NativePlacementRefusal(native, true) && !U::NativePlacementRefusal(native, false));
+        assert(!U::NativePlacementRefusal(native, true) && !U::NativePlacementRefusal(native, false));
+        native.DlssNrUiManualResolution = true;
+        assert(U::NativePlacementRefusal(native, true)); // Legacy before-Manual stays explicitly described.
+        native.DlssNrUiManualResolution = false;
         U::SelectResolutionChoice(native, 0);
         assert(native.DlssNrRenderingMode.value_or_default() == 1 && native.DlssNrWorkingScale.value_or_default() == 1);
         native.DlssNrRenderingMode = 0;
@@ -120,6 +210,9 @@ int main()
     assert(R::Resolve({R::Manual, 201}, 1920, 1080).reason);
     assert(R::Resolve({R::Manual, 24}, 1920, 1080).reason);
     assert(R::CaptureKey(preview) != 0);
+    const auto captureKey = R::CaptureKey(preview);
+    preview.DlssNrPresentInputPolicy = 0u;
+    assert(R::CaptureKey(preview) != captureKey);
     for (int method = 0; method < 3; ++method)
     for (int preset = 0; preset < 7; ++preset)
     for (float working : {0.25f, 0.67f, 1.0f, 1.75f, 2.0f})

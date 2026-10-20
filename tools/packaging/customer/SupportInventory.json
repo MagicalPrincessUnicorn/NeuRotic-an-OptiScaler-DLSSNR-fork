@@ -1,0 +1,11 @@
+{
+ "schema_version":1,
+ "files":[
+  "NeuRotic-InstallReceipt.ps1","NeuRotic-LegacyReceipt.ps1","NeuRotic-Uninstall.ps1","NeuRotic-Game-Uninstall.cmd",
+  "NeuRotic-InstallDefaults.ps1","NeuRotic-InstallProfiles.ps1","NeuRotic-LoggingPolicy.ps1","NeuRotic-RenderingRequirements.json","NeuRotic-InstallCore.ps1",
+  "NeuRotic-SimpleFileIo.cs","NeuRotic-GameCatalog.json","NeuRotic-Setup-Engine.ps1","NeuRotic-Prerequisites.ps1",
+  "NeuRotic-RuntimeFiles.ps1","NeuRotic-HubProtocol.ps1","NeuRotic-HubSettings.ps1","NeuRotic-ObjectRules.ps1",
+  "object-rules-v1.schema.json","NeuRotic-HubJson.cs","NeuRotic-HubAntiCheat.ps1","NeuRotic-AntiCheatCollector.cs",
+  "NeuRotic-AntiCheatPolicy.ps1","NeuRotic-AntiCheatProviders.json","neurotic_anticheat_rules.json","exe_names.txt","Collect-NR-Review.ps1"
+ ]
+}

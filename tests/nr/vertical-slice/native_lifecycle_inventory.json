@@ -1,0 +1,68 @@
+{
+  "work_order": "W03-SP08-COMPOSITE",
+  "suites": {
+    "native-lifecycle": [
+      {
+        "id": "T30.native-integrated-produced",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T30.native-integrated-three-rechecks",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.native-contribution-not-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.native-integrated-no-second-call",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.native-order-before-cpu-completion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.native-replay-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.native-cross-device-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.native-held-read-not-write",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.native-model-read-needs-provider-retention",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.native-gpu-operation-not-cpu-borrow",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.native-model-output-needs-provider-retention",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.native-mid-call-revocation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T30.native-unobserved-composition",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.native-reset-argument-not-overwritable",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "native-lifecycle": {
+      "emitted_suite": "native-lifecycle"
+    }
+  }
+}

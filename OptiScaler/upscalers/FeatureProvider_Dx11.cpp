@@ -146,6 +146,7 @@ bool FeatureProvider_Dx11::ChangeFeature(Upscaler upscaler, ID3D11Device* device
             LOG_INFO("changing backend to {0}", UpscalerDisplayName(state.newBackend));
 
             auto* dc = contextData->feature.get();
+            dc->RevokeNativeTemporal();
             // Use given params if using DLSS passthrough
             //
             // DLSS_on12 belongs here for the same reason the other two do: it is DLSS underneath, and
@@ -208,6 +209,8 @@ bool FeatureProvider_Dx11::ChangeFeature(Upscaler upscaler, ID3D11Device* device
             LOG_ERROR("Upscaler can't created");
             return false;
         }
+
+        contextData->feature->SetNativeTemporalSuperSampling(contextData->nativeTemporalSuperSampling);
 
         return true;
     }

@@ -6,6 +6,7 @@
 #include "../../../OptiScaler/dlssnr/NativeProviderEntry.h"
 #include "../../../OptiScaler/shaders/dlssnr/precompile/DlssNr_Shader.h"
 #include "NrPolicy.h"
+#include "../capture/CaptureColor.h"
 #include <WindowNrForwarderIdentity.h>
 #include <array>
 #include <chrono>
@@ -156,6 +157,7 @@ struct NrHost::Impl
     uint64_t historyEpoch=0;
     std::string adapterLuid;
     FrameStamp previous;
+    color::Representation resourceColor=color::DeclaredSdr(); // direct internal SDR resource fixtures; Process replaces with actual admitted capture
     bool previousEstimated = false;
     bool previousRawDepth = false, previousDepthReversed = false;
     UINT previousGuideWidth = 0, previousGuideHeight = 0;
@@ -211,7 +213,7 @@ struct NrHost::Impl
     DlssNr::FeatureReleaseAttempt releaseAttempt;
     bool ObserveCanonical()
     {
-        return package.Observe(nullptr,true) && package.MatchesReviewedProvider() && package.ObservedProviderModule();
+        return package.Observe(nullptr,true) && package.ObservedProviderModule();
     }
     ~Impl()
     {
@@ -493,7 +495,7 @@ struct NrHost::Impl
         td.Width = w;
         td.Height = h;
         td.MipLevels = td.ArraySize = 1;
-        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        td.Format = color::TextureFormat(resourceColor);
         td.SampleDesc.Count = 1;
         td.Usage = D3D11_USAGE_DEFAULT;
         td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
@@ -516,7 +518,7 @@ struct NrHost::Impl
         model = Texture(ww, wh, DXGI_FORMAT_R16G16B16A16_FLOAT);
         outputView.Reset();output11.Reset();
         output = {};
-        td.Format=DXGI_FORMAT_R8G8B8A8_UNORM;td.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+        td.Format=color::SharedOutputFormat(resourceColor);td.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
         require(d11->CreateTexture2D(&td,nullptr,&output11),"Create interoperable GPU output");
         ComPtr<IDXGIResource1> sharedOutputResource;
         require(output11.As(&sharedOutputResource),"GPU output sharing interface");
@@ -533,19 +535,23 @@ struct NrHost::Impl
         readback = Buffer(readbackBytes, D3D12_HEAP_TYPE_READBACK);
 #endif
     }
-    void Shape(UINT w, UINT h)
+    void Shape(UINT w, UINT h, const color::Representation& representation)
     {
         const auto [ww,wh] = detail::WorkingExtent(options,w,h);
         std::string admission;
-        if (!detail::AdmitShape(w, h, ww, wh, admission))
+        if (!detail::AdmitShape(w, h, ww, wh, admission,color::Hdr(representation)))
             throw std::runtime_error(admission);
-        if (width == w && height == h && workWidth == ww && workHeight == wh && !recreateFeature)
-            return;
+        const bool sameRecipe=color::Valid(resourceColor)&&resourceColor.storage==representation.storage&&resourceColor.domain==representation.domain&&resourceColor.recipe==representation.recipe;
+        if (width == w && height == h && workWidth == ww && workHeight == wh && !recreateFeature&&sameRecipe){
+            if(resourceColor.epoch!=representation.epoch)previous={}; // same physical recipe, fresh source history
+            resourceColor=representation;return;
+        }
         if (!Drain() || !ReleaseFeature())
         {
             poisoned = true;
             throw std::runtime_error("Previous model generation retirement unproved; quarantined");
         }
+        resourceColor=representation;
         Resources(w, h, ww, wh);
         Begin();
         providerEntered = true;
@@ -561,7 +567,7 @@ struct NrHost::Impl
         if (!actual || std::strcmp(actual, DlssNr::Feature18HostContractIdentity))
         {
             poisoned = true;
-            throw std::runtime_error("Exact provider host-recorded contract unavailable");
+            throw std::runtime_error("NeuRotic host adapter contract unavailable");
         }
         Submit();
         recreateFeature=false;
@@ -577,9 +583,16 @@ struct NrHost::Impl
         require(d11.As(&dxgi), "Query capture adapter");
         require(dxgi->GetAdapter(&adapter), "Capture adapter");
         DXGI_ADAPTER_DESC adapterDesc{};
-        if(SUCCEEDED(adapter->GetDesc(&adapterDesc)))adapterLuid=std::to_string(uint32_t(adapterDesc.AdapterLuid.HighPart))+":"+std::to_string(adapterDesc.AdapterLuid.LowPart);
+        require(adapter->GetDesc(&adapterDesc),"Read actual capture adapter identity");
         require(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d12)),
                 "Create D12 owner on capture adapter");
+        const auto actualLuid=d12->GetAdapterLuid();
+        const adapters::Identity captureIdentity{adapterDesc.AdapterLuid.LowPart,adapterDesc.AdapterLuid.HighPart,true};
+        const adapters::Identity processingIdentity{actualLuid.LowPart,actualLuid.HighPart,true};
+        if(captureIdentity!=processingIdentity)throw std::runtime_error("D11 capture and D12 inference adapters differ.");
+        if(options.processingAdapter.known&&!adapters::PinnedMatch(options.processingAdapter,processingIdentity,options.processingSession,options.processingSession))
+            throw std::runtime_error("NR processing adapter differs from the selected session.");
+        adapterLuid=adapters::IdentityText(processingIdentity);
         D3D12_COMMAND_QUEUE_DESC qd{};
         qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         require(d12->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue)), "Create private NR queue");
@@ -627,9 +640,8 @@ struct NrHost::Impl
         options = requested;
         modelDirectories.Open(std::filesystem::path(options.modelPath).parent_path());
         modelFile = std::make_unique<LockedFile>(options.modelPath);
-        if (_wcsicmp(std::filesystem::path(options.modelPath).filename().c_str(), L"nvngx_dlssnr.dll") ||
-            modelFile->bytes != Members[4].bytes || modelFile->hash != Members[4].sha256)
-            throw std::runtime_error("Exact canonical DLSS NR file required (size/SHA-256 mismatch)");
+        if (_wcsicmp(std::filesystem::path(options.modelPath).filename().c_str(), L"nvngx_dlssnr.dll"))
+            throw std::runtime_error("Select nvngx_dlssnr.dll");
         forwarderDirectories.Open(std::filesystem::path(options.forwarderPath).parent_path());
         forwarderFile = std::make_unique<LockedFile>(options.forwarderPath);
         if (_wcsicmp(std::filesystem::path(options.forwarderPath).filename().c_str(),
@@ -650,7 +662,7 @@ struct NrHost::Impl
         forwarder = LoadLibraryExW(options.forwarderPath.c_str(), nullptr,
                                    LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!forwarder)
-            throw std::runtime_error("Standalone NR forwarder failed to load");
+            throw std::runtime_error("Standalone NR forwarder failed to load: Windows error " + std::to_string(GetLastError()));
         if (!SamePath(modulePath(forwarder), options.forwarderPath))
             throw std::runtime_error("Loaded forwarder identity differs from selection");
         create = symbol<CreateFn>(forwarder, "dlssnr_call_create");
@@ -659,10 +671,13 @@ struct NrHost::Impl
         shutdown = symbol<decltype(shutdown)>(forwarder, "dlssnr_call_shutdown");
         contract = symbol<decltype(contract)>(forwarder, "dlssnr_call_host_recorded_contract_v1");
         auto probe = symbol<int(__cdecl *)(const wchar_t *)>(forwarder, "dlssnr_call_probe_d3d12");
-        if (probe(options.modelPath.c_str()) != 31 || !ObserveCanonical())
-            throw std::runtime_error("Exact loaded canonical provider path/bytes or D12 exports refused");
+        const int exportMask=probe(options.modelPath.c_str());
+        if(exportMask!=31)
+            throw std::runtime_error("Selected DLL D3D12 exports unavailable: mask=" + std::to_string(exportMask));
+        if(!ObserveCanonical())
+            throw std::runtime_error("Selected DLL identity observation failed: " + package.Error());
         if (!contract() || std::strcmp(contract(), DlssNr::Feature18HostContractIdentity))
-            throw std::runtime_error("Provider recording contract differs from reviewed ABI");
+            throw std::runtime_error("NeuRotic host adapter ABI mismatch");
         wchar_t coreRoot[32768]{};
         DWORD bytes = sizeof(coreRoot);
         DWORD type = 0;
@@ -747,11 +762,11 @@ struct NrHost::Impl
         auto slot=outputs.TryAcquire();
         if(!slot)throw std::runtime_error("Output frame ring busy; latest frame dropped");
         if(slot->texture) {
-            D3D11_TEXTURE2D_DESC previous{};slot->texture->GetDesc(&previous);
-            if(previous.Width!=td.Width||previous.Height!=td.Height||previous.Format!=td.Format) {slot->target.Reset();slot->texture.Reset();}
+            D3D11_TEXTURE2D_DESC previousDescriptor{};slot->texture->GetDesc(&previousDescriptor);
+            if(previousDescriptor.Width!=td.Width||previousDescriptor.Height!=td.Height||previousDescriptor.Format!=td.Format) {slot->target.Reset();slot->texture.Reset();}
         }
         if(!slot->texture) {
-            require(d11->CreateTexture2D(&td,nullptr,&slot->texture),"Create owned BGRA output slot");
+            require(d11->CreateTexture2D(&td,nullptr,&slot->texture),"Create owned matching-color output slot");
             require(d11->CreateRenderTargetView(slot->texture.Get(),nullptr,&slot->target),"GPU publication render target");
         }
         slot->stamp=publication.stamp;
@@ -770,7 +785,7 @@ struct NrHost::Impl
         if (fixtureFailEgressSignal)
             require(E_FAIL, "Injected egress signal failure");
 #endif
-        require(c114->Signal(ingress11.Get(), ++ingressValue), "Signal completed BGRA upload");
+        require(c114->Signal(ingress11.Get(), ++ingressValue), "Signal completed color publication");
         c11->Flush();
         if (ingress11->GetCompletedValue() == UINT64_MAX ||
             (ingress11->GetCompletedValue() < ingressValue &&
@@ -791,7 +806,7 @@ struct NrHost::Impl
     NrResult Process(const CapturedFrame &frame, const GuideResult *guides,FrameProbe* probe=nullptr)
     {
         NrResult r;
-        r.stamp = frame.stamp;
+        r.stamp = frame.stamp;r.color=frame.color;
         r.measurements.adapterLuid=adapterLuid;
         auto start = std::chrono::steady_clock::now();
         try
@@ -801,6 +816,7 @@ struct NrHost::Impl
             if (!frame.texture || !frame.stamp.session || !frame.stamp.sequence || !frame.stamp.width ||
                 !frame.stamp.height || !frame.stamp.timestampQpc)
                 throw std::runtime_error("Stamped owned capture required");
+            if(options.processingSession&&frame.stamp.session!=options.processingSession)throw std::runtime_error("Capture belongs to a different processing session.");
             ComPtr<ID3D11Device> frameDevice;
             frame.texture->GetDevice(&frameDevice);
             if (frameDevice.Get() != d11.Get())
@@ -808,17 +824,18 @@ struct NrHost::Impl
             D3D11_TEXTURE2D_DESC td{};
             frame.texture->GetDesc(&td);
             if (td.Width != frame.stamp.width || td.Height != frame.stamp.height || td.Width > 16384 ||
-                td.Height > 16384 || td.Format != DXGI_FORMAT_B8G8R8A8_UNORM || td.SampleDesc.Count != 1 ||
+                td.Height > 16384 || (!color::Matches(frame.color,color::ActualStorage(td.Format),frame.stamp.colorEpoch)||frame.color.provenance==color::Provenance::GeneratedSdrPreview) || td.SampleDesc.Count != 1 ||
                 td.MipLevels != 1 || td.ArraySize != 1)
-                throw std::runtime_error("Frame must be an exact BGRA8 SDR snapshot");
-            const bool estimated=detail::UseGuides(options,frame.stamp,guides);
+                throw std::runtime_error("Frame texture, color representation or generation differs from the captured snapshot");
+            if(width&&(frame.color.epoch<resourceColor.epoch||(frame.color.epoch==resourceColor.epoch&&!color::SameDomain(frame.color,resourceColor))))throw std::runtime_error("Capture color generation is stale or its representation changed without a transition");
+            const bool estimated=detail::UseGuides(options,frame.stamp,guides)&&guides->analysisRecipe==(color::Hdr(frame.color)?1u:0u);
             std::vector<float> relativeDepth;bool effectiveDepthInverted=false;
             if(guides&&guides->rawDeviceDepth&&!estimated)
                 throw std::runtime_error("Prepared device-depth frame admission refused");
             if(estimated&&!PrepareDepthUpload(*guides,relativeDepth,effectiveDepthInverted))
                 throw std::runtime_error("Prepared/estimated depth values outside declared range");
             auto shapeBegin=MeasureClock::now();
-            Shape(td.Width, td.Height);
+            Shape(td.Width, td.Height,frame.color);
             r.measurements.shapeMs=ElapsedMs(shapeBegin);
             r.workWidth = workWidth;
             r.workHeight = workHeight;
@@ -853,6 +870,8 @@ struct NrHost::Impl
             r.measurements.guidePreparation=estimated ? "cpu-upload" : "gpu-clear";
             gpuTimings.Mark(list.Get(),1);
             Constants c;
+            const auto recipe=color::Model(frame.color);
+            c.white=recipe->whitePoint;c.passthrough=recipe->passthrough;c.signedPresent=recipe->signedOriginal;
             c.width = width;
             c.height = height;
             c.guideWidth = guideWidth;
@@ -917,7 +936,7 @@ struct NrHost::Impl
             if (!r.recorded)
             {
                 poisoned = true;
-                throw std::runtime_error("Feature 18 evaluation refused; possible provider work quarantined");
+                throw std::runtime_error("Feature 18 evaluation failed: result=" + std::to_string(static_cast<unsigned>(rc)) + "; possible provider work quarantined");
             }
             D3D12_RESOURCE_BARRIER uav{};
             uav.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
@@ -1034,7 +1053,7 @@ NrResult NrHost::Process(const CapturedFrame &frame, const GuideResult *guides,F
     if (!impl_)
     {
         NrResult r;
-        r.stamp = frame.stamp;
+        r.stamp = frame.stamp;r.color=frame.color;
         r.reason = "NR is stopped";
         return r;
     }
@@ -1044,6 +1063,11 @@ NrResult NrHost::Process(const CapturedFrame &frame, const GuideResult *guides,F
 bool NrHost::RequiresRestart() const
 {
     return retained_;
+}
+adapters::Identity NrHost::ProcessingAdapter() const {
+    if(!impl_)return {};std::lock_guard<std::mutex> lock(impl_->mutex);
+    if(!impl_->d12)return {};const auto id=impl_->d12->GetAdapterLuid();
+    return {id.LowPart,id.HighPart,true};
 }
 bool NrHost::Reconfigure(const NrProcessingOptions& requested,std::string& reason)
 {
@@ -1057,6 +1081,10 @@ bool NrHost::Reconfigure(const NrProcessingOptions& requested,std::string& reaso
     owner.recreateFeature|=owner.options.modelStyle!=options.modelStyle;
     owner.options=std::move(options);owner.previous={}; // first affected evaluation resets temporal history
     reason.clear();return true;
+}
+void NrHost::RetainSharedGeneration() noexcept
+{
+    retained_=true;(void)impl_.release(); // shared immediate-context completion unknown; never Close/drain
 }
 void NrHost::Stop()
 {

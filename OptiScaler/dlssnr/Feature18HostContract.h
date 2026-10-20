@@ -1,17 +1,16 @@
 #pragma once
-#include "CanonicalProviderPolicy.h"
 #include <cstdint>
 #include <string_view>
 #include <utility>
 #define NR_FEATURE18_HOST_CONTRACT_V1 1
 namespace DlssNr {
-// Reviewed host assumption for this exact provider and GuidesV4 adapter. This
-// is neither a vendor release notification nor an evaluation-success receipt.
+// Provider-independent NeuRotic host policy, selected by Josh for BYO DLLs.
+// The host tracks real caller recordings and checked feature release. This is
+// not a vendor retention promise or a qualification of arbitrary DLL internals.
+// Preserve the v1 export ABI; the versioned identity distinguishes host policy.
 inline constexpr char Feature18HostContractIdentity[] =
-    "HostRecordedFeature18InvocationTerminal/1;AlphaFeature18.ABI1/API0x15;NeuRotic.GuidesV4;sha256="
-    "ceb6432f6fbdf44d886014bcd47241932bf8b67439feef9bbdd0961436662650";
-static_assert(std::string_view(Canonical::Members[4].sha256)==
-    "ceb6432f6fbdf44d886014bcd47241932bf8b67439feef9bbdd0961436662650");
+    "HostRecordedFeature18InvocationTerminal/2;NeuRotic.GuidesV4;SelectedDll";
+
 enum class FeatureReleaseDisposition : std::uint32_t { Unavailable, Returned, Exceptional };
 struct FeatureReleaseResult {
     std::uint32_t size=sizeof(FeatureReleaseResult);

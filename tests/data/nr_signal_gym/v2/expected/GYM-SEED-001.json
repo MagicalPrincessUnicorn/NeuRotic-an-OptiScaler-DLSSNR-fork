@@ -1,0 +1,77 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-001",
+  "case_input_sha256": "3489fbaaae27f9bbb38738754df48bf76c5d3c7ae06f602e3ea52cb7986b6000",
+  "revision": 1,
+  "transport_checks": [
+    {
+      "check_id": "T-PRESENCE",
+      "event_id": {
+        "state": "not_observed",
+        "reason_id": "GYM.NOT_AN_OPERATION_CHECK"
+      },
+      "adapter_id": "gym-storage-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/transport/minimal-frame/signals/0/presence",
+      "comparison": "exact",
+      "expected": "present",
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "transport_preservation",
+      "evidence_refs": [
+        "01_CANONICAL_CONTRACTS.md"
+      ],
+      "domain": "transport"
+    }
+  ],
+  "qualifications": [
+    {
+      "check_id": "Q-FITS",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/operations/minimal-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "fits": true
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "qualification",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-native-inputs-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+        }
+      },
+      "dimension": "geometry"
+    }
+  ],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

@@ -29,7 +29,7 @@ inline bool WrappedPopupCheckbox(const char* label, bool* value)
     bool changed=ImGui::Checkbox("",value);
     ImGui::SameLine(0,ImGui::GetStyle().ItemInnerSpacing.x);
     ImGui::PushTextWrapPos(0);
-    ImGui::TextUnformatted(label);
+    ImGui::TextUnformatted(label,ImGui::FindRenderedTextEnd(label));
     ImGui::PopTextWrapPos();
     const auto minimum=ImGui::GetItemRectMin();
     const auto maximum=ImGui::GetItemRectMax();

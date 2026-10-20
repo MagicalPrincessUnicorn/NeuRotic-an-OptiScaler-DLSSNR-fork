@@ -230,12 +230,13 @@ void Run(){
             view.phase=!requested?Phase::Off:decision.active?Phase::Active:Phase::Waiting;
             if(!decision.active){
                 if(input.unsafe)view.reason="GPU completion is uncertain; restart the game before recovery";
+                else if(route==0)view.reason=native.failureText;
                 else if(input.hardFailure)view.reason="Recover the model or device before starting NR Anything";
                 else if(!failure.empty())view.reason=failure;
                 else if(!present.failure.empty())view.reason=present.failure;
                 else if(!present.fallbackReason.empty())view.reason=present.fallbackReason;
                 else if(prepared.fresh)view.reason=prepared.status.reason;
-                if(input.unsafe||input.hardFailure||!failure.empty())view.phase=Phase::Blocked;
+                if(input.unsafe||(route==0?native.failed:(input.hardFailure||!failure.empty())))view.phase=Phase::Blocked;
             }
             if(controller&&(!requested||route!=3||!input.effect||input.unsafe||input.hardFailure)){
                 stop();failure="NR Anything stopped after the rendering request or safety state changed";

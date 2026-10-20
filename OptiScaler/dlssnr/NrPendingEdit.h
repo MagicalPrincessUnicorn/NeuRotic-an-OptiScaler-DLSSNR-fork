@@ -10,9 +10,9 @@ namespace DlssNr
 {
 // UI-only preview state. No option is written until Commit; the same transaction covers
 // every child so a rendering snapshot cannot observe half of a shared edit.
-class NrPendingEdit
+template<class Optional> class NrPendingEditFor
 {
-    std::vector<NrOptional<float>*> _targets;
+    std::vector<Optional*> _targets;
     std::vector<float> _original;
     float _preview = 0.0f;
     int _lastFrame = -1;
@@ -28,7 +28,7 @@ class NrPendingEdit
     }
 
   public:
-    void Prepare(const std::vector<NrOptional<float>*>& targets, int frame)
+    void Prepare(const std::vector<Optional*>& targets, int frame)
     {
         NrConfigSynchronization::Transaction transaction;
         const auto generation = NrConfigSynchronization::ProfileGeneration();
@@ -81,4 +81,7 @@ class NrPendingEdit
     void Cancel() { _pending = false; _blocked = true; }
     void Finish(bool active) { if (!active) { _pending = false; _blocked = false; } }
 };
+
+// Existing saved-option callers retain their synchronized edit type.
+using NrPendingEdit = NrPendingEditFor<NrOptional<float>>;
 }

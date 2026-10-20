@@ -1,0 +1,10 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Compile the touched real product translation units with the project's
+       Release metadata. No linking, game execution, or dependency rebuild. -->
+  <Target Name="SelectCharacterInspectorProductSources" BeforeTargets="ClCompile">
+    <ItemGroup>
+      <ClCompile Remove="@(ClCompile)" Condition="'%(ClCompile.Identity)' != 'pch.cpp' and '%(ClCompile.Identity)' != 'Config.cpp' and '%(ClCompile.Identity)' != 'menu\menu_common.cpp' and '%(ClCompile.Identity)' != 'menu\menu_overlay_dx.cpp' and '%(ClCompile.Identity)' != 'wrapped\wrapped_swapchain.cpp' and '%(ClCompile.Identity)' != 'nr\semantic\character\CharacterCaptureDx12.cpp' and '%(ClCompile.Identity)' != 'nr\semantic\character\CharacterRuntime.cpp'" />
+    </ItemGroup>
+    <Message Importance="high" Text="Character Inspector production compile: @(ClCompile)" />
+  </Target>
+</Project>

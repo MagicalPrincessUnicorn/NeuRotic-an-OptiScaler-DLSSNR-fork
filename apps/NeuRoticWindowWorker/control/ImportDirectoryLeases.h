@@ -36,6 +36,10 @@ public:
     ImportDirectoryLeases()=default;ImportDirectoryLeases(const ImportDirectoryLeases&)=delete;
     ~ImportDirectoryLeases(){for(auto i=directories_.rbegin();i!=directories_.rend();++i)CloseHandle(*i);}
     const std::filesystem::path& Root()const{return root_;}
+    bool Identity(BY_HANDLE_FILE_INFORMATION& info)const {
+        return !directories_.empty() && GetFileInformationByHandle(directories_.back(),&info)!=FALSE;
+    }
+    // Every publication is object-bound and no-clobber, including restoration.
     bool Publish(HANDLE temporary,const std::wstring& name,std::string& reason)const {
         if(directories_.empty() || temporary==INVALID_HANDLE_VALUE || name.empty() || name==L"." || name==L".." || name.find_first_of(L"/\\:")!=std::wstring::npos) {reason="Invalid owned import publication";return false;}
         wchar_t final[32768]{};auto size=GetFinalPathNameByHandleW(temporary,final,32768,FILE_NAME_NORMALIZED|VOLUME_NAME_DOS);

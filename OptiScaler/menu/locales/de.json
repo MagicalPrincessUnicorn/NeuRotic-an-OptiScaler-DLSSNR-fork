@@ -1842,5 +1842,10 @@
   "xess": "xess",
   "yes": "ja",
   "| Input: %s": "| Eingabe: %s",
-  "| Spoof: %s": "| Vortäuschung: %s"
+  "| Spoof: %s": "| Vortäuschung: %s",
+  "Match Native (Pre Super Resolution)": "Native Auflösung (vor Super Resolution)",
+  "Match Native (Post Super Resolution)": "Native Auflösung (nach Super Resolution)",
+  "Unknown Native resolution preference": "Unbekannte Einstellung für native Auflösung",
+  "Match Native Post requires After placement and automatic resolution": "Native Auflösung nach SR erfordert die Verarbeitung nach SR und automatische Auflösung",
+  "Match Native Post awaits current pre-SR render dimensions": "Native Auflösung nach SR wartet auf die aktuellen Rendermaße vor SR"
 }

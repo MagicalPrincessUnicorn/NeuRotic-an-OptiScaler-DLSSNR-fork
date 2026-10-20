@@ -29,7 +29,7 @@ bool Admit(const P::Descriptor& d,std::span<const std::byte> packed,std::string&
     const auto normalized=Neurotic::Context::NormalizePreparedGuides(d);
     if(!normalized){reason=normalized.reason;return false;}
     const auto w=d.color.width,h=d.color.height;const auto n=std::uint64_t(w)*h;
-    if(w>4096||h>2160||n>MaxBytes/20||packed.size()!=n*20)
+    if(!DlssNr::Connections::GpuBudget::AdmitRaster(w,h)||n>MaxBytes/20||packed.size()!=n*20)
         return Refuse(reason,"CPU prepared payload size or allocation bound refused");
     if(d.colorDomain!=P::C::ColorDomain::EncodedDisplay||d.motionUnits!=P::C::MotionUnits::Pixels||d.motionGridWidth!=1||d.motionGridHeight!=1)
         return Refuse(reason,"CPU prepared capture requires SDR and full-resolution pixel motion");
@@ -49,7 +49,7 @@ bool AdmitGpu(std::uint64_t luid,const P::Descriptor& d,const CpuMainlineClient:
     const auto normalized=Neurotic::Context::NormalizePreparedGuides(d);
     if(!normalized){reason=normalized.reason;return false;}
     const auto w=d.color.width,h=d.color.height;const auto n=std::uint64_t(w)*h;
-    if(!w||!h||w>4096||h>2160||n>MaxBytes/20||(!g.depth&&depth.size()!=n)||(g.depth&&!depth.empty())||!g.device||!g.color||!g.motion||!g.distrust||
+    if(!DlssNr::Connections::GpuBudget::AdmitRaster(w,h)||n>MaxBytes/20||(!g.depth&&depth.size()!=n)||(g.depth&&!depth.empty())||!g.device||!g.color||!g.motion||!g.distrust||
        !g.lease||!g.producer||!g.value||g.value==UINT64_MAX)return Refuse(reason,"GPU prepared inputs or depth span unavailable");
     const auto actual=g.device->GetAdapterLuid();std::uint64_t identity=0;std::memcpy(&identity,&actual,8);
     if(identity!=luid)return Refuse(reason,"GPU prepared adapter identity mismatch");

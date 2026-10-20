@@ -1,5 +1,6 @@
 #pragma once
 #include "VulkanNrFrameContract.h"
+#include "NativeNrResolution.h"
 #include "DlssNr_PresentResolution.h"
 #include "DlssNr_PresentInputDecision.h"
 #include <cmath>
@@ -35,8 +36,11 @@ inline PresentResolution::Size ResolveVkNrPresentWorkload(const PresentInputDeci
 }
 template<class C> bool VkNrMatchesRenderAfterRr(const C& cfg,const VkNrFrameContract& frame)
 {
-    return frame.route==VkNrRoute::Native&&frame.placement==VkNrPlacement::AfterRR&&
-        cfg.DlssNrRunBeforeSr.value_or_default()&&!cfg.DlssNrUiManualResolution.value_or_default()&&
+    return frame.route==VkNrRoute::Native&&
+        ((frame.placement==VkNrPlacement::AfterRR&&cfg.DlssNrRunBeforeSr.value_or_default())||
+         ((frame.placement==VkNrPlacement::AfterSR||frame.placement==VkNrPlacement::AfterRR)&&
+          NativeResolution::PostSelected(cfg)&&!cfg.DlssNrRunBeforeSr.value_or_default()))&&
+        !cfg.DlssNrUiManualResolution.value_or_default()&&
         cfg.DlssNrWorkingScale.value_or_default()==1.0f;
 }
 template<class C> PresentResolution::Policy VkNrResolutionPolicy(const C& cfg,const VkNrFrameContract& frame)
@@ -55,7 +59,23 @@ template<class C> PresentResolution::Size ResolveVkNrWorkload(const C& cfg,const
     std::optional<VkNrTemporalMetadata> metadata,std::optional<VkNrWorkloadAdmission> admitted = {},
     std::optional<PresentResolution::Policy> effective = {})
 {
+    if(frame.route==VkNrRoute::Native)
+        if(const auto reason=NativeResolution::SelectionRefusal(cfg))return {0,0,reason};
     const auto policy=effective.value_or(VkNrResolutionPolicy(cfg,frame));
+    if(frame.route==VkNrRoute::Native&&NativeResolution::PostSelected(cfg))
+    {
+        // Both objects originate at this synchronous ingress; never reuse Present admission.
+        if(!frame.evaluation||!frame.temporal||!metadata||
+           metadata->featureGeneration!=frame.evaluation.featureGeneration||
+           metadata->featureGeneration!=frame.temporal->featureGeneration||
+           metadata->frameToken!=frame.temporal->frameToken||
+           metadata->providerGeneration!=frame.temporal->providerGeneration||
+           metadata->color!=frame.temporal->color||!ValidVkNrTemporal(*metadata)||
+           (frame.placement!=VkNrPlacement::AfterSR&&frame.placement!=VkNrPlacement::AfterRR))
+            return {0,0,"Match Native Post awaits current pre-SR render dimensions"};
+        return NativeResolution::MatchPostWorkSize(metadata->color.width,metadata->color.height,
+            frame.output.width,frame.output.height);
+    }
     if(policy.mode!=PresentResolution::FollowNative)
         return PresentResolution::Resolve(policy,frame.output.width,frame.output.height);
     if(metadata&&metadata->featureGeneration&&metadata->frameToken&&ValidVkNrTemporal(*metadata))

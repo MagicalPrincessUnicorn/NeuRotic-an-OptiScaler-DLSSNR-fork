@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -215,7 +215,7 @@
+         std::unique_lock lock(p.mutex,std::try_to_lock);if(!lock.owns_lock()||p.state.phase!=RoutePhase::Active)return {};
+         for(;index<p.operations.size();++index)
+         {
+-            auto& op=p.operations[index];if(op.used||op.serial==(std::numeric_limits<std::uint64_t>::max)())continue;
++            auto& op=p.operations[index];if(op.serial==(std::numeric_limits<std::uint64_t>::max)())continue;
+             serial=++op.serial;op.used=op.preparing=true;op.owner=owner;break;
+         }
+         if(!serial)return {}; // capacity refusal precedes owner preparation

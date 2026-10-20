@@ -1,6 +1,7 @@
 #include "ui/HubViewModel.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "../../OptiScaler/menu/localization/LanguageRuntime.h"
 #include "../../OptiScaler/menu/font/Hack_Compressed.h"
 #include <algorithm>
 #include <cmath>
@@ -224,6 +225,23 @@ public:
    model.search.fill(0);io.AddMousePosEvent(-1000,-1000);Settle();
   }
  }
+ void SummaryActions(){
+  auto summary=Window("SelectedGameHeader");auto workspace=Window("SelectedGameWorkspace");auto list=Window("LibraryList");
+  Check(summary&&(summary->ScrollMax.y<=1.f||summary->ScrollbarY),
+        "summary overflow has a visible native scrollbar instead of hiding game actions");
+  if(!summary)return;
+  const auto fixed=Fixed();const float listBefore=list?list->Scroll.y:0.f,workspaceBefore=workspace?workspace->Scroll.y:0.f;
+  const bool overflow=summary->ScrollMax.y>1.f;
+  const bool moved=!overflow||Wheel(summary,-6,12);
+  ImRect refresh,visibility;const bool submitted=ItemBounds(summary,summary->GetID("##RefreshSelectedGame"),refresh)&&ItemBounds(summary,summary->GetID("##GameVisibility"),visibility);
+  auto clip=summary->InnerClipRect;clip.Expand(1.f);
+  Check(moved&&submitted&&clip.Contains(refresh)&&clip.Contains(visibility),
+        "Refresh and visibility actions fit or are reachable by scrolling the summary alone");
+  Check(list&&workspace&&list->Scroll.y==listBefore&&workspace->Scroll.y==workspaceBefore&&Unchanged(fixed),
+        "summary action access leaves the list, workspace and App frame unchanged");
+  if(overflow){Check(Wheel(summary,6,12)&&summary->Scroll.y<=1.f,
+        "summary wheel can return to the selected game title and artwork");}
+ }
  void Library(bool clamped=false){
   model.page=1;Settle();
   auto root=Window("NeuRotic"),page=Window("PageContent"),column=Window("LibraryColumn");
@@ -244,17 +262,19 @@ public:
         "crowded Library list scrolls while the details and fixed LibraryColumn stay still");
   Boundaries(list,"Library list top and bottom wheel boundaries stay inside the list");
   Drawer();
+  SummaryActions();
 
-  // A legitimate long executable refusal gives GameDetails real overflow at
-  // every tested size, independent of an arbitrary fixed child height.
+  // Real installation notices scroll in the detail workspace while the
+  // summary/actions, game list and fixed App frame retain their positions.
   for(int i=0;i<35;++i)model.games[0].target.reason+="Fixture executable needs review before installation.\n";
-  Settle();details=Window("GameDetails");list=Window("LibraryList");auto selectedHeader=Window("SelectedGameHeader");const float headerBefore=selectedHeader?selectedHeader->Pos.y:0;
+  Settle();details=Window("SelectedGameWorkspace");list=Window("LibraryList");auto selectedHeader=Window("SelectedGameHeader");const float headerBefore=selectedHeader?selectedHeader->Pos.y:0;
+  const float summaryBefore=selectedHeader?selectedHeader->Scroll.y:0;
   const auto fixed=Fixed();const float listBefore=list?list->Scroll.y:0;
   const bool detailsInput=Wheel(details,-6,3);
   Check(detailsInput&&details&&details->ScrollMax.y>0&&details->Scroll.y>1&&list&&list->Scroll.y==listBefore&&Unchanged(fixed),
-        "tall game details scroll independently of the list and outer page");
-  Check(selectedHeader&&selectedHeader->Pos.y<headerBefore&&!Window("InstallationScroll")&&!Window("SettingsScroll")&&!Window("DiagnosticsScroll"),
-        "the selected-game header moves with the single right-side scroll owner");
+        "tall installation details scroll independently of the summary, list and outer page");
+  Check(selectedHeader&&selectedHeader->Pos.y==headerBefore&&selectedHeader->Scroll.y==summaryBefore&&!Window("InstallationScroll")&&!Window("SettingsScroll")&&!Window("DiagnosticsScroll"),
+        "the separate summary remains stable while the four-tab workspace scrolls");
   Boundaries(details,"game details top and bottom wheel boundaries leave fixed ancestors still");
  }
  void Run(){
@@ -285,5 +305,52 @@ int RunScrollLayoutTests(){
  // The requested physical 1280x680 work area at 150% leaves 853x453 logical
  // pixels. Keep this Library-only so its compact-header contract is explicit.
  {ScrollFixture fixture({1280.f/1.5f,680.f/1.5f},1.5f);fixture.HeaderControls();fixture.Library(true);failed+=fixture.failed;}
+ return failed;
+}
+
+// A separate CPU-only entry point keeps the review corrections bounded and
+// restores the English catalog before leaving this dedicated test process.
+int RunCompactRowsReviewUiTests(){
+ using namespace Neurotic::Localization;int failed=0;
+ for(bool longLabels:{false,true}){
+  LanguagePack pack;
+  if(longLabels){
+   pack.id="review-footer-stress";pack.locale="en";pack.name="Review footer stress";
+   const std::pair<const char*,const char*> labels[]={
+    {"desktop.gamesettingsview.save_changes_c134f04c","Save prepared changes"},
+    {"desktop.gamesettingsview.restore_defaults_32425ec5","Restore installation defaults"},
+    {"desktop.saved-settings.unfinished-rule","Apply or reset the unfinished Object Rule before saving any changes."}};
+   for(auto [id,text]:labels)pack.entries[id]={text,"",CanonicalEnglish().at(id).revision};
+  }
+  SetSharedCatalog(std::move(pack));
+  ScrollFixture fixture({880,600},1);fixture.model.page=1;
+  auto& target=fixture.model.games[0].target;target={"C:/fixture/Game.exe","Fixture",true,"",64,IMAGE_FILE_MACHINE_AMD64};
+  fixture.model.inspection={{"state",nullptr},{"settings",nh::Json::array()}};
+  nh::SettingsField field;field.section="Menu";field.key="ReduceMotion";field.group="Menu";field.label="Reduce motion";field.available=true;field.type="bool";field.original="auto";field.choices={"auto","true","false"};strcpy_s(field.draft.data(),field.draft.size(),"auto");fixture.model.settings.push_back(field);
+  fixture.Settle();bool selected=false;
+  for(auto& bar:GImGui->TabBars.Buf)for(auto& tab:bar.Tabs)if(std::strcmp(ImGui::TabBarGetTabName(&bar,&tab),"Game Settings")==0){bar.NextSelectedTabId=tab.ID;selected=true;}
+  fixture.Settle();auto* details=fixture.Window("SelectedGameDetails");
+  fixture.Check(selected&&details&&details->ScrollMax.y<=1,longLabels?"long-caption Save and Restore fit the actual padded detail pane":"English Save and Restore fit the actual padded detail pane");
+  std::cout<<"NH-REVIEW-FOOTER facts: long="<<longLabels<<" detailsWidth="<<(details?details->InnerRect.GetWidth():0)<<" overflow="<<(details?details->ScrollMax.y:-1)<<'\n';
+  auto* workspace=fixture.Window("SelectedGameWorkspace");
+  const bool bottom=fixture.Wheel(workspace,-10000);fixture.Settle();ImRect save{},restore{};
+  const float wheelOffset=workspace?workspace->Scroll.y:0;
+  const bool submitted=details&&workspace&&fixture.ItemBounds(workspace,details->GetID("Save Changes"),save)&&fixture.ItemBounds(workspace,details->GetID("Restore Defaults"),restore);
+  const auto clip=workspace?workspace->InnerClipRect:ImRect{};
+  fixture.Check(submitted&&save.Min.x>=clip.Min.x-1&&restore.Min.x>=clip.Min.x-1&&save.Max.x<=clip.Max.x+1&&restore.Max.x<=clip.Max.x+1,
+    "Save and Restore retain native IDs and fit the compact scroll owner's width");
+  fixture.Check(bottom&&submitted&&workspace->ScrollbarY&&std::abs(workspace->Scroll.y-wheelOffset)<.5f&&save.Min.y>=clip.Min.y-1&&restore.Max.y<=clip.Max.y+1,
+    "native workspace scrolling exposes both footer actions completely");
+  failed+=fixture.failed;
+ }
+ SetSharedCatalog(LanguagePack{});
+ for(int kind=0;kind<3;++kind){
+  ScrollFixture fixture({1240,820},1);fixture.model.page=1;
+  fixture.model.games[0].target={"C:/fixture/Game.exe","Fixture",kind!=2,"",64,uint16_t(kind==1?IMAGE_FILE_MACHINE_AMD64:0)};
+  fixture.Settle();ImGui::NewFrame();ImGui::LogToBuffer();nh::RenderHub(fixture.model,nullptr,1);const std::string renderedText=GImGui->LogBuffer.c_str();ImGui::LogFinish();ImGui::Render();
+  const bool warned=renderedText.find("Executable architecture differs from this package.")!=std::string::npos;
+  fixture.Check(warned==(kind==0),kind==0?"accepted PE with Machine zero has visible architecture warning":kind==1?"AMD64 target has no other-architecture warning":"invalid target retains required-executable guidance without architecture warning");
+  failed+=fixture.failed;
+ }
  return failed;
 }

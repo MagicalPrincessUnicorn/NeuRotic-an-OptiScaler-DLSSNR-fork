@@ -152,7 +152,7 @@ $legacy=Fixture 'legacy-dxgi-parameter' $false
 RunEngine 'legacy-dxgi-parameter' @('-GameExecutable',(Join-Path $legacy 'FixtureGame.exe'),'-ExistingDxgiAction','Delete') | Out-Null
 Check ((HashFile (Join-Path $legacy 'dxgi.dll')) -eq $candidateHash) 'Legacy ExistingDxgiAction remains compatible'
 
-# Existing dxgi.dll delete: exact backup, no INI edit, changed runtime refusal, exact restore.
+# Existing dxgi.dll delete: exact backup, no INI edit, changed runtime preservation, exact restore.
 $delete=Fixture 'delete-existing'
 [IO.File]::WriteAllText((Join-Path $delete 'dxgi.dll'),'original non-ReShade dxgi')
 $deleteIni=Encoded ("[Plugins]`r`nLoadReshade = false`r`n; preserve me "+$unicode+"`r`n") 'utf8bom'
@@ -166,11 +166,11 @@ Check ($record.existing_proxy_action -eq 'Replace' -and $record.original_proxy.n
 Check ([Convert]::ToBase64String($deleteIni) -eq $record.original_ini.bytes_base64 -and $record.original_ini.sha256 -eq $oldIni) 'Delete manifest records exact original INI bytes and hash'
 [IO.File]::WriteAllText((Join-Path $delete 'dxgi.dll'),'later runtime')
 $before=Inventory $delete
-RunEngine 'restore-refuses-changed-runtime' @('-Restore') $false | Out-Null
-Check ((Inventory $delete) -eq $before) 'Restore refuses changed runtime without mutation'
-Copy-Item -LiteralPath (Join-Path $PackageRoot 'payload\OptiScaler.dll') -Destination (Join-Path $delete 'dxgi.dll') -Force
+RunCmd 'restore-changed-runtime-preview' (Join-Path $backup 'Restore.cmd') @('-CheckOnly') | Out-Null
+Check ((Inventory $delete) -eq $before) 'Restore previews changed runtime without mutation'
 RunCmd 'delete-restore' (Join-Path $backup 'Restore.cmd') @() | Out-Null
 Check ((HashFile (Join-Path $delete 'dxgi.dll')) -eq $oldDxgi -and $(BytesEqual ([IO.File]::ReadAllBytes((Join-Path $delete 'OptiScaler.ini'))) $deleteIni)) 'Delete restore returns exact original dxgi.dll and INI'
+Check (@(Get-ChildItem -LiteralPath (Join-Path $delete 'NeuRotic-preserved-files') -Filter '*.bin' -Recurse -File | Where-Object { (Get-Content -Raw -LiteralPath $_.FullName) -eq 'later runtime' }).Count -eq 1) 'Changed runtime is separately preserved by Restore'
 
 # Rename choice: test exact targeted edits and restoration across supported encodings.
 foreach($kind in @('utf8','utf8bom','utf16le','utf16be')){
@@ -242,7 +242,11 @@ $rollback=Fixture 'atomic-rollback'
 $rollbackIni=Encoded "[Plugins]`r`nLoadReshade = false`r`n" 'utf8'
 [IO.File]::WriteAllBytes((Join-Path $rollback 'OptiScaler.ini'),$rollbackIni)
 New-Item -ItemType Directory -Path (Join-Path $rollback 'OptiScaler') | Out-Null
-$locked=Join-Path $rollback 'OptiScaler\amd_fidelityfx_framegeneration_dx12.dll'
+$lateRuntime=@('payload\OptiScaler\amd_fidelityfx_framegeneration_dx12.dll',
+               'payload\OptiScaler\amd_fidelityfx_dx12.dll') |
+    Where-Object { $manifest.files.path -contains $_ } | Select-Object -First 1
+if (-not $lateRuntime) { throw 'No packaged OptiScaler runtime can exercise the post-INI rollback.' }
+$locked=Join-Path $rollback $lateRuntime.Substring(8)
 [IO.File]::WriteAllText($locked,'locked original support')
 $oldDxgi=HashFile (Join-Path $rollback 'dxgi.dll');$oldLocked=HashFile $locked
 $stream=[IO.File]::Open($locked,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
@@ -311,8 +315,8 @@ Check (Test-Path -LiteralPath (Join-Path $stacked 'dxgi.dll')) 'Uninstall previe
 RunEngine 'stacked-uninstall' @('-Uninstall','-GameExecutable',(Join-Path $stacked 'FixtureGame.exe'),'-UninstallMode','RemoveSettings','-ConfirmUninstall') | Out-Null
 Check (-not (Test-Path -LiteralPath (Join-Path $stacked 'dxgi.dll')) -and -not (Test-Path -LiteralPath (Join-Path $stacked 'OptiScaler.ini'))) 'One uninstall walks stacked updates back to the original fresh state'
 
-# A deliberate external update must not silently merge into a managed restore chain.
-# Adoption creates a new, one-entry lineage that restores the exact current files on uninstall.
+# Explicit advanced adoption creates a new baseline instead of ordinary repair's
+# original lineage, and restores those adopted files on uninstall.
 $adopted=Fixture 'public-adopt-modified-install' $true
 RunEngine 'adopted-install-original' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ProxyName','dxgi.dll') | Out-Null
 $oldBackup=Backup $adopted
@@ -323,8 +327,8 @@ $adoptedProxyHash=HashFile (Join-Path $adopted 'dxgi.dll')
 $adoptedForwarderHash=HashFile (Join-Path $adopted 'nvngx.dll_dlssnr.dll')
 $adoptedBareProxyHash=HashFile (Join-Path $adopted 'OptiScaler.dll')
 $adoptedBefore=Inventory $adopted
-RunEngine 'adopted-modified-refusal' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ExistingInstallAction','Update') $false | Out-Null
-Check ((Inventory $adopted) -eq $adoptedBefore) 'Modified managed files are refused without an explicit adoption choice'
+RunEngine 'adopted-modified-preview' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ExistingInstallAction','Update','-CheckOnly') | Out-Null
+Check ((Inventory $adopted) -eq $adoptedBefore) 'Modified managed files preview recovery without mutation'
 RunEngine 'adopted-modified-install' @('-GameExecutable',(Join-Path $adopted 'FixtureGame.exe'),'-ProxyName','dxgi.dll','-AdoptModifiedInstall','-RetireObsoleteOptiScalerProxy','-ExistingProxyAction','Replace') | Out-Null
 $state=Get-Content -Raw -LiteralPath (Join-Path $adopted 'NeuRotic\Installer\Current-Install.json') | ConvertFrom-Json
 Check ($state.adopted_modified_install -and $state.restore_chain.Count -eq 1 -and (Test-Path -LiteralPath (Join-Path $oldBackup 'INSTALL-MANIFEST.json'))) 'Explicit adoption preserves earlier records and starts a verified recovery lineage'

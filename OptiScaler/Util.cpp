@@ -11,6 +11,9 @@
 #include <shlobj.h>
 #include <cwctype>
 #include <queue>
+#include <optional>
+#include <new>
+#include <algorithm>
 
 #include <hooks/Gdi32_Hooks.h>
 
@@ -21,6 +24,97 @@ typedef decltype(&VerQueryValueW) PFN_VerQueryValueW;
 
 static IID streamlineRiid {};
 
+// Checked Unicode module path retrieval.
+namespace
+{
+struct ModulePaths
+{
+    std::filesystem::path dll;
+    std::filesystem::path exe;
+};
+
+// Published during consuming DLL_PROCESS_ATTACH modes, before config or hooks can
+// consume a root. Neither path is observable until both reads have succeeded.
+std::optional<ModulePaths>& CachedModulePaths()
+{
+    static std::optional<ModulePaths> paths;
+    return paths;
+}
+
+struct ModulePathLastError
+{
+    DWORD saved = GetLastError();
+    ~ModulePathLastError() { SetLastError(saved); }
+};
+
+bool TryModulePath(HMODULE module, std::filesystem::path& path) noexcept
+{
+    ModulePathLastError error;
+    try
+    {
+        constexpr DWORD maximum = 32768;
+        std::wstring buffer(MAX_PATH, L'\0');
+        for (;;)
+        {
+            const DWORD capacity = static_cast<DWORD>(buffer.size());
+            const DWORD length = GetModuleFileNameW(module, buffer.data(), capacity);
+            if (!length) { error.saved = GetLastError(); return false; }
+            if (length < capacity)
+            {
+                buffer.resize(length);
+                std::filesystem::path complete(std::move(buffer));
+                path = std::move(complete);
+                return true;
+            }
+            if (capacity == maximum)
+            {
+                error.saved = ERROR_INSUFFICIENT_BUFFER;
+                return false;
+            }
+            buffer.resize((std::min)(capacity * 2, maximum), L'\0');
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        error.saved = ERROR_NOT_ENOUGH_MEMORY;
+    }
+    catch (...)
+    {
+        error.saved = ERROR_INVALID_DATA;
+    }
+    return false;
+}
+} // namespace
+
+bool Util::InitializeModulePaths(HMODULE module) noexcept
+{
+    ModulePathLastError error;
+    try
+    {
+        auto& cached = CachedModulePaths();
+        if (!cached)
+        {
+            ModulePaths complete;
+            if (!TryModulePath(module, complete.dll) || !TryModulePath(nullptr, complete.exe))
+            {
+                error.saved = GetLastError();
+                return false;
+            }
+            cached.emplace(std::move(complete));
+        }
+        return true;
+    }
+    catch (const std::bad_alloc&)
+    {
+        error.saved = ERROR_NOT_ENOUGH_MEMORY;
+    }
+    catch (...)
+    {
+        error.saved = ERROR_INVALID_DATA;
+    }
+    return false;
+}
+
 /// <summary>
 /// Returns caller module filename
 /// Don't forget to add #pragma intrinsic(_ReturnAddress)
@@ -29,21 +123,26 @@ static IID streamlineRiid {};
 /// <returns>Caller module filename</returns>
 std::string Util::WhoIsTheCaller(void* returnAddress)
 {
-    char callerPath[MAX_PATH] = { 0 };
-
-    // Get the return address from the current function call.
-    // void* returnAddress = _ReturnAddress();
-
-    // Get the base address of the module containing the return address.
-    if (HMODULE hModule = GetCallerModule(returnAddress); hModule != nullptr)
+    ModulePathLastError error;
+    try
     {
-        // Get the full path of the calling module.
-        GetModuleFileNameA(hModule, callerPath, sizeof(callerPath));
-        auto path = std::filesystem::path(callerPath);
-
-        return wstring_to_string(path.filename().wstring());
+        const HMODULE module = GetCallerModule(returnAddress);
+        if (!module) { error.saved = GetLastError(); return ""; }
+        std::filesystem::path path;
+        if (!TryModulePath(module, path)) { error.saved = GetLastError(); return ""; }
+        const auto leaf = path.filename().wstring();
+        auto name = wstring_to_string(leaf);
+        if (name.empty()) { error.saved = GetLastError(); return ""; }
+        return name;
     }
-
+    catch (const std::bad_alloc&)
+    {
+        error.saved = ERROR_NOT_ENOUGH_MEMORY;
+    }
+    catch (...)
+    {
+        error.saved = ERROR_INVALID_DATA;
+    }
     return "";
 }
 
@@ -172,7 +271,7 @@ void Util::GetExeInfo()
 
     auto exePath = Util::ExePath();
     auto exeDir = exePath.parent_path();
-    auto exePathFilename = exePath.filename().string();
+    auto exePathFilename = wstring_to_string(exePath.filename().wstring());
     auto exePathFilenameW = exePath.filename().wstring();
     State::Instance().gameExe = exePathFilename;
 
@@ -293,17 +392,11 @@ void Util::GetExeInfo()
 
 std::filesystem::path Util::DllPath()
 {
-    static std::filesystem::path dll;
-
-    if (dll.empty())
-    {
-        wchar_t dllPath[MAX_PATH];
-        GetModuleFileNameW(dllModule, dllPath, MAX_PATH);
-        dll = std::filesystem::path(dllPath);
-
-        LOG_INFO("{0}", wstring_to_string(dll.wstring()));
-    }
-
+    const ModulePathLastError error;
+    // Startup validates and publishes this pair before any required consumers.
+    const auto& dll = CachedModulePaths().value().dll;
+    static const bool logged = [&] { LOG_INFO("{0}", wstring_to_string(dll.wstring())); return true; }();
+    (void) logged;
     return dll;
 }
 
@@ -360,16 +453,9 @@ double Util::MillisecondsNow()
 
 std::filesystem::path Util::ExePath()
 {
-    static std::filesystem::path exe;
-
-    if (exe.empty())
-    {
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        exe = std::filesystem::path(exePath);
-    }
-
-    return exe;
+    const ModulePathLastError error;
+    // A failed startup never enters configuration, hooks or relative searches.
+    return CachedModulePaths().value().exe;
 }
 
 static BOOL CALLBACK EnumWindowsCallback(HWND handle, LPARAM lParam)

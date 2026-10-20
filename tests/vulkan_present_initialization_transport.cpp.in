@@ -1,0 +1,85 @@
+// Software Vulkan only. The private provider is a stated stand-in. Actual owner,
+// command transport, dependency barrier, submission, fence and readback are real.
+#include "fixtures/vulkan_nr_gpu_host.h"
+#include "dlssnr/VulkanPresentInitialization.h"
+#include <array>
+#include <cstdlib>
+#include <filesystem>
+using namespace DlssNr;
+static void Require(bool ok,const char* reason){if(!ok)throw std::runtime_error(reason);}
+static void InitializationBarrier(VkCommandBuffer commandBuffer_,bool complete){
+ struct {bool initializationCompleted;} request_{complete};
+ // ACTUAL_INITIALIZATION_BARRIER
+}
+struct Pattern:VkNrGenerationPayload{Pattern(){privateBytes=32;}};
+int main(){try{
+ const char* icd=std::getenv("VK_ICD_FILENAMES");
+ const char* driver=std::getenv("VK_DRIVER_FILES");
+ const char* verified=std::getenv("NR_TEST_SOFTWARE_ICD");
+ Require(verified&&*verified,"build-owner verified software ICD path required");
+ const std::filesystem::path expected=verified;
+ Require(icd&&std::filesystem::equivalent(icd,expected),"explicit preserved software ICD required; no system fallback");
+ Require(!driver||std::filesystem::equivalent(driver,expected),"conflicting driver override refused");
+ VkGpuHost host;
+ VkPhysicalDeviceProperties properties{};vkGetPhysicalDeviceProperties(host.physical,&properties);
+ Require(properties.deviceType==VK_PHYSICAL_DEVICE_TYPE_CPU,"fixture requires software Vulkan CPU device");
+ auto& source=host.MakeBuffer(32,VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+ auto& output=host.MakeBuffer(32,VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+ const std::array<uint32_t,8> pattern{3,11,29,47,71,101,137,179};
+ VkPresentInitializationOwner initializer;
+ VkCommandBuffer privateCommand{};VkNrUseId initializationUse{};unsigned creates=0;
+ VkNrGenerationOwner model(VulkanNrRecordings(),[&](const VkNrGenerationKey&,VkNrUseId use,uint64_t){
+  ++creates;initializationUse=use;
+  vkCmdUpdateBuffer(privateCommand,source.buffer,0,sizeof(pattern),pattern.data());
+  return VkNrGenerationCreation{std::make_unique<Pattern>(),true,true,{}};
+ },[](VkNrGenerationPayload&){return true;});
+ VkPresentInitializationRequest request;
+ request.instance=host.instance;request.physicalDevice=host.physical;request.device=host.device;
+ request.frame.route=VkNrRoute::Present;request.frame.queue=host.queue;request.frame.queueFamily=host.family;
+ request.frame.deviceGeneration=VkNrCompletionDeviceGeneration(host.device);request.frame.routeEpoch=1;
+ request.frame.acquireGeneration=17;request.frame.output={32,8};request.frame.work={16,8};
+ request.frame.representation.format=VK_FORMAT_R16G16B16A16_SFLOAT;
+ request.waitBudget=std::make_shared<VkNrWaitBudget>();
+ VkNrGenerationKey key;key.frame=request.frame;
+ CompleteVkPresentGenerationKey(key,VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_R32_SFLOAT,VK_FORMAT_R16G16_SFLOAT,false);
+ const auto prepare=[&](const VkPresentInitializationRequest&,VkCommandBuffer command,VkNrUseId use){
+  privateCommand=command;const auto before=creates;
+  const auto prepared=model.Prepare(key,use,{},true,false);
+  VkPresentInitializationStep step;step.requestedPasses=1;step.recorded=creates!=before;
+  step.status=prepared.ready?(step.recorded?VkPresentInitializationStatus::Recorded:VkPresentInitializationStatus::Ready):VkPresentInitializationStatus::Pending;
+  if(prepared.ready)Require(model.Commit(prepared.generation),"actual model commit");return step;
+ };
+ const auto poll=[&]{model.RetireCompleted(VulkanNrRecordings());};
+ const auto initialized=initializer.Prepare(request,[]{return true;},prepare,poll);
+ Require(initialized.status==VkPresentInitializationStatus::Ready&&initialized.submissions==1&&creates==1,"real private initialization completed within shared budget");
+ Require(!initializer.Busy(),"no initialization use remains pending");
+ // Same authentic acquisition, different command/use. Actual model owner must
+ // authorize this use only after its observed initialization completion.
+ host.Begin();
+ Require(host.command!=privateCommand&&host.use!=initializationUse,"inference uses distinct recording");
+ const auto inference=model.Prepare(key,host.use,{},false,true);
+ Require(inference.ready&&creates==1,"completed model usable without recreation");
+ InitializationBarrier(host.command,true);
+ std::array<VkBufferCopy,8> copies{};
+ for(size_t i=0;i<copies.size();++i)copies[i]={VkDeviceSize((7-i)*4),VkDeviceSize(i*4),4};
+ vkCmdCopyBuffer(host.command,source.buffer,output.buffer,uint32_t(copies.size()),copies.data());
+ VkBufferMemoryBarrier readback{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+ readback.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;readback.dstAccessMask=VK_ACCESS_HOST_READ_BIT;
+ readback.srcQueueFamilyIndex=readback.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+ readback.buffer=output.buffer;readback.size=32;
+ vkCmdPipelineBarrier(host.command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,0,nullptr,1,&readback,0,nullptr);
+ VkGpuCheck(vkEndCommandBuffer(host.command),"end readback command");VulkanNrRecordings().OnEnd(host.command,VK_SUCCESS);
+ VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};submit.commandBufferCount=1;submit.pCommandBuffers=&host.command;
+ VkGpuCheck(ObserveVkNrQueueSubmit(host.queue,{&host.command,1},[&]{return vkQueueSubmit(host.queue,1,&submit,VK_NULL_HANDLE);}),"readback submit");
+ VkGpuCheck(WaitVkNrUse(host.use,request.waitBudget->RemainingNs()),"readback owned bounded completion");
+ PollVkNrCompletions();poll();
+ const auto* words=static_cast<const uint32_t*>(output.mapped);
+ for(size_t i=0;i<8;++i)Require(words[i]==pattern[7-i],"transformed bytes differ from initialized private pattern");
+ std::printf("READBACK %u %u %u %u %u %u %u %u\n",words[0],words[1],words[2],words[3],words[4],words[5],words[6],words[7]);
+ Require(initializer.Release(true,poll),"completed private command pool releases");
+ VkGpuCheck(vkResetCommandBuffer(host.command,0),"retire inference recording");VulkanNrRecordings().OnReset(host.command,VK_SUCCESS);poll();
+ Require(model.DrainReleased(),"stand-in model retires after actual completion and reset");
+ Require(host.validationErrors==0,"software Vulkan validation errors");
+ std::puts("PASS software Vulkan initialization -> distinct same-acquisition read/transform -> actual bytes; no private provider or WSI/game qualification");
+ return 0;
+}catch(const std::exception& e){std::fprintf(stderr,"FAIL %s\n",e.what());return 1;}}

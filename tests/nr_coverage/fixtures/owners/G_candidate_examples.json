@@ -1,0 +1,1839 @@
+{
+  "schema_version": "1.0",
+  "evidence_class": "SYNTHETIC_DESIGN_FIXTURES_NOT_RUNTIME",
+  "examples": [
+    {
+      "name": "ordinary_depth_shaped_creation",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "1"
+        },
+        "observation_incarnation": "1",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "1920"
+          },
+          "height": {
+            "state": "known",
+            "value": 1080
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 40
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 2
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "2ad1c6e55aaf4e9b8663afe4da23f6ef4c6340273cc1f41909dabf2560c50e84"
+        },
+        "local_stage": "CANDIDATE",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "1",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "1",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "1",
+          "last_sequence": "1",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "SUPERSEDED_FOR_CORRELATION",
+          "reason": "later_creation_same_retained_address"
+        },
+        "hypotheses": [
+          {
+            "signal_kind": "hardware_depth",
+            "method": "descriptor_factor_ledger",
+            "version": "create-only-1",
+            "verification": "unqualified",
+            "evidence_sequences": [
+              "1"
+            ]
+          }
+        ],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-DEPTH-FLAG",
+            "role": "support",
+            "strength": "strong",
+            "outcome": "supports",
+            "evidence_sequences": [
+              "1"
+            ],
+            "explanation_code": "depth_capable_not_main_view_proof"
+          },
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "1"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "1"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "1"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "candidate_low",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "placed_depth_array_not_verified_shadow",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "2"
+        },
+        "observation_incarnation": "2",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "2048"
+          },
+          "height": {
+            "state": "known",
+            "value": 2048
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 4
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 40
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 2
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "fc936c277730d7209746b698491cfacb7cb95b0668f2f0a80e2d497f154a491a"
+        },
+        "local_stage": "CANDIDATE",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "2",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_PLACED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "2",
+          "heap_offset": {
+            "state": "known",
+            "value": "0"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "2",
+          "last_sequence": "2",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [
+          {
+            "signal_kind": "hardware_depth",
+            "method": "descriptor_factor_ledger",
+            "version": "create-only-1",
+            "verification": "unqualified",
+            "evidence_sequences": [
+              "2"
+            ]
+          }
+        ],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-DEPTH-FLAG",
+            "role": "support",
+            "strength": "strong",
+            "outcome": "supports",
+            "evidence_sequences": [
+              "2"
+            ],
+            "explanation_code": "depth_capable_not_main_view_proof"
+          },
+          {
+            "factor_id": "OBS-F-DEPTH-ARRAY-PRIOR",
+            "role": "search_prior",
+            "strength": "weak",
+            "outcome": "caution",
+            "evidence_sequences": [
+              "2"
+            ],
+            "explanation_code": "array_not_proof_of_shadow_pass"
+          },
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "2"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "2"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "2"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "candidate_low",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "mipped_depth_not_verified_hiz",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "3"
+        },
+        "observation_incarnation": "3",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "1024"
+          },
+          "height": {
+            "state": "known",
+            "value": 1024
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 11
+          },
+          "format": {
+            "state": "known",
+            "value": 40
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 2
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "4cab90c042dabae7ae6ba62769cda45d457ae701ff5a9711e9788a75ded0bf53"
+        },
+        "local_stage": "CANDIDATE",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "3",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "3",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "3",
+          "last_sequence": "3",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [
+          {
+            "signal_kind": "hardware_depth",
+            "method": "descriptor_factor_ledger",
+            "version": "create-only-1",
+            "verification": "unqualified",
+            "evidence_sequences": [
+              "3"
+            ]
+          }
+        ],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-DEPTH-FLAG",
+            "role": "support",
+            "strength": "strong",
+            "outcome": "supports",
+            "evidence_sequences": [
+              "3"
+            ],
+            "explanation_code": "depth_capable_not_main_view_proof"
+          },
+          {
+            "factor_id": "OBS-F-DEPTH-MIP-PRIOR",
+            "role": "search_prior",
+            "strength": "weak",
+            "outcome": "caution",
+            "evidence_sequences": [
+              "3"
+            ],
+            "explanation_code": "mips_not_proof_of_hiz_generation"
+          },
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "3"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "3"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "3"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "candidate_low",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "single_channel_float_false_positive",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "4"
+        },
+        "observation_incarnation": "4",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "1920"
+          },
+          "height": {
+            "state": "known",
+            "value": 1080
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 41
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 4
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "bee551185dad7cc3cd08e0139a2af4a9acce2d5e572463d063eb81b7f2cc60a2"
+        },
+        "local_stage": "OBSERVED",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "4",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "4",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "4",
+          "last_sequence": "4",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "4"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "4"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "4"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "unranked",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "motion_shaped_but_unclassified",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "5"
+        },
+        "observation_incarnation": "5",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "1920"
+          },
+          "height": {
+            "state": "known",
+            "value": 1080
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 34
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 4
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "a034d4b45aec4b00d8783ebe97c15d11cf21a57811198677bdd8522847691566"
+        },
+        "local_stage": "OBSERVED",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "5",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "5",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "5",
+          "last_sequence": "5",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "5"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "5"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "5"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "unranked",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "tiny_uav_counter_or_exposure_unknown",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "6"
+        },
+        "observation_incarnation": "6",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "buffer"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "8"
+          },
+          "height": {
+            "state": "known",
+            "value": 1
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 0
+          },
+          "layout": {
+            "state": "known",
+            "value": 1
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 4
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "890222dd77a1db386b78311d3aacf2cc16b7b228ac78e0c2ce4ad270920ac8b3"
+        },
+        "local_stage": "OBSERVED",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "6",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "6",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "6",
+          "last_sequence": "6",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "6"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "6"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "6"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "unranked",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "ui_shaped_color_unclassified",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "7"
+        },
+        "observation_incarnation": "7",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "1920"
+          },
+          "height": {
+            "state": "known",
+            "value": 1080
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 28
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "2cfe077180021899290a469ae7959f668b84783cefa9775a36f88f9630eb698e"
+        },
+        "local_stage": "OBSERVED",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "7",
+          "previous_candidate": null,
+          "prior_address_history": "not_seen_in_retained_map",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "7",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "7",
+          "last_sequence": "7",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "7"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "7"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "7"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "unranked",
+          "score_as_probability": false
+        }
+      }
+    },
+    {
+      "name": "same_address_new_occurrence",
+      "record": {
+        "schema_version": "2.0",
+        "profile_id": "OBS-CLOSURE-1",
+        "candidate_key": {
+          "session": "cccccccccccccccccccccccccccccccc",
+          "birth_epoch": "1",
+          "api": "D3D12",
+          "creation_sequence": "8"
+        },
+        "observation_incarnation": "8",
+        "api": "D3D12",
+        "descriptor": {
+          "api": "D3D12",
+          "dimension": {
+            "state": "known",
+            "value": "texture2d"
+          },
+          "alignment": {
+            "state": "known",
+            "value": "0"
+          },
+          "width": {
+            "state": "known",
+            "value": "1920"
+          },
+          "height": {
+            "state": "known",
+            "value": 1080
+          },
+          "depth_or_array_size": {
+            "state": "known",
+            "value": 1
+          },
+          "mip_levels": {
+            "state": "known",
+            "value": 1
+          },
+          "format": {
+            "state": "known",
+            "value": 40
+          },
+          "layout": {
+            "state": "known",
+            "value": 0
+          },
+          "resource_flags": {
+            "state": "known",
+            "value": 2
+          },
+          "sample_count": {
+            "state": "known",
+            "value": 1
+          },
+          "sample_quality": {
+            "state": "known",
+            "value": 0
+          },
+          "initial_state": {
+            "state": "known",
+            "value": 0
+          }
+        },
+        "descriptor_fingerprint": {
+          "state": "known",
+          "value": "2ad1c6e55aaf4e9b8663afe4da23f6ef4c6340273cc1f41909dabf2560c50e84"
+        },
+        "local_stage": "CANDIDATE",
+        "admission_authority": "none",
+        "may_admit": false,
+        "external_qualification": "unavailable",
+        "resource_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "device_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "heap_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "content_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "frame_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "view_ref": {
+          "state": "unknown",
+          "reason": "owner_evidence_not_supplied"
+        },
+        "owner_resource_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_device_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_heap_generation": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "owner_content_version": {
+          "state": "unknown",
+          "reason": "owner_generation_not_supplied"
+        },
+        "correlation": {
+          "token": "8",
+          "previous_candidate": {
+            "session": "cccccccccccccccccccccccccccccccc",
+            "birth_epoch": "1",
+            "api": "D3D12",
+            "creation_sequence": "1"
+          },
+          "prior_address_history": "reappearance",
+          "meaning": "observation_only_not_resource_identity"
+        },
+        "observation_source": {
+          "seam_id": "S03",
+          "callsite": "D3D12_COMMITTED_NORMAL",
+          "outcome": "object_observed",
+          "descriptor_basis": "call_arguments",
+          "creation_sequence": "8",
+          "heap_offset": {
+            "state": "not_applicable",
+            "reason": "committed_implicit_heap"
+          }
+        },
+        "coverage": {
+          "lifecycle_coverage": "create_only",
+          "creation_family": "installed",
+          "complete_transport": true,
+          "loss_observed": false,
+          "drop_count": "0",
+          "drop_count_exact": true,
+          "limitations": [
+            "resource_destruction_not_observed",
+            "aliasing_not_observed",
+            "main_view_not_established"
+          ]
+        },
+        "lifetime": {
+          "state": "unknown",
+          "reason": "creation_is_not_liveness"
+        },
+        "temporal": {
+          "first_sequence": "8",
+          "last_sequence": "8",
+          "first_window": "1",
+          "last_window": "1",
+          "first_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "last_elapsed_ms": {
+            "state": "known",
+            "value": "0"
+          },
+          "time_basis": "worker_published_collection_clock",
+          "observation_count": "1",
+          "frame_budget_basis": "unknown",
+          "update_cadence": {
+            "state": "unknown",
+            "reason": "no_owner_use_events"
+          },
+          "content_stability": {
+            "state": "unknown",
+            "reason": "no_content_observation"
+          }
+        },
+        "retention": {
+          "state": "RETAINED",
+          "reason": "observed_creation"
+        },
+        "hypotheses": [
+          {
+            "signal_kind": "hardware_depth",
+            "method": "descriptor_factor_ledger",
+            "version": "create-only-1",
+            "verification": "unqualified",
+            "evidence_sequences": [
+              "8"
+            ]
+          }
+        ],
+        "factor_ledger": [
+          {
+            "factor_id": "OBS-F-DEPTH-FLAG",
+            "role": "support",
+            "strength": "strong",
+            "outcome": "supports",
+            "evidence_sequences": [
+              "8"
+            ],
+            "explanation_code": "depth_capable_not_main_view_proof"
+          },
+          {
+            "factor_id": "OBS-F-LIFETIME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "8"
+            ],
+            "explanation_code": "create_only_no_lifetime"
+          },
+          {
+            "factor_id": "OBS-F-ID-FRAME",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "8"
+            ],
+            "explanation_code": "no_owner_frame"
+          },
+          {
+            "factor_id": "OBS-F-PRODUCER-EXACT",
+            "role": "hard_gate",
+            "strength": "decisive",
+            "outcome": "unknown",
+            "evidence_sequences": [
+              "8"
+            ],
+            "explanation_code": "no_semantic_producer_evidence"
+          }
+        ],
+        "ranking": {
+          "model": "OBS-RANK-001",
+          "profile": "create-only-1",
+          "tier": "candidate_low",
+          "score_as_probability": false
+        }
+      }
+    }
+  ]
+}

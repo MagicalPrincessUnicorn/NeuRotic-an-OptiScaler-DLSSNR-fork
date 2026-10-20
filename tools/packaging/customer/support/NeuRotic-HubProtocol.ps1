@@ -7,18 +7,24 @@ function Read-HubRequestText([string]$Text){
  if([Text.Encoding]::UTF8.GetByteCount($Text) -gt 6291456){throw 'Request exceeds 6 MiB'}
  if(-not ('NeuRoticHubJson' -as [type])){Add-Type -Path (Join-Path $PSScriptRoot 'NeuRotic-HubJson.cs')}
  [NeuRoticHubJson]::ValidateSettingsRequest($Text);$request=$Text|ConvertFrom-Json
- $allowed=@('protocolVersion','requestId','kind','gameExecutable','operation','packageId','proxyName','existingProxyAction','planId','planFingerprint','freshInstall','fileDecisions','settings','configRevision','continueWithoutRuntime','gameRoot','steamRoot','steamAppId','verifyFiles','gameTitle','gameStore','gameStoreId')
+ $allowed=@('protocolVersion','requestId','kind','gameExecutable','operation','packageId','proxyName','existingProxyAction','planId','planFingerprint','freshInstall','installInspector','fileDecisions','settings','configRevision','continueWithoutRuntime','gameRoot','steamRoot','steamAppId','verifyFiles','gameTitle','gameStore','gameStoreId','nrDllCopy')
  foreach($property in $request.PSObject.Properties){if($property.Name -cnotin $allowed){throw ('Unknown request field: '+$property.Name)}}
- if(($request.protocolVersion -isnot [int] -and $request.protocolVersion -isnot [long]) -or $request.protocolVersion -ne 1 -or $request.kind -cnotin @('Inspect','RestoreDefaults','Plan','Execute','Preflight','LaunchPreflight')){throw 'Unsupported protocol or kind'}
+ if(($request.protocolVersion -isnot [int] -and $request.protocolVersion -isnot [long]) -or $request.protocolVersion -ne 1 -or $request.kind -isnot [string] -or $request.kind -cnotin @('Inspect','RestoreDefaults','Plan','Execute','Preflight','LaunchPreflight')){throw 'Unsupported protocol or kind'}
  foreach($name in @('requestId','gameExecutable','operation','packageId','proxyName','existingProxyAction','planId','planFingerprint','configRevision','gameRoot','steamRoot','steamAppId','gameTitle','gameStore','gameStoreId')){if($request.PSObject.Properties.Name -contains $name -and $request.$name -isnot [string]){throw ('Request field must be text: '+$name)}}
- foreach($name in @('freshInstall','continueWithoutRuntime','verifyFiles')){if($request.PSObject.Properties.Name -contains $name -and $request.$name -isnot [bool]){throw ('Request field must be Boolean: '+$name)}}
+ foreach($name in @('freshInstall','installInspector','continueWithoutRuntime','verifyFiles')){if($request.PSObject.Properties.Name -contains $name -and $request.$name -isnot [bool]){throw ('Request field must be Boolean: '+$name)}}
  if($request.PSObject.Properties.Name -contains 'freshInstall' -and ($request.kind -cne 'Plan' -or $request.operation -cne 'Install')){throw 'Fresh Install belongs only to Install'}
+ if($request.PSObject.Properties.Name -contains 'installInspector' -and ($request.kind -cne 'Plan' -or $request.operation -cne 'Install')){throw (New-NeuroticCodedError 'desktop.installation.inspector_only_install' 'Inspector installation belongs only to Install')}
  if((Get-HubProperty $request 'existingProxyAction') -and $request.existingProxyAction -cnotin @('RenameReShade','Replace','Cancel')){throw 'Unknown proxy choice'}
  if((Get-HubProperty $request 'proxyName') -and $request.proxyName -cnotin $script:NeuroticSimpleProxies){throw 'Unknown proxy filename'}
  if($request.PSObject.Properties.Name -contains 'fileDecisions'){
   if($request.kind -cne 'Plan' -or $request.operation -cne 'Install' -or $request.fileDecisions -isnot [Array] -or $request.fileDecisions.Count -gt 10000){throw 'File decisions belong only to Install'}
-  $seen=@{};foreach($file in $request.fileDecisions){if($null -eq $file -or @($file.PSObject.Properties).Count -ne 2 -or @($file.PSObject.Properties|Where-Object{$_.Name -cnotin @('path','action')}).Count -or $file.path -isnot [string] -or $file.action -cnotin @('Replace','Skip','Cancel')){throw 'Invalid file decision'};$path=ConvertTo-NeuroticRelativePath $file.path;if($seen.ContainsKey($path)){throw 'Duplicate file decision'};$seen[$path]=$true}
+  $seen=@{};foreach($file in $request.fileDecisions){
+   if($null -eq $file -or @($file.PSObject.Properties).Count -notin @(2,3) -or @($file.PSObject.Properties|Where-Object{$_.Name -cnotin @('path','action','reviewedIdentity')}).Count -or $file.path -isnot [string] -or $file.action -cnotin @('Replace','Skip','Cancel')){throw 'Invalid file decision'}
+   if($file.PSObject.Properties.Name -contains 'reviewedIdentity' -and ($file.reviewedIdentity -isnot [string] -or $file.reviewedIdentity.Length -gt 65536)){throw 'Invalid reviewed file identity'}
+   $path=ConvertTo-NeuroticRelativePath $file.path;if($seen.ContainsKey($path)){throw 'Duplicate file decision'};$seen[$path]=$true
+  }
  }
+ if($request.PSObject.Properties.Name -contains 'nrDllCopy'){if($request.kind -cne 'Plan' -or $request.operation -cnotin @('Install','UpdateNrDll')){throw (New-NeuroticCodedError 'desktop.nrdll.invalid_copy' 'The selected NR DLL request is invalid. Choose the file again.')};Assert-NeuroticNrDllCopy $request.nrDllCopy}
  if($request.PSObject.Properties.Name -contains 'settings' -and $request.settings -isnot [Array]){throw 'Settings must be an array'}
  if($request.kind -eq 'Execute' -and @($request.PSObject.Properties|Where-Object{$_.Name -cnotin @('protocolVersion','requestId','kind','planId','planFingerprint')}).Count){throw 'Execute accepts only the bound operation identity'}
  $base=@('protocolVersion','requestId','kind')
@@ -28,7 +34,7 @@ function Read-HubRequestText([string]$Text){
   'LaunchPreflight'{@('gameExecutable')}
   'RestoreDefaults'{@('gameExecutable','configRevision')}
   'Execute'{@('planId','planFingerprint')}
-  'Plan'{if($request.operation -eq 'Install'){@('gameExecutable','operation','packageId','proxyName','existingProxyAction','freshInstall','fileDecisions','continueWithoutRuntime','gameRoot','steamRoot','steamAppId','gameTitle','gameStore','gameStoreId')}elseif($request.operation -eq 'SaveSettings'){@('gameExecutable','operation','settings','configRevision','gameRoot','steamRoot','steamAppId')}else{@('gameExecutable','operation')}}
+  'Plan'{if($request.operation -eq 'Install'){@('gameExecutable','operation','packageId','proxyName','existingProxyAction','freshInstall','installInspector','fileDecisions','continueWithoutRuntime','gameRoot','steamRoot','steamAppId','gameTitle','gameStore','gameStoreId','nrDllCopy')}elseif($request.operation -eq 'UpdateNrDll'){@('gameExecutable','operation','nrDllCopy','gameRoot','steamRoot','steamAppId','gameTitle','gameStore','gameStoreId')}elseif($request.operation -eq 'SaveSettings'){@('gameExecutable','operation','settings','configRevision','gameRoot','steamRoot','steamAppId')}else{@('gameExecutable','operation')}}
  }
  foreach($property in $request.PSObject.Properties){if($property.Name -cnotin ($base+@($fields))){throw ('Field does not belong to this action: '+$property.Name)}}
  return $request
@@ -36,8 +42,8 @@ function Read-HubRequestText([string]$Text){
 function Get-HubTarget([string]$Executable,[switch]$MetadataOnly){
  $exe=[IO.Path]::GetFullPath($Executable);if([IO.Path]::GetExtension($exe) -ine '.exe'){throw 'Select an actual game executable'}
  $root=Split-Path -Parent $exe;[void](SafePath $root ([IO.Path]::GetFileName($exe)))
- $architecture=Get-NeuroticExecutableArchitecture $exe;if($architecture -eq 'unknown'){throw 'Unsupported executable architecture'}
- return [pscustomobject]@{executable=$exe;directory=$root;bitness=$(if($architecture -eq 'x64'){64}else{32});architecture=$architecture;fileIdentity=[NeuRoticSimpleFileIo]::Stat($exe);sha256=$null;installationRoute=$(if($architecture -eq 'x64'){'native-x64'}else{'unsupported'})}
+ $architecture=Get-NeuroticExecutableArchitecture $exe -RequireExecutable;if($architecture -eq 'unknown'){throw 'Unsupported executable architecture'}
+ return [pscustomobject]@{executable=$exe;directory=$root;bitness=$(if($architecture -eq 'x64' -or $architecture.StartsWith('pe64-')){64}else{32});architecture=$architecture;fileIdentity=[NeuRoticSimpleFileIo]::Stat($exe);sha256=$null;installationRoute='native-x64'}
 }
 function Get-HubUserRoot {
  $root=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'NeuRotic/HubData-v2';if($env:NEUROTIC_HUB_FIXTURE_ROOT){$root=$env:NEUROTIC_HUB_FIXTURE_ROOT}
@@ -58,22 +64,40 @@ function Resolve-HubPackage([string]$Id){
 }
 function Get-HubInspection($Target,[switch]$CurrentOnly,[switch]$Quick){
  $read=Read-NeuroticInstallReceipt $Target.directory;$state=$read.receipt
+ $component=Read-NeuroticNrDllOwnership $Target.directory
  $ini=SafePath $Target.directory 'OptiScaler.ini';$revision='Absent';if([IO.File]::Exists($ini)){if((Get-Item -LiteralPath $ini).Length -gt 6291456){throw 'Configuration exceeds the metadata limit'};$revision=HashFile $ini}
- $settings=@();if($Target.bitness -eq 64 -and [IO.File]::Exists($ini)){$settings=@(Get-HubSettingsProjection $Target.directory)}
+ $settings=@();if([IO.File]::Exists($ini)){$settings=@(Get-HubSettingsProjection $Target.directory)}
  $receiptRevision=$(if($state){HashBytes ([Text.Encoding]::UTF8.GetBytes(($state|ConvertTo-Json -Depth 8 -Compress)))}else{'Absent'})
- return [pscustomobject]@{target=$Target;state=$state;revision=$receiptRevision;configRevision=$revision;settings=$settings;notes=@($read.notes);conflicts=@();missing=@();recoveryRequired=$false;verification='Metadata';inventory=[pscustomobject]@{files=@()};runtime='NotAttempted'}
+ $inspection=[pscustomobject]@{target=$Target;state=$state;revision=$receiptRevision;configRevision=$revision;settings=$settings;nrDllOwnership=$component.receipt;notes=@($read.notes)+@($component.notes);conflicts=@();missing=@();recoveryRequired=$false;verification='Metadata';inventory=[pscustomobject]@{files=@()};runtime='NotAttempted'}
+ foreach($setting in $settings){$setting|Add-Member -NotePropertyName resetKnown -NotePropertyValue $false;$setting|Add-Member -NotePropertyName resetValue -NotePropertyValue '';$setting|Add-Member -NotePropertyName resetNativeManualScale -NotePropertyValue '0.25'}
+ # Default availability affects Reset only. Missing/unverified package data
+ # cannot hide or normalize otherwise editable installed preferences.
+ try{if($settings.Count){Add-HubSettingResetProjection $inspection (Resolve-HubPackage 'flagship-approved')}}catch{}
+ return $inspection
+}
+function Get-HubLoggingProfile {
+ try{
+  $package=Resolve-HubPackage 'flagship-approved'
+  $profile=Get-NeuroticField $package.manifest 'loggingProfile' ''
+  if($profile -is [string] -and $profile.Length -le 64 -and $profile -notmatch '[\x00-\x1f]'){return $profile}
+ }catch{}
+ return 'unknown'
 }
 function Get-HubPreflight {
  . (Join-Path $PSScriptRoot 'NeuRotic-Prerequisites.ps1')
  $runtime=Get-NeuroticVcRuntimeStatus ([version]'14.44.35207.0')
- return [ordered]@{status='PreflightChecked';runtime=[ordered]@{ready=[bool]$runtime.Ready;minimumVersion='14.44.35207.0';downloadUrl='https://aka.ms/vc14/vc_redist.x64.exe';problems=@($runtime.Problems)};components=(Get-NeuroticRuntimeComponents (Split-Path -Parent $PSScriptRoot))}
+ return [ordered]@{status='PreflightChecked';loggingProfile=(Get-HubLoggingProfile);runtime=[ordered]@{ready=[bool]$runtime.Ready;minimumVersion='14.44.35207.0';downloadUrl='https://aka.ms/vc14/vc_redist.x64.exe';problems=@($runtime.Problems)};components=(Get-NeuroticRuntimeComponents (Split-Path -Parent $PSScriptRoot))}
 }
-function Get-HubPlanFingerprint($Plan){return HashBytes ([Text.Encoding]::UTF8.GetBytes(([ordered]@{planId=$Plan.planId;request=$Plan.request;target=$Plan.target;packageDigest=$Plan.packageDigest;packageRoot=$Plan.packageRoot;antiCheat=$Plan.antiCheat;autoSetup=(Get-HubProperty $Plan 'autoSetup');installDefaults=(Get-HubProperty $Plan 'installDefaults')}|ConvertTo-Json -Depth 16 -Compress)))}
+function Get-HubPlanFingerprint($Plan){return HashBytes ([Text.Encoding]::UTF8.GetBytes(([ordered]@{planId=$Plan.planId;request=$Plan.request;target=$Plan.target;packageDigest=$Plan.packageDigest;packageRoot=$Plan.packageRoot;antiCheat=$Plan.antiCheat;autoSetup=(Get-HubProperty $Plan 'autoSetup');installDefaults=(Get-HubProperty $Plan 'installDefaults');nrDllTarget=(Get-HubProperty $Plan 'nrDllTarget')}|ConvertTo-Json -Depth 16 -Compress)))}
 function New-HubPlan($Request,$ManualPackage=$null){
- if($Request.operation -cnotin @('Install','Uninstall','SaveSettings')){return [ordered]@{status='UnsupportedOperation';reasonCode='desktop.neurotic-hubprotocol.this_operation_is_no_longer_supported_use_instal_f64894c4';messageParameters=@{};reason='This operation is no longer supported. Use Install or Uninstall.'}}
+ if($Request.operation -cnotin @('Install','Uninstall','SaveSettings','UpdateNrDll')){return [ordered]@{status='UnsupportedOperation';reasonCode='desktop.neurotic-hubprotocol.this_operation_is_no_longer_supported_use_instal_f64894c4';messageParameters=@{};reason='This operation is no longer supported. Use Install or Uninstall.'}}
  if($Request.operation -eq 'Install' -and (@(Get-HubProperty $Request 'fileDecisions' @()|Where-Object{$_.action -eq 'Cancel'}).Count -or (Get-HubProperty $Request 'existingProxyAction') -eq 'Cancel')){return [ordered]@{status='Cancelled';reasonCode='desktop.neurotic-hubprotocol.cancelled_no_files_were_changed_97002fba';messageParameters=@{};reason='Cancelled. No files were changed.'}}
- $target=Get-HubTarget $Request.gameExecutable;$package=$null;$antiCheat=$null
- if($Request.operation -in @('Install','SaveSettings') -and $target.bitness -ne 64){return [ordered]@{status='FailedWithoutChanges';reasonCode='desktop.manuallibrary.a_compatible_in_game_integration_is_unavailable__87dd6414';messageParameters=@{};reason='A compatible in-game integration is unavailable for this architecture. Use NR Anything.';target=$target}}
+ $target=Get-HubTarget $Request.gameExecutable;$package=$null;$antiCheat=$null;$nrDllTarget=$null
+ if($Request.operation -eq 'UpdateNrDll'){
+  $copy=Get-HubProperty $Request 'nrDllCopy';Assert-NeuroticNrDllCopy $copy
+  if($copy.mode -cne 'profile'){throw (New-NeuroticCodedError 'desktop.nrdll.choose_copy_profile' 'Choose a saved NR DLL profile to add or update the file.')}
+  $chosen=$null;try{$chosen=Resolve-NeuroticNrDllSource $null $copy;$nrDllTarget=Get-NeuroticNrDllUpdateTarget $target.executable}finally{Close-NeuroticNrDllSource $chosen}
+ }
  if($Request.operation -eq 'SaveSettings'){
   # Reject malformed/retired edits before asking for anti-cheat consent. The
   # actual write still checks the revision while holding the file exclusively.
@@ -85,15 +109,27 @@ function New-HubPlan($Request,$ManualPackage=$null){
   $profile=Get-NeuroticInstallProfile $target.executable $package $identity;$read=Read-NeuroticInstallReceipt $target.directory
   $proxy=Get-HubProperty $Request 'proxyName';if(-not $proxy){$proxy=Get-NeuroticField $read.receipt 'proxy';if(-not $proxy){$proxy=$profile.proxy}};if(-not $proxy){return [ordered]@{status='NeedsDecision';decisionKind='ProxyRequired';reasonCode='desktop.neurotic-hubprotocol.choose_a_proxy_filename_febc5774';messageParameters=@{};reason='Choose a proxy filename.';target=$target.executable}}
   $Request|Add-Member -NotePropertyName proxyName -NotePropertyValue $proxy -Force
-  $profile.proxy=$proxy;$actions=@(Get-NeuroticInstallActions $target.directory $package $profile ([bool](Get-HubProperty $Request 'freshInstall' $false)) $read.receipt (Get-NeuroticAcceptedRuntimeComponents))
-  $decisions=@{};foreach($file in @(Get-HubProperty $Request 'fileDecisions' @())){$decisions[(ConvertTo-NeuroticRelativePath $file.path)]=$file.action}
-  if((Get-HubProperty $Request 'existingProxyAction') -in @('RenameReShade','Replace')){$decisions[$proxy]='Replace'}
-  if((Get-HubProperty $Request 'existingProxyAction') -eq 'RenameReShade' -and (Test-Path -LiteralPath (SafePath $target.directory 'ReShade64.dll'))){return [ordered]@{status='NeedsDecision';decisionKind='FileConflict';target=$target.executable;canKeepReShade=$false;fileConflicts=@([pscustomobject]@{path='dxgi.dll'});reasonCode='desktop.neurotic-hubprotocol.reshade64_dll_is_occupied_choose_replace_skip_or_4dd59574';messageParameters=@{};reason='ReShade64.dll is occupied. Choose Replace, Skip or Cancel for dxgi.dll.'}}
-  $foreign=@($actions|Where-Object{$_.operation -ne 'Omit' -and $_.conflict -and -not $decisions.ContainsKey($_.path)}|ForEach-Object{[pscustomobject]@{path=$_.path}})
+  $profile.proxy=$proxy;$choice=Get-HubProperty $Request 'nrDllCopy';$state=Get-NeuroticNrDllTargetState $target.directory $read.receipt
+  $components=Get-NeuroticAcceptedRuntimeComponents -IncludeNeuralModel:($state -eq 'Initial' -and $null -eq $choice)
+  $selected=$null
+  try{
+   if($null -ne $choice){$effective=$(if($state -eq 'Initial'){$choice}else{[pscustomobject]@{mode='preserve'}});$selected=Resolve-NeuroticNrDllSource $components $effective;$components=$selected}
+   $actions=@(Get-NeuroticInstallActions $target.directory $package $profile ([bool](Get-HubProperty $Request 'freshInstall' $false)) $read.receipt $components ([bool](Get-HubProperty $Request 'installInspector' $false)))
+  }finally{Close-NeuroticNrDllSource $selected}
+  $decisions=@{};foreach($file in @(Get-HubProperty $Request 'fileDecisions' @())){$decisions[(ConvertTo-NeuroticRelativePath $file.path)]=$file}
+  $keepReShade=(Get-HubProperty $Request 'existingProxyAction') -eq 'RenameReShade' -and (Get-NeuroticField $decisions[$proxy] 'action' '') -ne 'Skip'
+  if($keepReShade -and (Test-Path -LiteralPath (SafePath $target.directory 'ReShade64.dll'))){return [ordered]@{status='NeedsDecision';decisionKind='FileConflict';target=$target.executable;canKeepReShade=$false;fileConflicts=@([pscustomobject]@{path='dxgi.dll';reviewedIdentity=(Get-NeuroticFileReviewIdentity $target.executable 'dxgi.dll' ([NeuRoticSimpleFileIo]::Stat((SafePath $target.directory 'dxgi.dll'))))});reasonCode='desktop.neurotic-hubprotocol.reshade64_dll_is_occupied_choose_replace_skip_or_4dd59574';messageParameters=@{};reason='ReShade64.dll is occupied. Choose Replace, Skip or Cancel for dxgi.dll.'}}
+  $foreign=@(foreach($action in $actions){
+   if($action.operation -ne 'Omit' -and ($action.conflict -or ($keepReShade -and $action.path -ieq $proxy))){
+    $reviewedIdentity=Get-NeuroticFileReviewIdentity $target.executable $action.path $action.identity
+    if(-not(Test-NeuroticFileReviewChoice $decisions[$action.path] $reviewedIdentity)){[pscustomobject]@{path=$action.path;reviewedIdentity=$reviewedIdentity}}
+   }
+  })
   if($foreign.Count){return [ordered]@{status='NeedsDecision';decisionKind='FileConflict';reasonCode='desktop.neurotic-hubprotocol.choose_how_to_handle_each_unfamiliar_file_bd8b419d';messageParameters=@{};reason='Choose how to handle each unfamiliar file.';target=$target.executable;fileConflicts=$foreign;canKeepReShade=($proxy -ieq 'dxgi.dll' -and -not(Test-Path -LiteralPath (SafePath $target.directory 'ReShade64.dll')))}}
  }
- if($Request.operation -in @('Install','SaveSettings')){$antiCheat=Get-HubAntiCheat $Request $target;if($antiCheat.scan_status -eq 'cancelled'){return [ordered]@{status='Cancelled';reasonCode='desktop.neurotic-hubprotocol.detection_cancelled_no_changes_made_f5bf3eea';messageParameters=@{};reason='Detection cancelled. No changes made.'}}}
+ if($Request.operation -in @('Install','SaveSettings','UpdateNrDll')){$antiCheat=Get-HubAntiCheat $Request $target;if($antiCheat.scan_status -eq 'cancelled'){return [ordered]@{status='Cancelled';reasonCode='desktop.neurotic-hubprotocol.detection_cancelled_no_changes_made_f5bf3eea';messageParameters=@{};reason='Detection cancelled. No changes made.'}}}
  $plan=[ordered]@{status='Planned';planId=[Guid]::NewGuid().ToString('N');request=$Request;target=$target;packageDigest=$(if($package){$package.digest}else{$null});packageRoot=$(if($package){$package.root}else{$null});antiCheat=$antiCheat;changes=@()}
+ if($Request.operation -eq 'UpdateNrDll'){$plan['nrDllTarget']=$nrDllTarget}
  if($Request.operation -eq 'Install'){$plan['autoSetup']=Get-NeuroticAutomaticSetup $profile $actions;$plan['installDefaults']=Read-NeuroticInstallDefaults}
  $plan.planFingerprint=Get-HubPlanFingerprint $plan;SaveRecord (Join-Path (Get-HubUserRoot) ($plan.planId+'.plan.json')) $plan
  return $plan
@@ -108,16 +144,24 @@ function Add-HubOperationEvidence($Result,$Plan,$Rechecked){
  foreach($name in $fields.Keys){if($Result -is [Collections.IDictionary]){$Result[$name]=$fields[$name]}else{$Result|Add-Member -NotePropertyName $name -NotePropertyValue $fields[$name] -Force}}
  return $Result
 }
+function Add-HubOperationNote($Result,$Note){
+ # Notes describe ancillary work only. They cannot promote Partial, a genuine
+ # failure or a pending decision into a successful mutation.
+ $notes=@(Get-HubProperty $Result 'notes' @())+@($Note)
+ if($Result -is [Collections.IDictionary]){$Result['notes']=$notes}else{$Result|Add-Member -NotePropertyName notes -NotePropertyValue $notes -Force}
+ if($Result.status -ceq 'Succeeded'){$Result.status='SucceededWithNotes'}
+ return $Result
+}
 function Invoke-HubExecute($Request,[bool]$ManualAcknowledged=$false){
  if($Request.planId -notmatch '^[a-f0-9]{32}$'){throw 'Invalid operation identity'}
  $path=Join-Path (Get-HubUserRoot) ($Request.planId+'.plan.json');if((Get-Item -LiteralPath $path).Length -gt 6291456){throw 'Operation metadata exceeds the limit'}
  $plan=Get-Content -LiteralPath $path -Raw -Encoding UTF8|ConvertFrom-Json
  if($plan.status -ne 'Planned' -or $Request.planFingerprint -cne (Get-HubPlanFingerprint $plan)){throw 'The bound operation changed. Retry the selected action.'}
- $antiCheat=$null
+ $antiCheat=$null;$result=$null;$cleanupNote=$null
  try{
  $request=$plan.request;$target=Get-HubTarget $request.gameExecutable
  if($target.fileIdentity -cne $plan.target.fileIdentity){return Add-HubOperationEvidence ([ordered]@{status='PreconditionChanged';reasonCode='desktop.neurotic-hubprotocol.selected_executable_changed_retry_the_action_343a6c17';messageParameters=@{};reason='Selected executable changed. Retry the action.'}) $plan $null}
- if($request.operation -in @('Install','SaveSettings')){
+ if($request.operation -in @('Install','SaveSettings','UpdateNrDll')){
   $antiCheat=Get-HubAntiCheat $request $target
   if($antiCheat.scan_status -eq 'cancelled'){return Add-HubOperationEvidence ([ordered]@{status='Cancelled';reasonCode='desktop.neurotic-hubprotocol.detection_cancelled_no_changes_made_f5bf3eea';messageParameters=@{};reason='Detection cancelled. No changes made.'}) $plan $antiCheat}
   if($antiCheat.fingerprint -cne $plan.antiCheat.fingerprint){return Add-HubOperationEvidence (New-HubAntiCheatDecision $target $antiCheat) $plan $antiCheat}
@@ -129,32 +173,52 @@ function Invoke-HubExecute($Request,[bool]$ManualAcknowledged=$false){
  try{
   if($request.operation -eq 'Uninstall'){$result=Invoke-NeuroticSimpleUninstall $target.directory}
   elseif($request.operation -eq 'SaveSettings'){$lock=Enter-NeuroticSimpleLock $target.directory;try{$result=Invoke-HubSettingsSave $target $request}finally{$lock.ReleaseMutex();$lock.Dispose()}}
+  elseif($request.operation -eq 'UpdateNrDll'){$result=Invoke-NeuroticNrDllUpdate $target.executable $request.nrDllCopy (Get-HubProperty $plan 'nrDllTarget') $plan.planId}
   elseif($request.operation -eq 'Install'){
    $identity=[pscustomobject]@{title=(Get-HubProperty $request 'gameTitle');store=(Get-HubProperty $request 'gameStore');storeId=(Get-HubProperty $request 'gameStoreId')}
-   $result=Invoke-NeuroticSimpleInstall $target.executable $package $request.proxyName ([bool](Get-HubProperty $request 'freshInstall' $false)) (Get-HubProperty $request 'fileDecisions' @()) (Get-HubProperty $request 'existingProxyAction' '') (Get-NeuroticAcceptedRuntimeComponents) $identity (Get-HubProperty $plan 'installDefaults')
+   $result=Invoke-NeuroticSimpleInstall $target.executable $package $request.proxyName ([bool](Get-HubProperty $request 'freshInstall' $false)) (Get-HubProperty $request 'fileDecisions' @()) (Get-HubProperty $request 'existingProxyAction' '') (Get-NeuroticAcceptedRuntimeComponents -IncludeNeuralModel:((Get-NeuroticNrDllTargetState $target.directory (Read-NeuroticInstallReceipt $target.directory).receipt) -eq 'Initial' -and $null -eq (Get-HubProperty $request 'nrDllCopy'))) $identity (Get-HubProperty $plan 'installDefaults') (Get-HubProperty $request 'nrDllCopy') ([bool](Get-HubProperty $request 'installInspector' $false))
   }else{return [ordered]@{status='UnsupportedOperation';reasonCode='desktop.hubviewmodel.use_install_or_uninstall_f5911d3d';messageParameters=@{};reason='Use Install or Uninstall.'}}
   if($result.status -eq 'FailedWithoutChanges' -and @($result.conflicts).Count){$result.status='NeedsDecision';$result|Add-Member -NotePropertyName decisionKind -NotePropertyValue 'FileConflict';$result|Add-Member -NotePropertyName fileConflicts -NotePropertyValue @($result.conflicts);$result|Add-Member -NotePropertyName target -NotePropertyValue $target.executable}
-  if($result -is [Collections.IDictionary]){$result.inspection=Get-HubInspection $target;$result.planId=$plan.planId}
-  else{$result|Add-Member -NotePropertyName inspection -NotePropertyValue (Get-HubInspection $target);$result|Add-Member -NotePropertyName planId -NotePropertyValue $plan.planId}
-  return Add-HubOperationEvidence $result $plan $antiCheat
- }finally{Remove-Item -LiteralPath $path -Force}
+  # Bind the authentic operation result before optional refresh/cleanup.
+  # A completed or partial mutation must retain its evidence if either fails.
+  $bound=[ordered]@{target=$target.executable;planId=$plan.planId}
+  foreach($name in $bound.Keys){if($result -is [Collections.IDictionary]){$result[$name]=$bound[$name]}else{$result|Add-Member -NotePropertyName $name -NotePropertyValue $bound[$name] -Force}}
+  try{
+   $inspection=Get-HubInspection $target
+   if($result -is [Collections.IDictionary]){$result['inspection']=$inspection}else{$result|Add-Member -NotePropertyName inspection -NotePropertyValue $inspection -Force}
+  }catch{
+   $note=if($request.operation -eq 'UpdateNrDll'){[pscustomobject]@{reasonCode='desktop.nrdll.inspection_unavailable';messageParameters=@{};reason='The NR DLL action finished, but game settings could not be refreshed.'}}else{[pscustomobject]@{reasonCode='desktop.operation.inspection_unavailable';messageParameters=@{};reason='Game settings could not be refreshed.'}}
+   $result=Add-HubOperationNote $result $note
+  }
+ }finally{
+  try{Remove-Item -LiteralPath $path -Force -ErrorAction Stop}
+  catch{
+   $cleanupNote=[pscustomobject]@{reasonCode='desktop.operation.cleanup_unavailable';messageParameters=@{};reason='Temporary operation data could not be removed.'}
+   if($null -ne $result){$result=Add-HubOperationNote $result $cleanupNote}
+   # If the mutation threw, preserve that original exception instead of
+   # replacing it with cleanup failure. The outer catch retains this note.
+  }
+ }
+ return Add-HubOperationEvidence $result $plan $antiCheat
  }catch{
   # The protocol's existing error result must retain evidence collected before
   # a later package/settings/write failure, without treating it as approval.
-  $_.Exception.Data['NeuroticOperationEvidence']=Add-HubOperationEvidence ([ordered]@{}) $plan $antiCheat
+  $evidence=Add-HubOperationEvidence ([ordered]@{}) $plan $antiCheat
+  if($null -ne $cleanupNote){$evidence['notes']=@($cleanupNote)}
+  $_.Exception.Data['NeuroticOperationEvidence']=$evidence
   throw
  }
 }
 function Get-HubLaunchPreflight($Request){
  $target=Get-HubTarget $Request.gameExecutable
- if($target.bitness -ne 64){return [ordered]@{status='FailedWithoutChanges';reasonCode='desktop.planintent.a_compatible_in_game_integration_is_unavailable__5a817f1b';messageParameters=@{};reason='A compatible in-game integration is unavailable. Use NR Anything.'}}
  return [ordered]@{status='LaunchReady';target=$target;targetLockName=('Global\NeuRotic-Installer-'+[NeuRoticSimpleFileIo]::DirectoryIdentity($target.directory));launcherPath=$null;cohort=@()}
 }
 function Resolve-HubSettingsDefaults($Request){
  $target=Get-HubTarget $Request.gameExecutable;$inspection=Get-HubInspection $target
  if($inspection.configRevision -cne $Request.configRevision){return [ordered]@{status='PreconditionChanged';reasonCode='desktop.neurotic-hubprotocol.settings_changed_externally_reload_before_resett_742a8b58';messageParameters=@{};reason='Settings changed externally. Reload before resetting defaults.'}}
- if($target.bitness -ne 64){throw 'In-game settings are unavailable for this architecture. Use NR Anything.'}
  $package=Resolve-HubPackage 'flagship-approved';$settings=@(Get-HubDefaultSettings $target $inspection $package)
+ # Package/defaults resolution may overlap an external settings edit. Recheck the actual INI before returning its staged defaults.
+ if((Get-HubInspection $target).configRevision -cne $Request.configRevision){return [ordered]@{status='PreconditionChanged';reasonCode='desktop.neurotic-hubprotocol.settings_changed_externally_reload_before_resett_742a8b58';messageParameters=@{};reason='Settings changed externally. Reload before resetting defaults.'}}
  return [ordered]@{status='DefaultsResolved';inspection=$inspection;defaultSettings=$settings;defaultsSource=[ordered]@{packageId=$package.id;packageDigest=$package.digest;executable=$target.executable;executableFileIdentity=$target.fileIdentity;runtimeRules='Automatic game and GPU rules resolve on next launch'}}
 }
 function Invoke-HubProtocol([string]$RequestPath,[string]$ResultPath){

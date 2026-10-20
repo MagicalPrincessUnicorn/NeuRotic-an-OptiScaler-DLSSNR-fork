@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cmath>
 #include "PerformanceMetrics.h"
+#include "capture/ProcessingAdapter.h"
+#include "capture/WorkerColor.h"
 #include "guidance/DepthPolicy.h"
 
 namespace nrw {
@@ -21,13 +23,24 @@ struct FrameStamp {
     uint32_t width = 0, height = 0;
     bool reset = false;
     uint64_t streamEpoch = 1, geometryEpoch = 1, configEpoch = 1;
+    uint64_t outputColorEpoch = 1; // generated preview/output conversion generation
+    uint64_t colorEpoch = 1;
+};
+struct AnalysisFrame {
+    FrameStamp stamp;color::Representation sourceColor;
+    uint32_t recipe=0;bool completed=false;uint64_t ownedBytes=0;double hostMilliseconds=0;
+    ComPtr<ID3D11Texture2D> texture; // full-raster encoded BGRA8 analysis sidecar, never original HDR
+    std::shared_ptr<void> ownership;
 };
 struct CapturedFrame {
     FrameStamp stamp;
-    ComPtr<ID3D11Texture2D> texture; // worker-owned snapshot, SDR BGRA8
+    ComPtr<ID3D11Texture2D> texture; // worker-owned snapshot in its declared actual color domain
     uint64_t acquiredQpc = 0; // copy completion; stamp keeps the compositor source clock
     bool pairedDepthOutput = false; // owned completed depth result may present its exact older colour
     std::shared_ptr<void> ownership; // retain pooled storage through the last consumer
+    std::shared_ptr<const AnalysisFrame> analysis; // immutable owned/completed optional estimate input
+    std::optional<float> sdrWhiteScale; // actual OS output SDR UI reference white; never captured-color rescale
+    color::Representation color=color::DeclaredSdr();
 };
 struct WindowIdentity {
     uint64_t hwnd = 0, processCreation = 0;
@@ -54,6 +67,8 @@ struct GuideResult {
     // depth. Raw device depth must be finite [0,1]; this does not certify cameras.
     bool rawDeviceDepth = false, rawDeviceDepthReversed = false;
     std::string depthProvider, motionProvider, reason;
+    uint64_t analysisOwnedBytes=0;double analysisHostMs=0;
+    uint32_t analysisRecipe=0; // encoded SDR bypass 0; existing full-raster core HDR proxy 1
 };
 inline bool PrepareDepthUpload(const GuideResult& guides,std::vector<float>& values,bool& inverted)
 {
@@ -74,6 +89,8 @@ struct NrOptions {
     uint32_t nrScalePercent = 100; // Native by default for existing protocol clients.
     GuideMode guides = GuideMode::Off;
     bool gpuTiming = true;
+    adapters::Identity processingAdapter;
+    uint64_t processingSession=0;
 };
 struct NrProcessingOptions {
     float transferStrength=1,colourStrength=1;
@@ -91,6 +108,7 @@ struct NrResult {
     double milliseconds = 0;
     NrMeasurements measurements;
     std::shared_ptr<void> ownership; // retain completed output until presentation retires
+    color::Representation color=color::DeclaredSdr();
 };
 struct CaptureStatistics {
     uint64_t arrivals=0, dequeued=0, superseded=0, presentCalls=0, foregroundHwnd=0;
@@ -99,8 +117,8 @@ struct CaptureStatistics {
     OptionalMs presentCallMs;
     std::string interactionReason="not-started";
 };
-struct CaptureOptions { WindowIdentity target; uint64_t session = 1; bool cursor = true; bool overlay = true; uint32_t controlHostPid = 0; };
-struct SnapshotResult { std::wstring path; std::string error; };
+struct CaptureOptions { WindowIdentity target; uint64_t session = 1; bool cursor = true; bool overlay = true; uint32_t controlHostPid = 0; adapters::Binding processing; };
+struct SnapshotResult { std::wstring path; std::string error,encoding; color::Representation color; };
 class FrameProbe;
 class CaptureHost {
 public:
@@ -109,7 +127,7 @@ public:
     bool Start(const CaptureOptions&, std::string& reason);
     bool Next(CapturedFrame&, std::string& reason); // bounded poll; false may mean no new frame
     bool Present(const CapturedFrame&, ID3D11Texture2D* processed, float split,
-                 std::string& reason, int stripes=0, SnapshotResult* snapshot=nullptr, int direction=0, std::shared_ptr<void> processedOwnership={}, FrameProbe* probe=nullptr); // original-side direction 0..7; split 0=processed, 1=original
+                 std::string& reason, int stripes=0, SnapshotResult* snapshot=nullptr, int direction=0, std::shared_ptr<void> processedOwnership={}, FrameProbe* probe=nullptr, const color::Representation* processedColor=nullptr); // original-side direction 0..7; split 0=processed, 1=original
     bool Pump(); // false on output close, Escape or source destruction
     bool Paused() const;
     HANDLE WakeHandle() const; // borrowed owner-thread handle; valid until Stop
@@ -120,8 +138,10 @@ public:
     bool DisengageHotkeyAvailable() const;
     void Disengage(); // hide/release interaction before backend retirement; retain GPU resources
     void Stop();
+    void RetainSharedGeneration() noexcept; // no GPU/provider entry; process-lifetime ownership
     ID3D11Device* Device() const;
     ID3D11DeviceContext* Context() const;
+    adapters::CaptureIdentity AdapterIdentity() const;
     static std::vector<WindowIdentity> Enumerate();
     static bool Inspect(HWND, WindowIdentity&, std::string& reason);
     static bool Validate(const WindowIdentity&, std::string& reason);
@@ -138,7 +158,9 @@ public:
     bool Reconfigure(const NrProcessingOptions&,std::string& reason); // owner-thread completed-frame boundary; never changes model/device
     NrResult Process(const CapturedFrame&, const GuideResult* guides = nullptr, FrameProbe* probe=nullptr);
     void Stop();
+    void RetainSharedGeneration() noexcept; // no GPU/provider entry; process-lifetime ownership
     bool RequiresRestart() const;
+    adapters::Identity ProcessingAdapter() const;
 private:
 #ifdef NRW_NATIVE_TEST
     friend struct NrOwnedGpuFixture;

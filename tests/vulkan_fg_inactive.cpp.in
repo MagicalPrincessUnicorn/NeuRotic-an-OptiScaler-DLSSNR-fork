@@ -1,0 +1,25 @@
+#include <vulkan/vulkan.h>
+#include <optional>
+#include <cstdio>
+#include <cstdlib>
+static bool enabled=false,capture=false,configuration=true;static int calls=0,polls=0;
+struct Setting{uint32_t value_or_default()const{return 2;}};
+struct Config{Setting DlssNrRoute;struct Runtime{bool enabled;};Runtime GetDlssNrRuntimeSnapshot()const{return {enabled};}static Config* Instance(){static Config c;return &c;}};
+static std::optional<Config> TryNrConfigSnapshot(const Config& c){return configuration?std::optional(c):std::nullopt;}
+static void Check(bool v,const char* s){if(!v){std::fprintf(stderr,"FAIL: %s\n",s);std::exit(1);}}
+namespace DlssNr{
+struct VkObservedPresent{VkDevice device{};VkQueue queue{};uint64_t acquisition=0;};
+struct Device{VkDevice device;};struct Devices{Device ForQueue(VkQueue){return {reinterpret_cast<VkDevice>(5)};}};
+static Devices& VulkanLoaderWsiDevices(){static Devices d;return d;}
+static bool WantsVulkanNrCapture(){return capture;}
+static void PollVkNrCompletions(){++polls;}
+struct Executor{void Maintain(const VkObservedPresent& p,bool inactive){Check(p.device==reinterpret_cast<VkDevice>(5)&&p.queue==reinterpret_cast<VkQueue>(6)&&!p.acquisition&&inactive,"maintenance has own device/queue only; no fabricated acquisition");Check(calls==0,"executor releases private recordings before model retirement");++calls;}};
+static Executor& GetVulkanPresentExecutor(){static Executor e;return e;}
+static void RetireInactiveVk(VkDevice d,bool on,uint32_t route){Check(calls==1&&d==reinterpret_cast<VkDevice>(5)&&!on&&route==2,"model retirement follows actual inactive policy");++calls;}
+}
+static void FgBypass(){auto queue=reinterpret_cast<VkQueue>(6);
+// PRODUCTION_FG_MAINTENANCE
+}
+int main(){FgBypass();Check(calls==2&&polls==1,"FG bypass must drain inactive private/model resources");
+ for(int phase=0;phase<3;++phase){calls=polls=0;enabled=phase==0;capture=phase==1;configuration=phase!=2;FgBypass();Check(calls==0&&polls==0,"active/private capture/unknown config cannot retire requested resources");}
+ puts("PASS actual FG early-return maintenance block: off cleanup, resource ordering, active/private capture/config refusal");}

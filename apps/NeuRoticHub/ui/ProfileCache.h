@@ -13,4 +13,6 @@ struct KnownInstallationInventory {std::vector<BulkUninstallTarget> targets;std:
 // Bounded nonrecursive metadata only. Stale entries are candidates, never authority.
 KnownInstallationInventory EnumerateKnownInstallations() noexcept;
 bool RememberKnownInstallation(const std::string& executable,const std::string& title={}) noexcept;
+// Commit advisory installation knowledge from an already parsed operation receipt.
+bool PreserveOperationKnowledge(const Json& request,const Json& receipt) noexcept;
 }

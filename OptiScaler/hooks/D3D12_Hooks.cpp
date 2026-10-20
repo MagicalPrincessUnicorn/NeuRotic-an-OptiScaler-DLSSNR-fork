@@ -2,6 +2,10 @@
 #include <dlssnr/NativeD3D12Guides.h>
 #include "D3D12_Hooks.h"
 #include <nr/d3d12/NativeRecordingHooks.h>
+#include <nr/d3d12/NativeRecordingReplay.h>
+#include <nr/d3d12/NativeRtvObservation.h>
+#include <nr/d3d12/NativeRtvHookPolicy.h>
+#include <tlhelp32.h>
 #include <dlssnr/DredDiagnostics.h>
 #include <dlssnr/NrGpuSafety.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
@@ -59,11 +63,22 @@ using PFN_Release = rewrite_signature<decltype(&IUnknown::Release)>::type;
 static PFN_CreateSampler o_CreateSampler = nullptr;
 static PFN_CheckFeatureSupport o_CheckFeatureSupport = nullptr;
 static PFN_CreateCommittedResource o_CreateCommittedResource = nullptr;
+static std::atomic<bool> s_committedHookRetained{false}, s_committedHookActive{true};
 static PFN_CreatePlacedResource o_CreatePlacedResource = nullptr;
 static PFN_SetResidencyPriority o_SetResidencyPriority = nullptr;
 static PFN_GetResourceAllocationInfo o_GetResourceAllocationInfo = nullptr;
 static PFN_CreateRootSignature o_CreateRootSignature = nullptr;
 static PFN_CreateCommandSignature o_CreateCommandSignature = nullptr;
+using PFN_NativeCreateDescriptorHeap = rewrite_signature<decltype(&ID3D12Device::CreateDescriptorHeap)>::type;
+using PFN_NativeCreateRtv = rewrite_signature<decltype(&ID3D12Device::CreateRenderTargetView)>::type;
+using PFN_NativeCopyDescriptors = rewrite_signature<decltype(&ID3D12Device::CopyDescriptors)>::type;
+using PFN_NativeCopyDescriptorsSimple = rewrite_signature<decltype(&ID3D12Device::CopyDescriptorsSimple)>::type;
+static PFN_NativeCreateDescriptorHeap o_NativeCreateDescriptorHeap = nullptr;
+static PFN_NativeCreateRtv o_NativeCreateRtv = nullptr;
+static PFN_NativeCopyDescriptors o_NativeCopyDescriptors = nullptr;
+static PFN_NativeCopyDescriptorsSimple o_NativeCopyDescriptorsSimple = nullptr;
+static std::atomic<bool> s_nativeRtvAttempted{false};
+static std::array<void*,5> s_nativeRtvTargets{};
 static PFN_D3D12GetInterface o_D3D12GetInterface = nullptr;
 static PFN_CreateDevice o_CreateDevice = nullptr;
 
@@ -1225,17 +1240,20 @@ void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
 
 void D3D12Hooks::InstallNativeRecordingHooks(ID3D12GraphicsCommandList* commandList)
 {
-    // Completion hooks share Close/Reset with the native recording observer.
-    // Finish their installation before native coverage pins executable routes;
-    // the first SR ticket must not replace those routes mid-recording.
-    if (!DlssNr::GpuSafety::PrepareRecordingHooks(commandList))
+    const auto interfaces = Neurotic::D3D12::NativeRecordingInterfaces::Resolve(commandList);
+    if (FAILED(interfaces.result) || !interfaces.terminal)
     {
-        s_nativeRecordingHooks.Revoke();
-        LOG_WARN("Native recording completion hooks unavailable");
+        LOG_WARN("Native recording observation interface unavailable: {:X}", static_cast<unsigned>(interfaces.result));
         return;
     }
-    // Independent of optional legacy RestoreRoot settings. Installation never
-    // authenticates this in-progress recording: a later real Reset is required.
+    // Completion metadata follows the same terminal list, while actual NR and
+    // original SR execution keep their existing caller/rendering interface.
+    if (!DlssNr::GpuSafety::PrepareRecordingHooks(commandList))
+    {
+        LOG_WARN("Native recording completion hooks or wrapper cookie continuity unavailable");
+        return;
+    }
+    commandList = interfaces.terminal.Get();
     if (!s_nativeRecordingHooks.Install(commandList))
     {
         LOG_WARN("Native recording hooks unavailable for this command-list implementation");
@@ -1251,6 +1269,10 @@ void D3D12Hooks::InstallNativeRecordingHooks(ID3D12GraphicsCommandList* commandL
             d.failedIid.Data4[0],d.failedIid.Data4[1],d.failedIid.Data4[2],d.failedIid.Data4[3],
             d.failedIid.Data4[4],d.failedIid.Data4[5],d.failedIid.Data4[6],d.failedIid.Data4[7]);
     }
+    if (interfaces.caller.Get() != interfaces.terminal.Get() &&
+        !s_nativeRecordingHooks.InstallWrapperHeapHook(interfaces.caller.Get()))
+        LOG_WARN("Native wrapper heap forwarding route unavailable; affected wrapped restoration will report its missing argument proof");
+
 }
 
 static void HookToCommandList(ID3D12Device* InDevice)
@@ -1818,6 +1840,10 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
                                          const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riidResource,
                                          void** ppvResource)
 {
+    Neurotic::D3D12::NativeRtvObservation::CommittedCallScope committedCall;
+    if (!s_committedHookActive.load())
+        return o_CreateCommittedResource(device, pHeapProperties, HeapFlags, pDesc,
+            InitialResourceState, pOptimizedClearValue, riidResource, ppvResource);
     DlssNr::CandidateObserver::CreationScope observation;
     if (!_skipCommitedResource)
     {
@@ -1848,6 +1874,8 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
     const HRESULT created = o_CreateCommittedResource(device, pHeapProperties, HeapFlags, pDesc,
                                                       InitialResourceState, pOptimizedClearValue,
                                                       riidResource, ppvResource);
+    Neurotic::D3D12::NativeRtvObservation::CommittedReturned(committedCall, created,
+        device, pHeapProperties, HeapFlags, ppvResource);
 
     // Where the exposure scan sees the game's resources. Silent and cheap for everything that does
     // not match, and it does nothing at all unless Neural Rendering is running.
@@ -2204,6 +2232,48 @@ static HRESULT hkCreateRootSignature(ID3D12Device* device, UINT nodeMask, const 
     return result;
 }
 
+// Independent of optional HUD tracking and current NR enable. Retain these
+// forwarding trampolines until process exit; retirement closes metadata only.
+static HRESULT STDMETHODCALLTYPE hkNativeCreateDescriptorHeap(ID3D12Device* device,
+    const D3D12_DESCRIPTOR_HEAP_DESC* desc, REFIID iid, void** output)
+{ return Neurotic::D3D12::NativeRtvObservation::CreateHeap(o_NativeCreateDescriptorHeap, device, desc, iid, output); }
+static void STDMETHODCALLTYPE hkNativeCreateRtv(ID3D12Device* device, ID3D12Resource* resource,
+    const D3D12_RENDER_TARGET_VIEW_DESC* desc, D3D12_CPU_DESCRIPTOR_HANDLE destination)
+{ Neurotic::D3D12::NativeRtvObservation::CreateRtv(o_NativeCreateRtv, device, resource, desc, destination); }
+static void STDMETHODCALLTYPE hkNativeCopyDescriptors(ID3D12Device* device, UINT nd,
+    const D3D12_CPU_DESCRIPTOR_HANDLE* dst, const UINT* ds, UINT ns,
+    const D3D12_CPU_DESCRIPTOR_HANDLE* src, const UINT* ss, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{ Neurotic::D3D12::NativeRtvObservation::CopyRanges(o_NativeCopyDescriptors, device, nd, dst, ds, ns, src, ss, type); }
+static void STDMETHODCALLTYPE hkNativeCopyDescriptorsSimple(ID3D12Device* device, UINT count,
+    D3D12_CPU_DESCRIPTOR_HANDLE dst, D3D12_CPU_DESCRIPTOR_HANDLE src, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{ Neurotic::D3D12::NativeRtvObservation::CopySimple(o_NativeCopyDescriptorsSimple, device, count, dst, src, type); }
+VALIDATE_HOOK(hkNativeCreateDescriptorHeap, PFN_NativeCreateDescriptorHeap)
+VALIDATE_HOOK(hkNativeCreateRtv, PFN_NativeCreateRtv)
+VALIDATE_HOOK(hkNativeCopyDescriptors, PFN_NativeCopyDescriptors)
+VALIDATE_HOOK(hkNativeCopyDescriptorsSimple, PFN_NativeCopyDescriptorsSimple)
+struct NativeRtvThreadEnrollment {
+    std::vector<HANDLE> handles;
+    ~NativeRtvThreadEnrollment() { for (auto handle : handles) CloseHandle(handle); }
+    bool Enlist() {
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (snapshot == INVALID_HANDLE_VALUE) return false;
+        THREADENTRY32 entry{}; entry.dwSize = sizeof(entry); bool good = true;
+        BOOL next = Thread32First(snapshot, &entry);
+        while (next) {
+            if (entry.th32OwnerProcessID == GetCurrentProcessId() && entry.th32ThreadID != GetCurrentThreadId()) {
+                HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
+                    FALSE, entry.th32ThreadID);
+                if (!thread) { good = false; break; }
+                try { handles.push_back(thread); } catch (...) { CloseHandle(thread); good = false; break; }
+                if (DetourUpdateThread(thread) != NO_ERROR) { good = false; break; }
+            }
+            next = Thread32Next(snapshot, &entry);
+        }
+        if (!next && GetLastError() != ERROR_NO_MORE_FILES) good = false;
+        CloseHandle(snapshot); return good;
+    }
+};
+
 VALIDATE_HOOK(hkCreateCommandSignature, PFN_CreateCommandSignature)
 static HRESULT hkCreateCommandSignature(ID3D12Device* device, const D3D12_COMMAND_SIGNATURE_DESC* descriptor,
                                         ID3D12RootSignature* root, REFIID iid, void** output)
@@ -2249,6 +2319,10 @@ static HRESULT hkD3D12GetInterface(REFCLSID rclsid, REFIID riid, void** ppvDebug
 
 static void HookToDevice(ID3D12Device* InDevice)
 {
+    if (InDevice) {
+        s_committedHookActive = true;
+        Neurotic::D3D12::NativeRtvObservation::ActivateKnownRoute();
+    }
     if (o_CreateSampler != nullptr || InDevice == nullptr)
         return;
 
@@ -2273,8 +2347,22 @@ static void HookToDevice(ID3D12Device* InDevice)
     if (installCommandSignature)
         o_CreateCommandSignature = (PFN_CreateCommandSignature) pVTable[41];
     o_GetResourceAllocationInfo = (PFN_GetResourceAllocationInfo) pVTable[25];
-    o_CreateCommittedResource = (PFN_CreateCommittedResource) pVTable[27];
+    const bool installCommitted = !s_committedHookRetained.load();
+    if (installCommitted) o_CreateCommittedResource = (PFN_CreateCommittedResource) pVTable[27];
     o_CreatePlacedResource = (PFN_CreatePlacedResource) pVTable[29];
+    const bool installNativeRtv = !s_nativeRtvAttempted.exchange(true);
+    bool nativeRtvPinned = false, nativeRtvAttached = false;
+    LONG nativeCommittedAttachResult = ERROR_NOT_SUPPORTED;
+    std::array<LONG,4> nativeRtvAttach{ERROR_NOT_SUPPORTED,ERROR_NOT_SUPPORTED,ERROR_NOT_SUPPORTED,ERROR_NOT_SUPPORTED};
+    if (installNativeRtv) {
+        s_nativeRtvTargets = {pVTable[14],pVTable[20],pVTable[23],pVTable[24],pVTable[27]};
+        o_NativeCreateDescriptorHeap = reinterpret_cast<PFN_NativeCreateDescriptorHeap>(pVTable[14]);
+        o_NativeCreateRtv = reinterpret_cast<PFN_NativeCreateRtv>(pVTable[20]);
+        o_NativeCopyDescriptors = reinterpret_cast<PFN_NativeCopyDescriptors>(pVTable[23]);
+        o_NativeCopyDescriptorsSimple = reinterpret_cast<PFN_NativeCopyDescriptorsSimple>(pVTable[24]);
+        nativeRtvPinned = Neurotic::D3D12::NativeRtvObservation::Pin(reinterpret_cast<void*>(&hkNativeCreateRtv));
+        for (auto* target : s_nativeRtvTargets) nativeRtvPinned = Neurotic::D3D12::NativeRtvObservation::Pin(target) && nativeRtvPinned;
+    }
 
     ID3D12Device1* device12_1 = nullptr;
     if (realDevice)
@@ -2292,8 +2380,20 @@ static void HookToDevice(ID3D12Device* InDevice)
     // Apply the detour
     if (o_CreateSampler != nullptr)
     {
-        DetourTransactionBegin();
-        DetourUpdateThread(GetCurrentThread());
+        const LONG transactionBegin = DetourTransactionBegin();
+        const LONG transactionThread = DetourUpdateThread(GetCurrentThread());
+        NativeRtvThreadEnrollment rtvThreads;
+        const bool rtvThreadsEnlisted = installNativeRtv && nativeRtvPinned &&
+            transactionBegin == NO_ERROR && transactionThread == NO_ERROR && rtvThreads.Enlist();
+        const Neurotic::D3D12::NativeRtvHookPolicy::Install rtvInstall{
+            installNativeRtv, nativeRtvPinned, transactionBegin == NO_ERROR,
+            transactionThread == NO_ERROR, rtvThreadsEnlisted};
+        if (rtvInstall.Ready()) {
+            nativeRtvAttach[0] = DetourAttach(reinterpret_cast<PVOID*>(&o_NativeCreateDescriptorHeap), hkNativeCreateDescriptorHeap);
+            nativeRtvAttach[1] = DetourAttach(reinterpret_cast<PVOID*>(&o_NativeCreateRtv), hkNativeCreateRtv);
+            nativeRtvAttach[2] = DetourAttach(reinterpret_cast<PVOID*>(&o_NativeCopyDescriptors), hkNativeCopyDescriptors);
+            nativeRtvAttach[3] = DetourAttach(reinterpret_cast<PVOID*>(&o_NativeCopyDescriptorsSimple), hkNativeCopyDescriptorsSimple);
+        }
 
         if (o_CreateSampler != nullptr)
             DetourAttach(&(PVOID&) o_CreateSampler, hkCreateSampler);
@@ -2334,21 +2434,33 @@ static void HookToDevice(ID3D12Device* InDevice)
                 DetourAttach(&(PVOID&) o_GetResourceAllocationInfo, hkGetResourceAllocationInfo);
         }
 
-        LONG observedCommittedAttach = ERROR_NOT_SUPPORTED;
+        LONG observedCommittedAttach = s_committedHookRetained.load() ? NO_ERROR : ERROR_NOT_SUPPORTED;
         LONG observedPlacedAttach = ERROR_NOT_SUPPORTED;
+        // The new observation-only hook requires the same actual installation
+        // prerequisites as its descriptor observers. Preserve inherited spoof/scan
+        // attachment requests independently; they do not imply observer coverage.
+        if (rtvInstall.AttachCommitted(installCommitted, o_CreateCommittedResource != nullptr,
+            wantSpoof || wantScan))
+            observedCommittedAttach = DetourAttach(&(PVOID&) o_CreateCommittedResource, hkCreateCommittedResource);
         if (wantSpoof || wantScan)
         {
             if (!wantSpoof)
                 LOG_DEBUG("DLSS-NR wants the resource creation hooks, applying detours");
-
-            if (o_CreateCommittedResource != nullptr)
-                observedCommittedAttach = DetourAttach(&(PVOID&) o_CreateCommittedResource, hkCreateCommittedResource);
 
             if (o_CreatePlacedResource != nullptr)
                 observedPlacedAttach = DetourAttach(&(PVOID&) o_CreatePlacedResource, hkCreatePlacedResource);
         }
 
         auto detourResult = DetourTransactionCommit();
+        nativeCommittedAttachResult = observedCommittedAttach;
+        // Publish retention monotonically; a failed later attempt must never
+        // clear forwarding ownership already established by a successful one.
+        if (rtvInstall.RetainCommitted(s_committedHookRetained.load(),
+            installCommitted, observedCommittedAttach == NO_ERROR, detourResult == NO_ERROR))
+            s_committedHookRetained = true;
+        nativeRtvAttached = rtvInstall.Coverage(detourResult == NO_ERROR,
+            observedCommittedAttach == NO_ERROR,
+            std::all_of(nativeRtvAttach.begin(), nativeRtvAttach.end(), [](LONG result){ return result == NO_ERROR; }));
         if (detourResult == NO_ERROR && observedCommandSignatureAttach != NO_ERROR)
             o_CreateCommandSignature = nullptr;
         const auto committedObservation = !(wantSpoof || wantScan) ? 1u :
@@ -2363,7 +2475,7 @@ static void HookToDevice(ID3D12Device* InDevice)
             o_CheckFeatureSupport = nullptr;
             o_CreateRootSignature = nullptr;
             if (installCommandSignature) o_CreateCommandSignature = nullptr;
-            o_CreateCommittedResource = nullptr;
+            if (!s_committedHookRetained.load()) o_CreateCommittedResource = nullptr;
             o_CreatePlacedResource = nullptr;
             o_D3D12DeviceRelease = nullptr;
             o_GetResourceAllocationInfo = nullptr;
@@ -2380,6 +2492,13 @@ static void HookToDevice(ID3D12Device* InDevice)
         ResTrack_Dx12::HookDevice(InDevice);
     }
 
+    if (installNativeRtv) {
+        const bool eligible = Neurotic::D3D12::NativeRtvObservation::Configure(s_nativeRtvTargets, nativeRtvAttached);
+        LOG_INFO("NR Native RTV observation: eligible={} modulePinned={} attachHeap={} attachView={} attachCopy={} attachSimple={} attachCommitted={} committedRetained={} retainedForwarding=true",
+            eligible,nativeRtvPinned,nativeRtvAttach[0],nativeRtvAttach[1],nativeRtvAttach[2],nativeRtvAttach[3],
+            nativeCommittedAttachResult,s_committedHookRetained.load());
+    }
+
     if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::LoadStreamline())
     {
         StreamlineProxy::InitWithD3D12(InDevice);
@@ -2388,6 +2507,8 @@ static void HookToDevice(ID3D12Device* InDevice)
 
 static void UnhookDevice()
 {
+    s_committedHookActive = false;
+    Neurotic::D3D12::NativeRtvObservation::Retire();
     s_nativeRecordingHooks.Revoke();
     Neurotic::D3D12::NativeIndirectSignatures::Retire();
     LOG_FUNC();
@@ -2406,7 +2527,7 @@ static void UnhookDevice()
     if (o_CheckFeatureSupport != nullptr)
         DetourDetach(&(PVOID&) o_CheckFeatureSupport, hkCheckFeatureSupport);
 
-    if (o_CreateCommittedResource != nullptr)
+    if (o_CreateCommittedResource != nullptr && !s_committedHookRetained.load())
         DetourDetach(&(PVOID&) o_CreateCommittedResource, hkCreateCommittedResource);
 
     if (o_CreatePlacedResource != nullptr)
@@ -2428,7 +2549,7 @@ static void UnhookDevice()
     {
         o_CreateSampler = nullptr;
         o_CheckFeatureSupport = nullptr;
-        o_CreateCommittedResource = nullptr;
+        if (!s_committedHookRetained.load()) o_CreateCommittedResource = nullptr;
         o_CreatePlacedResource = nullptr;
         o_D3D12DeviceRelease = nullptr;
         o_GetResourceAllocationInfo = nullptr;
@@ -2481,6 +2602,8 @@ void D3D12Hooks::HookAgility(HMODULE module)
 
 void D3D12Hooks::Unhook()
 {
+    s_committedHookActive = false;
+    Neurotic::D3D12::NativeRtvObservation::Retire();
     s_nativeRecordingHooks.Revoke();
     Neurotic::D3D12::NativeIndirectSignatures::Retire();
     if (o_D3D12CreateDevice == nullptr && o_CreateCommandSignature == nullptr)
@@ -2497,7 +2620,7 @@ void D3D12Hooks::Unhook()
     if (o_CheckFeatureSupport != nullptr)
         DetourDetach(&(PVOID&) o_CheckFeatureSupport, hkCheckFeatureSupport);
 
-    if (o_CreateCommittedResource != nullptr)
+    if (o_CreateCommittedResource != nullptr && !s_committedHookRetained.load())
         DetourDetach(&(PVOID&) o_CreateCommittedResource, hkCreateCommittedResource);
 
     if (o_CreatePlacedResource != nullptr)
@@ -2519,7 +2642,7 @@ void D3D12Hooks::Unhook()
     {
         o_CreateSampler = nullptr;
         o_CheckFeatureSupport = nullptr;
-        o_CreateCommittedResource = nullptr;
+        if (!s_committedHookRetained.load()) o_CreateCommittedResource = nullptr;
         o_CreatePlacedResource = nullptr;
         o_D3D12DeviceRelease = nullptr;
         o_GetResourceAllocationInfo = nullptr;
@@ -2530,7 +2653,7 @@ void D3D12Hooks::SetRootSignatureTracking(bool enable) { isUpscalerActive = !ena
 
 D3D12Hooks::NativeRecordingObservation D3D12Hooks::ObserveNativeRecording(ID3D12GraphicsCommandList* commandList)
 {
-    return s_nativeRecordingObserver.Observe(commandList);
+    return s_nativeRecordingObserver.ObserveCaller(commandList);
 }
 
 DlssNr::NativeRecordingDiagnosticV1 D3D12Hooks::DiagnoseNativeRecording(ID3D12GraphicsCommandList* commandList)
@@ -2558,19 +2681,35 @@ DlssNr::NativeRecordingDiagnosticV1 D3D12Hooks::DiagnoseNativeRecording(ID3D12Gr
 
 std::optional<NativeStateRestorePoint> D3D12Hooks::CapturePostSrState(
     ID3D12GraphicsCommandList* commandList, Neurotic::D3D12::RestoreMask mask,
-    Neurotic::D3D12::NativeStateCaptureDiagnostic* diagnostic)
+    Neurotic::D3D12::NativeStateCaptureDiagnostic* diagnostic,
+    Neurotic::D3D12::NativeRecordingState::QueryPolicy queryPolicy)
 {
-    auto observed = s_nativeRecordingObserver.Observe(commandList, diagnostic);
+    auto context = Neurotic::D3D12::NativeRecordingReplayContext::Prepare(s_nativeRecordingHooks, commandList);
+    if (!context || !context->Valid())
+    { if (diagnostic) { *diagnostic = {}; diagnostic->reason = "Native.State.OuterRoutesUnavailable"; } return {}; }
+    auto* terminal = context->interfaces.terminal.Get();
+    auto observed = s_nativeRecordingObserver.Observe(terminal, diagnostic);
     if (!observed.active || !observed.completeCoverage)
     {
-        if (diagnostic) {
-            diagnostic->reason = !observed.active ? "Native.State.InactiveOrTainted" : "Native.State.CoverageIncomplete";
-        }
+        if (diagnostic) diagnostic->reason = !observed.active ? "Native.State.InactiveOrTainted" : "Native.State.CoverageIncomplete";
         return {};
     }
-    auto state = s_nativeRecordingObserver.CaptureRestorable(commandList, mask, NativeOriginalSetters(), diagnostic);
+    auto state = s_nativeRecordingObserver.CaptureRestorable(terminal, mask, NativeOriginalSetters(), diagnostic, queryPolicy);
     if (!state) return {};
-    return NativeStateRestorePoint{observed.nativeList, observed.incarnation, std::move(*state)};
+    if(state->Incarnation()!=observed.incarnation)
+    { if(diagnostic)diagnostic->reason="Native.State.RecordingChangedDuringPreparation";return {}; }
+    const auto heaps = state->HeapArguments();
+    auto replay = Neurotic::D3D12::NativeRecordingReplayPlan::Make(s_nativeRecordingHooks,context,observed.incarnation,
+        mask,state->HeapCount(),heaps.data());
+    if (replay.refusal) { if (diagnostic) diagnostic->reason = replay.refusal; return {}; }
+    // Check the actual public replay capabilities before any inserted NR work.
+    auto checked = s_nativeRecordingObserver.CaptureRestorable(terminal,mask,replay.setters,diagnostic,queryPolicy);
+    if (!checked) return {};
+    const auto checkedHeaps = checked->HeapArguments();
+    if (checked->Incarnation()!=observed.incarnation || checked->HeapCount()!=state->HeapCount() || checkedHeaps!=heaps)
+    { if(diagnostic)diagnostic->reason="Native.State.HeapBindingChangedDuringPreparation";return {}; }
+    return NativeStateRestorePoint{terminal, observed.incarnation, std::move(*checked), std::move(context), std::move(replay.setters)};
+
 }
 
 bool D3D12Hooks::RestorePostSrState(const NativeStateRestorePoint& snapshot,
@@ -2589,7 +2728,7 @@ bool D3D12Hooks::RestorePostSrState(const NativeStateRestorePoint& snapshot,
         return false;
     }
     return s_nativeRecordingObserver.Restore(snapshot.nativeList, snapshot.incarnation, snapshot.state,
-                                             NativeOriginalSetters(), diagnostic);
+                                             snapshot.original, diagnostic);
 }
 
 bool D3D12Hooks::RegisterNativeRootLayout(
@@ -2598,13 +2737,114 @@ bool D3D12Hooks::RegisterNativeRootLayout(
     return s_nativeRecordingObserver.RegisterLayout(signature, std::move(layout));
 }
 
+bool D3D12Hooks::DeferNativePostQuery(ID3D12GraphicsCommandList* commandList,
+    const Neurotic::D3D12::NativeQueryInsertion::Boundary& producer,
+    std::shared_ptr<Neurotic::D3D12::NativeQueryInsertion::Operation> operation)
+{
+    const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(commandList);
+    if(FAILED(interfaces.result)||!interfaces.terminal||!interfaces.caller)return false;
+    return s_nativeRecordingHooks.DeferPostQuery(interfaces.terminal.Get(),producer,std::move(operation),interfaces.caller.Get());
+}
+
+Neurotic::D3D12::NativeQueryInsertion::Outcome D3D12Hooks::RecordNativeOwnedBarrier(
+    Neurotic::D3D12::NativeQueryInsertion::Boundary& cursor,std::uint64_t& serial,
+    const D3D12_RESOURCE_BARRIER& barrier,bool (*guard)(void*) noexcept,void* context,
+    ID3D12GraphicsCommandList* executionCaller,const D3D12_RESOURCE_BARRIER* callerBarrier)
+{
+    return s_nativeRecordingHooks.RecordOwnedBarrier(cursor,serial,barrier,guard,context,executionCaller,callerBarrier);
+}
+
+std::optional<Neurotic::D3D12::NativeQueryInsertion::Boundary> D3D12Hooks::ObserveNativeQueryProducer(
+    ID3D12GraphicsCommandList* list)
+{
+    Neurotic::D3D12::NativeQueryInsertion::Boundary result;
+    result.list=reinterpret_cast<std::uintptr_t>(list);
+    if(!list||!s_nativeRecordingObserver.ReadCurrentEpoch(list,result.incarnation,result.workOrdinal,result.hookGeneration))return {};
+    return result;
+}
+
+std::optional<Neurotic::D3D12::NativeResourceStateQuery> D3D12Hooks::PrepareNativeResourceStateQuery(
+    ID3D12Resource* resource, UINT subresource)
+{
+    if(!resource)return {};
+    // Foreign COM calls precede epoch selection. No GetDesc/AddRef is made
+    // while the observer or state mutex is held.
+    Microsoft::WRL::ComPtr<ID3D12Resource> retained=resource;
+    const auto description=resource->GetDesc();
+    UINT total=0;
+    if(description.Dimension==D3D12_RESOURCE_DIMENSION_BUFFER)total=1;
+    else
+    {
+        Microsoft::WRL::ComPtr<ID3D12Device> device;
+        D3D12_FEATURE_DATA_FORMAT_INFO info{description.Format,0};
+        if(SUCCEEDED(resource->GetDevice(IID_PPV_ARGS(&device)))&&
+           SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO,&info,sizeof(info))))
+        {
+            const std::uint64_t count=std::uint64_t(description.MipLevels)*info.PlaneCount*
+                (description.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE3D?1:description.DepthOrArraySize);
+            if(count&&count<=UINT_MAX)total=static_cast<UINT>(count);
+        }
+    }
+    return Neurotic::D3D12::NativeResourceStateQuery{resource,subresource,total};
+}
+
+bool D3D12Hooks::KnownNativeResourceStates(const Neurotic::D3D12::NativeQueryInsertion::Boundary& boundary,
+    std::span<const Neurotic::D3D12::NativeResourceStateQuery> queries,
+    std::span<std::optional<D3D12_RESOURCE_STATES>> values, std::uint64_t& mutationSerial)
+{
+    if(!boundary.list||queries.size()!=values.size())return false;
+    auto* list=reinterpret_cast<ID3D12GraphicsCommandList*>(boundary.list);
+    const auto current=[&] {
+        const auto now=ObserveNativeQueryProducer(list);
+        return now&&now->incarnation==boundary.incarnation&&now->hookGeneration==boundary.hookGeneration&&
+            now->workOrdinal==boundary.workOrdinal;
+    };
+    if(!current())return false;
+    const bool read=s_nativeRecordingObserver.WithCurrent(list,[&](auto& state,auto incarnation) {
+        return incarnation==boundary.incarnation&&state.KnownResourceStates(incarnation,boundary.workOrdinal,queries,values,mutationSerial);
+    });
+    return read&&current();
+}
+
+bool D3D12Hooks::NativeResourceStatesCurrent(const Neurotic::D3D12::NativeQueryInsertion::Boundary& boundary,
+                                          std::uint64_t mutationSerial)
+{
+    auto* list=reinterpret_cast<ID3D12GraphicsCommandList*>(boundary.list);
+    const auto now=ObserveNativeQueryProducer(list);
+    if(!now||now->incarnation!=boundary.incarnation||now->hookGeneration!=boundary.hookGeneration||
+       now->workOrdinal!=boundary.workOrdinal)return false;
+    const bool current=s_nativeRecordingObserver.WithCurrent(list,[&](auto& state,auto incarnation) {
+        return incarnation==boundary.incarnation&&state.ResourceFactsCurrent(incarnation,boundary.workOrdinal,mutationSerial);
+    });
+    const auto after=ObserveNativeQueryProducer(list);
+    return current&&after&&after->incarnation==boundary.incarnation&&after->hookGeneration==boundary.hookGeneration&&
+        after->workOrdinal==boundary.workOrdinal;
+}
+
+std::optional<D3D12_RESOURCE_STATES> D3D12Hooks::KnownNativeResourceState(
+    const Neurotic::D3D12::NativeQueryInsertion::Boundary& boundary, ID3D12Resource* resource, UINT subresource)
+{
+    const auto query=PrepareNativeResourceStateQuery(resource,subresource);
+    if(!query)return {};
+    std::optional<D3D12_RESOURCE_STATES> result;
+    std::uint64_t serial=0;
+    if(!KnownNativeResourceStates(boundary,std::span(&*query,1),std::span(&result,1),serial))return {};
+    return result;
+}
+
 std::optional<D3D12_RESOURCE_STATES> D3D12Hooks::KnownHudResourceState(ID3D12GraphicsCommandList* list,ID3D12Resource* resource)
 {
+    const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(list);
+    if(FAILED(interfaces.result)||!interfaces.terminal)return {};
+    list=interfaces.terminal.Get();
+    if(!resource)return {};
+    Neurotic::D3D12::NativeRecordingState::PreparedOwners resourceOwner;resourceOwner.Acquire(resource);
+    const auto description=resource->GetDesc();
     const auto observed=s_nativeRecordingObserver.Observe(list);
     if(!observed.active || !observed.completeCoverage) return {};
     std::optional<D3D12_RESOURCE_STATES> result;
     s_nativeRecordingObserver.WithCurrent(list,[&](auto& state,auto incarnation) {
-        result=state.KnownSingleSubresourceState(incarnation,resource); return result.has_value();
+        result=state.KnownSingleSubresourceStatePrepared(incarnation,resource,description); return result.has_value();
     });
     return result;
 }
@@ -2612,8 +2852,12 @@ std::optional<D3D12_RESOURCE_STATES> D3D12Hooks::KnownHudResourceState(ID3D12Gra
 bool D3D12Hooks::WatchNativeResource(ID3D12GraphicsCommandList* commandList, ID3D12Resource* resource,
                                      std::uint64_t generation, UINT subresource, D3D12_RESOURCE_STATES knownState)
 {
-    return s_nativeRecordingObserver.WithCurrent(commandList, [&](auto& state, auto incarnation) {
-        return state.WatchResource(incarnation, resource, generation, subresource, knownState);
+    const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(commandList);
+    if(FAILED(interfaces.result)||!interfaces.terminal)return false;
+    Neurotic::D3D12::NativeRecordingState::PreparedOwners resourceOwner;resourceOwner.Acquire(resource);
+    return s_nativeRecordingObserver.WithCurrent(interfaces.terminal.Get(), [&](auto& state, auto incarnation) {
+        return state.AdoptObjectOwners(incarnation,resourceOwner)&&
+            state.WatchResourcePrepared(incarnation, resource, generation, subresource, knownState);
     });
 }
 

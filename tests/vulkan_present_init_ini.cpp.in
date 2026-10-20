@@ -1,0 +1,43 @@
+#include "NrConfigFixture.h"
+#include <SimpleIni.h>
+#include <algorithm>
+#include <cctype>
+#include <format>
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
+static CSimpleIniA ini;
+static void Check(bool ok,const char* message){if(!ok){std::fprintf(stderr,"FAIL %s\n",message);std::exit(1);}}
+struct Config:TestConfig {
+ std::vector<std::string> _log;
+ static Config* active;
+ static Config* Instance(){return active;}
+ std::optional<std::string> readString(std::string,std::string,bool=false);
+ std::optional<bool> readBool(std::string,std::string);
+ void Load(){// ACTUAL_LOAD
+ }
+ void Save();
+};
+Config* Config::active=nullptr;
+// ACTUAL_READ_STRING
+// ACTUAL_READ_BOOL
+// ACTUAL_GET_BOOL
+void Config::Save(){// ACTUAL_SAVE
+}
+int main(){
+ for(const auto& [text,expected]:std::vector<std::pair<std::string,bool>>{
+   {"",false},{"false",false},{"true",true},{"TrUe",true},{"auto",false},{"invalid",false}}){
+  ini.Reset();const std::string data="[DlssNr]\n"+(text.empty()?std::string{}:"VulkanPresentSameFrameInit="+text+"\n");
+  Check(ini.LoadData(data.c_str(),data.size())>=0,"actual SimpleIni parse");
+  Config cfg;Config::active=&cfg;cfg.Load();
+  const auto snapshot=cfg.GetDlssNrConfigSnapshot();
+  Check(snapshot.DlssNrVulkanPresentSameFrameInit.value_or_default()==expected,"actual Config load and immutable snapshot");
+  cfg.Save();std::string saved;Check(ini.Save(saved)>=0,"actual SimpleIni serialization");
+  ini.Reset();Check(ini.LoadData(saved.c_str(),saved.size())>=0,"saved INI reparses");
+  Config restarted;Config::active=&restarted;restarted.Load();
+  Check(restarted.GetDlssNrConfigSnapshot().DlssNrVulkanPresentSameFrameInit.value_or_default()==expected,"saved opt-in roundtrip");
+  restarted.DlssNrVulkanPresentSameFrameInit=!expected;
+  Check(snapshot.DlssNrVulkanPresentSameFrameInit.value_or_default()==expected,"prior snapshot remains immutable");
+ }
+ std::puts("PASS actual Config readString/readBool/opt-in load/save + SimpleIni roundtrip; unrelated Config services excluded");
+}

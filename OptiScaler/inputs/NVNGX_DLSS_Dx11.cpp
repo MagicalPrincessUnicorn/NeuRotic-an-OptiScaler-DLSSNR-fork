@@ -590,6 +590,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
 
     State::Instance().api = DX11;
     auto deviceContext = Dx11Contexts[handleId].feature.get();
+    Dx11Contexts[handleId].nativeTemporalSuperSampling = InFeatureID == NVSDK_NGX_Feature_SuperSampling;
+    deviceContext->SetNativeTemporalSuperSampling(Dx11Contexts[handleId].nativeTemporalSuperSampling);
     *OutHandle = deviceContext->Handle();
 
     // Always get device from context to avoid issues with Dx11 w/Dx12
@@ -655,6 +657,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_ReleaseFeature(NVSDK_NGX_Handle* 
 
     if (auto deviceContext = Dx11Contexts[handleId].feature.get(); deviceContext != nullptr)
     {
+        deviceContext->RevokeNativeTemporal();
         if (!shutdown)
         {
             LOG_TRACE("sleeping for 500ms before reset()!");

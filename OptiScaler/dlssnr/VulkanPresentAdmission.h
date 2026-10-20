@@ -80,17 +80,39 @@ inline bool IsVkSwapchainUsageChainKnown(const void* chain) noexcept
     return true;
 }
 
-// NR changes only the wait list, never the presented images or present count.
-// NVIDIA metering therefore remains attached to the same original Present.
-inline bool IsVkPresentWaitReplacementChainKnown(const void* chain) noexcept
+// NR changes only waits; images, count, IDs and metering stay with the original Present.
+inline bool IsVkPresentWaitReplacementChainKnown(const VkPresentInfoKHR& present) noexcept
 {
-    const auto description = DescribeVkSwapchainChain(chain);
+    const auto description = DescribeVkSwapchainChain(present.pNext);
     if (description.cycle || description.truncated) return false;
-    if (description.count == 0) return true;
-    if (description.count != 1 || description.types[0] != WsiExtensions::SetPresentConfig) return false;
-    WsiExtensions::PresentConfig config {};
-    std::memcpy(&config, chain, sizeof(config));
-    return config.numFramesPerBatch <= 8;
+    bool presentId = false, metering = false;
+    for (auto node = static_cast<const VkBaseInStructure*>(present.pNext); node; node = node->pNext)
+    {
+        switch (node->sType)
+        {
+        case VK_STRUCTURE_TYPE_PRESENT_ID_KHR:
+        {
+            if (presentId) return false;
+            presentId = true;
+            VkPresentIdKHR ids {};
+            std::memcpy(&ids, node, sizeof(ids));
+            if (ids.swapchainCount == 0 || ids.swapchainCount != present.swapchainCount) return false;
+            // Null pPresentIds and zero entries are valid. Leave caller IDs/history untouched.
+            break;
+        }
+        case WsiExtensions::SetPresentConfig:
+        {
+            if (metering) return false;
+            metering = true;
+            WsiExtensions::PresentConfig config {};
+            std::memcpy(&config, node, sizeof(config));
+            if (config.numFramesPerBatch > 8) return false;
+            break;
+        }
+        default: return false;
+        }
+    }
+    return true;
 }
 
 inline VkImageUsageFlags QueryVkSwapchainSurfaceUsage(VkPhysicalDevice physical,

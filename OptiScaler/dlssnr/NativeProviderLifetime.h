@@ -13,25 +13,26 @@
 namespace DlssNr
 {
 namespace PC=Neurotic::Contracts;
-// Catalog identities, not caller-asserted booleans. A proprietary build may be
-// enrolled only by a reviewed catalog extension with its exact lifetime contract.
+// NeuRotic adapter-policy identities, never provider DLL allowlists. The
+// selected DLL uses the existing real recording/retirement owner under Josh's
+// BYO compatibility policy; this does not prove hidden provider retention.
 class ProviderLifetimeContract
 {
-    enum class Kind { Unavailable, ControlledD3D12V1, HostRecordedFeature18V1 };
+    enum class Kind { Unavailable, ControlledD3D12V1, HostRecordedFeature18V2 };
     Kind kind_=Kind::Unavailable;
     explicit ProviderLifetimeContract(Kind kind):kind_(kind){}
   public:
     static ProviderLifetimeContract NgxFeature18(){return ProviderLifetimeContract(Kind::Unavailable);}
     static ProviderLifetimeContract NgxFeature18(std::string_view matchedAdapter){
         return ProviderLifetimeContract(matchedAdapter==Feature18HostContractIdentity?
-            Kind::HostRecordedFeature18V1:Kind::Unavailable);}
+            Kind::HostRecordedFeature18V2:Kind::Unavailable);}
 #ifdef NR_GPU_SAFETY_TEST
     static ProviderLifetimeContract ControlledCallerList(){return ProviderLifetimeContract(Kind::ControlledD3D12V1);}
 #endif
     bool Supported()const{return kind_!=Kind::Unavailable;}
-    std::string_view Identity()const{return kind_==Kind::HostRecordedFeature18V1?Feature18HostContractIdentity:
+    std::string_view Identity()const{return kind_==Kind::HostRecordedFeature18V2?Feature18HostContractIdentity:
         Supported()?"ControlledD3D12CallerList/1/provider_lifetime.cpp/v1":
-        "NGX.Feature18/AlphaFeature18.ABI1/API0x15/UnverifiedBuild";}
+        "NGX.Feature18/HostAdapterUnavailable";}
     bool operator==(const ProviderLifetimeContract&)const=default;
 };
 struct ProviderRegistrationBinding

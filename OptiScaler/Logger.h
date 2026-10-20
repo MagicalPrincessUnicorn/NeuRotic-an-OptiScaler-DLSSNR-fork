@@ -3,6 +3,15 @@
 #include <ankerl/unordered_dense.h>
 
 void PrepareLogger();
+namespace Neurotic::Logging
+{
+inline constexpr bool SupportedLevel(int value) noexcept { return value >= 0 && value <= 6; }
+// Preserve unknown saved values; only the effective runtime level falls back.
+inline constexpr spdlog::level::level_enum RuntimeLevel(int value) noexcept
+{
+    return SupportedLevel(value) ? static_cast<spdlog::level::level_enum>(value) : spdlog::level::trace;
+}
+}
 // Terminal, idempotent close: disable output and flush while retaining the
 // default logger for late teardown callbacks until normal CRT destruction.
 void CloseLogger();

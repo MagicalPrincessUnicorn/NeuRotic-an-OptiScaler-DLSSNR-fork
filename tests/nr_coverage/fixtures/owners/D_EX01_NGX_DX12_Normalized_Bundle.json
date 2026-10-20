@@ -1,0 +1,3873 @@
+{
+  "schemaVersion": "1.0-draft",
+  "bundleId": "bundle:ngx-dx12:100",
+  "recordRevision": 1,
+  "mode": "fixture",
+  "ownerDomain": "DiagnosticsFixture",
+  "sourceSnapshot": {
+    "presence": "observed",
+    "validity": "established",
+    "origin": "direct_contract",
+    "evidence": [
+      "E-EX-NGX-DX12"
+    ],
+    "value": "Chat-D-design-fixture"
+  },
+  "frameContext": {
+    "identity": {
+      "sessionId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "session:ngx-dx12"
+      },
+      "renderStreamId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "stream:ngx-dx12"
+      },
+      "viewId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "view:main"
+      },
+      "episodeId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "episode:ngx-dx12:1"
+      },
+      "baseRealFrameId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "frame:ngx-dx12:100"
+      },
+      "renderId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "render:ngx-dx12:100"
+      },
+      "evaluationId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "value": "eval:ngx-dx12:100"
+      },
+      "presentId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.PRESENT_NOT_OBSERVED"
+        ]
+      },
+      "generatedFrameId": {
+        "presence": "not_applicable",
+        "validity": "established",
+        "origin": "none",
+        "evidence": []
+      },
+      "finalSealId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-ngx-dx12"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.FINAL_LINEAGE_MISSING"
+        ]
+      }
+    },
+    "associations": [
+      {
+        "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+        "type": "same_evaluation",
+        "from": "eval:ngx-dx12:100",
+        "to": "frame:ngx-dx12:100",
+        "validity": "established",
+        "scope": "one provider evaluation and view",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": []
+      }
+    ],
+    "routeGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-NGX-DX12"
+      ],
+      "value": 1
+    },
+    "historyGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-NGX-DX12"
+      ],
+      "value": 1
+    },
+    "modelGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-NGX-DX12"
+      ],
+      "value": 1
+    },
+    "fgPolicyGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-NGX-DX12"
+      ],
+      "value": 1
+    },
+    "contextEvidence": [
+      "E-EX-NGX-DX12"
+    ]
+  },
+  "signals": [
+    {
+      "recordId": "sig:ngx:color",
+      "recordRevision": 1,
+      "signalRole": "input_color",
+      "payloadKind": "resource",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_Color",
+          "NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width",
+          "...Height"
+        ],
+        "observationId": "obs:ngx:100:color",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "color",
+        "facts": {
+          "encoding": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "scene_linear_pre_exposed"
+          },
+          "transfer": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "linear"
+          },
+          "primaries": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "rec2020"
+          },
+          "range": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "extended_signed"
+          },
+          "preExposureConvention": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "stored_linear_equals_preExposure_times_scene_linear"
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "resource": {
+        "api": "d3d12",
+        "opaqueNativeToken": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "opaque:ngx-color",
+          "scope": "in-process diagnostic token; not serialized native pointer"
+        },
+        "objectIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "obj:ngx-color:1"
+        },
+        "resourceIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "res:ngx-color:1"
+        },
+        "viewIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "view:ngx-color:0:0:0:1"
+        },
+        "resourceGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "representationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "contentRevision": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "subresource": {
+          "mip": 0,
+          "arrayLayer": 0,
+          "plane": 0,
+          "levelCount": 1,
+          "layerCount": 1,
+          "aspectMask": "color"
+        },
+        "descriptor": {
+          "dimension": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "2d"
+          },
+          "format": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "R16G16B16A16_FLOAT"
+          },
+          "allocationExtent": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": {
+              "width": 1920,
+              "height": 1080
+            }
+          },
+          "sampleCount": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": 1
+          },
+          "usage": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": [
+              "shader_read"
+            ]
+          }
+        },
+        "deviceIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "device:0"
+        },
+        "adapterIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "adapter:0"
+        },
+        "accessState": {
+          "stateOrLayout": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE"
+          },
+          "queueIdentity": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "graphics:0"
+          },
+          "queueFamily": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "accessMode": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "read"
+          }
+        }
+      },
+      "lease": {
+        "leaseId": "lease:ngx:color",
+        "ownerDomain": "AdapterOwner",
+        "scope": "until_fence",
+        "readyProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:producer:10"
+        },
+        "retirementProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:consumer:20"
+        },
+        "revocationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "releaseMethod": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "owner_releases_after_retirement"
+        }
+      }
+    },
+    {
+      "recordId": "sig:ngx:output",
+      "recordRevision": 1,
+      "signalRole": "output_color",
+      "payloadKind": "resource",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_Output"
+        ],
+        "observationId": "obs:ngx:100:output",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 3840,
+            "height": 2160
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 3840,
+            "height": 2160
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 3840,
+            "height": 2160
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "output"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:output:3840x2160"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "output",
+        "facts": {
+          "encoding": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "scene_linear_pre_exposed"
+          },
+          "writeTarget": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": true
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "resource": {
+        "api": "d3d12",
+        "opaqueNativeToken": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "opaque:ngx-output",
+          "scope": "in-process diagnostic token; not serialized native pointer"
+        },
+        "objectIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "obj:ngx-output:1"
+        },
+        "resourceIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "res:ngx-output:1"
+        },
+        "viewIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "view:ngx-output:0:0:0:1"
+        },
+        "resourceGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "representationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "contentRevision": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 0
+        },
+        "subresource": {
+          "mip": 0,
+          "arrayLayer": 0,
+          "plane": 0,
+          "levelCount": 1,
+          "layerCount": 1,
+          "aspectMask": "color"
+        },
+        "descriptor": {
+          "dimension": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "2d"
+          },
+          "format": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "R16G16B16A16_FLOAT"
+          },
+          "allocationExtent": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": {
+              "width": 3840,
+              "height": 2160
+            }
+          },
+          "sampleCount": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": 1
+          },
+          "usage": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": [
+              "unordered_access"
+            ]
+          }
+        },
+        "deviceIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "device:0"
+        },
+        "adapterIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "adapter:0"
+        },
+        "accessState": {
+          "stateOrLayout": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "D3D12_RESOURCE_STATE_UNORDERED_ACCESS"
+          },
+          "queueIdentity": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "graphics:0"
+          },
+          "queueFamily": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "accessMode": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "write"
+          }
+        }
+      },
+      "lease": {
+        "leaseId": "lease:ngx:output",
+        "ownerDomain": "AdapterOwner",
+        "scope": "until_fence",
+        "readyProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:producer:10"
+        },
+        "retirementProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:consumer:20"
+        },
+        "revocationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "releaseMethod": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "owner_releases_after_retirement"
+        }
+      }
+    },
+    {
+      "recordId": "sig:ngx:depth",
+      "recordRevision": 1,
+      "signalRole": "depth",
+      "payloadKind": "resource",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_Depth",
+          "NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X",
+          "...Y"
+        ],
+        "observationId": "obs:ngx:100:depth",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "depth",
+        "facts": {
+          "encoding": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "device_depth"
+          },
+          "inverted": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": true
+          },
+          "nearPlane": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": 0.1,
+            "unit": "meters"
+          },
+          "farPlane": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "infinite"
+          },
+          "view": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "main_view_unjittered_projection_pair"
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "resource": {
+        "api": "d3d12",
+        "opaqueNativeToken": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "opaque:ngx-depth",
+          "scope": "in-process diagnostic token; not serialized native pointer"
+        },
+        "objectIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "obj:ngx-depth:1"
+        },
+        "resourceIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "res:ngx-depth:1"
+        },
+        "viewIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "view:ngx-depth:0:0:0:1"
+        },
+        "resourceGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "representationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "contentRevision": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "subresource": {
+          "mip": 0,
+          "arrayLayer": 0,
+          "plane": 0,
+          "levelCount": 1,
+          "layerCount": 1,
+          "aspectMask": "color"
+        },
+        "descriptor": {
+          "dimension": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "2d"
+          },
+          "format": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "R32_FLOAT"
+          },
+          "allocationExtent": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": {
+              "width": 1920,
+              "height": 1080
+            }
+          },
+          "sampleCount": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": 1
+          },
+          "usage": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": [
+              "shader_read"
+            ]
+          }
+        },
+        "deviceIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "device:0"
+        },
+        "adapterIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "adapter:0"
+        },
+        "accessState": {
+          "stateOrLayout": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE"
+          },
+          "queueIdentity": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "graphics:0"
+          },
+          "queueFamily": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "accessMode": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "read"
+          }
+        }
+      },
+      "lease": {
+        "leaseId": "lease:ngx:depth",
+        "ownerDomain": "AdapterOwner",
+        "scope": "until_fence",
+        "readyProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:producer:10"
+        },
+        "retirementProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:consumer:20"
+        },
+        "revocationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "releaseMethod": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "owner_releases_after_retirement"
+        }
+      }
+    },
+    {
+      "recordId": "sig:ngx:motion",
+      "recordRevision": 1,
+      "signalRole": "motion",
+      "payloadKind": "resource",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_MotionVectors",
+          "NVSDK_NGX_Parameter_MV_Scale_X",
+          "...Y",
+          "NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X",
+          "...Y"
+        ],
+        "observationId": "obs:ngx:100:motion",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "motion",
+        "facts": {
+          "components": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "xy"
+          },
+          "units": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "normalized_texture_units_before_scale"
+          },
+          "scale": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": {
+              "x": 1920.0,
+              "y": 1080.0
+            }
+          },
+          "direction": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "current_to_previous"
+          },
+          "jitterRelationship": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "unjittered"
+          },
+          "cameraMotionIncluded": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": true
+          },
+          "currentFrame": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "referenceFrame": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "frame:ngx-dx12:99"
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "resource": {
+        "api": "d3d12",
+        "opaqueNativeToken": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "opaque:ngx-motion",
+          "scope": "in-process diagnostic token; not serialized native pointer"
+        },
+        "objectIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "obj:ngx-motion:1"
+        },
+        "resourceIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "res:ngx-motion:1"
+        },
+        "viewIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "view:ngx-motion:0:0:0:1"
+        },
+        "resourceGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "representationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "contentRevision": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "subresource": {
+          "mip": 0,
+          "arrayLayer": 0,
+          "plane": 0,
+          "levelCount": 1,
+          "layerCount": 1,
+          "aspectMask": "color"
+        },
+        "descriptor": {
+          "dimension": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "2d"
+          },
+          "format": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "R16G16_FLOAT"
+          },
+          "allocationExtent": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": {
+              "width": 1920,
+              "height": 1080
+            }
+          },
+          "sampleCount": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": 1
+          },
+          "usage": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": [
+              "shader_read"
+            ]
+          }
+        },
+        "deviceIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "device:0"
+        },
+        "adapterIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "adapter:0"
+        },
+        "accessState": {
+          "stateOrLayout": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE"
+          },
+          "queueIdentity": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "graphics:0"
+          },
+          "queueFamily": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "accessMode": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "read"
+          }
+        }
+      },
+      "lease": {
+        "leaseId": "lease:ngx:motion",
+        "ownerDomain": "AdapterOwner",
+        "scope": "until_fence",
+        "readyProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:producer:10"
+        },
+        "retirementProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "fence:consumer:20"
+        },
+        "revocationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": 1
+        },
+        "releaseMethod": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "owner_releases_after_retirement"
+        }
+      }
+    },
+    {
+      "recordId": "sig:ngx:jitter",
+      "recordRevision": 1,
+      "signalRole": "jitter",
+      "payloadKind": "vector",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_Jitter_Offset_X",
+          "NVSDK_NGX_Parameter_Jitter_Offset_Y"
+        ],
+        "observationId": "obs:ngx:100:jitter",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "jitter",
+        "facts": {
+          "units": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "render_pixels"
+          },
+          "application": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "current_camera_projection"
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "vectorValue": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "value": {
+          "x": 0.25,
+          "y": -0.125
+        },
+        "unit": "render_pixels"
+      }
+    },
+    {
+      "recordId": "sig:ngx:preexposure",
+      "recordRevision": 1,
+      "signalRole": "pre_exposure",
+      "payloadKind": "scalar",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_DLSS_Pre_Exposure"
+        ],
+        "observationId": "obs:ngx:100:preexp",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "pre_exposure",
+        "facts": {
+          "meaning": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "stored_linear_equals_value_times_scene_linear"
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "scalarValue": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "value": 1.5
+      }
+    },
+    {
+      "recordId": "sig:ngx:reset",
+      "recordRevision": 1,
+      "signalRole": "reset",
+      "payloadKind": "event",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "DLSS-310.9.1-compatible-fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "NVSDK_NGX_Parameter_Reset"
+        ],
+        "observationId": "obs:ngx:100:reset",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "session:ngx-dx12"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "stream:ngx-dx12"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "episode:ngx-dx12:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "frame:ngx-dx12:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "render:ngx-dx12:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "value": "eval:ngx-dx12:100"
+          },
+          "presentId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.PRESENT_NOT_OBSERVED"
+            ]
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-ngx-dx12"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-NGX-DX12:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:ngx-dx12:100",
+            "to": "frame:ngx-dx12:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "reset",
+        "facts": {
+          "scope": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ],
+            "value": "current_temporal_history"
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-NGX-DX12"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-NGX-DX12"
+            ]
+          }
+        ],
+        "admission": "eligible",
+        "reasonIds": [],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-NGX-DX12"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "eventValue": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-EX-NGX-DX12"
+        ],
+        "value": false
+      }
+    }
+  ],
+  "bundleValidation": {
+    "hardGates": [],
+    "semanticChecks": [],
+    "admission": "eligible",
+    "reasonIds": [],
+    "consumerProfile": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-NGX-DX12"
+      ],
+      "value": "fixture_bundle_validation"
+    }
+  }
+}

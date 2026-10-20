@@ -1,0 +1,101 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "qualification_policy",
+  "policy_id": "fixture:browse-only",
+  "revision": "1",
+  "policy_sha256": "35e9aa2798f40d7c05ab642a87c60a3cc20ccdcb3786bd8b4911863d18c686a3",
+  "scope": {
+    "scope_id": "fixture:output",
+    "scope_revision": "1",
+    "scope_sha256": {
+      "state": "known",
+      "value": "f53741f9b027a9e8697346baad1f21e089dea5db7f640d8e69bf1a95101bd95a",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_id": {
+      "state": "known",
+      "value": "fixture:static",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_revision": {
+      "state": "known",
+      "value": "1",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_sha256": {
+      "state": "known",
+      "value": "60e7784763f9c9b0cc58f04cab0f63a87726592c3c4d31fef1eec572064c1db3",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "observation_scope_sha256": {
+      "state": "known",
+      "value": "da96132aba805b53db65caabeda288bde2106cddfed83d7d90ba2908728a64ba",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "required_conditions": [
+      "app_api",
+      "execution_api",
+      "route",
+      "placement"
+    ],
+    "required_cohort": [
+      "game_id",
+      "game_version",
+      "game_executable_sha256",
+      "neurotic_module_sha256",
+      "provider_manifest_sha256",
+      "effective_settings_sha256",
+      "driver_version",
+      "os_version",
+      "gpu_device_id",
+      "contract_manifest_sha256"
+    ],
+    "required_extensions": [
+      "implementation_version",
+      "game_build_manifest_sha256",
+      "control_mode"
+    ],
+    "required_bindings": [],
+    "axes": [
+      "output_delivery"
+    ],
+    "condition_coverage": "exact_segment",
+    "limitation": "Design-only requested scope; no real execution or accepted qualifying policy."
+  },
+  "lane": "cpu_fixture",
+  "intent": "discovery",
+  "mode": "browse_only",
+  "required_obligations": [
+    "fixture:delivery"
+  ],
+  "components": [
+    "neurotic"
+  ],
+  "not_applicable_justifications": [],
+  "rules": [
+    {
+      "obligation_id": "fixture:delivery",
+      "axis": "output_delivery",
+      "predicate": "AXIS_PASS",
+      "operand": "output_delivery",
+      "expected": "PASS"
+    }
+  ],
+  "review_basis_artifact_hashes": [],
+  "runtime_authority": false
+}

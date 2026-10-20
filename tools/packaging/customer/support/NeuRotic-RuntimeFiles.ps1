@@ -1,85 +1,4 @@
-function Get-NeuroticStreamlineCatalog {
- $catalog= @'
-[
-  {
-    "files": [
-      {
-        "path": "sl.interposer.dll",
-        "sha256": "27b2190057994c0b287c2c5716953bf1586f6499ac12fbbb2092b9aaf8396570",
-        "bytes": 651392
-      },
-      {
-        "path": "sl.common.dll",
-        "sha256": "a4b2b5acbe49fbc6d44dd432cac19cd53218f698b2539dc7ed0fb268c72cfc8d",
-        "bytes": 830592
-      },
-      {
-        "path": "sl.dlss_g.dll",
-        "sha256": "b8b5effd7debdb750abd216de43385fb653261712bc315d85eba68811fb3ee02",
-        "bytes": 625792
-      },
-      {
-        "path": "sl.reflex.dll",
-        "sha256": "ecf12973cdcec2ffced2ea77b1c7e45f4d387e7c864ddb5531b66a6f947effb3",
-        "bytes": 382080
-      },
-      {
-        "path": "sl.pcl.dll",
-        "sha256": "12aa4e76c28a27c735e4ecb3072f44d09428acb107b70ac38e4bd48ddb05f88d",
-        "bytes": 360064
-      },
-      {
-        "path": "nvngx_dlssg.dll",
-        "sha256": "5d5cbf14d2727d47f93fd10bf77bd91708ae122482a6f86fd564971641ebd47b",
-        "bytes": 7453808
-      }
-    ],
-    "id": "canonical-20260926",
-    "authority": "OptiScaler/dlssnr/CanonicalProviderPolicy.h",
-    "architecture": 64
-  },
-  {
-    "files": [
-      {
-        "path": "sl.interposer.dll",
-        "sha256": "8c87c9499461da561edd529aa9bf7831d67d7b94ebb1c1a5ed54ef4934e1ea4c",
-        "bytes": 652928
-      },
-      {
-        "path": "sl.common.dll",
-        "sha256": "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d",
-        "bytes": 843392
-      },
-      {
-        "path": "sl.dlss_g.dll",
-        "sha256": "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c",
-        "bytes": 636032
-      },
-      {
-        "path": "sl.reflex.dll",
-        "sha256": "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0",
-        "bytes": 388736
-      },
-      {
-        "path": "sl.pcl.dll",
-        "sha256": "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582",
-        "bytes": 360064
-      },
-      {
-        "path": "nvngx_dlssg.dll",
-        "sha256": "ff6e90eb78b827927dff5b4ecc6b1c870c2e9bca29ed9f48c7d348cc9e170b82",
-        "bytes": 7460976
-      }
-    ],
-    "id": "nvidia-sdk-2.14.1-release",
-    "authority": "preserved official NVIDIA SDK 2.14.1 manifest",
-    "architecture": 64
-  }
-]
-'@ | ConvertFrom-Json
- foreach($entry in $catalog){$entry}
-}
-# One persistent, user-owned source for App, Anything and manual setup checks.
+﻿# One persistent, user-owned source for App, Anything and manual setup checks.
 # Private NR bytes are never part of an application release or package manifest.
 function Assert-NeuroticRuntimePath([string]$Path) {
  $full=[IO.Path]::GetFullPath($Path);$cursor=$full
@@ -190,18 +109,13 @@ function Get-NeuroticRuntimeComponents([string]$AppRoot) {
    foreach($name in $names){
     $path=Assert-NeuroticRuntimePath (Join-Path $stream $name);$input=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try{
-     $reader=New-Object IO.BinaryReader($input)
-     if($input.Length -lt 256 -or $reader.ReadUInt16() -ne 0x5a4d){throw ('Invalid Streamline PE image: '+$name)}
-     $input.Position=0x3c;$offset=$reader.ReadUInt32();if($offset -gt $input.Length-24){throw 'Invalid PE header offset'}
-     $input.Position=$offset;if($reader.ReadUInt32() -ne 0x4550 -or $reader.ReadUInt16() -ne 0x8664){throw ('Streamline requires an x64 image: '+$name)}
      $input.Position=0;$sha=[Security.Cryptography.SHA256]::Create();try{$hash=([BitConverter]::ToString($sha.ComputeHash($input))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
      $observed[$name]=[pscustomobject]@{path=$name;source=$path;bytes=$input.Length;sha256=$hash;fileIdentity=[NeuRoticSimpleFileIo]::Stat($path);lastWriteTicks=(Get-Item -LiteralPath $path).LastWriteTimeUtc.Ticks}
     }finally{$input.Dispose()}
    }
-   foreach($cohort in @(Get-NeuroticStreamlineCatalog)){
-    if(-not @($cohort.files|Where-Object{$observed[$_.path].sha256 -ne $_.sha256 -or $observed[$_.path].bytes -ne $_.bytes}).Count){$generation=$cohort.id;$verifiedFiles=@($names|ForEach-Object{$observed[$_]});break}
-   }
-   if(-not $generation){throw 'Streamline files do not match a supported complete pinned cohort. Keep one matching file set together.'}
+   # Recognition is filename-only. Hashes identify the user's actual bytes
+   # for copy integrity and refreshed receipts, never a supported-version list.
+   $generation='user-supplied';$verifiedFiles=@($names|ForEach-Object{$observed[$_]})
   }catch{$problem=$_.Exception.Message}
  }
  $status=if($problem){'Unavailable'}elseif($generation){'Present'}elseif($present.Count){'Partial'}else{'Missing'}
@@ -213,7 +127,7 @@ function Get-NeuroticRuntimeComponents([string]$AppRoot) {
   $modelExists=[IO.File]::Exists($modelPath)
   $preference=Assert-NeuroticRuntimePath (Join-Path $root 'anything.json');$worker=Find-NeuroticModelWorker $AppRoot
   $remembered=$null
-  if([IO.File]::Exists($preference)){$remembered=[string](Get-Content -LiteralPath $preference -Raw|ConvertFrom-Json).modelPath}
+  if([IO.File]::Exists($preference)){$remembered=[string](Get-Content -LiteralPath $preference -Raw -Encoding UTF8|ConvertFrom-Json).modelPath}
   $checked=$null
   if(Test-Path -LiteralPath $modelPath){
    # A deposited file always wins. Rejecting it must not silently enable an old
@@ -224,7 +138,7 @@ function Get-NeuroticRuntimeComponents([string]$AppRoot) {
    if($remembered){$candidates+=,$remembered}
    else {
     $old=Assert-NeuroticRuntimePath (Join-Path (Split-Path -Parent $root) 'Anything/anything.json')
-    if([IO.File]::Exists($old)){$legacySaved=[string](Get-Content -LiteralPath $old -Raw|ConvertFrom-Json).modelPath;if($legacySaved){$candidates+=,$legacySaved}}
+    if([IO.File]::Exists($old)){$legacySaved=[string](Get-Content -LiteralPath $old -Raw -Encoding UTF8|ConvertFrom-Json).modelPath;if($legacySaved){$candidates+=,$legacySaved}}
     $legacyFolder=Assert-NeuroticRuntimePath (Join-Path $root 'Models')
     $candidates+=,(Join-Path $legacyFolder 'nvngx_dlssnr.dll')
     if([IO.Directory]::Exists($legacyFolder)){foreach($child in Get-ChildItem -LiteralPath $legacyFolder -Directory -Force){[void](Assert-NeuroticRuntimePath $child.FullName);$candidates+=,(Join-Path $child.FullName 'nvngx_dlssnr.dll')}}
@@ -278,16 +192,17 @@ function Save-NeuroticRuntimeAcceptance($Components){
   if([IO.File]::Exists($path)){[IO.File]::Replace($temporary,$path,[NullString]::Value)}else{[IO.File]::Move($temporary,$path)}
  }finally{if([IO.File]::Exists($temporary)){[IO.File]::Delete($temporary)}}
 }
-function Get-NeuroticAcceptedRuntimeComponents {
+function Get-NeuroticAcceptedRuntimeComponents([bool]$IncludeNeuralModel=$true) {
  Initialize-NeuroticRuntimeStat
  $empty=[pscustomobject]@{streamline=[pscustomobject]@{status='Missing';files=@();reason='Refresh runtime files.'};neuralModel=[pscustomobject]@{status='Missing';path='';reason='Refresh runtime files.'}}
  try{
   $path=Assert-NeuroticRuntimePath (Join-Path (Get-NeuroticRuntimeRoot) 'accepted-runtime.json')
   if(-not [IO.File]::Exists($path)){return $empty}
   if((Get-Item -LiteralPath $path).Length -gt 1MB){throw 'Runtime acceptance metadata is too large'}
-  $cache=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json;if($cache.schemaVersion -ne 1){return $empty}
+  $cache=Get-Content -LiteralPath $path -Raw -Encoding UTF8|ConvertFrom-Json;if($cache.schemaVersion -ne 1){return $empty}
   $components=$cache.components
   foreach($name in @('streamline','neuralModel')){
+   if($name -eq 'neuralModel' -and -not $IncludeNeuralModel){$components.neuralModel=$empty.neuralModel;continue}
    $component=$components.$name;if($component.status -ne 'Present'){continue}
    try{
     $files=@(if($name -eq 'streamline'){$component.files}else{$component})

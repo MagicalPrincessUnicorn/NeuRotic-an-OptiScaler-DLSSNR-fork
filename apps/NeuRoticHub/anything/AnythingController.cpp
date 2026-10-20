@@ -42,7 +42,7 @@ struct AnythingController::Impl {
  const SessionPolicy policy;
  mutable std::mutex mutex;AnythingSnapshot view;
  std::thread supervisor;std::atomic<bool> finish=false;
- std::atomic<bool> shutdownRequested=false;bool quitSent=false;
+ std::atomic<bool> shutdownRequested=false;bool quitSent=false;uint64_t shutdownDeadline=0;
  bool retiring=false,retireForced=false,retireError=false;std::string retireReason;
  std::atomic<bool> processExitProven=true;
  bool connectWanted=false,restartWanted=false,stopWanted=false;
@@ -76,7 +76,7 @@ struct AnythingController::Impl {
   return processExitProven.load(std::memory_order_acquire);
  }
  void SaveModel(const std::string& path){
-  try{if(policy.persistPreferences)SaveUserFile(data/L"anything.json",AJson{{"schemaVersion",1},{"modelPath",path}}.dump(2));savedModel=path;std::lock_guard lock(mutex);++view.modelRevision;
+  try{if(policy.persistPreferences)SaveUserFile(data/L"anything.json",AJson{{"schemaVersion",1},{"modelPath",path}}.dump(2));std::lock_guard lock(mutex);savedModel=path;++view.modelRevision;
   }catch(...){std::lock_guard lock(mutex);view.message+=Neurotic::UiMessage("desktop.anythingcontroller.model_preference_could_not_be_saved_220591eb", " Model preference could not be saved.");}
  }
  void ProjectMeasurement(){ // caller holds mutex; worker ownership is never inferred here
@@ -249,8 +249,13 @@ struct AnythingController::Impl {
      if(retiring||!process.value){Sleep(10);continue;}
      Drain(output.value,true);Drain(stderrRead.value,false);
      if(WaitForSingleObject(process.value,0)==WAIT_OBJECT_0){DWORD code=0;GetExitCodeProcess(process.value,&code);Kill(Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_exited_519763c8", "Window Worker exited (")+std::to_string(code)+Neurotic::UiLiteral("desktop.anythingcontroller.restart_to_reconnect_b5b7f609", "). Restart to reconnect."),false,true);}
-     else if(shutdownRequested){if(!writing&&pending.is_null()&&!quitSent){Send({{"command","quit"}});quitSent=true;}}
      else if(!pending.is_null()&&GetTickCount64()>=pendingDeadline){bool wasStop=pending.value("command","")=="stop";Kill(wasStop?Neurotic::UiLiteral("desktop.anythingcontroller.stopped_the_unresponsive_window_worker_process_g_b9f7c95e", "Stopped the unresponsive Window Worker process; GPU retirement was not proved."):Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_did_not_acknowledge_the_operation__a7e18077", "Window Worker did not acknowledge the operation; its process was stopped. Restart to reconnect."),true,!wasStop);}
+     else if(shutdownRequested){
+      // Keep Quit's existing grace fixed even while an earlier command/write is pending.
+      if(!shutdownDeadline)shutdownDeadline=GetTickCount64()+30000;
+      if(GetTickCount64()>=shutdownDeadline)Kill(Neurotic::UiLiteral("desktop.anythingcontroller.stopped_the_unresponsive_window_worker_process_g_b9f7c95e", "Stopped the unresponsive Window Worker process; GPU retirement was not proved."),true,false);
+      else if(!writing&&pending.is_null()&&!quitSent){Send({{"command","quit"}});quitSent=true;}
+     }
      else if(pending.is_null()&&GetTickCount64()-lastResponse>15000){Kill(Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_stopped_responding_its_process_was_0e8ae789", "Window Worker stopped responding; its process was stopped. Restart to reconnect."),true,true);}
      else if(!writing&&pending.is_null()){
       AJson request;{
@@ -279,7 +284,7 @@ struct AnythingController::Impl {
    }catch(const std::exception& e){Kill(std::string(Neurotic::UiLiteral("desktop.anythingcontroller.window_worker_connection_failed_53f4f361", "Window Worker connection failed: "))+e.what(),true,true);}
    Sleep(10);
   }
-  Kill(Neurotic::UiLiteral("desktop.anythingcontroller.application_closed_window_worker_process_stopped_28c1585a", "Application closed; Window Worker process stopped."),true,false);
+  if(process.value)Kill(Neurotic::UiLiteral("desktop.anythingcontroller.application_closed_window_worker_process_stopped_28c1585a", "Application closed; Window Worker process stopped."),true,false);
  }
  void RestoreModel(){
   if(!policy.persistPreferences){std::lock_guard lock(mutex);if(!savedModel.empty())queued={{"command","set-model"},{"path",savedModel}};return;}
@@ -311,7 +316,12 @@ bool AnythingController::SelectModel(const std::filesystem::path& file,bool impo
  if(import&&!impl->policy.persistPreferences)return false;
  auto path=Utf8(file.wstring());if(path.empty()||path.find('\0')!=std::string::npos||path.size()>32768)return false;
  std::lock_guard lock(impl->mutex);if(!impl->view.connected||impl->view.busy||impl->view.active||impl->view.stopping)return false;
- impl->queued={{"command",import?"import-model":"set-model"},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),path}};if(import)impl->queued["modelsRoot"]=Utf8(impl->Folder().wstring());impl->view.busy=true;impl->view.ready=false;impl->view.lastError.clear();impl->view.message=import?Neurotic::UiMessage("desktop.anythingcontroller.verifying_and_importing_your_nr_file_672870cd", "Verifying and importing your NR file..."):Neurotic::UiMessage("desktop.anythingcontroller.verifying_your_nr_file_e9254f4c", "Verifying your NR file...");return true;
+ impl->queued={{"command",import?"import-model":"set-model"},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),path}};
+ if(impl->policy.persistPreferences) {
+  impl->queued["modelsRoot"]=Utf8(impl->Folder().wstring());
+  if(!impl->savedModel.empty())impl->queued["modelUpdateContext"]={{"persistedModelPath",impl->savedModel},{"managedModelsRoot",Utf8(impl->Folder().wstring())}};
+ }
+ impl->view.busy=true;impl->view.ready=false;impl->view.lastError.clear();impl->view.message=import?Neurotic::UiMessage("desktop.anythingcontroller.verifying_and_importing_your_nr_file_672870cd", "Verifying and importing your NR file..."):Neurotic::UiMessage("desktop.anythingcontroller.verifying_your_nr_file_e9254f4c", "Verifying your NR file...");return true;
 }
 bool AnythingController::RefreshWindows(const std::string& search){std::lock_guard lock(impl->mutex);if(!impl->view.connected||impl->view.busy||impl->view.stopping||search.size()>1024)return false;impl->queued={{"command","catalog"},{"search",search}};if(impl->policy.excludeHostWindow)impl->queued["hostPid"]=GetCurrentProcessId();impl->view.busy=true;impl->view.lastError.clear();return true;}
 bool AnythingController::Start(AJson options){

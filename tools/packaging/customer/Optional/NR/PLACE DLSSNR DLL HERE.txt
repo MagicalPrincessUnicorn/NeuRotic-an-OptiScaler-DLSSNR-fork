@@ -1,0 +1,7 @@
+PLACE DLSSNR DLL HERE
+
+Store your compatible NR model file, nvngx_dlssnr.dll, in this folder.
+This file is supplied separately.
+
+Copy nvngx_dlssnr.dll beside your game's executable to use it.
+Setup does not copy files from this storage folder automatically.

@@ -1,0 +1,46 @@
+{
+  "archive": "DLSS5-Feeder-1.18.0-beta.1.zip",
+  "archive_sha256": "6491e50d4eba56cd742c52bb996473d7ea140484e0b164b61bf1f01e0a2e9eb5",
+  "members": [
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade.hpp",
+      "bytes": 19416,
+      "sha256": "cf3cd150920ea310b4b1e2e4f11ab8d7221a9fc18755f4891a026563311b524c"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_api.hpp",
+      "bytes": 58030,
+      "sha256": "8d83ec8a620c48da7a20d975bd27b3345b24d3f0d5b78ae4c4fe633d61b804eb"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_api_device.hpp",
+      "bytes": 87997,
+      "sha256": "a716c44b6fbb064dbbb0826687728f21aa71ed45e13564e4dc1cdf36da5bdfa0"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_api_format.hpp",
+      "bytes": 18134,
+      "sha256": "68caa17fef712043e810ab88770c15af009aa3c7693e5c115ddc324f2d0809a7"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_api_pipeline.hpp",
+      "bytes": 49493,
+      "sha256": "5bda8e07260c2c60f0fd18a78b11782aed8f69e5d24b5757874614caafdf416f"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_api_resource.hpp",
+      "bytes": 28761,
+      "sha256": "32cdafe6d783813f3ac72ad43e426638d8d0fef56bcb558fad218a14cfb75ee3"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_events.hpp",
+      "bytes": 124513,
+      "sha256": "2717f56e2bd89af6d708c9c316353d6581c5a41d4526629fadba51d13be57a89"
+    },
+    {
+      "member": "DLSS5-Feeder-1.18.0-beta.1/external/reshade/include/reshade_overlay.hpp",
+      "bytes": 95106,
+      "sha256": "ed914b12fbc41ed038287b0163c0bc934772afcff2c22392044c6008adc5ae79"
+    }
+  ]
+}

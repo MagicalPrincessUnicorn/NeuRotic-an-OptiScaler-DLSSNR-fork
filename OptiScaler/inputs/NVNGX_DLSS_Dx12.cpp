@@ -10,6 +10,7 @@
 // NR-FEED-001 END
 #include <dlssnr/FrameTrace.h>
 #include <dlssnr/PreFg.h>
+#include <dlssnr/NativeFgTrace.h>
 #include <dlssnr/FgLifecycle.h>
 #include <nr/semantic/character/CharacterFgActivity.h>
 #include <nr/semantic/character/CharacterRuntime.h>
@@ -24,9 +25,12 @@
 #include <dlssnr/NativeParameterOverride.h>
 #include <dlssnr/NativeTemporalInputs.h>
 #include <dlssnr/NativeSharedListInvocation.h>
+#include <nr/d3d12/NativeQueryInsertion.h>
+#include <nr/d3d12/NativeRtvObservation.h>
 #include <dlssnr/DlssNr_BasicMultipass.h>
 #include <dlssnr/DlssNr_Multipass.h>
 #include <dlssnr/NativeIdentity.h>
+#include <nr/d3d12/NativeRecordingInterfaces.h>
 #include <dlssnr/DlssNr_PresentGuides.h>
 #include "Util.h"
 #include "Config.h"
@@ -60,9 +64,130 @@
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Dx12>> Dx12Contexts;
 static DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature> HandleToFeature;
 
+static void TraceOpenNativeQueries(const Neurotic::D3D12::NativeStateCaptureDiagnostic& diagnostic) noexcept
+{
+    // One fixed process budget, no foreign heap calls or change to QueryOpen.
+    // These are BeginQuery observations, not bounds/results/GPU-order proof.
+    if(!diagnostic.openQueryTotal)return;
+    try
+    {
+        if(loggerClosed.load(std::memory_order_relaxed)||!spdlog::should_log(spdlog::level::info))return;
+        static std::atomic<unsigned> remaining{64};
+        unsigned budget=remaining.load(std::memory_order_relaxed);
+        while(budget&&!remaining.compare_exchange_weak(budget,budget-1,std::memory_order_relaxed)){}
+        if(!budget)return;
+        LOG_INFO("NR Native open-query observation: incarnation={} generation={} captureWork={} "
+                 "total={} details={} omitted={} heapDescKnown=0",
+                 diagnostic.incarnation,diagnostic.hookGeneration,diagnostic.queryCaptureWorkOrdinal,
+                 diagnostic.openQueryTotal,diagnostic.openQueryDetails,
+                 diagnostic.openQueryTotal-diagnostic.openQueryDetails);
+        for(UINT i=0;i<std::min<UINT>(diagnostic.openQueryDetails,static_cast<UINT>(diagnostic.openQueries.size()));++i)
+        {
+            const auto& query=diagnostic.openQueries[i];
+            LOG_INFO("NR Native open-query detail: incarnation={} heapAddress={:X} type={} index={} "
+                     "beginObservedWork={} beginMutation={} beginPhase={}",
+                     diagnostic.incarnation,query.heapAddress,static_cast<unsigned>(query.type),query.index,
+                     query.beginObservedWorkOrdinal,query.beginMutationSerial,
+                     Neurotic::D3D12::NativeRecordingPhaseName(query.beginPhase));
+        }
+    }
+    catch(...){/* Optional metadata cannot alter SR or Native admission. */}
+}
+
+struct LegacyPostDeferredContext {
+    std::optional<Neurotic::D3D12::NativeQueryInsertion::Boundary> producer;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> terminal;
+    unsigned handle=0;
+    std::optional<DlssNr::NativeSelectedUse::Witness> selectedUse;
+    DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::Snapshot feature;
+    std::optional<DlssNr::NativeTemporalInputs::Metadata> inputs;
+    DlssNr::NativeResolution::RenderObservation renderObservation;
+};
+class LegacyPostDeferredOperation final:public Neurotic::D3D12::NativeQueryInsertion::Operation {
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> original_,terminal_;
+    std::shared_ptr<DlssNr::LegacyPostRequest> request_;
+    unsigned handle_;
+    DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::Snapshot feature_;
+    std::uint64_t sequence_;
+    const Neurotic::D3D12::NativeQueryInsertion::Boundary producer_;
+    Neurotic::D3D12::NativeRtvObservation::Protected clearProtection_;
+    bool creationGuardRequired_ = false;
+    bool ClearProofCurrent() const noexcept {
+        try { return !creationGuardRequired_ || clearProtection_.Current(); } catch (...) { return false; }
+    }
+    static bool TakeReportBudget()noexcept{
+        static std::atomic<unsigned> budget{64};auto remaining=budget.load();
+        while(remaining&&!budget.compare_exchange_weak(remaining,remaining-1)){}
+        return remaining!=0;
+    }
+    void Report(const char* status,unsigned reason=0,unsigned slot=0)const noexcept{
+        try{if(TakeReportBudget())LOG_INFO("NR Native deferred: request={} list={} epoch={} hooks={} work={} status={} reason={} slot={} recordedIsNotGpuCompletion=true",sequence_,producer_.list,producer_.incarnation,producer_.hookGeneration,producer_.workOrdinal,status,reason,slot);}catch(...){}
+    }
+public:
+    LegacyPostDeferredOperation(ID3D12GraphicsCommandList* original,const LegacyPostDeferredContext& context,
+        std::shared_ptr<DlssNr::LegacyPostRequest> request):original_(original),terminal_(context.terminal),request_(std::move(request)),handle_(context.handle),feature_(context.feature),producer_(*context.producer){
+        static std::atomic<std::uint64_t> next{0};sequence_=++next;
+        // Optional clear qualification must not prevent an otherwise valid
+        // uninterrupted deferred request from reaching its real query boundary.
+        try {
+            const auto resources = DlssNr::LegacyPostRequestResources(*request_);
+            clearProtection_ = Neurotic::D3D12::NativeRtvObservation::Protect(resources);
+        } catch (...) {}
+    }
+    bool AllowsRtvClear(const Neurotic::D3D12::NativeQueryInsertion::Boundary& current,
+                        std::uintptr_t descriptor) noexcept override {
+        bool allowed = false;
+        try {
+            allowed = current.list == producer_.list && current.incarnation == producer_.incarnation &&
+                current.hookGeneration == producer_.hookGeneration && current.workOrdinal >= producer_.workOrdinal &&
+                clearProtection_.Allows(descriptor);
+            if (allowed && !clearProtection_.IsNoWrite(descriptor)) creationGuardRequired_ = true;
+        } catch (...) { allowed = false; }
+        try {
+            if (TakeReportBudget()) LOG_INFO("NR Native deferred clear: request={} list={} epoch={} hooks={} observedWork={} rtvCpuHandle={:X} disjoint={} originalNotYetForwarded=true recordedIsNotGpuCompletion=true",
+                sequence_,current.list,current.incarnation,current.hookGeneration,current.workOrdinal,descriptor,allowed);
+        } catch (...) {} // Optional logging cannot change clear eligibility.
+        return allowed;
+    }
+    void Admission(bool armed)const noexcept{Report(armed?"armed":"not-armed");}
+    Neurotic::D3D12::NativeQueryInsertion::Outcome Record(const Neurotic::D3D12::NativeQueryInsertion::Boundary& boundary)noexcept override{
+        using Outcome=Neurotic::D3D12::NativeQueryInsertion::Outcome;
+        try{
+            if(reinterpret_cast<uintptr_t>(terminal_.Get())!=boundary.list){Report("different-recording");return Outcome::Skipped;}
+            auto pin=HandleToFeature.Pin(handle_,feature_);if(!pin||!pin->Current()){Report("source-feature-retired");return Outcome::Skipped;}
+            struct CurrentGuard {
+                DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::CallbackPin& feature;
+                LegacyPostDeferredOperation& operation;
+                bool Current() noexcept { try { return feature.Current() && operation.ClearProofCurrent(); } catch (...) { return false; } }
+            } guard{*pin,*this};
+            if (!guard.Current()) { Report("creation-association-retired"); return Outcome::Skipped; }
+            const auto outcome=DlssNr::RecordLegacyPostRequest(request_,boundary,
+                [](void* value)noexcept{return static_cast<CurrentGuard*>(value)->Current();},&guard);
+            Report(outcome==Outcome::Recorded?"recorded":outcome==Outcome::Failed?"failed":"skipped");
+            return outcome;
+        }catch(...){Report("exception");return Outcome::Failed;}
+    }
+    void Cancel(Neurotic::D3D12::NativeQueryInsertion::Reason reason)noexcept override{Report("cancelled",static_cast<unsigned>(reason));}
+    void CancelAt(Neurotic::D3D12::NativeQueryInsertion::Reason reason,std::uint32_t slot)noexcept override{Report("cancelled-at-slot",static_cast<unsigned>(reason),slot);}
+};
+static bool ArmLegacyPostDeferred(ID3D12GraphicsCommandList* original,NVSDK_NGX_Parameter* parameters,
+    const NrConfigSnapshot<Config>& settings,bool forcedAfter,const LegacyPostDeferredContext& context)noexcept
+{
+    try{
+        if(!context.producer||!context.terminal||!context.feature||!context.selectedUse)return false;
+        auto request=DlssNr::PrepareLegacyPostRequest(original,parameters,settings,forcedAfter,
+            context.inputs?&*context.inputs:nullptr,&context.renderObservation,*context.selectedUse);
+        if(!request)return false;
+        auto operation=std::make_shared<LegacyPostDeferredOperation>(original,context,std::move(request));
+        const bool armed=D3D12Hooks::DeferNativePostQuery(original,*context.producer,operation);
+        operation->Admission(armed);return armed;
+    }catch(...){return false;}
+}
+
 template<class Invocation>
 static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Parameter* parameters,
-                                 const NrConfigSnapshot<Config>& settings, bool beforeSeam, bool forcedAfter, Invocation invoke)
+                                 const NrConfigSnapshot<Config>& settings, bool beforeSeam, bool forcedAfter, Invocation invoke,
+                                 const LegacyPostDeferredContext* deferred=nullptr)
 {
     const bool runBefore = settings.DlssNrRunBeforeSr.value_or_default();
     const bool requestedSeam = beforeSeam ? runBefore : (!runBefore || forcedAfter);
@@ -73,45 +198,81 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
         return true;
     }
 
+    std::optional<Neurotic::D3D12::NativeQueryInsertion::Boundary> restoredBoundary;
+    std::uint64_t restoredSerial=0;
+    void* originalOutput = nullptr;
+    bool restoredProof=false,completionRequired=false;
+    const auto envelope=[&]() -> bool {
     using Mask = Neurotic::D3D12::RestoreMask;
-    auto mask = Mask::Compute | Mask::Pipeline | Mask::Heaps | Mask::HeapInvalidatedTables;
-    if (beforeSeam) mask = mask | Mask::RootInvalidatedTables | Mask::BlendFactor;
+    auto mask = Mask::Compute | Mask::Pipeline | Mask::Heaps | Mask::HeapInvalidatedTables | Mask::BlendFactor;
+    // Restore the caller's authentic defined/undefined arguments at either
+    // seam; missing observations still cannot qualify for this policy.
+    mask = mask | Mask::RootInvalidatedTables | Mask::RootInvalidatedArguments;
     // The nested legacy envelope may replay graphics when explicitly requested.
     // Cover that stage's real mutations rather than weakening the owner check.
     if (Config::Instance()->RestoreGraphicSignature.value_or_default()) mask = mask | Mask::Graphics;
     Neurotic::D3D12::NativeStateCaptureDiagnostic diagnostic;
-    void* originalOutput = nullptr;
     DlssNr::NativeIdentity::Resolved<ID3D12GraphicsCommandList> nativeList;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> executionCaller;
     bool entered = false, invocationCompleted = false;
     bool restoreAttempted = false, restoreReturned = false, stateRestored = false;
     Neurotic::D3D12::NativeRecordingState::RestoreDiagnostic restoreDiagnostic;
     const auto result = DlssNr::InvokeNativeSharedList(
         [&]() -> std::optional<NativeStateRestorePoint> {
-            // Creation enrolls the resolved native object. A Streamline caller
-            // interface is not a journal key; keep invocation on its existing
-            // path while capturing/restoring that same authenticated native list.
-            nativeList = DlssNr::NativeIdentity::Resolve<ID3D12GraphicsCommandList>(list);
-            if (!nativeList.object)
-            {
-                diagnostic.reason = "Native.CallerIdentityUnavailable";
-                return {};
-            }
-            auto saved = D3D12Hooks::CapturePostSrState(nativeList.object.Get(), mask, &diagnostic);
-            if (!saved) return {};
+            // Foreign Output preparation must finish before choosing the
+            // caller binding snapshot. Its legitimate changes belong to the
+            // caller, even when the custom invocation records nothing.
             if (!parameters || parameters->Get(NVSDK_NGX_Parameter_Output, &originalOutput) !=
                     NVSDK_NGX_Result_Success || !originalOutput)
             {
                 diagnostic.reason = "Native.OutputBindingUnavailable";
                 return {};
             }
+            // Observe the enrolled terminal, but retain the real execution
+            // caller for snapshot/replay. Observation is not rendering unwrap.
+            {
+                auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(list);
+                nativeList.result=interfaces.result;nativeList.layers=interfaces.layers;
+                nativeList.object=std::move(interfaces.terminal);
+                executionCaller=std::move(interfaces.caller);
+            }
+            if (FAILED(nativeList.result)||!nativeList.object||!executionCaller)
+            {
+                diagnostic.reason = "Native.CallerIdentityUnavailable";
+                return {};
+            }
+            using QueryPolicy = Neurotic::D3D12::NativeRecordingState::QueryPolicy;
+            // Preserve the caller's live pipeline-statistics scope at either
+            // requested seam. Its measurements include NR; never suspend or
+            // restart the query. Capture/restore verifies the same authentic
+            // Begin identities, while other query types remain unsupported.
+            const auto queryPolicy = QueryPolicy::PreservePipelineStatistics;
+            auto saved = D3D12Hooks::CapturePostSrState(executionCaller.Get(), mask, &diagnostic, queryPolicy);
+            if (!saved) return {};
             return saved;
-        }, [&] { entered = true; invoke(); invocationCompleted = true; },
+        }, [&] {
+            entered = true;
+            Neurotic::D3D12::NativeRecordingPhaseScope phase(Neurotic::D3D12::NativeRecordingPhase::NeuralRendering);
+            invoke(); invocationCompleted = true;
+        },
         [&](const auto& saved) {
             restoreAttempted = true;
             stateRestored = D3D12Hooks::RestorePostSrState(saved, &restoreDiagnostic);
             restoreReturned = true;
+            if(stateRestored){
+                restoredBoundary=D3D12Hooks::ObserveNativeQueryProducer(saved.nativeList);
+                restoredProof=restoredBoundary&&restoredBoundary->incarnation==saved.incarnation&&
+                    D3D12Hooks::KnownNativeResourceStates(*restoredBoundary,{}, {},restoredSerial);
+                stateRestored=restoredProof;
+            }
             return stateRestored;
         });
+    if(result==DlssNr::NativeSharedListResult::Skipped&&!beforeSeam&&deferred&&
+       diagnostic.reason&&std::string_view(diagnostic.reason)=="Native.State.QueryOpen")
+    {
+        const bool armed=ArmLegacyPostDeferred(list,parameters,settings,forcedAfter,*deferred);
+        (void)armed; // The owned operation emits the bounded request/boundary join below.
+    }
     // A completed envelope proves invocation and replay, not that NR rendered.
     // Keep this small summary available after the detailed 16-refusal budget.
     try
@@ -125,15 +286,35 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
             static auto lastResult = DlssNr::NativeSharedListResult::Skipped;
             static std::string lastReason;
             static ULONGLONG lastMs = 0;
-            std::lock_guard lock(reportMutex);
+            static std::uint64_t suppressedCalls = 0;
+            static bool hookFactsReported = false;
+            static std::array<std::uint64_t, 4> lastHookFacts{};
             const bool skipped = result == DlssNr::NativeSharedListResult::Skipped;
             const char* reason = skipped ? diagnostic.reason : "";
-            const auto now = GetTickCount64();
-            if (!reported || entered != lastEntered || runBefore != lastRunBefore || forcedAfter != lastForcedAfter ||
-                result != lastResult || lastReason != reason || now - lastMs >= 1000)
+            bool emit = false, changed = false;
+            std::uint64_t suppressed = 0;
             {
-                reported = true; lastEntered = entered; lastRunBefore = runBefore; lastForcedAfter = forcedAfter;
-                lastResult = result; lastReason = reason; lastMs = now;
+                std::lock_guard lock(reportMutex);
+                // Sample beside the update: reverse lock acquisition must not
+                // underflow an older caller's unsigned timestamp difference.
+                const auto now = GetTickCount64();
+                changed = !reported || entered != lastEntered || runBefore != lastRunBefore ||
+                    forcedAfter != lastForcedAfter || result != lastResult || lastReason != reason;
+                // This state belongs to this Invocation specialization (four
+                // callsites), not a process-global sampling clock. Alternating
+                // outcomes cannot turn its summary into a per-frame stream.
+                if (!reported || now - lastMs >= 1000)
+                {
+                    emit = true; suppressed = suppressedCalls; suppressedCalls = 0;
+                    reported = true; lastEntered = entered; lastRunBefore = runBefore; lastForcedAfter = forcedAfter;
+                    lastResult = result; lastReason = reason; lastMs = now;
+                }
+                else if (suppressedCalls != UINT64_MAX) ++suppressedCalls;
+            }
+            // No logging, driver query or other owner lock while reportMutex
+            // is held. Every following observation remains best effort only.
+            if (emit && !loggerClosed.load(std::memory_order_relaxed) && spdlog::should_log(spdlog::level::info))
+            {
                 const char* outcome = skipped ? "Skipped" : result == DlssNr::NativeSharedListResult::Restored
                     ? "Restored-invoke-and-replay" : "Failed-invoke-or-replay";
                 if (skipped)
@@ -144,6 +325,72 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
                 else
                     LOG_INFO("NR Native invocation: seam={} runBefore={} forcedAfter={} outcome={} entered={}",
                              beforeSeam ? "Before" : "After", runBefore, forcedAfter, outcome, entered);
+                LOG_INFO("NR Native captured blend: known={} bits={:08X}/{:08X}/{:08X}/{:08X} "
+                         "origin={} mutation={} observedSequence={} unsupportedEffects={:016X}/{:016X}",
+                         diagnostic.blendKnown, diagnostic.blendBits[0], diagnostic.blendBits[1],
+                         diagnostic.blendBits[2], diagnostic.blendBits[3],
+                         Neurotic::D3D12::NativeRecordingPhaseName(diagnostic.blendPhase),
+                         diagnostic.blendMutation, diagnostic.blendObservedSequence,
+                         diagnostic.unsupportedEffectBits[0], diagnostic.unsupportedEffectBits[1]);
+                TraceOpenNativeQueries(diagnostic);
+                const bool typeKnown = nativeList.object.Get() != nullptr;
+                const int nativeType = typeKnown ? static_cast<int>(nativeList.object->GetType()) : -1;
+                const auto current = D3D12Hooks::ObserveNativeRecording(nativeList.object.Get());
+                LOG_INFO("NR Native current owner: pid={} thread={} caller={:p} native={:p} layers={} resolve={:X} "
+                         "seam={} outcome={} reason={} listTypeKnown={} listType={} "
+                         "capturedIncarnation={} currentIncarnation={} currentWork={} currentActive={} "
+                         "currentCoverage={} currentGeneration={} summaryChanged={} suppressedInvocations={}",
+                         GetCurrentProcessId(), GetCurrentThreadId(), static_cast<void*>(list),
+                         static_cast<void*>(nativeList.object.Get()), nativeList.layers,
+                         static_cast<unsigned>(nativeList.result), beforeSeam ? "Before" : "After", outcome, reason,
+                         typeKnown, nativeType, diagnostic.incarnation, current.incarnation, current.workOrdinal,
+                         current.active, current.completeCoverage, current.hookGeneration, changed, suppressed);
+                // These are already stored historical address facts, not current
+                // incarnation rights or canonical COM identity. Query outside the
+                // reporting lock; formatting and logging also stay outside it.
+                const auto hooks = D3D12Hooks::DiagnoseNativeRecording(nativeList.object.Get());
+                const std::array<std::uint64_t, 4> hookFacts{
+                    hooks.queriedList, hooks.firstRefusalSequence, hooks.flags, hooks.droppedEvents};
+                bool reportHookFacts = false;
+                {
+                    std::lock_guard lock(reportMutex);
+                    reportHookFacts = !hookFactsReported || lastHookFacts != hookFacts;
+                    if (reportHookFacts) { hookFactsReported = true; lastHookFacts = hookFacts; }
+                }
+                if (reportHookFacts)
+                {
+                    GUID requestedIid{};
+                    static_assert(sizeof(requestedIid) == sizeof(hooks.failedIid));
+                    std::memcpy(&requestedIid, hooks.failedIid, sizeof(requestedIid));
+                    LOG_INFO("NR Native hook refusal observation: source=historical-address recordKnown={} "
+                             "firstRefusalKnown={} pid={} thread={} native={:p} currentIncarnation={} "
+                             "flags={} firstRefusal={} firstRefusalSequence={} slot={} result={:X} "
+                             "requestedIid={:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X} "
+                             "expectedInterfacePointer={:X} returnedInterfacePointer={:X} droppedEvents={}",
+                             (hooks.flags & 4u) != 0, (hooks.flags & 4u) != 0 && hooks.firstRefusal != 0,
+                             GetCurrentProcessId(), GetCurrentThreadId(), static_cast<void*>(nativeList.object.Get()),
+                             current.incarnation, hooks.flags, hooks.firstRefusal, hooks.firstRefusalSequence,
+                             hooks.failedSlot, static_cast<unsigned>(hooks.firstResult),
+                             requestedIid.Data1, requestedIid.Data2, requestedIid.Data3,
+                             requestedIid.Data4[0], requestedIid.Data4[1], requestedIid.Data4[2], requestedIid.Data4[3],
+                             requestedIid.Data4[4], requestedIid.Data4[5], requestedIid.Data4[6], requestedIid.Data4[7],
+                             hooks.expectedIdentity, hooks.observedIdentity, hooks.droppedEvents);
+                }
+                // Zero detail avoids persistent/sample vectors, but inspection
+                // still scans retained tickets/fence points under their owner.
+                // These are process-global GpuSafety counts, never frame rights
+                // or total process/VRAM usage. Reserved bytes are sampled apart.
+                const auto retained = DlssNr::GpuSafety::InspectPending(0, 0);
+                const auto reservedDerivedBytes = DlssNr::GpuSafety::DerivedAllocatedBytes();
+                const auto& slots = retained.slots;
+                LOG_INFO("NR Native retention observation: pid={} thread={} native={:p} incarnation={} "
+                         "owner=GpuSafety scope=process reusable={} gpuPending={} completedUnsealed={} "
+                         "unsubmittedUnsealed={} failed={} registryFailed={} omittedDetails={} "
+                         "separatelyObservedReservedDerivedBytes={}",
+                         GetCurrentProcessId(), GetCurrentThreadId(), static_cast<void*>(nativeList.object.Get()),
+                         current.incarnation, slots.reusable, slots.gpuPending, slots.completedUnsealed,
+                         slots.unsubmittedUnsealed, slots.failed, slots.registryFailed, retained.omitted,
+                         reservedDerivedBytes);
             }
         }
     }
@@ -161,11 +408,16 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
                 const auto raw = D3D12Hooks::ObserveNativeRecording(list);
                 const auto recorded = D3D12Hooks::ObserveNativeRecording(nativeList.object.Get());
                 const auto hooks = D3D12Hooks::DiagnoseNativeRecording(nativeList.object.Get());
+                GUID requestedIid{};
+                static_assert(sizeof(requestedIid) == sizeof(hooks.failedIid));
+                std::memcpy(&requestedIid, hooks.failedIid, sizeof(requestedIid));
                 LOG_WARN("NR Native caller-state unavailable; custom pass skipped before mutation: "
                          "list={:p} native={:p} layers={} resolve={:X} reason={} "
                          "rawEntry={} rawActive={} nativeEntry={} active={} coverage={} incarnation={} generation={} "
                          "installs={}/{} globalInstalls={}/{} resets={}/{} enrolled={} closed={} "
                          "hookFlags={} historicalFirstRefusal={} historicalFirstRefusalSequence={} historicalSlot={} stage={} "
+                         "requestedIid={:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X} "
+                         "expectedInterfacePointer={:X} returnedInterfacePointer={:X} "
                          "firstResult={:X} resetResult={:X} parameter={} known={} required={} trace_count={} trace_total={} "
                          "capturedEntry={} capturedRawActive={} capturedTainted={} capturedHistoryKnown={} capturedHistory={} "
                          "capturedIncarnation={} capturedGeneration={} currentFirstInvalidation={} currentSlot={} currentSequence={} currentWork={}",
@@ -177,7 +429,11 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
                          hooks.globalInstallAttempts, hooks.resetSuccesses, hooks.resetCalls,
                          hooks.enrollmentSuccesses, hooks.closeCalls, hooks.flags,
                          static_cast<unsigned>(hooks.firstRefusal), hooks.firstRefusalSequence,
-                         hooks.failedSlot, hooks.enrollmentStage, static_cast<unsigned>(hooks.firstResult),
+                         hooks.failedSlot, hooks.enrollmentStage,
+                         requestedIid.Data1, requestedIid.Data2, requestedIid.Data3,
+                         requestedIid.Data4[0], requestedIid.Data4[1], requestedIid.Data4[2], requestedIid.Data4[3],
+                         requestedIid.Data4[4], requestedIid.Data4[5], requestedIid.Data4[6], requestedIid.Data4[7],
+                         hooks.expectedIdentity, hooks.observedIdentity, static_cast<unsigned>(hooks.firstResult),
                          static_cast<unsigned>(hooks.lastResetResult), diagnostic.parameter,
                          diagnostic.known, diagnostic.required, diagnostic.traceCount, diagnostic.traceTotal,
                          diagnostic.recordingPresent, diagnostic.rawActive, diagnostic.tainted,
@@ -190,10 +446,10 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
                 {
                     const auto& entry = diagnostic.trace[i];
                     LOG_WARN("NR Native caller-state trace: list={:p} native={:p} observedIncarnation={} "
-                             "capturedIncarnation={} seq={} work={} op={} a={} b={} c={}",
+                             "capturedIncarnation={} seq={} work={} op={} a={} b={} c={} blendBits={:08X}/{:08X}/{:08X}/{:08X}",
                              static_cast<void*>(list), static_cast<void*>(nativeList.object.Get()),
                              recorded.incarnation, diagnostic.incarnation, entry.sequence, entry.workOrdinal, entry.operation,
-                             entry.a, entry.b, entry.c);
+                             entry.a, entry.b, entry.c, entry.blendBits[0], entry.blendBits[1], entry.blendBits[2], entry.blendBits[3]);
                 }
             }
             catch (...)
@@ -206,6 +462,7 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
     }
     if (result == DlssNr::NativeSharedListResult::Restored)
     {
+        completionRequired=true;
         static std::atomic<unsigned> restored {0};
         if (++restored <= 4)
             LOG_DEBUG("NR Native caller-state restored before continuation: list={:p}", static_cast<void*>(list));
@@ -240,9 +497,9 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
             for (UINT i = 0; i < std::min<UINT>(d.tail.traceCount, UINT(d.tail.trace.size())); ++i)
             {
                 const auto& entry = d.tail.trace[i];
-                LOG_ERROR("NR Native restore trace: native={:p} seq={} work={} op={} a={} b={} c={}",
+                LOG_ERROR("NR Native restore trace: native={:p} seq={} work={} op={} a={} b={} c={} blendBits={:08X}/{:08X}/{:08X}/{:08X}",
                           static_cast<void*>(nativeList.object.Get()), entry.sequence, entry.workOrdinal,
-                          entry.operation, entry.a, entry.b, entry.c);
+                          entry.operation, entry.a, entry.b, entry.c, entry.blendBits[0], entry.blendBits[1], entry.blendBits[2], entry.blendBits[3]);
             }
         }
     }
@@ -258,6 +515,21 @@ static bool InvokeLegacyNativeNr(ID3D12GraphicsCommandList* list, NVSDK_NGX_Para
     LOG_ERROR("NR Native caller-state restoration or invocation failed; continuation refused: list={:p}",
               static_cast<void*>(list));
     return false;
+    };
+    const bool continued=envelope();
+    // The saved snapshot, diagnostics and local execution/native COM owners
+    // have all retired. This final check is pure and cannot overwrite a change.
+    const bool accepted=continued&&(!completionRequired||(restoredProof&&restoredBoundary&&
+        D3D12Hooks::NativeResourceStatesCurrent(*restoredBoundary,restoredSerial)));
+    if(continued&&!accepted){
+        // A late retirement failure needs the same parameter cleanup as an
+        // invocation/replay failure. This branch cannot publish success.
+        try{
+            if(parameters&&originalOutput)parameters->Set(NVSDK_NGX_Parameter_Output,originalOutput);
+            DlssNr::RestoreAfterUpscale(parameters);
+        }catch(...){}
+    }
+    return accepted;
 }
 
 namespace Neurotic::Lifecycle
@@ -266,6 +538,21 @@ Orchestration::InitResult NativeProcessBootstrap::PrepareRuntime(Callback& callb
 {
     if(!settings.DlssNrRunBeforeSr.value_or_default()&&!callback.RequiredSrInput())
     {callback.runtimeReason_=Protocol::Symbol("Native.PostSrOutputPending");return {};}
+    DlssNr::NativeResolution::RenderObservation renderObservation;
+    if(DlssNr::NativeResolution::PostSelected(settings)&&callback.call_)
+    {
+        unsigned width=0,height=0,x=0,y=0,outputX=0,outputY=0;
+        const auto& call=*callback.call_;
+        const bool haveWidth=call.Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width,&width)==0;
+        const bool haveHeight=call.Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height,&height)==0;
+        call.Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X,&x);
+        call.Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y,&y);
+        call.Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X,&outputX);
+        call.Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y,&outputY);
+        if(const auto* color=call.Description("Color"))
+            renderObservation=DlssNr::NativeResolution::ObserveRender(width,height,haveWidth&&haveHeight,
+                color->Width,color->Height,x,y,reinterpret_cast<uintptr_t>(call.Resource("Output")),outputX,outputY);
+    }
     return Materialize(callback,settings,[&]{
         const bool before=settings.DlssNrRunBeforeSr.value_or_default();
         const auto color=callback.publication_?callback.publication_->DeclaredColor(!before):std::nullopt;
@@ -274,7 +561,8 @@ Orchestration::InitResult NativeProcessBootstrap::PrepareRuntime(Callback& callb
         if(domain!=C::ColorDomain::SceneLinear&&domain!=C::ColorDomain::EncodedDisplay)
             return std::unique_ptr<DlssNr::NativeRendererPreparation>{};
         return DlssNr::NativeRendererPreparation::TryAcquire(callback.call_->CommandList(),
-            callback.call_->Resource(before?"Color":"Output"),settings,before,domain==C::ColorDomain::SceneLinear);});
+            callback.call_->Resource(before?"Color":"Output"),settings,before,domain==C::ColorDomain::SceneLinear,
+            &renderObservation);});
 }
 Protocol::NativeProtocolResult NativeProcessBootstrap::RunNativeBefore(
     Callback& callback,void* nativeParameters,const NrConfigSnapshot<Config>& settings)
@@ -561,11 +849,12 @@ class NativeDx12Source
         {
             const auto* call=callback.OriginalCall();
             // The selected NR route uses compute, PSO and descriptor heaps.
+            // Preserve blend factors as command-list state across the invocation.
             // Graphics state may be undefined on a compute-only caller list;
             // the observer must reject any mutation of that omitted stage.
             using Mask=Neurotic::D3D12::RestoreMask;
             Neurotic::D3D12::NativeStateCaptureDiagnostic diagnostic;
-            if(call)captured=D3D12Hooks::CapturePostSrState(call->CommandList(),Mask::Compute|Mask::Pipeline|Mask::Heaps|Mask::HeapInvalidatedTables,&diagnostic);
+            if(call)captured=D3D12Hooks::CapturePostSrState(call->CommandList(),Mask::Compute|Mask::Pipeline|Mask::Heaps|Mask::HeapInvalidatedTables|Mask::BlendFactor,&diagnostic);
             if(!captured)
             {
                 auto reason=std::string(diagnostic.reason);
@@ -576,23 +865,26 @@ class NativeDx12Source
                 LOG_WARN("NR state capture refused: list={:p} reason={} trace_count={} trace_total={}",
                     call ? static_cast<void*>(call->CommandList()) : nullptr, reason,
                     diagnostic.traceCount, diagnostic.traceTotal);
+                TraceOpenNativeQueries(diagnostic);
                 for(UINT i=0;i<diagnostic.traceCount;++i)
                 {
                     const auto& entry=diagnostic.trace[i];
-                    LOG_WARN("NR state trace: seq={} work={} op={} a={} b={} c={}",
-                        entry.sequence,entry.workOrdinal,entry.operation,entry.a,entry.b,entry.c);
+                    LOG_WARN("NR state trace: seq={} work={} op={} a={} b={} c={} blendBits={:08X}/{:08X}/{:08X}/{:08X}",
+                        entry.sequence,entry.workOrdinal,entry.operation,entry.a,entry.b,entry.c,entry.blendBits[0],entry.blendBits[1],entry.blendBits[2],entry.blendBits[3]);
                 }
             }
         }
         catch(...){result.reason=P::Symbol("Native.CommandStateCaptureFailed");return host->RecordNativeResult(callback,result);}
         if(!captured)return host->RecordCommandStateUnavailable(callback,D3D12Hooks::ObserveNativeRecording(
             callback.OriginalCall()?callback.OriginalCall()->CommandList():nullptr),captureReason);
-        P::NativeCommandStateScope restore([&]{return D3D12Hooks::RestorePostSrState(*captured);},
+        Neurotic::D3D12::NativeRecordingState::RestoreDiagnostic restoreDiagnostic;
+        P::NativeCommandStateScope restore([&]{return D3D12Hooks::RestorePostSrState(*captured,&restoreDiagnostic);},
             [&]()noexcept{P::NativeMarkCommandStateRestoreFailed(result.facts);});
         try
         {
             // Creation/preparation can itself record work. Its state belongs
             // inside the same envelope as the actual evaluation.
+            Neurotic::D3D12::NativeRecordingPhaseScope nrPhase(Neurotic::D3D12::NativeRecordingPhase::NeuralRendering);
             host->PrepareRuntime(callback,settings);
             if(!callback.Current())result.reason=P::Symbol("Native.ScopeUnavailable");
             else result=host->RunNativeBefore(callback,parameters,settings);
@@ -600,7 +892,47 @@ class NativeDx12Source
         catch(...){result.reason=P::Symbol("Native.InvocationOwnerFailure");}
         // Explicit before the result is copied; destructor covers exceptions.
         const bool restored=restore.Restore();
-        if(!restored&&result.reason.Empty())result.reason=result.facts.failure;
+        if(!restored)
+        {
+            const auto invocationReason=result.reason;
+            const std::string_view reason=restoreDiagnostic.reason;
+            if(reason.starts_with("Native.Restore.")&&reason!="Native.Restore.NotAttempted")
+                result.reason=P::Symbol(reason);
+            else if(result.reason.Empty())result.reason=result.facts.failure;
+            // Evidence from the same restore attempt, never a second replay or
+            // an admission override. Optional logging cannot change its result.
+            try
+            {
+                LOG_WARN("NR state restore refused: reason={} invocation_reason={} active={} tainted={} "
+                         "saved_incarnation={} current_incarnation={} saved_compute={} current_compute={} "
+                         "saved_graphics={} current_graphics={} saved_work={} current_work={}",
+                    reason,invocationReason.View(),restoreDiagnostic.active,restoreDiagnostic.tainted,
+                    restoreDiagnostic.savedIncarnation,restoreDiagnostic.currentIncarnation,
+                    restoreDiagnostic.savedComputeMutation,restoreDiagnostic.currentComputeMutation,
+                    restoreDiagnostic.savedGraphicsMutation,restoreDiagnostic.currentGraphicsMutation,
+                    restoreDiagnostic.savedWorkOrdinal,restoreDiagnostic.currentWorkOrdinal);
+                const auto& tail=restoreDiagnostic.tail;
+                LOG_WARN("NR state restore witness: first_reason={} first_slot={} first_sequence={} first_work={} "
+                         "saved_blend={} current_blend={} saved_unrestorable={} current_unrestorable={} "
+                         "last_slot={} last_sequence={} last_ordinal={} last_work={} a={} b={} c={} "
+                         "trace_count={} trace_total={}",
+                    tail.firstInvalidation.reason,tail.firstInvalidation.slot,tail.firstInvalidation.sequence,
+                    tail.firstInvalidation.workOrdinal,restoreDiagnostic.savedBlendMutation,
+                    restoreDiagnostic.currentBlendMutation,restoreDiagnostic.savedUnrestorableOrdinal,
+                    restoreDiagnostic.currentUnrestorableOrdinal,restoreDiagnostic.lastUnrestorableSlot,
+                    restoreDiagnostic.lastUnrestorableSequence,restoreDiagnostic.lastUnrestorableOrdinal,
+                    restoreDiagnostic.lastUnrestorableWorkOrdinal,restoreDiagnostic.lastUnrestorableA,
+                    restoreDiagnostic.lastUnrestorableB,restoreDiagnostic.lastUnrestorableC,
+                    tail.traceCount,tail.traceTotal);
+                for(UINT i=0;i<tail.traceCount;++i)
+                {
+                    const auto& entry=tail.trace[i];
+                    LOG_WARN("NR state restore trace: seq={} work={} op={} a={} b={} c={} blendBits={:08X}/{:08X}/{:08X}/{:08X}",
+                        entry.sequence,entry.workOrdinal,entry.operation,entry.a,entry.b,entry.c,entry.blendBits[0],entry.blendBits[1],entry.blendBits[2],entry.blendBits[3]);
+                }
+            }
+            catch(...){/* Optional diagnostics cannot alter restoration failure. */}
+        }
         host->ObserveNativeRestoration(callback,result,restored,D3D12Hooks::ObserveNativeRecording(
             callback.OriginalCall()?callback.OriginalCall()->CommandList():nullptr));
         return host->RecordNativeResult(callback,result);
@@ -1700,7 +2032,9 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
                                                const NVSDK_NGX_Handle* InFeatureHandle,
                                                NVSDK_NGX_Parameter* InParameters,
                                                PFN_NVSDK_NGX_ProgressCallback InCallback,
-                                               DlssNr::NativeTemporalInputs::OutputEvaluation& outputEvaluation);
+                                               DlssNr::NativeTemporalInputs::OutputEvaluation& outputEvaluation,
+                                               ID3D12GraphicsCommandList* producerTerminal,
+                                               std::optional<Neurotic::D3D12::NativeQueryInsertion::Boundary>* producer);
 
 static NVSDK_NGX_Result TryCreateOptiFeature(ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
                                              NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
@@ -2207,7 +2541,9 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
                                                const NVSDK_NGX_Handle* InFeatureHandle,
                                                NVSDK_NGX_Parameter* InParameters,
                                                PFN_NVSDK_NGX_ProgressCallback InCallback,
-                                               DlssNr::NativeTemporalInputs::OutputEvaluation& outputEvaluation)
+                                               DlssNr::NativeTemporalInputs::OutputEvaluation& outputEvaluation,
+                                               ID3D12GraphicsCommandList* producerTerminal,
+                                               std::optional<Neurotic::D3D12::NativeQueryInsertion::Boundary>* producer)
 {
     State& state = State::Instance();
     const Config& cfg = *Config::Instance();
@@ -2322,7 +2658,9 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
         ScopedSkipHeapCapture skip {};
         evalSuccess = outputEvaluation.Invoke(feature->GetUpscalerType() == Upscaler::DLSSD &&
             feature->Api() == API::DX12 && !feature->IsWithDx12(),
-            [&] { return feature->Evaluate(InCmdList, InParameters); });
+            [&] { const bool evaluated=feature->Evaluate(InCmdList, InParameters);
+                if(evaluated&&producerTerminal&&producer)*producer=D3D12Hooks::ObserveNativeQueryProducer(producerTerminal);
+                return evaluated; });
     }
 
     if (!evalSuccess)
@@ -2487,8 +2825,18 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     {
         if (InParameters)
             fgBackbufferResult = InParameters->Get("DLSSG.Backbuffer", &fgBackbuffer);
-        if (DlssNr::FrameTrace::Armed() && InParameters)
+        DlssNr::NativeFgReceipt::Context receiptContext {};
+        bool receiptScoped=false,receiptConsumer=false;
+        if (DlssNr::NativeFgTrace::Enabled())
         {
+            const auto current = DlssNr::NativeFgTrace::CurrentConsumer();
+            receiptScoped = current.associated;
+            receiptContext = current.context;
+            receiptConsumer=DlssNr::NativeFgTrace::ConsumerSample(receiptContext.provider,receiptContext.epoch,receiptScoped);
+        }
+        if ((DlssNr::FrameTrace::Armed() || receiptConsumer) && InParameters)
+        {
+            const DWORD receiptError=GetLastError();
             void* traceHudless = nullptr;
             const auto hudlessResult = InParameters->Get("DLSSG.HUDLess", &traceHudless);
             const auto* preFg = DlssNr::PreFg::forwardingFrame;
@@ -2501,6 +2849,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 preFg ? "present-call-scope" : "unknown", DlssNr::FgLifecycle::Find(handleId),
                 DlssNr::FgLifecycle::Read().generation, preFg ? preFg->diagnosticClaim.generation : 0,
                 preFg ? preFg->providerGeneration : 0);
+            if (receiptConsumer)
+                DlssNr::NativeFgTrace::Consumer(handleId,InCmdList,fgBackbuffer,
+                    static_cast<unsigned>(fgBackbufferResult),traceHudless,static_cast<unsigned>(hudlessResult),
+                    receiptContext,receiptScoped);
+            SetLastError(receiptError);
         }
         int frameCount = 0;
         InParameters->Get("DLSSG.MultiFrameCount", &frameCount);
@@ -2552,6 +2905,23 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     // during native SR must not schedule NR once before SR and again after it.
     const auto nrSettings = isNrPipelineFeature ? TryNrConfigSnapshot(cfg)
                                                : std::optional<NrConfigSnapshot<Config>>{};
+    // Capture before foreign resolution or selected SR. A later selected call
+    // on another list must revoke an older pending request as well.
+    const auto deferredSelectedUse=nrSettings&&nrSettings->GetDlssNrRuntimeSnapshot().enabled&&
+        nrSettings->DlssNrRoute.value_or_default()==0&&!nrSettings->DlssNrNativeProtocol.value_or_default()
+        ?DlssNr::BeginLegacyNativeSelectedUse():std::optional<DlssNr::NativeSelectedUse::Witness>{};
+    // NR-DEFERRED-OBSERVATION-IDENTITY-BEGIN
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> deferredTerminal;
+    if(nrSettings&&nrSettings->GetDlssNrRuntimeSnapshot().enabled&&nrSettings->DlssNrRoute.value_or_default()==0&&!nrSettings->DlssNrNativeProtocol.value_or_default()) {
+        // Observation supports optional owning wrapper contracts separately
+        // from rendering. Execution remains on InCmdList throughout SR.
+        auto observed=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(InCmdList);
+        if(SUCCEEDED(observed.result))deferredTerminal=std::move(observed.terminal);
+    }
+    // NR-DEFERRED-OBSERVATION-IDENTITY-END
+    std::optional<Neurotic::D3D12::NativeQueryInsertion::Boundary> deferredProducer;
+    const auto nrRenderObservation=nrSettings&&DlssNr::NativeResolution::PostSelected(*nrSettings)
+        ? DlssNr::ObserveRenderBeforeUpscale(InParameters) : DlssNr::NativeResolution::RenderObservation{};
     std::optional<DlssNr::NativeFeatureRegistry<NVSDK_NGX_Feature>::CallbackPin> sourcePin;
     std::optional<Neurotic::Lifecycle::NativeProcessBootstrap::Callback> nativeSource;
     std::shared_ptr<const DlssNr::NativeNgxCallCapture> alternateOriginal;
@@ -2640,6 +3010,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 const auto provider = DlssNr::PreFg::Provider();
                 fgCompletion = DlssNr::PreFg::ClaimCompletion(nativeBackbuffer, provider.generation, handleId,
                                                               fgGenerated, fgIndex);
+                DlssNr::NativeFgTrace::Handoff(handleId,InCmdList,provider.generation,
+                    static_cast<unsigned>(fgCompletion.result),fgCompletion.reason,fgCompletion.dependency.token,
+                    fgCompletion.dependency.sequence,fgCompletion.dependency.viewportKey,bool(consumerObservation));
                 const auto& completion = fgCompletion;
                 bool handoffFailed = completion.result == DlssNr::PreFg::CompletionClaimResult::Refused;
                 if (completion.result == DlssNr::PreFg::CompletionClaimResult::Ready &&
@@ -2711,8 +3084,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 characterFgToken=Neurotic::Semantic::Character::NativeFgWork().Begin(handleId,DlssNr::PreFg::NativeFgInstance(handleId));
                 if(Neurotic::Semantic::Character::CharacterWorkerRequested())Neurotic::Semantic::Character::CharacterNativeFgStarted();
             }
-            NVSDK_NGX_Result result =
-                NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            NVSDK_NGX_Result result = [&] {
+                Neurotic::D3D12::NativeRecordingPhaseScope phase(Neurotic::D3D12::NativeRecordingPhase::UpstreamEvaluation);
+                const auto evaluated=NVNGXProxy::D3D12_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+                if(evaluated==NVSDK_NGX_Result_Success&&deferredTerminal)deferredProducer=D3D12Hooks::ObserveNativeQueryProducer(deferredTerminal.Get());
+                return evaluated;
+            }();
             if(characterFgToken.pending)Neurotic::Semantic::Character::NativeFgWork().Finish(characterFgToken,
                 result==NVSDK_NGX_Result_Success,DlssNr::PreFg::NativeFgInstance(handleId),Neurotic::Semantic::Character::CharacterActivityNow());
             if (nativeSource && isSuperResolution && nrSettings)
@@ -2775,10 +3152,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
                 auto nativeInputs = DlssNr::NativeTemporalInputs::FromCreation(
                     featureSnapshot.originalCreation, handleId, featureSnapshot.generation);
                 if(nativeInputs) {nativeInputs->alternateOriginal=alternateOriginal;nativeInputs->alternateSource=alternateSource;}
+                LegacyPostDeferredContext deferred{deferredProducer,deferredTerminal,handleId,deferredSelectedUse,featureSnapshot,nativeInputs,nrRenderObservation};
                 if (!InvokeLegacyNativeNr(InCmdList, InParameters, *nrSettings, false, isRayReconstruction, [&] {
                     DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings,
-                                                nativeInputs ? &*nativeInputs : nullptr);
-                })) return rejectLegacyNr();
+                                                nativeInputs ? &*nativeInputs : nullptr, &nrRenderObservation);
+                },&deferred)) return rejectLegacyNr();
             }
 
             if(sourcePin&&alternateOriginal)HandleToFeature.CompleteTemporalSource(*sourcePin,alternateSource,
@@ -2835,8 +3213,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
     DlssNr::NativeTemporalInputs::OutputEvaluation outputEvaluation;
     if(nativeInputs) {nativeInputs->alternateOriginal=alternateOriginal;nativeInputs->alternateSource=alternateSource;}
-    const NVSDK_NGX_Result optiResult =
-        TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback, outputEvaluation);
+    const NVSDK_NGX_Result optiResult = [&] {
+        Neurotic::D3D12::NativeRecordingPhaseScope phase(Neurotic::D3D12::NativeRecordingPhase::UpstreamEvaluation);
+        return TryEvaluateOptiFeature(InCmdList, InFeatureHandle, InParameters, InCallback, outputEvaluation,deferredTerminal.Get(),&deferredProducer);
+    }();
     // Resolve RR metadata only for the backend which actually evaluated this
     // call, after any recreation/fallback. This never authorizes a pre-RR write.
     if (isRayReconstruction)
@@ -2860,10 +3240,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     if (optiResult == NVSDK_NGX_Result_Success && outputEvaluation.Succeeded() && isNrPipelineFeature && nrSettings &&
         !nrSettings->DlssNrNativeProtocol.value_or_default())
     {
+        LegacyPostDeferredContext deferred{deferredProducer,deferredTerminal,handleId,deferredSelectedUse,featureSnapshot,nativeInputs,nrRenderObservation};
         if (!InvokeLegacyNativeNr(InCmdList, InParameters, *nrSettings, false, isRayReconstruction, [&] {
             DlssNr::EvaluateAfterUpscale(InCmdList, InParameters, nullptr, isRayReconstruction, &*nrSettings,
-                                        nativeInputs ? &*nativeInputs : nullptr);
-        })) return rejectLegacyNr();
+                                        nativeInputs ? &*nativeInputs : nullptr, &nrRenderObservation);
+        },&deferred)) return rejectLegacyNr();
     }
 
     if(sourcePin&&alternateOriginal)HandleToFeature.CompleteTemporalSource(*sourcePin,alternateSource,

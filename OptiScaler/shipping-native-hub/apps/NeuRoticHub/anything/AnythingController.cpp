@@ -74,7 +74,7 @@ struct AnythingController::Impl {
   return processExitProven.load(std::memory_order_acquire);
  }
  void SaveModel(const std::string& path){
-  try{if(policy.persistPreferences)SaveUserFile(data/L"anything.json",AJson{{"schemaVersion",1},{"modelPath",path}}.dump(2));savedModel=path;std::lock_guard lock(mutex);++view.modelRevision;
+  try{if(policy.persistPreferences)SaveUserFile(data/L"anything.json",AJson{{"schemaVersion",1},{"modelPath",path}}.dump(2));std::lock_guard lock(mutex);savedModel=path;++view.modelRevision;
   }catch(...){std::lock_guard lock(mutex);view.message+=Neurotic::UiMessage("desktop.anythingcontroller.model_preference_could_not_be_saved_220591eb", " Model preference could not be saved.");}
  }
  void ProjectMeasurement(){ // caller holds mutex; worker ownership is never inferred here
@@ -286,7 +286,12 @@ bool AnythingController::SelectModel(const std::filesystem::path& file,bool impo
  if(import&&!impl->policy.persistPreferences)return false;
  auto path=Utf8(file.wstring());if(path.empty()||path.find('\0')!=std::string::npos||path.size()>32768)return false;
  std::lock_guard lock(impl->mutex);if(!impl->view.connected||impl->view.busy||impl->view.active||impl->view.stopping)return false;
- impl->queued={{"command",import?"import-model":"set-model"},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),path}};if(import)impl->queued["modelsRoot"]=Utf8(impl->Folder().wstring());impl->view.busy=true;impl->view.ready=false;impl->view.lastError.clear();impl->view.message=import?Neurotic::UiMessage("desktop.anythingcontroller.verifying_and_importing_your_nr_file_672870cd", "Verifying and importing your NR file..."):Neurotic::UiMessage("desktop.anythingcontroller.verifying_your_nr_file_e9254f4c", "Verifying your NR file...");return true;
+ impl->queued={{"command",import?"import-model":"set-model"},{Neurotic::UiLiteral("desktop.anythingview.path_aaaf4056", "path"),path}};
+ if(impl->policy.persistPreferences) {
+  impl->queued["modelsRoot"]=Utf8(impl->Folder().wstring());
+  if(!impl->savedModel.empty())impl->queued["modelUpdateContext"]={{"persistedModelPath",impl->savedModel},{"managedModelsRoot",Utf8(impl->Folder().wstring())}};
+ }
+ impl->view.busy=true;impl->view.ready=false;impl->view.lastError.clear();impl->view.message=import?Neurotic::UiMessage("desktop.anythingcontroller.verifying_and_importing_your_nr_file_672870cd", "Verifying and importing your NR file..."):Neurotic::UiMessage("desktop.anythingcontroller.verifying_your_nr_file_e9254f4c", "Verifying your NR file...");return true;
 }
 bool AnythingController::RefreshWindows(const std::string& search){std::lock_guard lock(impl->mutex);if(!impl->view.connected||impl->view.busy||impl->view.stopping||search.size()>1024)return false;impl->queued={{"command","catalog"},{"search",search}};if(impl->policy.excludeHostWindow)impl->queued["hostPid"]=GetCurrentProcessId();impl->view.busy=true;impl->view.lastError.clear();return true;}
 bool AnythingController::Start(AJson options){

@@ -1,5 +1,6 @@
 #pragma once
 #include "HdrObservation.h"
+#include <nr/context/ColorOperation.h>
 
 namespace DlssNr::PresentColor
 {
@@ -20,7 +21,18 @@ struct Decision
     float whitePoint = 1.0f;
     const char* reason = "Present color representation is unsupported";
     bool Supported() const { return profile != Profile::Unsupported; }
-    ModelContract Model() const { return {hdr, whitePoint, hdr, recipe}; }
+    Neurotic::Context::PresentColorOperation Operation(DXGI_FORMAT actualFormat) const
+    {
+        using Conversion=Neurotic::Context::PresentColorConversion;
+        const auto conversion=actualFormat==DXGI_FORMAT_B8G8R8A8_UNORM ? Conversion::ChannelOrder :
+            profile==Profile::Hdr10Pq2020 ? Conversion::Pq2020Linear709 : Conversion::Copy;
+        return {conversion,false,hdr,whitePoint,hdr,hdr?80.0f:0.0f};
+    }
+    ModelContract Model() const
+    {
+        const auto operation=Operation(DXGI_FORMAT_UNKNOWN);
+        return {operation.hdr,operation.modelWhitePoint,operation.signedOriginal,recipe};
+    }
 };
 inline Decision Select(const HdrObservation::Snapshot& s, DXGI_FORMAT actualFormat)
 {

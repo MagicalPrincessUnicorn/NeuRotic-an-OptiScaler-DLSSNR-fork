@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "OwnerPublicationJournal.h"
 #include <dlssnr/NativeNgxCallCapture.h>
 #include <nr/context/RepresentationPlanner.h>
@@ -43,7 +44,8 @@ template<class Store>NativeRepresentationPreparation PrepareCapturedNativeRepres
     const std::array<C::ScalarValue,7> values={std::uint64_t{encode.passthrough},double(encode.whitePoint),
         std::uint64_t{encode.useGameExposure},double(encode.exposurePreMul),std::uint64_t{encode.reversibleMode},
         std::uint64_t{encode.width},std::uint64_t{encode.height}};
-    C::BoundedList<C::SemanticClaim,8> parameters;
+    auto parametersStorage=std::make_unique<C::BoundedList<C::SemanticClaim,8>>();
+    auto& parameters=*parametersStorage;
     for(std::size_t i=0;i<values.size();++i)
     {C::SemanticClaim claim;claim.field=P::Symbol(P::NativeEncodeKeys[i]);claim.effective=known(values[i]);parameters.Push(claim);}
     const auto decoded=P::DecodeNativeEncode([&](std::string_view key)->const C::OptionalFact<C::ScalarValue>*{
@@ -112,7 +114,8 @@ template<class Store>NativeRepresentationPreparation PrepareCapturedNativeRepres
             step.sourceUnits=known(P::Symbol("QualifiedColor"));step.targetUnits=known(P::Symbol("LegacyNative.ModelEncoded.v1"));
             step.qualification=known(*meaning);step.alreadyApplied=known(false);
             if(!S::PublishList(parameters,store,step.parameters))return refuse("CTX.Native.EncodePublication");
-            req.transforms.Push(step);S::FusionRule fusion;fusion.operation=step.operation;fusion.version=1;fusion.steps=req.transforms;
+            req.transforms.Push(step);auto fusionStorage=std::make_unique<S::FusionRule>();
+            auto& fusion=*fusionStorage;fusion.operation=step.operation;fusion.version=1;fusion.steps=req.transforms;
             fusion.mapping=req.mapping;fusion.output=req.output;fusion.precision=req.precision;fusion.capabilities=req.capabilities;req.consumerTransform=fusion;
         }
         else if(i==1)
@@ -123,7 +126,9 @@ template<class Store>NativeRepresentationPreparation PrepareCapturedNativeRepres
             target.uses.Push(C::UsageKind::WriteExclusive);target.retirementContract=known(P::Symbol("Native.ModelScratch.v1"));req.targetAccess=target;
         }
         S::SourceRepresentationFacts facts;facts.source=source->identity;facts.precision=known(req.precision);facts.capabilities=known(capabilities);
-        const auto decision=S::DeriveStructuralRepresentationPlan(context,semantic,policy,req,facts,store);
+        // Retain the owned result across the entire planner/key return chain.
+        const auto decisionStorage=S::DeriveStructuralRepresentationPlanOwned(context,semantic,policy,req,facts,store);
+        const auto& decision=*decisionStorage;
         const auto wanted=i==0?S::PreparationPath::ConsumerTransform:i==1?S::PreparationPath::TargetAllocation:S::PreparationPath::DirectUse;
         if(decision.path!=S::PreparationPath::StructuralOnly||decision.plannedPath!=wanted||decision.prepared||
            decision.evidence.conversions||decision.evidence.preparedLookups)return refuse("CTX.Native.RepresentationPlanUnavailable");

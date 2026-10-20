@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -105,7 +105,7 @@
+                         record.plan.routeGeneration=issued.value;record.plan.committed=committed;
+                         p.record=prepared->record_; // retained even for an issued tombstone
+ #ifdef NR_ORCH_INIT_TESTING
+-                        if(p.fault==TestFault::AfterIssue)p.state.phase=RoutePhase::Quarantined;
++                        if(p.fault==TestFault::AfterIssue){p.state.phase=RoutePhase::Empty;p.budgetConsumed=false;}
+                         else
+ #endif
+                         {

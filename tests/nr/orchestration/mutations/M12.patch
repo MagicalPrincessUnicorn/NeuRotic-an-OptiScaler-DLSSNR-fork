@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -285,7 +285,7 @@
+         owner=op->owner;snapshot=op->snapshot;
+     }
+     auto guard=owner->Acquire(*snapshot,point);
+-    if(!guard||!Protocol::SameNativeInvocation(*snapshot,guard->Current()))return {};
++    if(!guard)return {};
+     {
+         std::lock_guard lock(p.mutex);auto* op=p.Find(slot,serial);
+         const auto checkpoint=static_cast<std::size_t>(point);

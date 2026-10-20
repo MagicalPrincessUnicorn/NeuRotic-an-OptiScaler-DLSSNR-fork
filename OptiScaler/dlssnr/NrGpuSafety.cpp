@@ -8,6 +8,7 @@
 #endif
 #include "NrGpuSafety.h"
 #include "NativeIdentity.h"
+#include <nr/d3d12/NativeRecordingInterfaces.h>
 #if !defined(NR_GPU_SAFETY_TEST) || defined(NR_GPU_SAFETY_DIAGNOSTICS_TEST)
 #include "DredDiagnostics.h"
 #endif
@@ -117,6 +118,7 @@ struct HookProof { void* reset; void* close; D3D12_COMMAND_LIST_TYPE type; };
 struct RecordingState
 {
     bool open=false,active=false;
+    UINT64 revision=0;
     std::thread::id owner;
 };
 // Callbacks can outlive explicit NGX sessions. This small registry and its hooks have process
@@ -195,6 +197,41 @@ template<class T> bool Put(ID3D12Object* object, REFGUID key, const std::shared_
     const HRESULT hr = object->SetPrivateDataInterface(key, cookie);
     cookie->Release();
     return SUCCEEDED(hr);
+}
+
+// Compare the actual interface-valued private cookies. A wrapper must expose
+// the same metadata used by the terminal Reset/Execute hooks; pointer aliases
+// alone never establish that lifetime contract. Foreign wrapper calls happen
+// outside State().mutex, and callers revalidate the recording afterwards.
+ComPtr<IUnknown> CookieIdentity(ID3D12Object* object,REFGUID key)
+{
+    IUnknown* raw=nullptr;UINT bytes=sizeof(raw);
+    const auto result=object->GetPrivateData(key,&bytes,&raw);
+    ComPtr<IUnknown> value;value.Attach(raw);
+    if(FAILED(result)||bytes!=sizeof(raw))value.Reset();
+    return value;
+}
+struct CookieJoin
+{
+    ComPtr<IUnknown> caller,terminal;
+    explicit operator bool()const noexcept{return caller&&caller.Get()==terminal.Get();}
+};
+CookieJoin JoinCookie(const Neurotic::D3D12::NativeRecordingInterfaces& interfaces,REFGUID key)
+{
+    CookieJoin joined;
+    joined.caller=CookieIdentity(interfaces.caller.Get(),key);
+    joined.terminal=CookieIdentity(interfaces.terminal.Get(),key);
+    return joined;
+}
+bool CookieStillCurrent(ID3D12Object* terminal,REFGUID key,const CookieJoin& joined)
+{
+    return joined&&CookieIdentity(terminal,key).Get()==joined.terminal.Get();
+}
+void AdvanceRecordingState(const std::shared_ptr<RecordingState>& state)
+{
+    if(!state)return;
+    if(state->revision==UINT64_MAX)State().failed=true;
+    else ++state->revision;
 }
 
 // The registry lock is released while another thread owns this exact list.
@@ -289,7 +326,9 @@ void ExecuteOn(ExecuteFn forward, ID3D12CommandQueue* queue, UINT count, ID3D12C
                 if(state->active&&state->owner!=std::this_thread::get_id())return false;
         return true;});
     for(UINT i=0;i<count;++i)
-        if(const auto state=Get<RecordingState>(lists[i],recordingStateGuid))state->open=false;
+        if(const auto state=Get<RecordingState>(lists[i],recordingStateGuid)) {
+            state->open=false;AdvanceRecordingState(state);
+        }
     CompletionSet uses;
     std::vector<std::pair<ID3D12CommandList*, std::shared_ptr<ExternalWait>>> waits;
     std::vector<std::pair<ID3D12CommandList*, std::shared_ptr<ExecutionObservation>>> observations;
@@ -406,9 +445,9 @@ void ExecuteOn(ExecuteFn forward, ID3D12CommandQueue* queue, UINT count, ID3D12C
     {
         if(ticket->submissions==UINT64_MAX){ticket->failed=true;s.failed=true;continue;}
         ++ticket->submissions;
-        NR_FRAME_TRACE("ticket-submitted", "ticket={:p} queue={:p} submissions={} fence={:p} value={} ok={}",
+        NR_FRAME_TRACE("ticket-submitted", "ticket={:p} queue={:p} submissions={} fence={:p} value={} ok={} incarnation={}",
             static_cast<void*>(ticket.get()), static_cast<void*>(queue), ticket->submissions,
-            timeline ? static_cast<void*>(timeline->fence.Get()) : nullptr, value, ok);
+            timeline ? static_cast<void*>(timeline->fence.Get()) : nullptr, value, ok, ticket->incarnation);
         if (!ok) { ticket->failed = true; continue; }
         auto found = std::find_if(ticket->points.begin(), ticket->points.end(),
                                  [&](const Point& p) { return p.timeline == timeline; });
@@ -433,7 +472,7 @@ HRESULT ResetOn(ResetFn forward, ID3D12GraphicsCommandList* list, ID3D12CommandA
     NR_FRAME_TRACE("command-list-reset", "list={:p} result={}", static_cast<void*>(list), static_cast<unsigned int>(hr));
     if (SUCCEEDED(hr))
     {
-        if(state)state->open=true;
+        if(state){state->open=true;AdvanceRecordingState(state);}
         if (observationCookies.load(std::memory_order_relaxed))
             if (auto observation = Get<ExecutionObservation>(list, executionObservationGuid))
                 if (FAILED(list->SetPrivateDataInterface(executionObservationGuid, nullptr)))
@@ -467,30 +506,52 @@ HRESULT CloseOn(CloseFn forward,ID3D12GraphicsCommandList* list)
 {
     std::unique_lock lock(State().mutex);
     AwaitAction(list,lock);
-    if(const auto state=Get<RecordingState>(list,recordingStateGuid))state->open=false;
+    if(const auto state=Get<RecordingState>(list,recordingStateGuid)) {
+        state->open=false;AdvanceRecordingState(state);
+    }
     return forward(list);
 }
 HRESULT STDMETHODCALLTYPE Close(ID3D12GraphicsCommandList* list){return CloseOn(originalClose,list);}
 HRESULT STDMETHODCALLTYPE CloseAlternate(ID3D12GraphicsCommandList* list){return CloseOn(alternateClose,list);}
 
-bool EnsureHooks(ID3D12GraphicsCommandList* list, bool verifyQueue = false)
+// Uses the existing bounded, opt-in frame trace. No extra COM/device query.
+void ObservationStage(const char** requested, const char* stage, const char* phase,
+                      ID3D12GraphicsCommandList* list, HRESULT result = S_OK)
 {
+    if (!requested) return;
+    NR_FRAME_TRACE("nr-api", "api=fg-observation stage={} phase={} list={:p} result={:X}",
+        stage, phase, static_cast<void*>(list), static_cast<unsigned int>(result));
+    (void)stage; (void)phase; (void)list; (void)result;
+}
+bool EnsureHooks(ID3D12GraphicsCommandList* list, bool verifyQueue = false, const char** reason = nullptr)
+{
+    if (reason) *reason = "hook-lock";
+    ObservationStage(reason,"hook-lock","enter",list);
     std::lock_guard lock(State().hookMutex);
+    ObservationStage(reason,"hook-lock","return",list);
     void* target = (*(void***)list)[10];
     void* close = (*(void***)list)[9];
     // Preserve the established NR recording fast path. External FG consumers
     // additionally prove the queue implementation for their actual list type.
     if (!verifyQueue && originalReset && target == resetTarget && originalClose && close==closeTarget) return true;
     const auto type = list->GetType();
-    if (!SupportedExternalType(type)) return false;
+    if (!SupportedExternalType(type)) { if(reason)*reason="unsupported-list-type"; return false; }
     if (auto proof = Get<HookProof>(list, hookProofGuid))
         if (proof->reset == target && proof->close==close && proof->type == type) return true;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12CommandQueue> queue;
     D3D12_COMMAND_QUEUE_DESC desc {};
     desc.Type = type;
-    if (FAILED(list->GetDevice(IID_PPV_ARGS(&device))) ||
-        FAILED(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&queue)))) return false;
+    if(reason)*reason="consumer-get-device";
+    ObservationStage(reason,"get-device","enter",list);
+    const HRESULT deviceResult=list->GetDevice(IID_PPV_ARGS(&device));
+    ObservationStage(reason,"get-device","return",list,deviceResult);
+    if(FAILED(deviceResult))return false;
+    if(reason)*reason="consumer-create-queue";
+    ObservationStage(reason,"create-queue","enter",list);
+    const HRESULT queueResult=device->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue));
+    ObservationStage(reason,"create-queue","return",list,queueResult);
+    if(FAILED(queueResult))return false;
     ID3D12CommandQueue* nativeQueue = NativeObject(queue.Get());
     void* queueTarget = (*(void***)nativeQueue)[10];
     const bool haveExecute = (originalExecute && queueTarget == executeTarget) ||
@@ -499,20 +560,30 @@ bool EnsureHooks(ID3D12GraphicsCommandList* list, bool verifyQueue = false)
                            (alternateReset && target == alternateResetTarget);
     const bool haveClose = (originalClose && close==closeTarget) ||
                           (alternateClose && close==alternateCloseTarget);
-    if ((!haveExecute && originalExecute && alternateExecute) ||
-        (!haveReset && originalReset && alternateReset) ||
-        (!haveClose && originalClose && alternateClose)) return false;
+    if (!haveExecute && originalExecute && alternateExecute)
+    { if(reason)*reason="execute-hook-slot-capacity"; return false; }
+    if (!haveReset && originalReset && alternateReset)
+    { if(reason)*reason="reset-hook-slot-capacity"; return false; }
+    if (!haveClose && originalClose && alternateClose)
+    { if(reason)*reason="close-hook-slot-capacity"; return false; }
     // DIRECT and COMPUTE can share implementation addresses, or have distinct
     // ones. Hook each address once, retaining the correct original trampoline.
     ExecuteFn* executeSlot = haveExecute ? nullptr : !originalExecute ? &originalExecute : &alternateExecute;
     ResetFn* resetSlot = haveReset ? nullptr : !originalReset ? &originalReset : &alternateReset;
     CloseFn* closeSlot = haveClose ? nullptr : !originalClose ? &originalClose : &alternateClose;
     HMODULE self = nullptr;
+    if(reason)*reason="hook-module-pin";
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                            reinterpret_cast<LPCWSTR>(&Execute), &self)) return false;
     if (executeSlot || resetSlot || closeSlot)
     {
-        if (DetourTransactionBegin() != NO_ERROR) return false;
+        if(reason)*reason="hook-detour-transaction";
+        ObservationStage(reason,"detour-transaction","enter",list);
+        const LONG begin=DetourTransactionBegin();
+        if(begin!=NO_ERROR) {
+            ObservationStage(reason,"detour-begin","return",list,HRESULT_FROM_WIN32(begin));
+            return false;
+        }
         LONG result = DetourUpdateThread(GetCurrentThread());
         if (executeSlot)
         {
@@ -534,6 +605,7 @@ bool EnsureHooks(ID3D12GraphicsCommandList* list, bool verifyQueue = false)
         }
         if (result == NO_ERROR) result = DetourTransactionCommit();
         else DetourTransactionAbort();
+        ObservationStage(reason,"detour-transaction","return",list,HRESULT_FROM_WIN32(result));
         if (result != NO_ERROR)
         {
             if (executeSlot) *executeSlot = nullptr;
@@ -545,72 +617,141 @@ bool EnsureHooks(ID3D12GraphicsCommandList* list, bool verifyQueue = false)
         if (resetSlot) (resetSlot == &originalReset ? resetTarget : alternateResetTarget) = target;
         if (closeSlot) (closeSlot == &originalClose ? closeTarget : alternateCloseTarget) = close;
     }
-    return Put(list, hookProofGuid, std::make_shared<HookProof>(HookProof {target, close, type}));
+    if(reason)*reason="hook-proof-cookie-write";
+    ObservationStage(reason,"hook-proof-cookie","enter",list);
+    const bool stored=Put(list,hookProofGuid,std::make_shared<HookProof>(HookProof {target,close,type}));
+    if(reason) {
+        NR_FRAME_TRACE("nr-api","api=fg-observation stage=hook-proof-cookie phase=return list={:p} stored={}",
+            static_cast<void*>(list),stored);
+    }
+    return stored;
 }
 }
 
-bool PrepareRecordingHooks(ID3D12GraphicsCommandList* list)
+static bool PrepareRecordingHooksObserved(ID3D12GraphicsCommandList* list,const char** reason)
 {
-    if (!list) return false;
-    list = NativeObject(list);
-    if (!EnsureHooks(list)) return false;
-    auto& s = State();
-    std::lock_guard lock(s.mutex);
-    // Enroll only cold metadata so the next real Reset can establish open
-    // state. Do not create a ticket or replace an existing recording state.
-    return !s.failed && (Get<RecordingState>(list, recordingStateGuid) ||
-        Put(list, recordingStateGuid, std::make_shared<RecordingState>()));
+    if(reason)*reason="recording-interface-unavailable";
+    const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(list);
+    if(FAILED(interfaces.result)||!interfaces.terminal)return false;
+    list=interfaces.terminal.Get();
+    if(!EnsureHooks(list,false,reason))return false;
+    if(reason)*reason="recording-registry-or-cookie-write";
+    ObservationStage(reason,"recording-cookie","enter",list);
+    std::shared_ptr<RecordingState> recordingState;UINT64 revision=0;
+    {
+        std::lock_guard lock(State().mutex);
+        if(State().failed) { if(reason)*reason="gpu-safety-registry-failed"; return false; }
+        if(reason)*reason="recording-cookie-write";
+        recordingState=Get<RecordingState>(list,recordingStateGuid);
+        if(!recordingState) {
+            recordingState=std::make_shared<RecordingState>();
+            if(!Put(list,recordingStateGuid,recordingState))return false;
+        }
+        revision=recordingState->revision;
+    }
+    ObservationStage(reason,"recording-cookie","return",list);
+    if(reason)*reason="recording-cookie-continuity-or-revision";
+    ObservationStage(reason,"recording-continuity","enter",list);
+    const auto joined=JoinCookie(interfaces,recordingStateGuid);
+    std::lock_guard lock(State().mutex);
+    const bool current=!State().failed&&CookieStillCurrent(list,recordingStateGuid,joined)&&
+        Get<RecordingState>(list,recordingStateGuid)==recordingState&&recordingState->revision==revision;
+    if(reason) {
+        NR_FRAME_TRACE("nr-api","api=fg-observation stage=recording-continuity phase=return "
+            "list={:p} callerCookie={} terminalCookie={} sameCookie={} revision={} currentRevision={} healthy={} current={}",
+            static_cast<void*>(list),bool(joined.caller),bool(joined.terminal),bool(joined),revision,
+            recordingState->revision,!State().failed,current);
+    }
+    return current;
 }
+bool PrepareRecordingHooks(ID3D12GraphicsCommandList* list)
+{ return PrepareRecordingHooksObserved(list,nullptr); }
 
 std::shared_ptr<ExternalExecutionStatus> ObserveExternalExecution(ID3D12GraphicsCommandList* list, const char** reason)
 {
-    if (reason) *reason = "null-list";
-    if (!list) return {};
-    list = NativeObject(list);
-    if (reason) *reason = "unsupported-list-type";
-    if (!SupportedExternalType(list->GetType())) return {};
-    if (reason) *reason = "submission/reset-hooks-unavailable";
-    if (!EnsureHooks(list, true)) return {};
+    if(reason)*reason="list-observation-interface-unavailable";
+    ObservationStage(reason,"consumer-interface","enter",list);
+    const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(list);
+    ObservationStage(reason,"consumer-interface","return",list,interfaces.result);
+    if(FAILED(interfaces.result)||!interfaces.terminal)return {};
+    list=interfaces.terminal.Get();
+    if(!PrepareRecordingHooksObserved(interfaces.caller.Get(),reason)||!EnsureHooks(list,true,reason))return {};
+    auto observation=std::make_shared<ExecutionObservation>();
+    std::shared_ptr<RecordingState> recordingState;UINT64 revision=0;
+    {
+        std::lock_guard lock(State().mutex);
+        if(reason)*reason="gpu-safety-registry-failed";
+        if(State().failed)return {};
+        recordingState=Get<RecordingState>(list,recordingStateGuid);
+        if(!recordingState)return {};
+        revision=recordingState->revision;
+        if(reason)*reason="observation-cookie-write-failed";
+        ObservationStage(reason,"execution-cookie","enter",list);
+        const bool stored=Put(list,executionObservationGuid,observation);
+        if(reason) {
+            NR_FRAME_TRACE("nr-api","api=fg-observation stage=execution-cookie phase=return list={:p} stored={}",
+                static_cast<void*>(list),stored);
+        }
+        if(!stored)return {};
+    }
+    ObservationStage(reason,"execution-continuity","enter",list);
+    const auto joined=JoinCookie(interfaces,executionObservationGuid);
     std::lock_guard lock(State().mutex);
-    if (reason) *reason = "gpu-safety-registry-failed";
-    if (State().failed) return {};
-    auto observation = std::make_shared<ExecutionObservation>();
-    if (reason) *reason = "observation-cookie-write-failed";
-    if (!Put(list, executionObservationGuid, observation)) return {};
-    if (reason) *reason = "waiting for successful FG evaluation and queue submission";
+    if(reason) {
+        NR_FRAME_TRACE("nr-api","api=fg-observation stage=execution-continuity phase=joined "
+            "list={:p} caller={:p} callerCookie={} terminalCookie={} sameCookie={} revision={} currentRevision={} healthy={}",
+            static_cast<void*>(list),static_cast<void*>(interfaces.caller.Get()),bool(joined.caller),
+            bool(joined.terminal),bool(joined),revision,recordingState->revision,!State().failed);
+    }
+    if(State().failed||!CookieStillCurrent(list,executionObservationGuid,joined)||
+       Get<ExecutionObservation>(list,executionObservationGuid)!=observation||
+       Get<RecordingState>(list,recordingStateGuid)!=recordingState||recordingState->revision!=revision) {
+        observation->status->failed=true;
+        if(reason)*reason="observation-cookie-continuity-changed";
+        return {};
+    }
+    if(reason)*reason="waiting for successful FG evaluation and queue submission";
+    ObservationStage(reason,"execution-continuity","return",list);
     return observation->status;
 }
 
 Ticket Record(ID3D12GraphicsCommandList* list)
 {
-    if (!list || (list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT &&
-                  list->GetType() != D3D12_COMMAND_LIST_TYPE_COMPUTE)) return {};
-    list = NativeObject(list);
-    if (!EnsureHooks(list)) return Unavailable("command-list completion hooks unavailable");
-    auto& s = State();
-    std::lock_guard lock(s.mutex);
-    if (s.failed) return Unavailable("submission/fence failure; process restart required");
-    // Attach cold metadata only when NR registers this list, never allocate in
-    // an unrelated host Reset callback. Its first observed state stays unknown.
-    if(!Get<RecordingState>(list,recordingStateGuid)&&
-       !Put(list,recordingStateGuid,std::make_shared<RecordingState>()))
-        return Unavailable("command-list recording state unavailable");
-    if (auto t = Get<Recording>(list, recordingGuid))
+    const auto interfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(list);
+    if(FAILED(interfaces.result)||!interfaces.terminal)return Unavailable("recording observation interface unavailable");
+    list=interfaces.terminal.Get();
+    if(!SupportedExternalType(list->GetType()))return {};
+    if(!PrepareRecordingHooks(interfaces.caller.Get()))return Unavailable("completion hooks or wrapper recording cookie continuity unavailable");
+    Ticket ticket;std::shared_ptr<RecordingState> recordingState;UINT64 revision=0;
     {
-        NR_FRAME_TRACE("ticket-record-existing", "list={:p} ticket={:p}", static_cast<void*>(list), static_cast<void*>(t.get()));
-        return t;
+        auto& s=State();std::lock_guard lock(s.mutex);
+        if(s.failed)return Unavailable("submission/fence failure; process restart required");
+        recordingState=Get<RecordingState>(list,recordingStateGuid);
+        if(!recordingState)return Unavailable("command-list recording state unavailable");
+        revision=recordingState->revision;
+        ticket=Get<Recording>(list,recordingGuid);
+        if(!ticket) {
+            std::erase_if(s.pending,[](const Ticket& value){return value->sealed&&Completed(value);});
+            if(s.failed)return Unavailable("device loss; process restart required");
+            if(s.pending.size()>=256)return Unavailable("recording capacity exhausted");
+            ticket=std::make_shared<Recording>();
+            if(s.nextRecording==UINT64_MAX){s.failed=true;return {};}
+            ticket->incarnation=++s.nextRecording;
+            if(!Put(list,recordingGuid,ticket))return Unavailable("command-list lifetime cookie failed");
+            s.pending.push_back(ticket);
+        }
     }
-    std::erase_if(s.pending, [](const Ticket& t) { return t->sealed && Completed(t); });
-    if (s.failed) return Unavailable("device loss; process restart required");
-    if (s.pending.size() >= 256) return Unavailable("recording capacity exhausted");
-    auto ticket = std::make_shared<Recording>();
-    if(s.nextRecording==UINT64_MAX){s.failed=true;return {};}
-    ticket->incarnation=++s.nextRecording;
-    if (!Put(list, recordingGuid, ticket)) return Unavailable("command-list lifetime cookie failed");
-    s.pending.push_back(ticket);
-    NR_FRAME_TRACE("ticket-record-new", "list={:p} ticket={:p}", static_cast<void*>(list), static_cast<void*>(ticket.get()));
+    const auto joined=JoinCookie(interfaces,recordingGuid);
+    std::lock_guard lock(State().mutex);
+    if(State().failed||ticket->failed||ticket->sealed||
+       !CookieStillCurrent(list,recordingGuid,joined)||Get<Recording>(list,recordingGuid)!=ticket||
+       Get<RecordingState>(list,recordingStateGuid)!=recordingState||recordingState->revision!=revision)
+        return Unavailable("wrapper recording cookie continuity changed during preparation");
+    NR_FRAME_TRACE("ticket-record", "list={:p} ticket={:p} incarnation={}",
+        static_cast<void*>(list),static_cast<void*>(ticket.get()),ticket->incarnation);
     return ticket;
 }
+
 bool SealOwnedRecording(ID3D12GraphicsCommandList* list)
 {
     if (!list) return false;
@@ -658,6 +799,11 @@ bool OrderedOn(const Ticket& ticket, ID3D12CommandQueue* queue)
     auto timeline = Get<Timeline>(NativeObject(queue), timelineGuid);
     return timeline && timeline == ticket->points.front().timeline &&
            timeline->fence->GetCompletedValue() != UINT64_MAX;
+}
+uint64_t TicketIdentity(const Ticket& ticket)
+{
+    std::lock_guard lock(State().mutex);
+    return ticket ? ticket->incarnation : 0;
 }
 bool Reusable(const Ticket& ticket)
 {
@@ -708,9 +854,9 @@ bool OrderBefore(const Ticket& ticket, ID3D12CommandQueue* consumer)
         point.value, static_cast<unsigned int>(result));
     return SUCCEEDED(result);
 }
-bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
+static bool BindExternalWaitForRecording(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFence,
                       UINT64 producerValue, UINT64 token, UINT64 sequence,
-                      std::shared_ptr<ExternalWaitStatus> status)
+                      std::shared_ptr<ExternalWaitStatus> status,const Ticket& expectedRecording)
 {
     ComPtr<ID3D12Device> listDevice, fenceDevice;
     HRESULT listDeviceResult = E_PENDING, fenceDeviceResult = E_PENDING;
@@ -740,16 +886,36 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
     };
     if (!list || !producerFence || !producerValue || producerValue == UINT64_MAX)
         return refuse("invalid-dependency");
-    const auto nativeList = NativeIdentity::Resolve<ID3D12GraphicsCommandList>(list);
+    const auto recordingInterfaces=Neurotic::D3D12::NativeRecordingInterfaces::Resolve(list);
     const auto nativeFence = NativeIdentity::Resolve<ID3D12Fence>(producerFence);
-    if (FAILED(nativeList.result) || !nativeList.object) return refuse("list-identity-unresolved");
+    if (FAILED(recordingInterfaces.result) || !recordingInterfaces.terminal) return refuse("list-identity-unresolved");
     if (FAILED(nativeFence.result) || !nativeFence.object) return refuse("fence-identity-unresolved");
-    list = nativeList.object.Get();
+    list = recordingInterfaces.terminal.Get();
     if (!SupportedExternalType(list->GetType())) return refuse("unsupported-list-type");
     producerFence = nativeFence.object.Get();
-    if (!EnsureHooks(list, true)) return refuse("completion-hooks-unavailable");
-    std::lock_guard lock(State().mutex);
+    if (!PrepareRecordingHooks(recordingInterfaces.caller.Get()) || !EnsureHooks(list, true))
+        return refuse("completion-hooks-or-recording-cookie-continuity-unavailable");
+    // Last alien-cookie Release must occur after this lock is destroyed.
+    CookieJoin bindingJoin;
+    std::unique_lock lock(State().mutex);
     if (State().failed) return refuse("gpu-safety-registry-failed");
+    if(expectedRecording&&(expectedRecording->failed||expectedRecording->sealed||expectedRecording->submissions||
+       Get<Recording>(list,recordingGuid)!=expectedRecording))return refuse("consumer-recording-changed");
+    const auto recordingState=Get<RecordingState>(list,recordingStateGuid);
+    if(!recordingState)return refuse("recording-state-unavailable");
+    const auto revision=recordingState->revision;
+    const auto verifyBinding=[&](const std::shared_ptr<ExternalWait>& expected) {
+        lock.unlock();
+        bindingJoin=JoinCookie(recordingInterfaces,externalWaitGuid);
+        lock.lock();
+        const bool current=!State().failed&&CookieStillCurrent(list,externalWaitGuid,bindingJoin)&&
+            (!expectedRecording||(!expectedRecording->failed&&!expectedRecording->sealed&&!expectedRecording->submissions&&
+               Get<Recording>(list,recordingGuid)==expectedRecording))&&
+            Get<ExternalWait>(list,externalWaitGuid)==expected&&
+            Get<RecordingState>(list,recordingStateGuid)==recordingState&&recordingState->revision==revision;
+        if(!current)expected->Fail();
+        return current;
+    };
     auto previous = Get<ExternalWait>(list, externalWaitGuid);
     if (previous)
     {
@@ -766,6 +932,7 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
                 previous->siblings.size() + 1 >= status->group->expectedWaits)
                 return refuse("duplicate-dependency");
             previous->siblings.push_back(status);
+            if(!verifyBinding(previous))return refuse("dependency-cookie-continuity-changed");
             status->MarkBound();
             return true;
         }
@@ -799,7 +966,8 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
     dependency->token = token;
     dependency->sequence = sequence;
     dependency->status = status;
-    const bool bound = Put(list, externalWaitGuid, dependency);
+    const bool written=Put(list,externalWaitGuid,dependency);
+    const bool bound=written&&verifyBinding(dependency);
     if (dependency->status)
     {
         if (bound) dependency->status->MarkBound();
@@ -809,6 +977,11 @@ bool BindExternalWait(ID3D12GraphicsCommandList* list, ID3D12Fence* producerFenc
         static_cast<void*>(list), static_cast<void*>(producerFence), producerValue, token, sequence, bound);
     if (!bound) return refuse("private-dependency-write-failed");
     return true;
+}
+bool BindExternalWait(ID3D12GraphicsCommandList* list,ID3D12Fence* producerFence,
+                      UINT64 producerValue,UINT64 token,UINT64 sequence,std::shared_ptr<ExternalWaitStatus> status)
+{
+    return BindExternalWaitForRecording(list,producerFence,producerValue,token,sequence,std::move(status),{});
 }
 SlotSnapshot InspectSlots(const Ticket* tickets, unsigned int count)
 {
@@ -931,25 +1104,50 @@ bool MatchesLocalRecording(const Ticket& ticket, ID3D12GraphicsCommandList* list
 }
 struct LocalRecordingAction::Impl
 {
-    ComPtr<ID3D12GraphicsCommandList> list;
+    struct Lease
+    {
+        ComPtr<ID3D12GraphicsCommandList> list;
+        Ticket ticket;
+        std::shared_ptr<RecordingState> state;
+        UINT64 revision=0;
+        bool published=false;
+        // Call only under the registry lock, after all foreign calls/releases.
+        bool Valid(bool active)const noexcept
+        {
+            return state&&ticket&&state->open&&state->revision==revision&&
+                !State().failed&&!ticket->failed&&!ticket->sealed&&ticket->submissions==0&&
+                (active ? state->active&&state->owner==std::this_thread::get_id() : !state->active);
+        }
+        bool Current()const
+        {
+            std::lock_guard lock(State().mutex);
+            if(!published||!Valid(true))return false;
+            try {
+                const auto observedState=Get<RecordingState>(list.Get(),recordingStateGuid);
+                const auto observedTicket=Get<Recording>(list.Get(),recordingGuid);
+                // A cookie lookup or its Release can synchronously Close/Reset.
+                // No foreign validation follows this final memory-only check.
+                return observedState==state&&observedTicket==ticket&&Valid(true);
+            }catch(...){return false;}
+        }
+        ~Lease()
+        {
+            if(!published)return;
+            std::lock_guard lock(State().mutex);
+            state->active=false;state->owner={};
+            State().actionFinished.notify_all();
+        }
+    };
     std::vector<ComPtr<ID3D12Resource>> resources;
-    Ticket ticket;
-    std::shared_ptr<RecordingState> state;
+    // Destroy the lease reference before this handle's resource references.
+    // A surviving parent/child retains exclusivity; the final handle ends it.
+    std::shared_ptr<Lease> lease;
 };
 LocalRecordingAction::LocalRecordingAction(std::unique_ptr<Impl> impl):impl_(std::move(impl)){}
-LocalRecordingAction::~LocalRecordingAction()
-{
-    std::lock_guard lock(State().mutex);
-    impl_->state->active=false;impl_->state->owner={};
-    State().actionFinished.notify_all();
-}
+LocalRecordingAction::~LocalRecordingAction()=default;
 bool LocalRecordingAction::Current()const
 {
-    std::lock_guard lock(State().mutex);
-    return impl_->state->active&&impl_->state->owner==std::this_thread::get_id()&&impl_->state->open&&
-        Get<RecordingState>(impl_->list.Get(),recordingStateGuid)==impl_->state&&
-        Get<Recording>(impl_->list.Get(),recordingGuid)==impl_->ticket&&
-        !State().failed&&!impl_->ticket->failed&&!impl_->ticket->sealed&&impl_->ticket->submissions==0;
+    return impl_->lease->Current();
 }
 bool LocalRecordingAction::CurrentFor(ID3D12Resource* resource)const
 {
@@ -958,8 +1156,8 @@ bool LocalRecordingAction::CurrentFor(ID3D12Resource* resource)const
     return std::any_of(impl_->resources.begin(),impl_->resources.end(),
         [native](const auto& held){return held.Get()==native;})&&Current();
 }
-const Ticket& LocalRecordingAction::RecordingTicket()const noexcept{return impl_->ticket;}
-ID3D12GraphicsCommandList* LocalRecordingAction::CommandList()const noexcept{return impl_->list.Get();}
+const Ticket& LocalRecordingAction::RecordingTicket()const noexcept{return impl_->lease->ticket;}
+ID3D12GraphicsCommandList* LocalRecordingAction::CommandList()const noexcept{return impl_->lease->list.Get();}
 std::unique_ptr<LocalRecordingAction> BeginLocalAction(const Ticket& ticket,
     ID3D12GraphicsCommandList* list,ID3D12Resource* resource)
 {
@@ -974,6 +1172,10 @@ std::unique_ptr<LocalRecordingAction> BeginLocalAction(const Ticket& ticket,
     const auto state=Get<RecordingState>(list,recordingStateGuid);
     if(!state||!state->open||state->active)return {};
     auto impl=std::make_unique<LocalRecordingAction::Impl>();
+    impl->lease=std::make_shared<LocalRecordingAction::Impl::Lease>();
+    auto& lease=*impl->lease;
+    lease.state=state;lease.ticket=ticket;lease.revision=state->revision;
+    lease.list=list;
     for(auto* resource:resources)
     {
         if(!resource)return {};
@@ -981,9 +1183,36 @@ std::unique_ptr<LocalRecordingAction> BeginLocalAction(const Ticket& ticket,
         if(!resource||!MatchesLocalRecording(ticket,list,resource))return {};
         impl->resources.emplace_back(resource);
     }
-    impl->list=list;impl->ticket=ticket;impl->state=state;
     auto action=std::unique_ptr<LocalRecordingAction>(new LocalRecordingAction(std::move(impl)));
+    const auto observedState=Get<RecordingState>(list,recordingStateGuid);
+    const auto observedTicket=Get<Recording>(list,recordingGuid);
+    // All resource/device queries, AddRefs and temporary releases precede this
+    // publication. Reentry must not publish into a changed or closed recording.
+    if(observedState!=state||observedTicket!=ticket||!lease.Valid(false))return {};
     state->active=true;state->owner=std::this_thread::get_id();
+    lease.published=true;
+    return action;
+}
+std::unique_ptr<LocalRecordingAction> BorrowLocalAction(const LocalRecordingAction& owner,
+    std::span<ID3D12Resource* const> resources)
+{
+    if(resources.empty())return {};
+    std::lock_guard lock(State().mutex);
+    // Retain the capability before foreign preparation; a caller retiring its
+    // parent handle during a callback cannot destroy this lease underneath us.
+    auto lease=owner.impl_->lease;
+    if(!lease->Current())return {};
+    auto impl=std::make_unique<LocalRecordingAction::Impl>();
+    impl->lease=lease;
+    for(auto* resource:resources)
+    {
+        if(!resource)return {};
+        resource=NativeObject(resource);
+        if(!resource||!MatchesLocalRecording(lease->ticket,lease->list.Get(),resource))return {};
+        impl->resources.emplace_back(resource);
+    }
+    auto action=std::unique_ptr<LocalRecordingAction>(new LocalRecordingAction(std::move(impl)));
+    if(!lease->Current())return {};
     return action;
 }
 UINT64 TimestampFrequency(const Ticket& ticket)
@@ -1069,6 +1298,7 @@ struct DerivedArtifact {
     std::shared_ptr<DerivedBacking> backing;
     Ticket producer;
     CompletionSet readers;
+    bool readerPreparing=false;
 };
 bool RetainDerivedUse(const LocalRecordingAction& action,std::shared_ptr<void> use)
 {
@@ -1107,7 +1337,7 @@ DerivedArtifactRef CreateDerivedArtifact(const LocalRecordingAction& action,
 bool DerivedArtifactReusable(const DerivedArtifactRef& artifact)
 {
     std::lock_guard lock(State().mutex);
-    return artifact&&Reusable(artifact->producer)&&Reusable(artifact->readers);
+    return artifact&&!artifact->readerPreparing&&Reusable(artifact->producer)&&Reusable(artifact->readers);
 }
 bool RearmDerivedArtifact(const DerivedArtifactRef& artifact,const LocalRecordingAction& producer)
 {
@@ -1174,7 +1404,10 @@ bool PrepareDerivedSnapshot(const LocalRecordingAction& source,std::span<const D
 std::unique_ptr<DerivedReadLease> ReserveDerivedRead(const DerivedArtifactRef& artifact,
     const LocalRecordingAction& consumer,ID3D12CommandQueue* queue)
 {
-    std::lock_guard lock(State().mutex);
+    // Hold the artifact across foreign callbacks without releasing its backing
+    // under the registry guard. Preparing readers block rearm/another reader.
+    const auto heldArtifact=artifact;
+    std::unique_lock lock(State().mutex);
     const auto refuse=[&](const char* why,const RecordingSnapshot& proof=RecordingSnapshot{}) -> std::unique_ptr<DerivedReadLease> {
 #ifndef NR_GPU_SAFETY_TEST
         static uint64_t refusals=0;
@@ -1189,10 +1422,10 @@ std::unique_ptr<DerivedReadLease> ReserveDerivedRead(const DerivedArtifactRef& a
 #endif
         return {};
     };
-    if(!artifact||!consumer.Current())return refuse("reader-unavailable");
-    if(artifact->producer==consumer.RecordingTicket())return refuse("same-recording");
-    for(const auto& resource:artifact->backing->resources)if(!consumer.CurrentFor(resource.Get()))return refuse("resource-access");
-    const auto proof=InspectRecording(artifact->producer,queue);
+    if(!heldArtifact||!consumer.Current())return refuse("reader-unavailable");
+    if(heldArtifact->producer==consumer.RecordingTicket())return refuse("same-recording");
+    for(const auto& resource:heldArtifact->backing->resources)if(!consumer.CurrentFor(resource.Get()))return refuse("resource-access");
+    const auto proof=InspectRecording(heldArtifact->producer,queue);
     if(!proof.valid)return refuse("producer-unavailable",proof);
     if(!proof.submitted)return refuse("producer-unsubmitted",proof);
     if(!proof.uniqueSubmission)return refuse("producer-replayed",proof);
@@ -1202,25 +1435,40 @@ std::unique_ptr<DerivedReadLease> ReserveDerivedRead(const DerivedArtifactRef& a
     // producer's fence on whichever queue actually executes this reader.
     // A supplied queue retains its existing same-queue admission requirement.
     if(queue&&(!proof.sameDevice||!proof.sameQueue||!proof.orderedForConsumer))return refuse("queue-mismatch",proof);
-    std::erase_if(artifact->readers,[](const Ticket& ticket){return Reusable(ticket);});
+    std::erase_if(heldArtifact->readers,[](const Ticket& ticket){return Reusable(ticket);});
     // Private images undergo state transitions on the reader list. Do not let
     // two independently submitted readers race those transitions.
-    if(!artifact->readers.empty())return refuse("previous-reader-pending",proof);
+    if(heldArtifact->readerPreparing||!heldArtifact->readers.empty())return refuse("previous-reader-pending",proof);
+    struct PreparationRetirement {
+        const DerivedArtifactRef& artifact;
+        ~PreparationRetirement(){std::lock_guard guard(State().mutex);artifact->readerPreparing=false;}
+    } preparation{heldArtifact};
+    heldArtifact->readerPreparing=true;
     try {
-        auto result=std::unique_ptr<DerivedReadLease>(new DerivedReadLease(artifact->backing,
+        auto result=std::unique_ptr<DerivedReadLease>(new DerivedReadLease(heldArtifact->backing,
             proof.completed?DerivedReadiness::CompletedImmutable:DerivedReadiness::DependencyOrderedImmutable));
-        artifact->readers.reserve(artifact->readers.size()+1);
-        if(!RetainDerivedUse(consumer,artifact->backing))return refuse("reader-retention",proof);
+        heldArtifact->readers.reserve(heldArtifact->readers.size()+1);
+        if(!RetainDerivedUse(consumer,heldArtifact->backing))return refuse("reader-retention",proof);
         // Bind the already-submitted producer to the actual consumer execution.
         // A missing recording-time queue or a later host queue change cannot
         // race the producer: the existing execute hook enforces this dependency
         // on the same-device queue that really executes the reader. These
         // are recording incarnations, never invented frame/provider tokens.
-        const auto& point=artifact->producer->points.front();
-        if(!proof.completed&&!BindExternalWait(consumer.CommandList(),point.timeline->fence.Get(),point.value,
-            artifact->producer->incarnation,consumer.RecordingTicket()->incarnation))return refuse("dependency-binding",proof);
-        artifact->readers.push_back(consumer.RecordingTicket());return result;
-    }catch(...){return refuse("reader-allocation",proof);}
+        const auto producer=heldArtifact->producer,reader=consumer.RecordingTicket();
+        const auto timeline=producer->points.front().timeline;
+        const auto value=producer->points.front().value;
+        // There must be NO enclosing recursive registry guard during wrapper
+        // resolution/cookie joining. The preparation reservation remains owned
+        // while unlocked; no second reader or producer rearm can commit.
+        lock.unlock();
+        const bool bound=proof.completed||BindExternalWaitForRecording(consumer.CommandList(),timeline->fence.Get(),value,
+            producer->incarnation,reader->incarnation,{},reader);
+        lock.lock();
+        if(!bound)return refuse("dependency-binding",proof);
+        if(!consumer.Current()||heldArtifact->producer!=producer||!heldArtifact->readerPreparing||
+           !heldArtifact->readers.empty())return refuse("reader-changed-during-preparation",proof);
+        heldArtifact->readers.push_back(reader);return result;
+    }catch(...){if(!lock.owns_lock())lock.lock();return refuse("reader-allocation",proof);}
 }
 uint64_t DerivedAllocatedBytes(){return ArtifactBudget().bytes.load();}
 }

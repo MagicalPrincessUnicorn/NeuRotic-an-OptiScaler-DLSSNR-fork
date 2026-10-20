@@ -1,0 +1,81 @@
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <new>
+#include <dlssnr/VulkanNrImageFacts.h>
+static thread_local bool countAllocations=false;
+static thread_local unsigned allocations=0;
+void* operator new(std::size_t n){if(countAllocations)++allocations;if(auto p=std::malloc(n?n:1))return p;throw std::bad_alloc();}
+void operator delete(void* p) noexcept {std::free(p);}
+void operator delete(void* p,std::size_t) noexcept {std::free(p);}
+#define LOG_DEBUG(...) ((void)0)
+#define LOG_WARN(...) ((void)0)
+#define LOG_ERROR(...) ((void)0)
+struct Feature {bool IsWithDx12()const{return false;}};
+struct State {Feature* currentFeature=nullptr;static State& Instance(){static State s;return s;}};
+// PRODUCTION_TRACKER
+static void Check(bool value,const char* message){if(!value){std::fprintf(stderr,"FAIL: %s\n",message);std::exit(1);}}
+static uint32_t constants[2]{},graphicsConstants[2]{},offsets[2]{};
+static VkDescriptorSet sets[2]{};
+static unsigned pushCalls=0,bindCalls=0;
+static void VKAPI_CALL Push(VkCommandBuffer,VkPipelineLayout,VkShaderStageFlags stages,uint32_t offset,uint32_t size,const void* values){
+ ++pushCalls;
+ if(stages&VK_SHADER_STAGE_COMPUTE_BIT)std::memcpy(reinterpret_cast<char*>(constants)+offset,values,size);
+ if(stages&VK_SHADER_STAGE_FRAGMENT_BIT)std::memcpy(reinterpret_cast<char*>(graphicsConstants)+offset,values,size);
+}
+static void VKAPI_CALL Bind(VkCommandBuffer,VkPipelineBindPoint,VkPipelineLayout,uint32_t first,uint32_t count,const VkDescriptorSet* values,uint32_t dynamicCount,const uint32_t* dynamic){
+ ++bindCalls;Check(count==dynamicCount,"verbatim dynamic-offset count");
+ for(uint32_t i=0;i<count;++i){sets[first+i]=values[i];offsets[first+i]=dynamic[i];}
+}
+int main(){
+ vk_state::CommandBufferStateTracker tracker;tracker.EnableNativeObservations();
+ auto cmd=reinterpret_cast<VkCommandBuffer>(1);auto pool=reinterpret_cast<VkCommandPool>(2);
+ auto layout=reinterpret_cast<VkPipelineLayout>(3);auto other=reinterpret_cast<VkPipelineLayout>(4);
+ tracker.OnAllocateCommandBuffers(reinterpret_cast<VkDevice>(1),pool,1,&cmd,0);vk_state::VulkanCmdFns fns{};fns.CmdPushConstants=Push;fns.CmdBindDescriptorSets=Bind;tracker.SetFunctionTable(fns);
+ VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};tracker.OnBegin(cmd,&begin);
+ auto update=[&](uint32_t n){for(uint32_t i=0;i<2;++i){
+  auto set=reinterpret_cast<VkDescriptorSet>(uintptr_t(n*2+i+5));uint32_t value=n*2+i;
+  tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,i,1,&set,1,&value);
+  tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,i*4,4,&value);
+ }};
+ update(0);allocations=0;countAllocations=true;auto start=std::chrono::steady_clock::now();
+ for(uint32_t n=1;n<=100000;++n)update(n);
+ countAllocations=false;auto elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+ vk_state::CommandBufferState saved;Check(tracker.CaptureNrState(cmd,saved),"capture interleaved actual state");
+ std::printf("Alternating supported calls=400000 allocations=%u descriptors=%zu pushes=%zu host_ms=%.3f (synthetic; no game timing)\n",allocations,saved.BP[1].DescriptorBindCalls.size(),saved.PushConstantHistory.size(),elapsed);
+ Check(allocations==0,"interleaved disjoint updates must reuse warmed restore storage");
+ vk_state::ReplayParams replay;replay.ReplayComputeToo=true;tracker.ReplaySaved(cmd,saved,replay);
+ Check(pushCalls==2&&bindCalls==2,"replay cost bounded by live disjoint state");
+ Check(constants[0]==200000&&constants[1]==200001&&offsets[0]==200000&&offsets[1]==200001,"replay latest constants and dynamic offsets");
+ Check(sets[0]==reinterpret_cast<VkDescriptorSet>(200005)&&sets[1]==reinterpret_cast<VkDescriptorSet>(200006),"replay latest descriptor handles");
+ Check(saved.BP[1].Sets[0].BindCallIndex==0&&saved.BP[1].Sets[1].BindCallIndex==1,"per-set indices follow replacement slots");
+ // A partial overlap prevents moving a later full update before that overlap.
+ tracker.OnBegin(cmd,&begin);uint32_t pair[]{1,2},middle=3,last[]{4,5};VkDescriptorSet pairSets[]{sets[0],sets[1]};
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,8,pair);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,4,4,&middle);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,8,last);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,2,pairSets,2,pair);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,1,1,&pairSets[1],1,&middle);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,2,pairSets,2,last);
+ Check(tracker.CaptureNrState(cmd,saved),"capture overlap");pushCalls=bindCalls=0;tracker.ReplaySaved(cmd,saved,replay);
+ Check(constants[0]==4&&constants[1]==5&&offsets[0]==4&&offsets[1]==5,"overlap chronology retains the last full update");
+ tracker.OnBegin(cmd,&begin);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,pair);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,layout,VK_SHADER_STAGE_FRAGMENT_BIT,0,4,&middle);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,last);
+ Check(tracker.CaptureNrState(cmd,saved),"capture stage-disjoint overlap");pushCalls=0;tracker.ReplaySaved(cmd,saved,replay);
+ Check(pushCalls==2&&constants[0]==4&&graphicsConstants[0]==3,"same bytes in disjoint stages replace independently");
+ // Distinct layouts cannot be treated as compatible merely because ranges are disjoint.
+ tracker.OnBegin(cmd,&begin);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,pair);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,other,VK_SHADER_STAGE_COMPUTE_BIT,4,4,&middle);
+ tracker.OnPushConstants(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,last);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,pairSets,1,pair);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,other,1,1,&pairSets[1],1,&middle);
+ tracker.OnBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,pairSets,1,last);
+ Check(tracker.CaptureNrState(cmd,saved)&&saved.PushConstantHistory.size()==3&&saved.BP[1].DescriptorBindCalls.size()==3,"different-layout chronology retained");
+ tracker.OnResetPool(reinterpret_cast<VkDevice>(1),pool);Check(!tracker.CaptureNrState(cmd,saved),"pool reset still invalidates replay");
+ std::puts("PASS actual interleaved tracker storage/replay cost, exact values, overlap/layout chronology and reset invalidation");
+}

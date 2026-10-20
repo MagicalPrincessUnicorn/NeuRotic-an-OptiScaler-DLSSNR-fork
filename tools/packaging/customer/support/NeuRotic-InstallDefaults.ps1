@@ -1,19 +1,24 @@
-# Four installation preferences, never a replacement game INI. Missing fields
+# Installation preferences, never a replacement game INI. Missing fields
 # inherit package defaults. Read once per operation and bind the snapshot to Plan.
 function ConvertTo-NeuroticInstallDefaults($Document){
  if($null -eq $Document -or $Document -is [Array] -or $Document -is [string]){throw 'Invalid install defaults object'}
  $names=@($Document.PSObject.Properties.Name)
  if($Document -is [Collections.IDictionary]){$names=@($Document.Keys)}
- if(@($names|Where-Object{$_ -cnotin @('schemaVersion','nrMode','modelPreset','style','mfgUnlock','mfgConsent')}).Count){throw 'Unknown install default'}
+ if(@($names|Where-Object{$_ -cnotin @('schemaVersion','nrMode','modelPreset','style','mfgUnlock','mfgConsent','logToFile','logLevel')}).Count){throw 'Unknown install default'}
  $version=Get-NeuroticField $Document 'schemaVersion'
  if(($version -isnot [int] -and $version -isnot [long]) -or $version -ne 1){throw 'Unsupported install defaults version'}
  $patches=@()
- foreach($field in @(@('nrMode','DlssNr','Route',@(0,2,3)),@('style','DlssNr','Style',@(0,1,2)))){
+ foreach($field in @(@('nrMode','DlssNr','Route',@(0,2,3)),@('style','DlssNr','Style',@(0,1,2)),@('logLevel','Log','LogLevel',@(0,1,2,3,4,5,6)))){
   if($names -ccontains $field[0]){
    $value=Get-NeuroticField $Document $field[0]
    if(($value -isnot [int] -and $value -isnot [long]) -or $value -notin $field[3]){throw ('Invalid install default: '+$field[0])}
    $patches+=,[pscustomobject]@{section=$field[1];key=$field[2];value=[string]$value;policy='default'}
   }
+ }
+ if($names -ccontains 'logToFile'){
+  $value=Get-NeuroticField $Document 'logToFile'
+  if($value -isnot [bool]){throw 'Invalid diagnostic enable default'}
+  $patches+=,[pscustomobject]@{section='Log';key='LogToFile';value=$value.ToString().ToLowerInvariant();policy='default'}
  }
  if($names -ccontains 'modelPreset'){
   $value=Get-NeuroticField $Document 'modelPreset'

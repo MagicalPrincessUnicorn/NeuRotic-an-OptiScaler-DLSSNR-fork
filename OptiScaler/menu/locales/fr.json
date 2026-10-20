@@ -1842,5 +1842,10 @@
   "xess": "xess",
   "yes": "oui",
   "| Input: %s": "| Entrée : %s",
-  "| Spoof: %s": "| Simulation : %s"
+  "| Spoof: %s": "| Simulation : %s",
+  "Match Native (Pre Super Resolution)": "Résolution native (avant Super Resolution)",
+  "Match Native (Post Super Resolution)": "Résolution native (après Super Resolution)",
+  "Unknown Native resolution preference": "Préférence de résolution native inconnue",
+  "Match Native Post requires After placement and automatic resolution": "La résolution native après SR exige un traitement après SR et une résolution automatique",
+  "Match Native Post awaits current pre-SR render dimensions": "La résolution native après SR attend les dimensions actuelles avant SR"
 }

@@ -20,6 +20,7 @@ struct ReadinessIdentity
     unsigned int colorRecipe = 0, colorProfile = 0;
     uint64_t additionalModels = 0, additionalRetirements = 0;
     unsigned int requestedPasses = 1;
+    uint64_t viewportKey = 0;
     bool operator==(const ReadinessIdentity&) const = default;
 };
 

@@ -1,0 +1,50 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-005",
+  "case_input_sha256": "1592392b1e582b95e3ab13a7d0345cdf4242eae4ddde2f5f3462f7f357bb2bd3",
+  "revision": 1,
+  "transport_checks": [],
+  "qualifications": [
+    {
+      "check_id": "Q-FITS",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "motion",
+      "actual_pointer": "/operations/overflow-rect-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "fits": false
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "qualification",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-native-inputs-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596"
+        }
+      },
+      "dimension": "geometry"
+    }
+  ],
+  "decisions": [],
+  "approval": "synthetic_reviewed"
+}

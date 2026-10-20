@@ -2,7 +2,11 @@ $ErrorActionPreference = 'Stop'
 $nrTestRoot = Split-Path -Parent $PSScriptRoot
 $nrConfigText = Get-Content -Raw -LiteralPath (Join-Path $nrTestRoot 'OptiScaler\Config.h')
 $nrSnapshotText = Get-Content -Raw -LiteralPath (Join-Path $nrTestRoot 'OptiScaler\NrConfigSnapshot.h')
-$nrFixtureText = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'nr_config.cpp')
+$nrFixtureText = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'NrConfigFixture.h')
+$nrSourceText = Get-Content -Raw -LiteralPath (Join-Path $nrTestRoot 'OptiScaler/Config.cpp')
+if ($nrSourceText -notmatch '(?s)auto savedRoute = readUInt\("DlssNr", "Route"\).*?PresentInput::LoadConfig\(\*this,.*?savedRoute\.has_value\(\)') {
+    throw 'Present policy migration must distinguish an explicit legacy Route from the shipped Route=auto template.'
+}
 
 $nrFieldPattern = '(?<type>NrOptional|CustomOptional)<[^;\r\n]+>\s+(?<name>DlssNr\w+)\b[^;\r\n]*;'
 $nrFields = [regex]::Matches($nrConfigText, $nrFieldPattern)

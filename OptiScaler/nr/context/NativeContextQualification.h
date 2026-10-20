@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "CapabilityQualification.h"
 #include "RepresentationCacheKeys.h"
 #include <inputs/universal_feeder/providers/NativeObservationOwner.h>
@@ -49,7 +50,8 @@ template<class Store>NativeContextResult BuildNativeContext(Feed::NativeObservat
             "Color","Output","Depth","MotionVectors","ExposureTexture","DLSS.Input.Bias.Current.Color.Mask","jitter"};
         std::array<bool,required.size()> seen{};
         auto selected=std::make_unique<C::BoundedList<C::AcquisitionCandidate,64>>();
-        C::BoundedList<SourceQualification,64> qualified;
+        auto qualifiedStorage=std::make_unique<C::BoundedList<SourceQualification,64>>();
+        auto& qualified=*qualifiedStorage;
         C::BoundedList<C::Symbol,16> projection;
         for(const auto name:NativeControlNames){C::Symbol key;key.Assign(name);projection.Push(key);}
         for(const auto& candidate:owner.Candidates())
@@ -118,7 +120,8 @@ template<class Store>NativeContextResult BuildNativeContext(Feed::NativeObservat
         auto context=built.context->Value();
         const C::BoundedList<C::SemanticClaim,16>* fields=nullptr;
         if(!ResolveList(context.fields,store,fields)||!fields)return refuse("CTX.Native.ControlsMissing");
-        auto effective=*fields;
+        auto effectiveStorage=std::make_unique<C::BoundedList<C::SemanticClaim,16>>(*fields);
+        auto& effective=*effectiveStorage;
         for(auto& claim:effective)
         {
             if((!claim.raw.IsKnown()&&!UnpublishedNativeControl(claim.raw))||

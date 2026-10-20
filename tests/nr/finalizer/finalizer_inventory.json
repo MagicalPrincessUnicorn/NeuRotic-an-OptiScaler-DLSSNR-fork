@@ -1,0 +1,641 @@
+{
+  "work_order": "NR-LIFE-003",
+  "suites": {
+    "finalizer-exactly-once": [
+      {
+        "id": "T27.accept-one",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.canceled-prefix-retires",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.capacity-no-eviction",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.competing-evaluation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.duplicate-claim",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.duplicate-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.first-claim-retained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.foreign-cancel-rejected",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.generated-rejected",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.literal-base",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.literal-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.multipass-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.multipass-10",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.multipass-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.prepare",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.primary",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.produced",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.proven-transfer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.reclaim",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.repeated-rejected",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.retired-capacity-reused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.retired-handle-not-reused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.retired-no-reclaim",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.route-does-not-reopen",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.scope-normal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.scope-stream",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.scope-view",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.stale-handle",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.unknown-base",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27.unknown-rejected",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "finalizer-order": [
+      {
+        "id": "T28.all-owner-tails-retired",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.before-present",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.consume",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.consumer-substitution",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.device-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.drained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.exact-release",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.incomplete-release-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.inflight-no-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.intermediate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.no-inferred-exclusion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.no-lineage",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.offer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.offer-idempotent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.order-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.ordered-not-complete",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.original-not-model-success",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.original-qualified",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.owner-exclusion-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.owner-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.packet-closure",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.present-failure-no-unseal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.present-failure-separate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.present-not-release",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.produced-without-output",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.profile-substitution",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.release-cannot-regress",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.release-cannot-rehold",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.release-not-gpu-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.reoffer-rechecks-rights",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.resource-unretired-tail-pending",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.retention-substitution",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.stale-candidate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.stopped",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.submit-recheck",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.unknown-color",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.unknown-hud",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.unknown-release-blocks-drain",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.unproven-original",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.unpublished-dependency",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28.wrong-provider",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "finalizer-reset": [
+      {
+        "id": "T29.bypass-retains",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.consumed-present-failure-no-new-reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.delayed-ack-pending",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.delayed-first-ack",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.failed-ack-preserves",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.failed-no-success-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.failed-recorded",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.failed-reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.finalizer-not-reset-owner",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.legal-ack-clears",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.may-advance-pending",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.new-reset-still-pending",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.not-attempted-no-new-reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.old-ack-not-new-reset",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.other-history",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.other-owner",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.owner-ack",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.skip-not-ack",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.submitted-unknown-pending",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.unknown-advance-no-transfer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T29.wrong-generation",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "finalizer-prefg": [
+      {
+        "id": "T28P.claim-a-matches",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.claim-b-matches",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.claim-b-wrong-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.exact-canonical-mapping",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.foreign-consumer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.foreign-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.foreign-handoff",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.foreign-provider",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.null-resource-no-reserve",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T28P.unknown-provider-token",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "finalizer-concurrency": [
+      {
+        "id": "T27C.accepted-commit",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27C.nonblocking-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27C.one-literal-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27C.outer-unaffected",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T27C.reentrant-refused",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "finalizer-unsealed": [
+      {
+        "id": "F09.binding-recording-exact",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.downstream-held",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.downstream-replay",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.downstream-unknown-completion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.drained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.duplicate-receipt",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.exact-callback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.exact-recipe",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.exact-sample",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.exclusion-capacity-refuses",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.false-exclusion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.feature-recreation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.first-family-retired",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.ingress-recreation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.interrupt",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.interrupt-idempotent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.interrupt-prepared",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.interrupt-seal-races-64",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.interruption-not-retirement",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.missing-recording",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.must-interrupt",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-duplicate-boundary",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-duplicate-candidate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-late-candidate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-late-prepare",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-late-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-lost-registration",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-new-primary",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.no-prepared-commit",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.persistent-exclusion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.prefix-keeps-unacknowledged",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.prefix-missing-exclusion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.prefix-next-ack",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.prefix-own-ack",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.prepared-hold-not-covered",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.retired-no-seal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.sealed-not-interrupted",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.sequential-201",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.unacknowledged-claim-not-drained",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.unknown-exclusion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.wrong-exclusion-frame",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.wrong-exclusion-owner",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.wrong-finalizer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "F09.wrong-release-provider",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "finalizer-unsealed": {
+      "emitted_suite": "finalizer-unsealed"
+    },
+    "finalizer-exactly-once": {
+      "emitted_suite": "finalizer-exactly-once"
+    },
+    "finalizer-order": {
+      "emitted_suite": "finalizer-order"
+    },
+    "finalizer-reset": {
+      "emitted_suite": "finalizer-reset"
+    },
+    "finalizer-prefg": {
+      "emitted_suite": "finalizer-prefg"
+    },
+    "finalizer-concurrency": {
+      "emitted_suite": "finalizer-concurrency"
+    }
+  }
+}

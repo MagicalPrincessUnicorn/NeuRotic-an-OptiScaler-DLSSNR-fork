@@ -3,19 +3,49 @@
 #include "UserFile.h"
 #include "install/OperationController.h"
 #include <fstream>
+#include <map>
+#include <memory>
+#include <algorithm>
 namespace nh {
 // Participating App versions have exactly one mutable state owner per user.
 // A separate namespace isolates documents from uncooperative older releases.
 class UserDataSession {
- HANDLE mutex=nullptr;bool owned=false;
+ public:
+ struct LifetimeResource {virtual ~LifetimeResource()=default;virtual void Revoke() noexcept=0;};
+ private:
+ HANDLE mutex=nullptr;bool owned=false;std::wstring rootKey;
+ struct Lease {unsigned owners=0;uint64_t epoch=0;std::vector<std::weak_ptr<LifetimeResource>> resources;};
+ inline static std::map<std::wstring,Lease> leases;
+ inline static uint64_t nextEpoch=0;
+ static std::wstring Key(const std::filesystem::path& root){auto key=root.lexically_normal().wstring();for(auto& c:key)c=towlower(c);return key;}
  public:
  explicit UserDataSession(const std::filesystem::path& root){
   uint64_t hash=14695981039346656037ull;for(auto c:root.lexically_normal().wstring()){hash^=towlower(c);hash*=1099511628211ull;}
   auto name=L"Global\\NeuRotic-UserData-v2-"+std::to_wstring(hash);mutex=CreateMutexW(nullptr,FALSE,name.c_str());if(!mutex)throw std::runtime_error(Neurotic::UiMessage("desktop.userdatasession.app_data_admission_unavailable_a1dd237b", "App data admission unavailable."));
   auto result=WaitForSingleObject(mutex,0);owned=result==WAIT_OBJECT_0||result==WAIT_ABANDONED;
+  try{if(owned){rootKey=Key(root);auto& lease=leases[rootKey];if(!lease.owners)lease.epoch=++nextEpoch;++lease.owners;}}
+  catch(...){if(owned)ReleaseMutex(mutex);CloseHandle(mutex);mutex=nullptr;owned=false;throw;}
  }
  ~UserDataSession(){Release();if(mutex)CloseHandle(mutex);}
- void Release(){if(owned){ReleaseMutex(mutex);owned=false;}}
+ void Release(){if(owned){
+  // Revoke housekeeping authority before relinquishing the actual GUI mutex.
+  auto found=leases.find(rootKey);if(found!=leases.end()&&!--found->second.owners){
+   for(const auto& weak:found->second.resources)if(auto resource=weak.lock())resource->Revoke();
+   leases.erase(found);
+  }
+  owned=false;ReleaseMutex(mutex);
+ }}
+ // UI-thread lifetime authority for this exact cooperative user-data namespace.
+ // A non-owning constructor never installs or revokes another session's lease.
+ // Resources retain no authority of their own. The last real owner revokes
+ // their handles before releasing the namespace mutex, including unwinding.
+ static bool RegisterResource(const std::filesystem::path& root,uint64_t epoch,const std::shared_ptr<LifetimeResource>& resource){
+  auto found=leases.find(Key(root));if(found==leases.end()||found->second.epoch!=epoch||!found->second.owners)return false;
+  auto& resources=found->second.resources;std::erase_if(resources,[](const auto& weak){return weak.expired();});resources.push_back(resource);return true;
+ }
+ static uint64_t Authority(const std::filesystem::path& root) noexcept try{
+  auto found=leases.find(Key(root));return found==leases.end()?0:found->second.epoch;
+ }catch(...){return 0;}
  UserDataSession(const UserDataSession&)=delete;
  bool Owns()const{return owned;}
 };

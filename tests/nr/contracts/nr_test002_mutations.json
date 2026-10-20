@@ -1,0 +1,1573 @@
+{
+  "schema_version": "1.0",
+  "work_order": "NR-TEST-002",
+  "artifact_kind": "UNEXECUTED_MUTATION_RECIPES",
+  "source_mutations": [
+    {
+      "id": "TEST-M01",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/SemanticDescriptions.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "69727c2da06e53c98882e796e1f787bf376316634209d3e930cec0d2c8b522c4",
+      "anchor": "OptionalFact<Vec2> currentJitter {};",
+      "replacement": "OptionalFact<Vec2> currentJitter = OptionalFact<Vec2>::FromKnown(Vec2{0,0}, EvidenceRef{});",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        504,
+        504
+      ],
+      "baseline_assertion_ids": [
+        "T04.jitter.unknown"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T04.jitter.unknown"
+      ],
+      "intended_failure": "Missing jitter falsely becomes known zero",
+      "group": "nr_test002_contracts",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M02",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/SemanticDescriptions.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "69727c2da06e53c98882e796e1f787bf376316634209d3e930cec0d2c8b522c4",
+      "anchor": "OptionalFact<double> preExposure {};",
+      "replacement": "OptionalFact<double> preExposure = OptionalFact<double>::FromKnown(1.0, EvidenceRef{});",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        533,
+        533
+      ],
+      "baseline_assertion_ids": [
+        "T04.exposure.unknown"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T04.exposure.unknown"
+      ],
+      "intended_failure": "Missing pre-exposure falsely becomes known neutral",
+      "group": "nr_test002_contracts",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M03",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/ContractCommon.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "aaa552c1669dd0de0c6560451a5da832ec7507e1d2a5f4ba336b96b4be4664ed",
+      "anchor": "if (c < '0' || c > '9')\n            return Error::Malformed;",
+      "replacement": "if (c < '0' || c > '9')\n            return Error::None;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        140,
+        141
+      ],
+      "baseline_assertion_ids": [
+        "T57.decimal.negative"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T57.decimal.negative"
+      ],
+      "intended_failure": "Nondecimal input is admitted instead of rejected",
+      "group": "nr_test002_schema",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M04",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/Identity.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "49b898a3d329e06c3e9ba4cca4eafbbf58f87aad96968d457cc57ad89ac2da92",
+      "anchor": "return entry.identity.value == token.identity.value ? Error::DuplicateEntry : Error::ContradictoryEntry;",
+      "replacement": "return Error::None;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        190,
+        190
+      ],
+      "baseline_assertion_ids": [
+        "T57.generation.contradiction"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T57.generation.contradiction"
+      ],
+      "intended_failure": "Contradictory same-axis generation admitted",
+      "group": "nr_test002_schema",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M05",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/FixtureCodec.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "18e3dc537b4b2b87fb9bb45fa1e49149f4746be99a0b9fbbe97d3a5b11dad7a4",
+      "anchor": "Require(value.kind == JsonKind::String, Error::WrongValueType); Require(ParseDecimal(value.text, out));",
+      "replacement": "Require(value.kind == JsonKind::String, Error::WrongValueType); Require(ParseDecimal(value.text, out));\n        out = static_cast<std::uint64_t>(static_cast<double>(out));",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        731,
+        731
+      ],
+      "baseline_assertion_ids": [
+        "T06.id.exact64"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T06.id.exact64"
+      ],
+      "intended_failure": "Lossless uint64 is corrupted through binary64",
+      "group": "nr_test002_schema",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M06",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/FixtureCodec.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "18e3dc537b4b2b87fb9bb45fa1e49149f4746be99a0b9fbbe97d3a5b11dad7a4",
+      "anchor": "Detail::Require(major == Limits::EnvelopeMajor, Error::UnsupportedVersion);",
+      "replacement": "Detail::Require(major == Limits::EnvelopeMajor, Error::UnsupportedVersion);\n        Detail::Require(minor == 0, Error::UnsupportedVersion);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        966,
+        966
+      ],
+      "baseline_assertion_ids": [
+        "T06.future-minor"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T06.future-minor"
+      ],
+      "intended_failure": "Safe future minor is spuriously rejected",
+      "group": "nr_test002_schema",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M07",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/FixtureCodec.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "18e3dc537b4b2b87fb9bb45fa1e49149f4746be99a0b9fbbe97d3a5b11dad7a4",
+      "anchor": "Require(ParseEnum(View(value.text), out), Error::UnknownEnum);",
+      "replacement": "(void)ParseEnum(View(value.text), out);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        753,
+        753
+      ],
+      "baseline_assertion_ids": [
+        "T57.required-enum"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T57.required-enum"
+      ],
+      "intended_failure": "Unknown required enum silently uses value-initialized member",
+      "group": "nr_test002_schema",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M08",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/FixtureCodec.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "18e3dc537b4b2b87fb9bb45fa1e49149f4746be99a0b9fbbe97d3a5b11dad7a4",
+      "anchor": "Require(c != '/' && c != '\\\\' && static_cast<unsigned char>(c) >= 0x20, Error::UnsafeExtension);",
+      "replacement": "Require(static_cast<unsigned char>(c) >= 0x20, Error::UnsafeExtension);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        873,
+        873
+      ],
+      "baseline_assertion_ids": [
+        "T57.traversal"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T57.traversal"
+      ],
+      "intended_failure": "Path-bearing optional extension accepted",
+      "group": "nr_test002_schema",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M09",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/C11_Diagnostics.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "548ddb7a479da9eb394bc3cee98fde638115b538ec04b249dbd6dd8e2db4e525",
+      "anchor": "if (header.owner == OwnerDomain::Diagnostics || header.owner == OwnerDomain::Unspecified)",
+      "replacement": "if (header.owner == OwnerDomain::Unspecified)",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        133,
+        133
+      ],
+      "baseline_assertion_ids": [
+        "T05.owner.mirror-not-owner"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T05.owner.mirror-not-owner"
+      ],
+      "intended_failure": "Diagnostics claims operational OwnerReceipt authorship",
+      "group": "nr_test002_contracts",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M10",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/shaders/dlssnr/DlssNr_Common.h",
+      "target_classification": "EXISTING_ALPHA_PACKED_SOURCE",
+      "baseline_lf_sha256": "181d92b962f24f91c28e78164776943543ffdabcae03e375c4ab4b6946bdbe1d",
+      "anchor": "static_cast<float>(workWidth) / width",
+      "replacement": "-static_cast<float>(workWidth) / width",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        31,
+        31
+      ],
+      "baseline_assertion_ids": [
+        "T11.scale.x"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T11.scale.x"
+      ],
+      "intended_failure": "Motion working scale sign inverted",
+      "group": "nr_test002_analytics",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M11",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/shaders/dlssnr/DlssNr_Common.h",
+      "target_classification": "EXISTING_ALPHA_PACKED_SOURCE",
+      "baseline_lf_sha256": "181d92b962f24f91c28e78164776943543ffdabcae03e375c4ab4b6946bdbe1d",
+      "anchor": "static_cast<float>(workWidth) / width",
+      "replacement": "2.0f * static_cast<float>(workWidth) / width",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        31,
+        31
+      ],
+      "baseline_assertion_ids": [
+        "T11.scale.x"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T11.scale.x"
+      ],
+      "intended_failure": "Motion scale applied twice",
+      "group": "nr_test002_analytics",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M12",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/dlssnr/NativeTemporalInputs.h",
+      "target_classification": "EXISTING_ALPHA_PACKED_SOURCE",
+      "baseline_lf_sha256": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596",
+      "anchor": "return {x, y, lowResolution ? renderWidth : outputWidth, lowResolution ? renderHeight : outputHeight};",
+      "replacement": "(void)x; (void)y; return {0, 0, lowResolution ? renderWidth : outputWidth, lowResolution ? renderHeight : outputHeight};",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        30,
+        30
+      ],
+      "baseline_assertion_ids": [
+        "T11.guide.low"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T11.guide.low"
+      ],
+      "intended_failure": "Declared active origin discarded",
+      "group": "nr_test002_analytics",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M13",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/dlssnr/NativeTemporalInputs.h",
+      "target_classification": "EXISTING_ALPHA_PACKED_SOURCE",
+      "baseline_lf_sha256": "d40e57dd80a38c76ed64f31fe8aaeae2c4046c7381fc9c77035119816005f596",
+      "anchor": "region.width <= width - region.x && region.height <= height - region.y;",
+      "replacement": "region.width <= width && region.height <= height;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        25,
+        25
+      ],
+      "baseline_assertion_ids": [
+        "T11.fits.outside"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T11.fits.outside"
+      ],
+      "intended_failure": "Allocation bounds ignore active origin",
+      "group": "nr_test002_analytics",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M14",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "C::ScopedIdentity<K> id{e->nameSpace,e->binding.publisher.issuer,next};",
+      "replacement": "C::ScopedIdentity<K> id{e->nameSpace,e->binding.publisher.issuer,K==C::IdentityKind::ObjectIncarnation ? 1 : next};",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        329,
+        329
+      ],
+      "baseline_assertion_ids": [
+        "T08.object.recreated"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.object.recreated"
+      ],
+      "intended_failure": "Object incarnation frozen across recreation",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M15",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "return Established(id,event.evidence);",
+      "replacement": "if constexpr (K==C::IdentityKind::PresentId)\n        {\n            for (auto& other : entries_)\n                if (other.role==Detail::ChannelRole::Render)\n                    ++other.ids[KindIndex<C::IdentityKind::BaseRealFrameId>()].value;\n        }\n        return Established(id,event.evidence);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        332,
+        332
+      ],
+      "baseline_assertion_ids": [
+        "T07.base.only-two"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T07.base.only-two"
+      ],
+      "intended_failure": "PresentId event incorrectly advances a base-real counter (not physical history execution)",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M16",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "return Established(id,event.evidence);",
+      "replacement": "if constexpr (K==C::IdentityKind::EvaluationId)\n        {\n            for (auto& other : entries_)\n                if (other.role==Detail::ChannelRole::Render)\n                    ++other.ids[KindIndex<C::IdentityKind::BaseRealFrameId>()].value;\n        }\n        return Established(id,event.evidence);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        332,
+        332
+      ],
+      "baseline_assertion_ids": [
+        "T07.base.only-two"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T07.base.only-two"
+      ],
+      "intended_failure": "EvaluationId event incorrectly advances a base-real counter (not physical history execution)",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M17",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "    case RenderObservation::ExistingGameContent:\n    case RenderObservation::GeneratedOutput:\n    case RenderObservation::RepeatedContent:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});\n",
+      "replacement": "    case RenderObservation::ExistingGameContent:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});\n    case RenderObservation::GeneratedOutput:\n        return handle_.host->Issue<C::IdentityKind::BaseRealFrameId>(handle_,Detail::ChannelRole::Render,evidence.event);\n    case RenderObservation::RepeatedContent:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});\n",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        655,
+        659
+      ],
+      "baseline_assertion_ids": [
+        "T07.generated.no-base"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T07.generated.no-base"
+      ],
+      "intended_failure": "GeneratedOutput wrongly establishes a new real frame",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M18",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "    case RenderObservation::ExistingGameContent:\n    case RenderObservation::GeneratedOutput:\n    case RenderObservation::RepeatedContent:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});\n",
+      "replacement": "    case RenderObservation::ExistingGameContent:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});\n    case RenderObservation::GeneratedOutput:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});\n    case RenderObservation::RepeatedContent:\n        return handle_.host->Issue<C::IdentityKind::BaseRealFrameId>(handle_,Detail::ChannelRole::Render,evidence.event);\n",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        655,
+        659
+      ],
+      "baseline_assertion_ids": [
+        "T07.repeated.no-base"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T07.repeated.no-base"
+      ],
+      "intended_failure": "RepeatedContent wrongly establishes a new real frame",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M19",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "// No resource/representation/route/history generation is read or changed here.\n        return Established(C::ContentRevision{next},event.evidence);",
+      "replacement": "// Intentional machine mutation only: forbidden cross-owner content churn.\n        for (auto& other : entries_)\n            if (other.role==Detail::ChannelRole::Route)\n                ++other.ids[KindIndex<C::IdentityKind::RouteGeneration>()].value;\n        return Established(C::ContentRevision{next},event.evidence);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        356,
+        357
+      ],
+      "baseline_assertion_ids": [
+        "T09.content.no-route-churn"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T09.content.no-route-churn"
+      ],
+      "intended_failure": "Content write inappropriately advances RouteGeneration",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M20",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "anchor": "// No resource/representation/route/history generation is read or changed here.\n        return Established(C::ContentRevision{next},event.evidence);",
+      "replacement": "// Intentional machine mutation only: forbidden cross-owner content churn.\n        for (auto& other : entries_)\n            if (other.role==Detail::ChannelRole::History)\n                ++other.ids[KindIndex<C::IdentityKind::HistoryGeneration>()].value;\n        return Established(C::ContentRevision{next},event.evidence);",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        356,
+        357
+      ],
+      "baseline_assertion_ids": [
+        "T09.content.no-history-churn"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T09.content.no-history-churn"
+      ],
+      "intended_failure": "Content write inappropriately advances HistoryGeneration",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M21",
+      "classification": "TEST_ORACLE_INTEGRITY_MUTATION",
+      "target_path": "tests/nr/oracles/Test002AnalyticCases.h",
+      "target_classification": "PROPOSED_NEW_TEST",
+      "baseline_lf_sha256": "ccc894129389d188241d91322ddd1f18af2003caf46068aa946c2b490d637d7a",
+      "anchor": "const auto expectedText = !c.expected.known ? \"Unknown\" : c.expected.vectorResult\n        ? Number(c.expected.vector.x)+\",\"+Number(c.expected.vector.y) : Number(c.expected.scalar);",
+      "replacement": "const auto expectedText = actualText;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        154,
+        155
+      ],
+      "baseline_assertion_ids": [
+        "T06.static.oracle-not-actual"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T06.static.oracle-not-actual"
+      ],
+      "intended_failure": "Expected evidence contaminated by actual result",
+      "group": "source-audit",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M22",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "anchor": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;\n    const auto& left=a.KnownPart()->value;\n    const auto& right=b.KnownPart()->value;\n    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left==right ? IdentityStatus::Ok : IdentityStatus::Different;\n}",
+      "replacement": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;\n    const auto& left=a.KnownPart()->value;\n    const auto& right=b.KnownPart()->value;\n    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left.kind==right.kind && left.issuer==right.issuer && left.value==right.value ? IdentityStatus::Ok : IdentityStatus::Different;\n}",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        90,
+        98
+      ],
+      "baseline_assertion_ids": [
+        "T08.identity.namespace"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.identity.namespace"
+      ],
+      "intended_failure": "Namespace comparison removed",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M23",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "anchor": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;\n    const auto& left=a.KnownPart()->value;\n    const auto& right=b.KnownPart()->value;\n    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left==right ? IdentityStatus::Ok : IdentityStatus::Different;\n}",
+      "replacement": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;\n    const auto& left=a.KnownPart()->value;\n    const auto& right=b.KnownPart()->value;\n    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left.kind==right.kind && left.nameSpace==right.nameSpace && left.value==right.value ? IdentityStatus::Ok : IdentityStatus::Different;\n}",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        90,
+        98
+      ],
+      "baseline_assertion_ids": [
+        "T08.identity.issuer"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.identity.issuer"
+      ],
+      "intended_failure": "Issuer comparison removed",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M24",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "anchor": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;\n    const auto& left=a.KnownPart()->value;\n    const auto& right=b.KnownPart()->value;\n    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left==right ? IdentityStatus::Ok : IdentityStatus::Different;\n}",
+      "replacement": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;\n    const auto& left=a.KnownPart()->value;\n    const auto& right=b.KnownPart()->value;\n    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left.nameSpace==right.nameSpace && left.issuer==right.issuer && left.value==right.value ? IdentityStatus::Ok : IdentityStatus::Different;\n}",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        90,
+        98
+      ],
+      "baseline_assertion_ids": [
+        "T08.identity.kind"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.identity.kind"
+      ],
+      "intended_failure": "Semantic kind comparison removed",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M25",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "anchor": "CompareTypedIdentity(expected.view,observed.view)",
+      "replacement": "IdentityStatus::Ok",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        180,
+        180
+      ],
+      "baseline_assertion_ids": [
+        "T08.association.view"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.association.view"
+      ],
+      "intended_failure": "View omitted from a same-scope association",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M26",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "anchor": "CompareTypedIdentity(expected.stream,observed.stream)",
+      "replacement": "IdentityStatus::Ok",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        179,
+        179
+      ],
+      "baseline_assertion_ids": [
+        "T08.association.stream"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.association.stream"
+      ],
+      "intended_failure": "Stream comparison omitted",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M27",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "anchor": "return expected.contentRevision.KnownPart()->value==current.contentRevision.KnownPart()->value\n        ? IdentityStatus::Ok : IdentityStatus::Different;",
+      "replacement": "return IdentityStatus::Ok;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        181,
+        182
+      ],
+      "baseline_assertion_ids": [
+        "T09.content.stale"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T09.content.stale"
+      ],
+      "intended_failure": "Stale content revision treated current",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M28",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "anchor": "if (!expected.contentRevision.IsKnown() || !current.contentRevision.IsKnown()) return IdentityStatus::Unknown;",
+      "replacement": "if (!expected.contentRevision.IsKnown() || !current.contentRevision.IsKnown()) return IdentityStatus::Ok;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        180,
+        180
+      ],
+      "baseline_assertion_ids": [
+        "T09.content.zero-vs-unknown"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T09.content.zero-vs-unknown"
+      ],
+      "intended_failure": "Unknown content freshness is accepted as equal to explicitly Known ContentRevision(0)",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M29",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/Identity.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "49b898a3d329e06c3e9ba4cca4eafbbf58f87aad96968d457cc57ad89ac2da92",
+      "anchor": "return fact.IsKnown() && fact.KnownPart()->value.identity.kind != expected ? Error::WrongIdentityKind : Error::None;",
+      "replacement": "(void)fact; (void)expected; return Error::None;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        208,
+        208
+      ],
+      "baseline_assertion_ids": [
+        "T08.generation.wrong-slot"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.generation.wrong-slot"
+      ],
+      "intended_failure": "Generation type/location validation removed",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M30",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "anchor": "return a.record.schema==b.record.schema && a.record.version==b.record.version &&\n           a.dependencyBody->second==b.dependencyBody->second && a.generationBody->second==b.generationBody->second\n        ? IdentityStatus::Ok : IdentityStatus::Different;",
+      "replacement": "return IdentityStatus::Ok;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        146,
+        148
+      ],
+      "baseline_assertion_ids": [
+        "T09.signature.selected-route-different",
+        "T09.signature.selected-resource-different",
+        "T09.signature.selected-representation-different",
+        "T09.signature.selected-record-different"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T09.signature.selected-route-different",
+        "T09.signature.selected-resource-different",
+        "T09.signature.selected-representation-different",
+        "T09.signature.selected-record-different"
+      ],
+      "intended_failure": "Valid unequal selected signatures are always reported equal after validation",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M31",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "anchor": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Unknown;",
+      "replacement": "inline IdentityStatus CompareIdentity(const C::OptionalFact<C::StableIdentity>& a,\n                                      const C::OptionalFact<C::StableIdentity>& b)\n{\n    if (!a.IsKnown() || !b.IsKnown()) return IdentityStatus::Ok;",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        90,
+        93
+      ],
+      "baseline_assertion_ids": [
+        "T08.identity.zero-vs-unknown"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.identity.zero-vs-unknown"
+      ],
+      "intended_failure": "Unknown identity is accepted as equal to explicitly Known(0)",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    },
+    {
+      "id": "TEST-M32",
+      "classification": "PRODUCTION_SOURCE_MUTATION",
+      "target_path": "OptiScaler/nr/contracts/Identity.h",
+      "target_classification": "ACCEPTED_PREREQUISITE_CANDIDATE",
+      "baseline_lf_sha256": "49b898a3d329e06c3e9ba4cca4eafbbf58f87aad96968d457cc57ad89ac2da92",
+      "anchor": "inline Error CheckIdentityFact(const OptionalFact<StableIdentity>& fact, IdentityKind expected)\n{\n    return fact.IsKnown() && fact.KnownPart()->value.kind != expected ? Error::WrongIdentityKind : Error::None;\n}",
+      "replacement": "inline Error CheckIdentityFact(const OptionalFact<StableIdentity>& fact, IdentityKind expected)\n{\n    (void)fact; (void)expected; return Error::None;\n}",
+      "anchor_count_required": 1,
+      "target_leaf_lines": [
+        202,
+        205
+      ],
+      "baseline_assertion_ids": [
+        "T08.incarnation.generation-misplaced"
+      ],
+      "expected_mutant_assertion_ids": [
+        "T08.incarnation.generation-misplaced"
+      ],
+      "intended_failure": "A generation-kind StableIdentity is accepted in an incarnation field",
+      "group": "nr_test002_identity",
+      "compiler_or_crash_is_kill": false,
+      "execution_state": "NOT_RUN",
+      "applied": false,
+      "execution_rule": "Run an unmutated matching control first. In a separately authorized machine copy, require successful mutant compilation and startup to the relevant test path, exact mutant/case/run correlation, and the named assertion raw mismatch. A generic infrastructure exit, code 2, crash, timeout, missing summary, framing failure, or unrelated nonzero exit is never by itself a kill. If the intended raw mismatch is followed by infrastructure failure, preserve both facts separately. Restore the exact baseline digest afterward.",
+      "semantic_kill": null
+    }
+  ],
+  "retained_TEST_FINAL_intents": [
+    {
+      "id": "M-C14-01",
+      "intentional_defect": "Hold `ObjectIncarnation` constant across destruction/recreation",
+      "primary_test": "T08",
+      "intended_failure": "reincarnation identity violation",
+      "must_not_accept_as": "same object",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 457,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M14"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-C14-02",
+      "intentional_defect": "Equalize `ResourceGeneration` and `RepresentationGeneration` and compare by value only",
+      "primary_test": "T08/T09",
+      "intended_failure": "typed-generation conflation",
+      "must_not_accept_as": "interchangeable structural generation",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 458,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M24",
+        "TEST-M29"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-C14-03",
+      "intentional_defect": "Insert `ContentRevision` into `GenerationVector`",
+      "primary_test": "T06/T09/T57",
+      "intended_failure": "noncanonical corrected C14 kind",
+      "must_not_accept_as": "valid generation token",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 459,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "REPRESENTED_HOSTILE_INPUT",
+      "assertion_ids": [
+        "T57.generation.content-kind"
+      ],
+      "limitation": "No ContentRevision enum exists to mutate locally. Hostile input rejection is authored; a hypothetical enum addition is not supplied as a compile-tested recipe."
+    },
+    {
+      "id": "M-C14-04",
+      "intentional_defect": "Include `ContentRevision` in stable route key",
+      "primary_test": "T09",
+      "intended_failure": "per-frame route churn",
+      "must_not_accept_as": "valid route identity",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 460,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "LATER_OWNER_CALL_SITE_OBLIGATION",
+      "assertion_ids": [
+        "T09.signature.selected-only"
+      ],
+      "limitation": "No API takes content as a route-signature parameter; a content-to-structural adapter defect belongs to later CTX/ORCH integration. No invented production file."
+    },
+    {
+      "id": "M-C14-05",
+      "intentional_defect": "Same numeric identity across two namespaces treated equal",
+      "primary_test": "T06/T08",
+      "intended_failure": "namespace collision",
+      "must_not_accept_as": "same identity",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 461,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M22"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-C14-06",
+      "intentional_defect": "Same numeric identity across two issuers treated equal",
+      "primary_test": "T06/T08",
+      "intended_failure": "issuer collision",
+      "must_not_accept_as": "same identity",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 462,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M23"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-C14-07",
+      "intentional_defect": "Reuse stale association from old object/resource incarnation",
+      "primary_test": "T07/T08",
+      "intended_failure": "stale association across lifetime boundary",
+      "must_not_accept_as": "current association",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 463,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M25",
+        "TEST-M26"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "RELATED_CURRENT_MUTATIONS_PLUS_LIFETIME_OBLIGATION",
+      "assertion_ids": [
+        "T08.association.incarnation"
+      ],
+      "limitation": "Current view/stream-removal mutants exercise scope loss, not all stale-resource producers. Pointer/reincarnation production integration is later owner work."
+    },
+    {
+      "id": "M-C14-08",
+      "intentional_defect": "Replace Unknown identity/freshness with `0`",
+      "primary_test": "T04/T06",
+      "intended_failure": "false known/default substitution",
+      "must_not_accept_as": "established zero",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 464,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M28",
+        "TEST-M31"
+      ],
+      "semantic_scope": "EXACT_IDENTITY_AND_FRESHNESS_ZERO_VS_UNKNOWN_FIXTURES_AUTHORED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_EXACT_RECIPE_CANDIDATES",
+      "related_partial_recipes": [
+        "TEST-M01",
+        "TEST-M02"
+      ],
+      "mapping_note": "TEST-M31 targets identity Unknown->Ok; TEST-M28 targets freshness Unknown->Ok. Signal-default recipes are retained only as related default-substitution coverage."
+    },
+    {
+      "id": "M-C14-09",
+      "intentional_defect": "Treat native pointer value as fixture identity",
+      "primary_test": "T06/T57",
+      "intended_failure": "executable/native-handle identity prohibited",
+      "must_not_accept_as": "stable identity",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 465,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M08"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "HOSTILE_SCHEMA_INPUT_PLUS_RELATED_PATH_MUTANT",
+      "assertion_ids": [
+        "T57.native-handle"
+      ],
+      "limitation": "No native pointer parameter exists in canonical identity input. Path-policy mutant is related security coverage, not proof of native-handle admission handling."
+    },
+    {
+      "id": "M-C14-10",
+      "intentional_defect": "Serialize 64-bit ID through IEEE-754/JS-safe integer and lose precision",
+      "primary_test": "T06",
+      "intended_failure": "ID round-trip corruption",
+      "must_not_accept_as": "equal ID",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 466,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M05"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-T07-01",
+      "intentional_defect": "Every Present increments real history",
+      "primary_test": "T07",
+      "intended_failure": "Present != proven new real frame",
+      "must_not_accept_as": "temporal history advance",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 467,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M15"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE",
+      "limitation": "CPU identity/generation mutation only; does not run a temporal history, reset executor, or GPU consumer."
+    },
+    {
+      "id": "M-T07-02",
+      "intentional_defect": "Every evaluation increments real history",
+      "primary_test": "T07",
+      "intended_failure": "EvaluationId != BaseRealFrameId",
+      "must_not_accept_as": "temporal history advance",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 468,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M16"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE",
+      "limitation": "CPU identity/generation mutation only; does not run a temporal history, reset executor, or GPU consumer."
+    },
+    {
+      "id": "M-T07-03",
+      "intentional_defect": "Generated frame increments real history",
+      "primary_test": "T07",
+      "intended_failure": "FG output != new game render",
+      "must_not_accept_as": "temporal history advance",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 469,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M17"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE",
+      "limitation": "CPU identity/generation mutation only; does not run a temporal history, reset executor, or GPU consumer."
+    },
+    {
+      "id": "M-T07-04",
+      "intentional_defect": "Cadence/FPS manufactures `GeneratedFrameId`",
+      "primary_test": "T07",
+      "intended_failure": "generated identity authority violation",
+      "must_not_accept_as": "FG-owner identity",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 470,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "LATER_OWNER_CALL_SITE_OBLIGATION",
+      "assertion_ids": [
+        "T07.generated.wrong-owner"
+      ],
+      "limitation": "No cadence/FPS input is present in the accepted importer. Wrong-owner and opaque-input tests are authored; cadence-based manufacture must be injected at a future trusted-adapter boundary."
+    },
+    {
+      "id": "M-T07-05",
+      "intentional_defect": "Repeated Present becomes a new base real frame",
+      "primary_test": "T07",
+      "intended_failure": "repeat/new-render conflation",
+      "must_not_accept_as": "real sample",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 471,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M18"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE",
+      "limitation": "CPU identity/generation mutation only; does not run a temporal history, reset executor, or GPU consumer."
+    },
+    {
+      "id": "M-T08-01",
+      "intentional_defect": "Same resource pointer after recreation treated same resource",
+      "primary_test": "T08",
+      "intended_failure": "pointer reuse is not identity",
+      "must_not_accept_as": "current resource",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 472,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "REPRESENTED_RELATIONAL_INPUT",
+      "assertion_ids": [
+        "T08.pointer-reuse.new-incarnation"
+      ],
+      "limitation": "Equal numeric address labels never enter the SUT. New-incarnation comparison is authored; real pointer-registry adapter mutation belongs to later owner integration."
+    },
+    {
+      "id": "M-T08-02",
+      "intentional_defect": "Omit `ViewId` from an association and merge left/right views",
+      "primary_test": "T08",
+      "intended_failure": "view-scope loss",
+      "must_not_accept_as": "same history",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 473,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M25"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-T08-03",
+      "intentional_defect": "Merge primary and secondary swapchain streams on equal Present number",
+      "primary_test": "T08",
+      "intended_failure": "render-stream/namespace collision",
+      "must_not_accept_as": "same Present",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 474,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M26"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-T09-01",
+      "intentional_defect": "Advance `RouteGeneration` for every content write",
+      "primary_test": "T09",
+      "intended_failure": "content freshness != route replacement",
+      "must_not_accept_as": "valid route evolution",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 475,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M19"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-T09-02",
+      "intentional_defect": "Reset `HistoryGeneration` on every content revision",
+      "primary_test": "T09",
+      "intended_failure": "unnecessary history churn",
+      "must_not_accept_as": "required reset",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 476,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M20"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE",
+      "limitation": "CPU identity/generation mutation only; does not run a temporal history, reset executor, or GPU consumer."
+    },
+    {
+      "id": "M-T09-03",
+      "intentional_defect": "Keep stale converted pixels after CR change where freshness is required",
+      "primary_test": "T09",
+      "intended_failure": "stale content cache",
+      "must_not_accept_as": "valid prepared content",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 477,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M27"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_FRESHNESS_PREDICATE_NOT_GPU_CACHE",
+      "assertion_ids": [
+        "T09.content.stale"
+      ],
+      "limitation": "Current mutation covers CompareExactContent only; stale converted GPU pixels/cache reuse requires CTX-002 and resource-owner execution."
+    },
+    {
+      "id": "M-KNOWN-01",
+      "intentional_defect": "Missing jitter becomes known `0`",
+      "primary_test": "T04/T11",
+      "intended_failure": "Unknown/default substitution",
+      "must_not_accept_as": "observed zero",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 478,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M01"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-KNOWN-02",
+      "intentional_defect": "Missing exposure/pre-exposure becomes known neutral `1`",
+      "primary_test": "T04/T12",
+      "intended_failure": "Unknown/default substitution",
+      "must_not_accept_as": "observed neutral",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 479,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M02"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-EVID-01",
+      "intentional_defect": "Alias one source twice to increase credibility",
+      "primary_test": "T05",
+      "intended_failure": "alias double-count",
+      "must_not_accept_as": "two sources",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 480,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "UNBOUND_LATER_OWNER",
+      "assertion_ids": [
+        "T05.binding.alias-dedup"
+      ],
+      "limitation": "ARCH describes alias provenance; CTX-001 will own credibility deduplication. No second test normalizer."
+    },
+    {
+      "id": "M-EVID-02",
+      "intentional_defect": "Diagnostic mirror treated as new owner evidence",
+      "primary_test": "T05/C11",
+      "intended_failure": "authority inversion",
+      "must_not_accept_as": "independent owner fact",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 481,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M09"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-SCHEMA-01",
+      "intentional_defect": "Unknown required future enum coerced to nearest known enum",
+      "primary_test": "T06/T57",
+      "intended_failure": "fail-closed schema rule",
+      "must_not_accept_as": "supported meaning",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 482,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M07"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-SCHEMA-02",
+      "intentional_defect": "Future optional field causes parser to reject otherwise safe supported minor record",
+      "primary_test": "T06/T57",
+      "intended_failure": "extension-compatibility violation",
+      "must_not_accept_as": "hostile required field",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 483,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M06"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-SCHEMA-03",
+      "intentional_defect": "Duplicate same kind+namespace+issuer with contradictory values accepted",
+      "primary_test": "T06/T57",
+      "intended_failure": "contradictory generation snapshot",
+      "must_not_accept_as": "valid set",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 484,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M04"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_RECIPE_CANDIDATE"
+    },
+    {
+      "id": "M-SCHEMA-04",
+      "intentional_defect": "Generation token placed in an incarnation field (or reverse)",
+      "primary_test": "T06/T57",
+      "intended_failure": "kind/location mismatch",
+      "must_not_accept_as": "type-compatible record",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 485,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M32"
+      ],
+      "semantic_scope": "EXACT_GENERATION_IN_INCARNATION_FIELD_FIXTURE_AUTHORED_NOT_EXECUTED",
+      "coverage_classification": "CURRENT_SOURCE_EXACT_RECIPE_CANDIDATE",
+      "related_partial_recipes": [
+        "TEST-M29"
+      ],
+      "mapping_note": "TEST-M32 removes CheckIdentityFact and is bound to a ResourceGeneration-valued StableIdentity placed in objectIncarnation. TEST-M29 remains related generation-slot coverage only."
+    },
+    {
+      "id": "M-ORACLE-01",
+      "intentional_defect": "Expected result generated by calling the same production normalizer",
+      "primary_test": "all",
+      "intended_failure": "oracle independence violation",
+      "must_not_accept_as": "valid analytic oracle",
+      "source": "NR-TEST-002_Contract_and_Analytic_Oracle_Tests_FINAL.md",
+      "source_line": 486,
+      "classification": "RETAINED_SPECIFICATION_INTENT_NOT_AUTHORED_RECIPE",
+      "execution_state": "NOT_RUN",
+      "actual": null,
+      "verdict": null,
+      "candidate_recipes": [
+        "TEST-M21"
+      ],
+      "semantic_scope": "SOURCE_INTENT_MAPPED_NOT_EXECUTED",
+      "coverage_classification": "TEST_INTEGRITY_ONLY",
+      "assertion_ids": [
+        "T06.static.oracle-not-actual"
+      ],
+      "limitation": "Current static mutant corrupts expected-value reporting. It is not a neural normalizer mutant; manual oracle-independence review remains required."
+    }
+  ],
+  "analytic_mutation_obligations": [
+    {
+      "id": "AN-M01",
+      "case": "T11.oracle.jitter-sign",
+      "changed_variable": "jitter delta sign",
+      "wrong_vector": [
+        0.025,
+        -0.015
+      ]
+    },
+    {
+      "id": "AN-M02",
+      "case": "T11.oracle.pixel-to-uv",
+      "changed_variable": "allocation instead of active denominator",
+      "wrong_vector": [
+        0.0078125,
+        -0.0078125
+      ]
+    },
+    {
+      "id": "AN-M03",
+      "case": "T11.oracle.rect-offset",
+      "changed_variable": "origin omitted",
+      "wrong_vector": [
+        0.625,
+        0.625
+      ]
+    },
+    {
+      "id": "AN-M04",
+      "case": "T11.oracle.no-double-jitter",
+      "changed_variable": "remove jitter twice",
+      "wrong_vector": [
+        0.01,
+        0
+      ]
+    },
+    {
+      "id": "AN-M05",
+      "case": "T12.oracle.reversed-depth",
+      "changed_variable": "universal one-minus-z as view depth",
+      "wrong_scalar": 0.75
+    },
+    {
+      "id": "AN-M06",
+      "case": "T12.oracle.pre-exposure",
+      "changed_variable": "multiply rather than divide pre-exposure",
+      "wrong_scalar": 72
+    },
+    {
+      "id": "AN-M07",
+      "case": "T12.oracle.pre-exposure",
+      "changed_variable": "calibration substituted for pre-exposure",
+      "wrong_scalar": 4.8
+    },
+    {
+      "id": "AN-M08",
+      "case": "T11.oracle.jitter-sign",
+      "changed_variable": "paired wrong jitter sign plus erroneous 2x UV rescale from a half-size active-extent substitution",
+      "wrong_vector": [
+        0.05,
+        -0.03
+      ],
+      "independent_derivation": "m=(.02,-.01), delta=(.005,-.005). Wrong sign alone: m+delta=(.025,-.015). Erroneous extent rescale alone: 2*(m-delta)=(.03,-.01). Both: 2*(m+delta)=(.05,-.03). Correct remains (.015,-.005).",
+      "single_error_controls": [
+        [
+          0.025,
+          -0.015
+        ],
+        [
+          0.03,
+          -0.01
+        ]
+      ],
+      "coupled_error_purpose": "Keep the two independent defect controls and the paired result distinct; none is an executed production mutant."
+    }
+  ],
+  "analytic_state": "NO_PRODUCTION_BINDING_NO_MUTATION_KILL_CLAIM; these are oracle targets for later CTX-owner source recipes",
+  "acceptance": {
+    "successful_unmutated_control_required": true,
+    "mutant_compilation_and_startup_to_relevant_path_required": true,
+    "named_intended_raw_mismatch_required": true,
+    "exact_mutant_case_run_correlation_required": true,
+    "compile_failure_is_kill": false,
+    "infrastructure_exit_is_kill": false,
+    "code_2_is_kill": false,
+    "timeout_is_kill": false,
+    "crash_is_kill": false,
+    "missing_summary_is_kill": false,
+    "framing_failure_is_kill": false,
+    "arbitrary_nonzero_is_kill": false,
+    "raw_mismatch_followed_by_infrastructure_failure_must_preserve_both": true,
+    "unexpected_collateral_failures_must_be_recorded": true,
+    "executed_in_chat": false,
+    "semantic_kills_established": 0
+  },
+  "correction_reconciliation": {
+    "TEST2-R04": "TEST-M30 adds the narrow always-equal-after-validation mutation target.",
+    "TEST2-R07": "TEST-M31 and TEST-M32 provide exact identity-zero and incarnation/category mutations; TEST-M28 remains exact freshness-zero/Unknown coverage.",
+    "TEST2-R09": "Evidence rule preserved: generic infrastructure outcomes never establish a kill."
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "work_order":"W03-finite-58-construction",
+  "suites":{
+    "spectre-final-boundary":[
+      {"id":"F06.canonical-association","binding":"CURRENT_CALLABLE"},
+      {"id":"F06.wrong-view","binding":"CURRENT_CALLABLE"},
+      {"id":"F06.wrong-base","binding":"CURRENT_CALLABLE"},
+      {"id":"F06.wrong-stream","binding":"CURRENT_CALLABLE"},
+      {"id":"F06.wrong-provider","binding":"CURRENT_CALLABLE"},
+      {"id":"F06.wrong-handoff","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.required-rendering-incomplete","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.hud-false","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.hud-unknown","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.required-tone-map-false","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.required-tone-map-unknown","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.color-unknown","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.lineage-unknown","binding":"CURRENT_CALLABLE"},
+      {"id":"F07.complete-required-boundary","binding":"CURRENT_CALLABLE"},
+      {"id":"F12.final-packet-retains-provider-hold","binding":"CURRENT_CALLABLE"},
+      {"id":"F12.terminal-distinct-scratch","binding":"CURRENT_CALLABLE"},
+      {"id":"F12.final-held-after-scratch","binding":"CURRENT_CALLABLE"},
+      {"id":"F12.final-release-control","binding":"CURRENT_CALLABLE"}
+    ]
+  },
+  "suite_metadata":{"spectre-final-boundary":{"emitted_suite":"spectre-final-boundary"}}
+}

@@ -29,6 +29,13 @@ cbuffer Params : register(b0)
     uint  gApplyModel;     // 0 output the clean frame (pass still runs), 1 apply the model's edit
     uint  gUseGameExposure;// D3D12 source-1 only: 1 = read the game's live exposure in-shader (t4)
     float gExposurePreMul; // preExposure * trim, so the live white point is gExposurePreMul / exposure
+    uint gSignedPresent;   // explicit Present HDR recipe; Native/SDR remain zero
+    uint gSourceX;
+    uint gSourceY;
+    uint gFinalLuminanceGuard; // Post-SR/Present only; Pre keeps its existing resolve.
+    uint gOutputIsUnorm; // Actual bound output view; not the input or saved route.
+    uint gTargetX;
+    uint gTargetY;
 };
 
 // Bringing an impossible colour back into a possible one.
@@ -231,10 +238,12 @@ Texture2D<float4>   gExposure : register(t4);
 #endif
 #ifdef VK_MODE
 [[vk::binding(5, 0)]]
+[[vk::image_format("unknown")]]
 #endif
 RWTexture2D<float4> gTarget   : register(u0);  // encode: the proxy. resolve: the frame.
 #ifdef VK_MODE
 [[vk::binding(6, 0)]]
+[[vk::image_format("unknown")]]
 #endif
 RWTexture2D<float4> gKeep     : register(u1);  // encode: the untouched copy. unused by the resolve.
 #ifdef VK_MODE
@@ -481,6 +490,11 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     if (id.x >= gWidth || id.y >= gHeight)
         return;
 
+    uint2 targetPixel = id.xy;
+#ifdef VK_MODE
+    targetPixel += uint2(gTargetX, gTargetY);
+#endif
+
     // Normalised, so the source may be any size relative to this dispatch.
     float2 uv = (float2(id.xy) + 0.5) / float2(gWidth, gHeight);
 
@@ -510,7 +524,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
                                     : gSource.SampleLevel(gLinear, displayUv, 0);
         if (outside) shown.rgb = 0.0;
         if (divider) shown.rgb = WhitePoint();
-        gTarget[id.xy] = shown;
+        gTarget[targetPixel] = shown;
         return;
     }
 
@@ -528,7 +542,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         const float2 halfTexel = 0.5 / size;
         sourceUv = clamp(sourceUv, halfTexel, 1.0 - halfTexel);
 
-        gTarget[id.xy] = gSource.SampleLevel(gLinear, sourceUv, 0);
+        gTarget[targetPixel] = gSource.SampleLevel(gLinear, sourceUv, 0);
         return;
     }
 
@@ -589,7 +603,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             }
         }
 
-        gTarget[id.xy] = float4(peak, 0.0, 0.0, 1.0);
+        gTarget[targetPixel] = float4(peak, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -605,7 +619,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         // The motion slot is free here: the meter has no use for motion vectors.
         if (id.x == 0 && id.y == 0)
         {
-            gTarget[id.xy] = float4(gMotion.Load(int3(0, 0, 0)).r, 0.0, 0.0, 1.0);
+            gTarget[targetPixel] = float4(gMotion.Load(int3(0, 0, 0)).r, 0.0, 0.0, 1.0);
             return;
         }
 
@@ -635,7 +649,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             }
         }
 
-        gTarget[id.xy] = float4(taken > 0u ? sum / (float) taken : 0.0, 0.0, 0.0, 1.0);
+        gTarget[targetPixel] = float4(taken > 0u ? sum / (float) taken : 0.0, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -647,7 +661,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         // Nothing to do when the sizes already agree.
         if (srcW == gWidth && srcH == gHeight)
         {
-            gTarget[id.xy] = gSource.Load(int3(id.xy, 0));
+            gTarget[targetPixel] = gSource.Load(int3(id.xy, 0));
             return;
         }
 
@@ -695,24 +709,28 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         const int acx = clamp((int) floor(((float) id.x + 0.5) * (float) srcW / (float) gWidth), 0, (int) srcW - 1);
         const int acy = clamp((int) floor(((float) id.y + 0.5) * (float) srcH / (float) gHeight), 0, (int) srcH - 1);
 
-        gTarget[id.xy] = float4(acc / area, gSource.Load(int3(acx, acy, 0)).a);
+        gTarget[targetPixel] = float4(acc / area, gSource.Load(int3(acx, acy, 0)).a);
         return;
     }
 
     if (gMode == 0)
     {
+#ifdef VK_MODE
+        float4 source = gSource.Load(int3(id.xy + uint2(gSourceX,gSourceY), 0));
+#else
         float4 source = gSource.Load(int3(id.xy, 0));
+#endif
         float3 frame = max(source.rgb, float3(0.0, 0.0, 0.0));
 
         // Kept so the resolve has the frame as it was, rather than having to reconstruct it.
-        gKeep[id.xy] = float4(frame, source.a);
+        gKeep[id.xy] = float4(gSignedPresent != 0 ? source.rgb : frame, source.a);
 
         // Some games hand DLSS a frame that has already been through their tonemapper. The game says
         // which in its own DLSS creation flags, and converting one that needs no conversion is pure
         // damage, so it goes through untouched.
         if (gPassthrough != 0)
         {
-            gTarget[id.xy] = float4(frame, source.a);
+            gTarget[targetPixel] = float4(frame, source.a);
             return;
         }
 
@@ -745,7 +763,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         // alpha, so the default stays byte-identical.
         float alpha = gReversibleMode != 0 ? 1.0 : source.a;
 
-        gTarget[id.xy] = float4(LinearToSrgb(display), alpha);
+        gTarget[targetPixel] = float4(LinearToSrgb(display), alpha);
         return;
     }
 
@@ -808,7 +826,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     // the result to a near-constant scale. Colour still moves, because that comes from the model's
     // own hue, which is what makes the failure so confusing to look at.
     const float normScale = gPassthrough != 0 ? 1.0 : WhitePoint();
-    float3 original = originalSample.rgb / normScale;
+    float3 original = (gSignedPresent != 0 ? max(originalSample.rgb, 0.0) : originalSample.rgb) / normScale;
 
     float originalLuma = dot(original, kLuma);
     float proxyLuma = dot(proxy, kLuma);
@@ -818,23 +836,43 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     // with and without Neural Rendering. In passthrough the frame is already display-referred.
     if (gApplyModel == 0)
     {
-        gTarget[id.xy] = float4(max(originalSample.rgb, 0.0), originalSample.a);
+        gTarget[targetPixel] = float4(gSignedPresent != 0 ? originalSample.rgb : max(originalSample.rgb, 0.0), originalSample.a);
         return;
     }
 
     if (gDebugView == 1)
     {
-        gTarget[id.xy] = float4(proxy * gDebugScale, originalSample.a);
+        gTarget[targetPixel] = float4(proxy * gDebugScale, originalSample.a);
         return;
     }
 
     if (gDebugView == 2)
     {
-        gTarget[id.xy] = float4(model * gDebugScale, originalSample.a);
+        gTarget[targetPixel] = float4(model * gDebugScale, originalSample.a);
         return;
     }
 
     float3 edit = model - proxy;
+    // A composed zero edit must not replace the retained scene's chromaticity
+    // with the quantized proxy's chromaticity. This applies to unsigned Native
+    // and SDR Present as well as signed HDR. Require exact equality: a real
+    // model edit, however small, continues through the existing composition.
+    // Replacement recipes deliberately decode the model, and debug/compare
+    // views have separate presentation semantics; leave those paths intact.
+    if (gSignedPresent == 0 && gReversibleMode != 2 && gReversibleMode != 4 &&
+        gDebugView == 0 && gCompareMode == 0 && all(edit == 0.0))
+    {
+        gTarget[targetPixel] = float4(max(originalSample.rgb, 0.0), originalSample.a);
+        return;
+    }
+
+    // Identical proxy/model is an identity, even after reduced proxy quantization.
+    // Avoid treating the lossy model representation as a change to the retained HDR original.
+    if (gSignedPresent != 0 && (all(edit == 0.0) || gTransferStrength == 0.0))
+    {
+        gTarget[targetPixel] = originalSample;
+        return;
+    }
 
     // Coring was tried here and removed: the per-frame churn's amplitude overlaps the real detail's,
     // so an amplitude threshold cannot separate them -- it only relocated the noise to the threshold.
@@ -843,7 +881,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     {
         // Amplified and centred on grey, so both directions of the edit are visible at once.
         float3 shown = saturate(0.5 + edit * 20.0);
-        gTarget[id.xy] = float4(SrgbToLinear(shown) * gDebugScale, originalSample.a);
+        gTarget[targetPixel] = float4(SrgbToLinear(shown) * gDebugScale, originalSample.a);
         return;
     }
 
@@ -1033,6 +1071,49 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     if (gColourStrength > 1.0)
         result = ClampAp1(FromOkLab(float3(1.0, gColourStrength, gColourStrength) * ToOkLab(max(result, 0.0))));
 
+    // The floored ratio above is not upgradedLuma / originalLuma. Dividing
+    // upgraded by that ratio therefore does not bind the colour endpoint to
+    // original * boundedRatio, and chroma boosting can change luminance again.
+    // Apply the intended luminance to the final chromaticity. This is a scalar
+    // correction, with no neighbourhood filtering, history, or model bypass.
+    // Scale through the peak to avoid a large multiplier for tiny RGB values.
+    // Pre-SR keeps the established resolve because its output is consumed by SR.
+    if (gFinalLuminanceGuard != 0)
+    {
+        const float targetLuma = originalLuma * boundedRatio;
+        const float peak = max(result.r, max(result.g, result.b));
+        if (peak > 0.0)
+        {
+            const float3 chromaticity = result / peak;
+            result = chromaticity * (targetLuma / max(dot(chromaticity, kLuma), 1e-6));
+        }
+        else
+            result = original * boundedRatio;
+
+        // A normalized output store clips at one; the signed path has its
+        // existing FP16 endpoint clamp. Independent channel clipping can break
+        // the lower light bound even when luminance itself is representable.
+        // Fit only out-of-carrier chroma toward a same-luminance neutral.
+        // Ordinary float targets have no SDR ceiling; Pre/replace stay unchanged.
+        if (gOutputIsUnorm != 0 || gSignedPresent != 0)
+        {
+            const float carrierLimit = (gOutputIsUnorm != 0 ? 1.0 : 65504.0) / normScale;
+            float carrierLuma = dot(result, kLuma);
+            if (carrierLuma > carrierLimit)
+            {
+                result *= carrierLimit / carrierLuma;
+                carrierLuma = carrierLimit;
+            }
+            const float carrierPeak = max(result.r, max(result.g, result.b));
+            if (carrierPeak > carrierLimit)
+            {
+                const float keepChroma = saturate((carrierLimit - carrierLuma) /
+                                                  max(carrierPeak - carrierLuma, 1e-6));
+                result = lerp(carrierLuma.xxx, result, keepChroma);
+            }
+        }
+    }
+
     // Replace mode: the model's answer IS the picture, decoded through Neutwo's exact inverse, with
     // NONE of the composition above -- no ratio, no highlight guard, no palette blend. This is the
     // RenoDX reversible-bridge behaviour and the second half of the A/B: composed vs pure model. On a
@@ -1058,5 +1139,14 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     if (onDivider)
         result = float3(WhitePoint(), WhitePoint(), WhitePoint());
 
-    gTarget[id.xy] = float4(max(result, float3(0.0, 0.0, 0.0)), originalSample.a);
+    if (gSignedPresent != 0)
+    {
+        if (!showOriginal && !outsideFrame && !onDivider)
+            result += min(originalSample.rgb, 0.0);
+        // Bound only at the carrier's representable endpoints, not at SDR white.
+        // Hue redistribution can exceed FP16 even for a finite FP16 original.
+        gTarget[targetPixel] = float4(clamp(result, -65504.0, 65504.0), originalSample.a);
+    }
+    else
+        gTarget[targetPixel] = float4(max(result, float3(0.0, 0.0, 0.0)), originalSample.a);
 }

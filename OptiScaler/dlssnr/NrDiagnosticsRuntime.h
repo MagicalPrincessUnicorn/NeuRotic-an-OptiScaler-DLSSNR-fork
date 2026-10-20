@@ -37,7 +37,7 @@ static void RenderDiagnosticRuntime(Config* config,NrDiagnosticsUi::Page page,
         const bool before=settings.DlssNrRenderingMode.value_or_default()!=0&&!native.nativeRayReconstructionActive;
         const auto feature=State::Instance().currentFeature;outW=before?(feature?feature->DisplayWidth():0u):native.frameWidth;outH=before?(feature?feature->DisplayHeight():0u):native.frameHeight;
         if(status){workW=status->workWidth;workH=status->workHeight;outW=status->outputWidth;outH=status->outputHeight;}}
-    auto resolution=Neurotic::Translate(StageUi::ResolutionChoices[StageUi::ResolutionChoiceSelection(settings)]);
+    auto resolution=Neurotic::Translate(StageUi::ResolutionChoiceLabel(settings,StageUi::ResolutionChoiceSelection(settings)));
     if(StageUi::ResolutionSelection(settings)==1)resolution+=" ("+count(StageUi::DisplayPercent(StageUi::ResolutionScale(settings)))+"%)";
     const bool before=settings.DlssNrRenderingMode.value_or_default()!=0&&!native.nativeRayReconstructionActive;
     const char* method=route==3?"NR Anything":StageUi::Methods[std::clamp(route,0,2)];

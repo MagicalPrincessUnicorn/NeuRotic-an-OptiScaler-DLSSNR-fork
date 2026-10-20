@@ -7,6 +7,7 @@
 #include "dxgi1_6.h"
 #include "d3d12.h"
 #include <wrl/client.h>
+#include <atomic>
 
 #define USE_LOCAL_MUTEX
 
@@ -88,6 +89,7 @@ class DECLSPEC_UUID("3af622a3-82d0-49cd-994f-cce05122c222") WrappedIDXGISwapChai
     int _id = 0;
     bool _uwp = false;
     LONG _refcount;
+    std::atomic<bool> _firstPresentReceipt{false};
     UINT _lastFlags = 0;
 
     IUnknown* _device = nullptr;

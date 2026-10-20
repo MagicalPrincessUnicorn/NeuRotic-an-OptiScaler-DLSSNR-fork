@@ -1,4 +1,9 @@
 #include <pch.h>
+#include <nr/diagnostics/PacingTrace.h>
+#include <hooks/StreamlineManagedCaps.h>
+#include <hooks/StreamlineCapsArchitecture.h>
+#include <hooks/StreamlineOwnedJson.h>
+#include <hooks/StreamlineOnLoadBindings.h>
 #include <mfg/ExperimentalMfgRuntime.h>
 #include <dlssnr/VulkanPresentGuidesVk.h>
 #include <nr/semantic/character/CharacterFgActivity.h>
@@ -15,9 +20,11 @@
 #include <magic_enum.hpp>
 
 #include "Streamline_Hooks.h"
+#include <dlssnr/connections/ConnectionPolicy.h>
 #include "Vulkan_Hooks.h"
 #include <mfg/MfgControl.h>
 #include <mfg/MfgAdaUnlock.h>
+#include <mfg/MfgRequestTrace.h>
 namespace {
 namespace RP=Neurotic::Diagnostics::RuntimeProvenance;
 std::atomic<HMODULE> nrObservedInterposer{nullptr};
@@ -114,9 +121,9 @@ static bool IsSL1AndFGActive()
     return state.streamlineVersion.major == 1 && state.activeFgInput == FGInput::DLSSG;
 }
 
-static void PatchSL1PluginJson(nlohmann::json& configJson)
+static void PatchSL1PluginJson(nlohmann::json& configJson, bool legacyExternalFg)
 {
-    if (!IsSL1AndFGActive())
+    if (!legacyExternalFg)
         return;
 
     LOG_DEBUG("Patching SL1 plugin JSON for external FG management");
@@ -135,6 +142,11 @@ static void PatchSL1PluginJson(nlohmann::json& configJson)
 
     if (configJson.contains("/external/hws/required"_json_pointer))
         configJson["external"]["hws"]["required"] = false;
+}
+
+static void PatchSL1PluginJson(nlohmann::json& configJson)
+{
+    PatchSL1PluginJson(configJson, IsSL1AndFGActive());
 }
 
 char* StreamlineHooks::trimStreamlineLog(const char* msg)
@@ -198,7 +210,7 @@ sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVe
     localPref.logMessageCallback = &streamlineLogCallback;
 
     // renderAPI is optional so need to be careful, should only matter for Vulkan
-    renderApi = localPref.renderAPI;
+    renderApi.store(localPref.renderAPI);
 
     State::Instance().slFGInputs.reportEngineType(localPref.engine);
 
@@ -330,7 +342,7 @@ sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVe
         localPref.numFeaturesToLoad = localFeaturesToLoad.size();
 
         // return so that localFeaturesToLoad is valid
-        return NrSlCall("L2","slInit",caller,[&]{auto r=o_slInit(localPref,sdkVersion); if(r==sl::Result::eOk)++nrReplacementInputGeneration; if(localPref.renderAPI==sl::RenderAPI::eVulkan&&r==sl::Result::eOk){static std::atomic<uint64_t> generation{0x1000000000000000ull};DlssNr::RevokeVulkanPresentTags();DlssNr::VulkanNrStreamlineAdapter().Provider(++generation,true);DlssNr::VulkanNrStreamlineAdapter().LookupOutput([](VkCommandBuffer cb){auto output=DlssNr::SelectedVkNrOutput(cb);return output&&DlssNr::VkNrStreamlineSourceScope::SourceSucceeded(output->use)?output:std::nullopt;});DlssNr::VulkanNrStreamlineAdapter().PrepareOutput(DlssNr::PrepareVkNrFinalColor);} return r;},[&](RP::Json& event){
+        return NrSlCall("L2","slInit",caller,[&]{auto r=o_slInit(localPref,sdkVersion); if(r==sl::Result::eOk){++nrReplacementInputGeneration;DlssNr::PreFg::Streamline::Initialized(localPref.renderAPI);} if(localPref.renderAPI==sl::RenderAPI::eVulkan&&r==sl::Result::eOk){static std::atomic<uint64_t> generation{0x1000000000000000ull};DlssNr::RevokeVulkanPresentTags();DlssNr::VulkanNrStreamlineAdapter().Provider(++generation,true);DlssNr::VulkanNrStreamlineAdapter().LookupOutput([](VkCommandBuffer cb){auto output=DlssNr::SelectedVkNrOutput(cb);return output&&DlssNr::VkNrStreamlineSourceScope::SourceSucceeded(output->use)?output:std::nullopt;});DlssNr::VulkanNrStreamlineAdapter().PrepareOutput(DlssNr::PrepareVkNrFinalColor);} return r;},[&](RP::Json& event){
             event["sdk_version"]=sdkVersion;event["requested"]=NrPreferences(pref);event["effective"]=NrPreferences(localPref);
             event["process"]=RP::Process();event["modules"]=RP::LoadedModules();});
     }
@@ -348,14 +360,14 @@ sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVe
     //    localPref.flags &= ~sl::PreferenceFlags::eLoadDownloadedPlugins;
     //}
 
-    return NrSlCall("L2","slInit",caller,[&]{auto r=o_slInit(localPref,sdkVersion); if(r==sl::Result::eOk)++nrReplacementInputGeneration; if(localPref.renderAPI==sl::RenderAPI::eVulkan&&r==sl::Result::eOk){static std::atomic<uint64_t> generation{0x1000000000000000ull};DlssNr::RevokeVulkanPresentTags();DlssNr::VulkanNrStreamlineAdapter().Provider(++generation,true);DlssNr::VulkanNrStreamlineAdapter().LookupOutput([](VkCommandBuffer cb){auto output=DlssNr::SelectedVkNrOutput(cb);return output&&DlssNr::VkNrStreamlineSourceScope::SourceSucceeded(output->use)?output:std::nullopt;});DlssNr::VulkanNrStreamlineAdapter().PrepareOutput(DlssNr::PrepareVkNrFinalColor);} return r;},[&](RP::Json& event){
+    return NrSlCall("L2","slInit",caller,[&]{auto r=o_slInit(localPref,sdkVersion); if(r==sl::Result::eOk){++nrReplacementInputGeneration;DlssNr::PreFg::Streamline::Initialized(localPref.renderAPI);} if(localPref.renderAPI==sl::RenderAPI::eVulkan&&r==sl::Result::eOk){static std::atomic<uint64_t> generation{0x1000000000000000ull};DlssNr::RevokeVulkanPresentTags();DlssNr::VulkanNrStreamlineAdapter().Provider(++generation,true);DlssNr::VulkanNrStreamlineAdapter().LookupOutput([](VkCommandBuffer cb){auto output=DlssNr::SelectedVkNrOutput(cb);return output&&DlssNr::VkNrStreamlineSourceScope::SourceSucceeded(output->use)?output:std::nullopt;});DlssNr::VulkanNrStreamlineAdapter().PrepareOutput(DlssNr::PrepareVkNrFinalColor);} return r;},[&](RP::Json& event){
         event["sdk_version"]=sdkVersion;event["requested"]=NrPreferences(pref);event["effective"]=NrPreferences(localPref);
         event["process"]=RP::Process();event["modules"]=RP::LoadedModules();});
 }
 
 sl::Result StreamlineHooks::hkslIsFeatureSupported(sl::Feature feature, const sl::AdapterInfo& adapterInfo)
 {
-    if (nrFgOverrides && renderApi != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (nrFgOverrides && renderApi.load() != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
         return sl::Result::eOk;
 
     const bool experimentalLane = experimentalFgLane(feature == sl::kFeatureDLSS_G);
@@ -379,7 +391,7 @@ sl::Result StreamlineHooks::hkslIsFeatureSupported(sl::Feature feature, const sl
 
 sl::Result StreamlineHooks::hkslIsFeatureLoaded(sl::Feature feature, bool& loaded)
 {
-    if (nrFgOverrides && renderApi != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (nrFgOverrides && renderApi.load() != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
     {
         loaded = true;
         return sl::Result::eOk;
@@ -387,7 +399,7 @@ sl::Result StreamlineHooks::hkslIsFeatureLoaded(sl::Feature feature, bool& loade
 
     const auto result = NrSlCall("L2","slIsFeatureLoaded",_ReturnAddress(),[&]{return o_slIsFeatureLoaded(feature,loaded);},[&](RP::Json& e){
         e["feature"]=feature;if(e["phase"]=="return"&&e["result"]==0)e["loaded"]=loaded;});
-    if (renderApi == sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (renderApi.load() == sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
         DlssNr::VulkanNrStreamlineAdapter().FeatureLoaded(result == sl::Result::eOk && loaded, result == sl::Result::eOk);
     return result;
 }
@@ -395,9 +407,9 @@ sl::Result StreamlineHooks::hkslIsFeatureLoaded(sl::Feature feature, bool& loade
 sl::Result StreamlineHooks::hkslSetFeatureLoaded(sl::Feature feature, bool loaded)
 {
     const auto result = o_slSetFeatureLoaded(feature, loaded);
-    if(renderApi!=sl::RenderAPI::eVulkan&&feature==sl::kFeatureDLSS_G&&result==sl::Result::eOk&&!loaded)
+    if(renderApi.load()!=sl::RenderAPI::eVulkan&&feature==sl::kFeatureDLSS_G&&result==sl::Result::eOk&&!loaded)
         Neurotic::Semantic::Character::NativeFgWork().Reset();
-    if (renderApi == sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (renderApi.load() == sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
     {
         DlssNr::VulkanNrStreamlineAdapter().FeatureLoaded(loaded, result == sl::Result::eOk);
         LOG_INFO("Vulkan FG feature load observation: loaded={} result={} activity={}", loaded,
@@ -408,7 +420,7 @@ sl::Result StreamlineHooks::hkslSetFeatureLoaded(sl::Feature feature, bool loade
 
 sl::Result StreamlineHooks::hkslGetFeatureRequirements(sl::Feature feature, sl::FeatureRequirements& requirements)
 {
-    if (nrFgOverrides && renderApi != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (nrFgOverrides && renderApi.load() != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
         return sl::Result::eOk;
 
     return NrSlCall("L3","slGetFeatureRequirements",_ReturnAddress(),[&]{return o_slGetFeatureRequirements(feature,requirements);},
@@ -417,7 +429,7 @@ sl::Result StreamlineHooks::hkslGetFeatureRequirements(sl::Feature feature, sl::
 
 sl::Result StreamlineHooks::hkslGetFeatureVersion(sl::Feature feature, sl::FeatureVersion& version)
 {
-    if (nrFgOverrides && renderApi != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (nrFgOverrides && renderApi.load() != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
     {
         version.versionSL = { State::Instance().streamlineVersion.major, State::Instance().streamlineVersion.minor,
                               State::Instance().streamlineVersion.patch };
@@ -447,7 +459,7 @@ static sl::Result dummy_slDLSSGSetOptions(const sl::ViewportHandle& viewport, co
 
 sl::Result StreamlineHooks::hkslGetFeatureFunction(sl::Feature feature, const char* functionName, void*& function)
 {
-    if (nrFgOverrides && renderApi != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
+    if (nrFgOverrides && renderApi.load() != sl::RenderAPI::eVulkan && feature == sl::kFeatureDLSS_G)
     {
         if (strcmp(functionName, "slDLSSGSetOptions") == 0)
         {
@@ -464,6 +476,7 @@ sl::Result StreamlineHooks::hkslGetFeatureFunction(sl::Feature feature, const ch
         }
     }
 
+    const auto returnedGeneration = nrMfgHookGeneration.load();
     const auto result = NrSlCall("L5","slGetFeatureFunction",_ReturnAddress(),[&]{return o_slGetFeatureFunction(feature,functionName,function);},[&](RP::Json& e){
         e["feature"]=feature;e["function_name"]=functionName?functionName:"UNKNOWN";
         if(e["phase"]=="return"&&e["result"]==0)e["resolved_function"]=RP::Address(function);});
@@ -474,7 +487,9 @@ sl::Result StreamlineHooks::hkslGetFeatureFunction(sl::Feature feature, const ch
         const auto steamOverlay = KernelBaseProxy::GetModuleHandleA_()("gameoverlayrenderer64.dll");
         if (steamOverlay && Util::GetCallerModule(_ReturnAddress()) == steamOverlay)
             return result;
-        wrapNativeDlssgFunction(functionName, function);
+        auto observation = Neurotic::Mfg::MfgWrapperResolution::FromFeatureReturn(result, feature, functionName,
+            function, returnedGeneration, reinterpret_cast<const void*>(&hkslDLSSGSetOptions), reinterpret_cast<const void*>(&hkslDLSSGGetState));
+        wrapNativeDlssgFunction(functionName, function, observation);
     }
     return result;
 }
@@ -488,19 +503,19 @@ sl::Result StreamlineHooks::hkslSetTag(const sl::ViewportHandle& viewport, const
     if (Neurotic::Feed::Observing())
         for (uint32_t i = 0; tags && i < numTags && i < 32; ++i)
         {
-            Neurotic::Feed::Callback feedTag({"Streamline", FeedStreamlineApi(renderApi), "tag"}, &viewport);
+            Neurotic::Feed::Callback feedTag({"Streamline", FeedStreamlineApi(renderApi.load()), "tag"}, &viewport);
             feedTag.Value("provider.viewport", static_cast<uint32_t>(viewport));
             feedTag.Value("provider.tagCount", numTags);
             Neurotic::Feed::ObserveStreamlineTag(feedTag, tags[i]);
         }
     // NR-FEED-001 END
-    if (renderApi == sl::RenderAPI::eD3D11 || renderApi == sl::RenderAPI::eVulkan)
+    if (renderApi.load() == sl::RenderAPI::eD3D11 || renderApi.load() == sl::RenderAPI::eVulkan)
     {
-        if(renderApi==sl::RenderAPI::eD3D11)LOG_ERROR("hkslSetTag only supports DX12"); // Legacy tags lack a public frame identity.
+        if(renderApi.load()==sl::RenderAPI::eD3D11)LOG_ERROR("hkslSetTag only supports DX12"); // Legacy tags lack a public frame identity.
         return o_slSetTag(viewport, tags, numTags, cmdBuffer);
     }
 
-    if (renderApi == sl::RenderAPI::eCount)
+    if (renderApi.load() == sl::RenderAPI::eCount)
         LOG_WARN("Incomplete Streamline hooks");
 
     if (tags == nullptr)
@@ -591,7 +606,7 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
     if (Neurotic::Feed::Observing())
         for (uint32_t i = 0; resources && i < numResources && i < 32; ++i)
         {
-            Neurotic::Feed::Callback feedTag({"Streamline", FeedStreamlineApi(renderApi), "tag-for-frame"}, &viewport);
+            Neurotic::Feed::Callback feedTag({"Streamline", FeedStreamlineApi(renderApi.load()), "tag-for-frame"}, &viewport);
             feedTag.Value("provider.frame", static_cast<uint32_t>(frame));
             feedTag.Value("provider.viewport", static_cast<uint32_t>(viewport));
             feedTag.Value("provider.tagCount", numResources);
@@ -602,7 +617,7 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
     {
         NR_FRAME_TRACE("sl-tags-enter", "provider=game-streamline frame={} viewport={} list={:p} count={} api={}",
             static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport), static_cast<void*>(cmdBuffer),
-            numResources, static_cast<unsigned int>(renderApi));
+            numResources, static_cast<unsigned int>(renderApi.load()));
         // Cap the observation batch; its declared count above makes omissions visible.
         for (uint32_t i = 0; resources && i < numResources && i < 32; ++i)
         {
@@ -615,7 +630,7 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
                 tag.extent.left, tag.extent.top, tag.extent.width, tag.extent.height);
         }
     }
-    if(renderApi==sl::RenderAPI::eVulkan){
+    if(renderApi.load()==sl::RenderAPI::eVulkan){
         auto& adapter=DlssNr::VulkanNrStreamlineAdapter();
         const auto tagProvider=adapter.Generation();
         auto d=adapter.BeforeTags(&frame,viewport,resources?std::span<const sl::ResourceTag>(resources,numResources):std::span<const sl::ResourceTag>{},cmdBuffer);
@@ -639,13 +654,13 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
     // FG. Native DirectX tags retain their unmodified forwarding path.
     if(State::Instance().activeFgInput!=FGInput::NvngxFG&&State::Instance().activeFgInput!=FGInput::DLSSG)
         return o_slSetTagForFrame(frame,viewport,resources,numResources,cmdBuffer);
-    if (renderApi == sl::RenderAPI::eD3D11)
+    if (renderApi.load() == sl::RenderAPI::eD3D11)
     {
         LOG_ERROR("hkslSetTagForFrame only supports DX12");
         return o_slSetTagForFrame(frame, viewport, resources, numResources, cmdBuffer);
     }
 
-    if (renderApi == sl::RenderAPI::eCount)
+    if (renderApi.load() == sl::RenderAPI::eCount)
         LOG_WARN("Incomplete Streamline hooks");
 
     if (resources == nullptr)
@@ -732,12 +747,8 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
     if (feature == sl::kFeatureDLSS_G && !Neurotic::Mfg::Experimental::AllowFeatureCall())
         return sl::Result::eErrorFeatureNotSupported;
     const auto sourceFrameIndex=static_cast<uint32_t>(frame);
-    nativeGuideFrame.Configure(renderApi == sl::RenderAPI::eD3D12 &&
-        (feature == sl::kFeatureDLSS || feature == sl::kFeatureDLSS_RR) &&
-        frame.structVersion == sl::kStructVersion1, sourceFrameIndex,
-        reinterpret_cast<ID3D12GraphicsCommandList*>(cmdBuffer));
     // NR-FEED-001 BEGIN
-    Neurotic::Feed::Callback feedEvaluate({"Streamline", FeedStreamlineApi(renderApi), "evaluate"}, &frame);
+    Neurotic::Feed::Callback feedEvaluate({"Streamline", FeedStreamlineApi(renderApi.load()), "evaluate"}, &frame);
     feedEvaluate.Value("provider.frame", sourceFrameIndex);feedEvaluate.Value("provider.feature", feature);
     feedEvaluate.Value("provider.inputCount", numInputs);
     // NR-FEED-001 END
@@ -761,7 +772,7 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
             }
         }
     }
-    if (renderApi==sl::RenderAPI::eD3D12 && State::Instance().activeFgInput == FGInput::DLSSG && numInputs > 0 && inputs != nullptr)
+    if (renderApi.load()==sl::RenderAPI::eD3D12 && State::Instance().activeFgInput == FGInput::DLSSG && numInputs > 0 && inputs != nullptr)
     {
         for (uint32_t i = 0; i < numInputs; i++)
         {
@@ -785,10 +796,12 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
 
     std::optional<uint32_t> sourceViewport;
     bool uniqueViewport=true;
-    const bool selectedSource=renderApi==sl::RenderAPI::eD3D12 && feature==sl::kFeatureDLSS &&
+    const bool selectedSource=renderApi.load()==sl::RenderAPI::eD3D12 && feature==sl::kFeatureDLSS &&
         (Config::Instance()->DlssNrNativeProtocol.value_or_default() ||
          Config::Instance()->DlssNrAlternateFrame.value_or_default()) && frame.structVersion==sl::kStructVersion1;
-    if(selectedSource && inputs && numInputs>0 && numInputs<=16)
+    const bool temporalSource=renderApi.load()==sl::RenderAPI::eD3D12 &&
+        (feature==sl::kFeatureDLSS || feature==sl::kFeatureDLSS_RR) && frame.structVersion==sl::kStructVersion1;
+    if(temporalSource && inputs && numInputs>0 && numInputs<=16)
         for(uint32_t i=0;i<numInputs;++i)
             if(inputs[i] && inputs[i]->structType==sl::ViewportHandle::s_structType)
             {
@@ -800,8 +813,12 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
     // viewport is an identity. A token changed during forwarding setup is unknown.
     sourceFrame.Configure(selectedSource && uniqueViewport && static_cast<uint32_t>(frame)==sourceFrameIndex,
         sourceFrameIndex,sourceViewport,reinterpret_cast<ID3D12GraphicsCommandList*>(cmdBuffer));
+    nativeGuideFrame.Configure(temporalSource && uniqueViewport && sourceViewport &&
+        static_cast<uint32_t>(frame)==sourceFrameIndex, sourceFrameIndex,
+        reinterpret_cast<ID3D12GraphicsCommandList*>(cmdBuffer),
+        sourceViewport ? DlssNr::PreFg::ViewportKey(*sourceViewport) : 0);
     std::optional<DlssNr::VkNrPublicFrame> vkPublicFrame;
-    if(renderApi==sl::RenderAPI::eVulkan&&(feature==sl::kFeatureDLSS||feature==sl::kFeatureDLSS_RR)&&frame.structVersion==1&&cmdBuffer&&inputs&&numInputs<=16){
+    if(renderApi.load()==sl::RenderAPI::eVulkan&&(feature==sl::kFeatureDLSS||feature==sl::kFeatureDLSS_RR)&&frame.structVersion==1&&cmdBuffer&&inputs&&numInputs<=16){
         std::optional<uint32_t> viewport;bool unique=true;
         for(uint32_t i=0;i<numInputs;++i)if(inputs[i]&&inputs[i]->structType==sl::ViewportHandle::s_structType){
             if(viewport||inputs[i]->structVersion!=1){unique=false;break;}viewport=static_cast<uint32_t>(*static_cast<const sl::ViewportHandle*>(inputs[i]));}
@@ -810,7 +827,7 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
     }
     DlssNr::VkNrStreamlineSourceScope vkSource(vkPublicFrame);
     auto result = o_slEvaluateFeature(feature, frame, inputs, numInputs, cmdBuffer);
-    if (feature == sl::kFeatureDLSS_G && renderApi == sl::RenderAPI::eD3D12)
+    if (feature == sl::kFeatureDLSS_G && renderApi.load() == sl::RenderAPI::eD3D12)
     {
         Neurotic::Mfg::Experimental::ObserveEvaluation(result == sl::Result::eOk);
         if (result != sl::Result::eOk && cmdBuffer && Neurotic::Mfg::Experimental::Requested())
@@ -852,28 +869,78 @@ sl::Result StreamlineHooks::hkslGetNativeInterface(void* proxyInterface, void** 
 sl::Result StreamlineHooks::hkslSetD3DDevice(void* d3dDevice)
 {
     LOG_FUNC();
-    // slSetD3DDevice starts the plugins and queries NGX capabilities inside
-    // this call. The adapter must be observed before that startup begins.
-    if (renderApi == sl::RenderAPI::eD3D12 && d3dDevice)
+    const auto entryApi = renderApi.load();
+    const auto interposer = nrObservedInterposer.load();
+    const auto hookGeneration = nrMfgHookGeneration.load();
+    Microsoft::WRL::ComPtr<ID3D12Device> nativeDevice;
+    HRESULT deviceQuery = E_POINTER;
+    const bool queryDevice = d3dDevice &&
+        (entryApi == sl::RenderAPI::eCount || entryApi == sl::RenderAPI::eD3D12);
+    if (queryDevice)
+        deviceQuery = static_cast<IUnknown*>(d3dDevice)->QueryInterface(IID_PPV_ARGS(&nativeDevice));
+    // Preserve factual adapter observation and MFG preparation before plugin
+    // startup. They do not publish an accepted API or provider request.
+    if (SUCCEEDED(deviceQuery) && nativeDevice)
     {
-        ID3D12Device* nativeDevice = nullptr;
-        if (SUCCEEDED(static_cast<IUnknown*>(d3dDevice)->QueryInterface(IID_PPV_ARGS(&nativeDevice))))
-        {
-            Neurotic::Mfg::ObserveAdaD3D12Adapter(nativeDevice->GetAdapterLuid());
-            Neurotic::Mfg::Experimental::ObserveDevice(nativeDevice);
-            nativeDevice->Release();
-        }
+        Neurotic::Mfg::ObserveAdaD3D12Adapter(nativeDevice->GetAdapterLuid());
+        Neurotic::Mfg::Experimental::ObserveDevice(nativeDevice.Get());
     }
     prepareExperimentalMfgCapabilities();
+    prepareNativeMfgCapabilities();
     const auto result = NrSlCall("L4","slSetD3DDevice",_ReturnAddress(),[&]{return o_slSetD3DDevice(d3dDevice);},
         [&](RP::Json& e){e["device_identity"]=reinterpret_cast<std::uintptr_t>(d3dDevice);});
+    const DWORD providerLastError = GetLastError();
+    bool accepted = false, observationFailed = false;
+    HRESULT cookieResult = E_PENDING;
+    DlssNr::NativeIdentity::Resolved<IUnknown> identity;
+    try
+    {
+        if (result == sl::Result::eOk && SUCCEEDED(deviceQuery) && nativeDevice)
+        {
+            identity = DlssNr::NativeIdentity::ResolveDeviceIdentity(nativeDevice.Get());
+            std::lock_guard lock(DlssNr::PreFg::Streamline::hookMutex);
+            if (interposer && interposer == nrObservedInterposer.load() &&
+                hookGeneration == nrMfgHookGeneration.load() && renderApi.load() == entryApi &&
+                DlssNr::PreFg::Streamline::AcceptedD3D12Device(interposer, identity.object.Get(), cookieResult))
+            {
+                renderApi.store(sl::RenderAPI::eD3D12);
+                accepted = true;
+            }
+        }
+    }
+    catch (...) { observationFailed = true; }
+    // Saturating budget: no wraparound or logging exception may alter the
+    // successful/failed original API return or its observable LastError.
+    static std::atomic<unsigned> diagnosticCalls {0};
+    auto diagnostic = diagnosticCalls.load(std::memory_order_relaxed);
+    while (diagnostic < 32 && !diagnosticCalls.compare_exchange_weak(
+        diagnostic, diagnostic + 1, std::memory_order_relaxed)) {}
+    if (diagnostic < 32) try
+    {
+        LOG_INFO("Streamline device observation: input={:p} qiAttempted={} qiResult={:X} device={:p} "
+                 "identity={:p} identityResult={:X} dedupeResult={:X} apiBefore={} apiAfter={} preFgApi={} result={} "
+                 "hookGeneration={} currentGeneration={} interposer={:p} currentInterposer={:p} accepted={} observationFailed={}",
+            d3dDevice, queryDevice, static_cast<unsigned>(deviceQuery), static_cast<void*>(nativeDevice.Get()),
+            static_cast<void*>(identity.object.Get()), static_cast<unsigned>(identity.result),
+            static_cast<unsigned>(cookieResult), static_cast<unsigned>(entryApi), static_cast<unsigned>(renderApi.load()),
+            static_cast<unsigned>(DlssNr::PreFg::Streamline::observedApi.load()), static_cast<int>(result),
+            hookGeneration, nrMfgHookGeneration.load(), static_cast<void*>(interposer),
+            static_cast<void*>(nrObservedInterposer.load()), accepted, observationFailed);
+    }
+    catch (...) {}
+    // Release transient COM observations before restoring the original API's
+    // LastError; no observation owns a device after this synchronous call.
+    identity.object.Reset();
+    nativeDevice.Reset();
+    SetLastError(providerLastError);
     return result;
 }
+
 
 bool StreamlineHooks::experimentalFgLane(bool fg) noexcept
 {
     const auto& state = State::Instance();
-    return fg && renderApi == sl::RenderAPI::eD3D12 && state.activeFgInput == FGInput::NoFG &&
+    return fg && renderApi.load() == sl::RenderAPI::eD3D12 && state.activeFgInput == FGInput::NoFG &&
         state.activeFgOutput == FGOutput::NoFG && state.activeFgNvngx == FGNvngxReplacement::None;
 }
 
@@ -883,31 +950,76 @@ bool StreamlineHooks::prepareExperimentalMfgCapabilities() noexcept
     return Neurotic::Mfg::Experimental::PrepareAtBoundary(experimentalFgLane(true));
 }
 
-bool StreamlineHooks::prepareNativeMfgCapabilities(HMODULE enteredProvider, ID3D12GraphicsCommandList* command)
+static std::optional<bool> NrNativeMfgAdapterSupport(LUID adapter) noexcept
 {
-    const auto& state = State::Instance();
-    if (!Config::Instance()->FGDLSSGNativeMfgExperimental.value_or_default() ||
-        renderApi != sl::RenderAPI::eD3D12 || state.activeFgInput != FGInput::NoFG ||
-        state.activeFgOutput != FGOutput::NoFG || state.activeFgNvngx != FGNvngxReplacement::None) return false;
-    const auto gpu = IdentifyGpu::getPrimaryGpu();
-    if (gpu.nvidiaArchInfo.architecture_id < NV_GPU_ARCHITECTURE_AD100 ||
-        gpu.nvidiaArchInfo.architecture_id >= NV_GPU_ARCHITECTURE_GB200) return false;
-    LUID enteredAdapter {};
-    bool adapterVerified = false;
-    if (enteredProvider)
+    try
     {
-        ID3D12Device* device = nullptr;
-        if (command && SUCCEEDED(command->GetDevice(IID_PPV_ARGS(&device))))
+        for (const auto& gpu : IdentifyGpu::getAllGpus())
         {
-            enteredAdapter = device->GetAdapterLuid();
-            adapterVerified = true;
-            device->Release();
+            if (gpu.luid.HighPart != adapter.HighPart || gpu.luid.LowPart != adapter.LowPart) continue;
+            if (gpu.vendorId != VendorId::Invalid && gpu.vendorId != VendorId::Nvidia) return false;
+            const auto architecture = gpu.nvidiaArchInfo.architecture_id;
+            if (!architecture) return std::nullopt;
+            return architecture >= NV_GPU_ARCHITECTURE_AD100 && architecture < NV_GPU_ARCHITECTURE_GB200;
         }
     }
+    catch (...) {} // Capability discovery cannot interrupt the original game call.
+    return std::nullopt;
+}
+
+std::optional<bool> StreamlineHooks::nativeMfgAdapter(LUID& adapter,
+    ID3D12GraphicsCommandList* command) noexcept
+{
+    try
+    {
+        if (command)
+        {
+            ID3D12Device* device = nullptr;
+            if (FAILED(command->GetDevice(IID_PPV_ARGS(&device))) || !device) return std::nullopt;
+            adapter = device->GetAdapterLuid();
+            device->Release();
+        }
+        else if (!Neurotic::Mfg::ObservedAdaD3D12Adapter(adapter)) return std::nullopt;
+        return NrNativeMfgAdapterSupport(adapter);
+    }
+    catch (...) {}
+    return std::nullopt;
+}
+
+bool StreamlineHooks::prepareNativeMfgCapabilities(HMODULE enteredProvider, ID3D12GraphicsCommandList* command)
+{
+    const auto selectedWrapper = mfgSelectedWrapper.load();
+    const auto generation = nrMfgHookGeneration.load();
+    LUID enteredAdapter {};
+    if (enteredProvider)
+    {
+        bool verified = false;
+        // Query once, outside publication locks. Release even if a foreign
+        // wrapper throws; then consume an unverified observation below.
+        try
+        {
+            Microsoft::WRL::ComPtr<ID3D12Device> device;
+            if (command && SUCCEEDED(command->GetDevice(IID_PPV_ARGS(&device))) && device)
+            {
+                enteredAdapter = device->GetAdapterLuid();
+                verified = true;
+            }
+        }
+        catch (...) {}
+        if (!Neurotic::Mfg::ObserveAdaCreateOwner(enteredProvider,
+            verified ? &enteredAdapter : nullptr, generation)) return false;
+    }
+    const auto& state = State::Instance();
+    if (!Config::Instance()->FGDLSSGNativeMfgExperimental.value_or_default() ||
+        renderApi.load() != sl::RenderAPI::eD3D12 || state.activeFgInput != FGInput::NoFG ||
+        state.activeFgOutput != FGOutput::NoFG || state.activeFgNvngx != FGNvngxReplacement::None) return false;
+    if (enteredProvider ? !NrNativeMfgAdapterSupport(enteredAdapter).value_or(false) :
+        !nativeMfgAdapter(enteredAdapter).value_or(false)) return false;
+    if (selectedWrapper != mfgSelectedWrapper.load() || generation != nrMfgHookGeneration.load()) return false;
     // No game options have been passed yet. Patch qualification is independent
     // of their layout; later supported option versions reuse this publication.
-    return Neurotic::Mfg::TryPublishAdaMfg(mfgSelectedWrapper.load(),
-        nrMfgHookGeneration.load(), 5, gpu.luid, enteredProvider, adapterVerified ? &enteredAdapter : nullptr);
+    return Neurotic::Mfg::TryPublishAdaMfg(selectedWrapper,
+        generation, 5, enteredAdapter, enteredProvider, enteredProvider ? &enteredAdapter : nullptr);
 }
 
 void StreamlineHooks::streamlineLogCallback_sl1(sl1::LogType type, const char* msg)
@@ -959,7 +1071,7 @@ bool StreamlineHooks::hkslSetTag_sl1(const sl1::Resource* resource, sl1::BufferT
                                      const sl1::Extent* extent)
 {
     // NR-FEED-001 BEGIN
-    Neurotic::Feed::Callback feedTag({"Streamline.v1", FeedStreamlineApi(renderApi), "tag"}, resource);
+    Neurotic::Feed::Callback feedTag({"Streamline.v1", FeedStreamlineApi(renderApi.load()), "tag"}, resource);
     feedTag.Value("provider.viewport", id);feedTag.Value("tag.type", tag);
     // Native SL1 resource layout stays with its existing owner; no guessed lifetime mapping.
     feedTag.Resource("tag.resource", Neurotic::Contracts::SemanticKind::Other, resource);
@@ -973,7 +1085,7 @@ bool StreamlineHooks::hkslSetTag_sl1(const sl1::Resource* resource, sl1::BufferT
 bool StreamlineHooks::hkslSetConstants_sl1(const sl1::Constants& values, uint32_t frameIndex, uint32_t id)
 {
     // NR-FEED-001 BEGIN
-    Neurotic::Feed::Callback feedConstants({"Streamline.v1", FeedStreamlineApi(renderApi), "constants"}, &values);
+    Neurotic::Feed::Callback feedConstants({"Streamline.v1", FeedStreamlineApi(renderApi.load()), "constants"}, &values);
     feedConstants.Value("provider.frame", frameIndex);feedConstants.Value("provider.viewport", id);
     Neurotic::Feed::ObserveStreamlineConstants(feedConstants, values);
     // NR-FEED-001 END
@@ -1013,14 +1125,10 @@ bool StreamlineHooks::hkslEvaluateFeature_sl1(sl1::CommandBuffer* cmdBuffer, sl1
 
 void StreamlineHooks::hookSystemCaps(sl::param::IParameters* params)
 {
-    if (State::Instance().streamlineVersion.major > 1)
+    if (State::Instance().streamlineVersion.major == 1)
     {
-        if (!systemCaps)
-            sl::param::getPointerParam(params, sl::param::common::kSystemCaps, &systemCaps);
-    }
-    else if (State::Instance().streamlineVersion.major == 1)
-    {
-        // This should be Streamline 1.5 as previous versions don't even have slOnPluginLoad
+        // Historical legacy path. The missing public 1.3/1.5 payload contract
+        // remains separate work; callback presence alone is not layout proof.
         if (!systemCapsSl15)
         {
             LOG_TRACE(
@@ -1030,24 +1138,18 @@ void StreamlineHooks::hookSystemCaps(sl::param::IParameters* params)
     }
 }
 
-uint32_t StreamlineHooks::getSystemCapsArch(SystemCaps* altSystemCaps)
+uint32_t StreamlineHooks::getSystemCapsArch(const SystemCaps* altSystemCaps)
 {
     uint32_t highestArch = 0;
 
     auto primaryGpu = IdentifyGpu::getPrimaryGpu();
     if (!fakenvapi::isUsingAsMainNvapi() && primaryGpu.vendorId == VendorId::Nvidia)
     {
-        if (State::Instance().streamlineVersion.major > 1)
+        if (altSystemCaps || State::Instance().streamlineVersion.major > 1)
         {
-            auto caps = altSystemCaps != nullptr ? altSystemCaps : systemCaps;
-            if (caps)
-            {
-                for (auto& adapter : caps->adapters)
-                {
-                    if (adapter.architecture > highestArch)
-                        highestArch = adapter.architecture;
-                }
-            }
+            auto caps = altSystemCaps;
+            if(const auto observed=Neurotic::Hooks::HighestUsedArchitecture(caps))
+                highestArch=*observed;
         }
         else if (State::Instance().streamlineVersion.major == 1)
         {
@@ -1078,7 +1180,7 @@ void StreamlineHooks::setArch(uint32_t arch, SystemCaps* altSystemCaps)
     if (State::Instance().streamlineVersion.major > 1 || altSystemCaps)
     {
         // Assumes that altCaps are always for SL2+
-        auto caps = altSystemCaps != nullptr ? altSystemCaps : systemCaps;
+        auto caps = altSystemCaps;
         if (caps)
         {
             for (uint32_t i = 0; i < caps->gpuCount; i++)
@@ -1109,7 +1211,9 @@ void StreamlineHooks::setArch(uint32_t arch, SystemCaps* altSystemCaps)
 }
 
 // Spoof arch based on feature and current arch
-void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature, SystemCaps* altSystemCaps)
+namespace
+{
+std::optional<uint32_t> NrRequestedStreamlineArchitecture(uint32_t currentArch, sl::Feature feature)
 {
     constexpr uint32_t maxArch = 0xFFFFFFFF;
 
@@ -1117,13 +1221,13 @@ void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature, Syste
     if (feature == sl::kFeatureDLSS)
     {
         if (currentArch < NV_GPU_ARCHITECTURE_TU100)
-            return setArch(maxArch, altSystemCaps);
+            return maxArch;
     }
 
     // Don't spoof DLSSD at all
     else if (feature == sl::kFeatureDLSS_RR)
     {
-        return;
+        return std::nullopt;
     }
 
     // Don't change arch for DLSSG with ada and above
@@ -1132,40 +1236,121 @@ void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature, Syste
         if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
         {
             if (!Nvngx_FG::isDx12Available() && !Nvngx_FG::isVulkanAvailable())
-                return setArch(0);
+                return 0u;
         }
 
         if (currentArch < NV_GPU_ARCHITECTURE_AD100)
-            return setArch(maxArch, altSystemCaps);
+            return maxArch;
     }
 
     else if (feature == sl::kFeatureReflex || feature == sl::kFeaturePCL)
     {
         if (fakenvapi::isUsingAsMainNvapi())
-            return setArch(maxArch, altSystemCaps);
+            return maxArch;
     }
+
+    return std::nullopt;
 }
 
-bool StreamlineHooks::hkdlss_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+const char* NrManagedCapsReason(Neurotic::Hooks::ManagedCapsStatus status) noexcept
+{
+    using S=Neurotic::Hooks::ManagedCapsStatus;
+    switch(status)
+    {
+    case S::MissingParameters:return "parameter interface is null";
+    case S::MissingPublication:return "current system-caps key is absent";
+    case S::NullPublication:return "current system-caps pointer is null";
+    case S::QueryException:return "optional system-caps pointer query threw";
+    case S::InvalidCount:return "gpuCount exceeds the declared SDK adapter array";
+    case S::PolicyException:return "optional spoof policy query threw";
+    default:return "no capability override requested";
+    }
+}
+template<class ArchitectureReader>
+void NrBeginManagedCaps(std::optional<Neurotic::Hooks::StreamlineScopedCaps<SystemCaps>>& scope,
+                        sl::param::IParameters* params, sl::Feature feature,
+                        Neurotic::Hooks::StreamlineCapsTarget target,ArchitectureReader&& readArch)
+{
+    using Request=Neurotic::Hooks::StreamlineCapsOverride<SystemCaps>;
+    const auto status=Neurotic::Hooks::BeginManagedCaps<SystemCaps>(scope,params,sl::param::common::kSystemCaps,
+        [&](const SystemCaps& caps)->std::optional<Request>{
+            const auto requested=Neurotic::Hooks::StreamlineArchitectureForTarget(
+                NrRequestedStreamlineArchitecture(readArch(caps),feature),target);
+            if(!requested)return std::nullopt;
+            const auto primaryGpu=IdentifyGpu::getPrimaryGpu();
+            return Request{*requested,VendorId::Nvidia,
+                fakenvapi::isUsingAsMainNvapi()||primaryGpu.vendorId!=VendorId::Nvidia};
+        });
+    if(status==Neurotic::Hooks::ManagedCapsStatus::Applied||status==Neurotic::Hooks::ManagedCapsStatus::Unchanged)return;
+    try
+    {
+        static std::atomic<unsigned> budget{64};
+        auto left=budget.load(std::memory_order_relaxed);
+        while(left&&!budget.compare_exchange_weak(left,left-1,std::memory_order_relaxed)){}
+        if(left)LOG_WARN("Streamline scoped capability write unavailable: target={} feature={} reason={}; original plugin callback remains callable",
+            target==Neurotic::Hooks::StreamlineCapsTarget::Local?"local":"game",static_cast<uint32_t>(feature),NrManagedCapsReason(status));
+    }
+    catch(...){/* An optional diagnostic never blocks the original callback. */}
+}
+}
+
+void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature, SystemCaps* altSystemCaps)
+{
+    if(const auto requested=Neurotic::Hooks::StreamlineArchitectureForTarget(
+        NrRequestedStreamlineArchitecture(currentArch,feature),altSystemCaps?
+            Neurotic::Hooks::StreamlineCapsTarget::Local:Neurotic::Hooks::StreamlineCapsTarget::Game))
+        setArch(*requested,altSystemCaps);
+}
+
+
+static bool NrOwnedOnLoadJson(bool result,const char** output,std::string_view rendered,
+                              const char* feature) noexcept
+{
+    const bool published=Neurotic::Hooks::StreamlineOwnedJson::PublishSuccessfulForProcess(result,output,rendered);
+    if(result&&!published)
+    {
+        // Allocation failure must not report a successful load with borrowed text.
+        // Logging cannot change the false/null failure protocol.
+        static std::atomic<unsigned> failures{0};
+        if(failures.fetch_add(1,std::memory_order_relaxed)<64)
+            try {LOG_ERROR("Streamline {} OnLoad JSON ownership allocation failed; load rejected",feature);}
+            catch(...) {}
+    }
+    return published;
+}
+
+bool StreamlineHooks::hkdlss_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                             const char** pluginJSON)
 {
     LOG_FUNC();
 
-    // TODO: do it better than "static" and hoping for the best
-    static std::string config;
+    auto* params = invocation.parameters;
 
+    const bool spoofRequested=Config::Instance()->StreamlineSpoofing.value_or_default();
+    std::optional<Neurotic::Hooks::StreamlineScopedCaps<SystemCaps>> modernCaps;
+    const bool legacyCaps=State::Instance().streamlineVersion.major<=1;
     uint32_t currentArch = 0;
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    if (spoofRequested)
     {
-        hookSystemCaps(params);
-        currentArch = getSystemCapsArch();
-        spoofArch(currentArch, sl::kFeatureDLSS);
+        if (!legacyCaps)
+            NrBeginManagedCaps(modernCaps,params,sl::kFeatureDLSS,Neurotic::Hooks::StreamlineCapsTarget::Game,
+                [&](const SystemCaps& caps){return getSystemCapsArch(&caps);});
+        else
+        {
+            hookSystemCaps(params);
+            currentArch=getSystemCapsArch();
+            spoofArch(currentArch,sl::kFeatureDLSS);
+        }
     }
 
-    auto result = o_dlss_slOnPluginLoad(params, loaderJSON, pluginJSON);
+    auto result = invocation.original(params, loaderJSON, pluginJSON);
 
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    // End the actual managed borrow before JSON parsing or returning.
+    modernCaps.reset();
+    if (spoofRequested&&legacyCaps)
         setArch(currentArch);
+
+    if(!result||!pluginJSON||!*pluginJSON)return result;
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
@@ -1187,11 +1372,9 @@ bool StreamlineHooks::hkdlss_slOnPluginLoad(sl::param::IParameters* params, cons
 
     PatchSL1PluginJson(configJson);
 
-    config = configJson.dump();
+    const auto config = configJson.dump();
 
-    *pluginJSON = config.c_str();
-
-    return result;
+    return NrOwnedOnLoadJson(result,pluginJSON,config,"DLSS");
 }
 
 sl::Result StreamlineHooks::hkslDLSSGetOptimalSettings(const sl::DLSSOptions& options,
@@ -1221,30 +1404,45 @@ sl::Result StreamlineHooks::hkslDLSSGetOptimalSettings(const sl::DLSSOptions& op
     return o_slDLSSGetOptimalSettings(localOptions, settings);
 }
 
-bool StreamlineHooks::hkdlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+bool StreamlineHooks::hkdlssg_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                              const char** pluginJSON)
 {
     LOG_FUNC();
 
-    // TODO: do it better than "static" and hoping for the best
-    static std::string config;
+    auto* params = invocation.parameters;
 
     bool shouldSpoofArch =
         Config::Instance()->StreamlineSpoofing.value_or_default() &&
         (State::Instance().activeFgInput == FGInput::NvngxFG || State::Instance().activeFgInput == FGInput::DLSSG);
 
+    std::optional<Neurotic::Hooks::StreamlineScopedCaps<SystemCaps>> modernCaps;
+    const bool legacyCaps=State::Instance().streamlineVersion.major<=1;
     uint32_t currentArch = 0;
     if (shouldSpoofArch)
     {
-        hookSystemCaps(params);
-        currentArch = getSystemCapsArch();
-        spoofArch(currentArch, sl::kFeatureDLSS_G);
+        if (!legacyCaps)
+            NrBeginManagedCaps(modernCaps,params,sl::kFeatureDLSS_G,Neurotic::Hooks::StreamlineCapsTarget::Game,
+                [&](const SystemCaps& caps){return getSystemCapsArch(&caps);});
+        else
+        {
+            hookSystemCaps(params);
+            currentArch=getSystemCapsArch();
+            spoofArch(currentArch,sl::kFeatureDLSS_G);
+        }
     }
 
-    auto result = o_dlssg_slOnPluginLoad(params, loaderJSON, pluginJSON);
+    // Wrapper binding may happen inside slSetD3DDevice startup. Attempt the
+    // same FULL owned transaction before this selected plugin initializes its
+    // capacity; an ambiguous provider remains unavailable, never half-ready.
+    prepareNativeMfgCapabilities();
+    auto result = invocation.original(params, loaderJSON, pluginJSON);
 
-    if (shouldSpoofArch)
+    // End the actual managed borrow before JSON parsing or returning.
+    modernCaps.reset();
+    if (shouldSpoofArch&&legacyCaps)
         setArch(currentArch);
+
+    if(!result||!pluginJSON||!*pluginJSON)return result;
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
@@ -1303,16 +1501,14 @@ bool StreamlineHooks::hkdlssg_slOnPluginLoad(sl::param::IParameters* params, con
 
     PatchSL1PluginJson(configJson);
 
-    config = configJson.dump();
+    const auto config = configJson.dump();
 
-    *pluginJSON = config.c_str();
-
-    return result;
+    return NrOwnedOnLoadJson(result,pluginJSON,config,"DLSSG");
 }
 
 const char* StreamlineHooks::hkdlssg_slGetPluginJSONConfig_sl1()
 {
-    static std::string patchedConfig;
+    std::string patchedConfig;
 
     const char* originalConfig = o_dlssg_slGetPluginJSONConfig_sl1();
 
@@ -1332,7 +1528,18 @@ const char* StreamlineHooks::hkdlssg_slGetPluginJSONConfig_sl1()
 
         LOG_DEBUG("SL1 DLSSG JSON after patch: {}", patchedConfig);
 
-        return patchedConfig.c_str();
+        if(const auto* owned=Neurotic::Hooks::StreamlineOwnedJson::TryCopyForProcess(patchedConfig))
+            return owned;
+
+        // Preserve this invocation's upstream borrow on failure, as with the
+        // existing parse/dump fallback. The caller must keep the ACTUAL string
+        // owner alive through consumption; a facade or temporary Root lease is
+        // not that guarantee. This result is neither owned nor patched.
+        static std::atomic<unsigned> copyFailures{0};
+        if(copyFailures.fetch_add(1,std::memory_order_relaxed)<64)
+            try {LOG_ERROR("SL1 DLSSG JSON ownership copy failed; returning UNOWNED, UNPATCHED upstream result under its original borrow contract");}
+            catch(...) {} // Do not add an escaping logging/allocation failure.
+        return originalConfig;
     }
     catch (const std::exception& e)
     {
@@ -1341,33 +1548,23 @@ const char* StreamlineHooks::hkdlssg_slGetPluginJSONConfig_sl1()
     }
 }
 
-bool StreamlineHooks::hklocal_dlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+bool StreamlineHooks::hklocal_dlssg_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                                    const char** pluginJSON)
 {
     LOG_FUNC();
 
-    // TODO: do it better than "static" and hoping for the best
-    static std::string config;
+    auto* params = invocation.parameters;
 
-    bool shouldSpoofArch = Config::Instance()->StreamlineSpoofing.value_or_default();
-
-    uint32_t currentArch = 0;
-    SystemCaps* localSystemCaps = nullptr;
+    const bool shouldSpoofArch = Config::Instance()->StreamlineSpoofing.value_or_default();
+    std::optional<Neurotic::Hooks::StreamlineScopedCaps<SystemCaps>> localCaps;
     if (shouldSpoofArch)
-    {
-        sl::param::getPointerParam(params, sl::param::common::kSystemCaps, &localSystemCaps);
+        NrBeginManagedCaps(localCaps,params,sl::kFeatureDLSS_G,Neurotic::Hooks::StreamlineCapsTarget::Local,
+            [&](const SystemCaps& caps){return getSystemCapsArch(&caps);});
 
-        if (localSystemCaps)
-        {
-            currentArch = getSystemCapsArch(localSystemCaps);
-            spoofArch(currentArch, sl::kFeatureDLSS_G, localSystemCaps);
-        }
-    }
+    auto result = invocation.original(params, loaderJSON, pluginJSON);
 
-    auto result = o_local_dlssg_slOnPluginLoad(params, loaderJSON, pluginJSON);
-
-    if (shouldSpoofArch && localSystemCaps)
-        setArch(currentArch, localSystemCaps);
+    localCaps.reset();
+    if(!result||!pluginJSON||!*pluginJSON)return result;
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
@@ -1390,11 +1587,9 @@ bool StreamlineHooks::hklocal_dlssg_slOnPluginLoad(sl::param::IParameters* param
             configJson["external"]["vk"]["device"]["1.3_features"].clear();
     }
 
-    config = configJson.dump();
+    const auto config = configJson.dump();
 
-    *pluginJSON = config.c_str();
-
-    return result;
+    return NrOwnedOnLoadJson(result,pluginJSON,config,"local DLSSG");
 }
 
 sl::Result StreamlineHooks::hkslSetConstants(const sl::Constants& values, const sl::FrameToken& frame,
@@ -1403,7 +1598,7 @@ sl::Result StreamlineHooks::hkslSetConstants(const sl::Constants& values, const 
     const auto replacementOwner = Sl_Inputs_Dx12::CaptureOwner();
     const auto replacementProvider = nrReplacementInputGeneration.load();
     // NR-FEED-001 BEGIN
-    Neurotic::Feed::Callback feedConstants({"Streamline", FeedStreamlineApi(renderApi), "constants"}, &viewport);
+    Neurotic::Feed::Callback feedConstants({"Streamline", FeedStreamlineApi(renderApi.load()), "constants"}, &viewport);
     feedConstants.Value("provider.frame", static_cast<uint32_t>(frame));
     feedConstants.Value("provider.viewport", static_cast<uint32_t>(viewport));
     Neurotic::Feed::ObserveStreamlineConstants(feedConstants, values);
@@ -1411,30 +1606,33 @@ sl::Result StreamlineHooks::hkslSetConstants(const sl::Constants& values, const 
     LOG_TRACE("called with frameIndex: {}, viewport: {}", (unsigned int) frame, (unsigned int) viewport);
 
     const auto result = o_slSetConstants(values, frame, viewport);
-    if (result == sl::Result::eOk && renderApi == sl::RenderAPI::eD3D12 && replacementProvider == nrReplacementInputGeneration.load())
+    if (result == sl::Result::eOk && renderApi.load() == sl::RenderAPI::eD3D12 && replacementProvider == nrReplacementInputGeneration.load())
         State::Instance().slFGInputs.setConstants(values, (uint32_t)frame, (uint32_t)viewport, replacementProvider, replacementOwner);
     return result;
 }
 
-bool StreamlineHooks::hkcommon_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+bool StreamlineHooks::hkcommon_slOnPluginLoad(const CommonInvocation& invocation, const char* loaderJSON,
                                               const char** pluginJSON)
 {
     LOG_FUNC();
 
-    // TODO: do it better than "static" and hoping for the best
-    static std::string config;
+    auto result = invocation.original(invocation.parameters, loaderJSON, pluginJSON);
 
-    auto result = o_common_slOnPluginLoad(params, loaderJSON, pluginJSON);
+    if(!result||!pluginJSON||!*pluginJSON)return result;
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
-    auto& slVersion = State::Instance().streamlineVersion;
-
-    // Grab a version of the potentially updated sl.common
-    // Opti assumes that all plugins will have this version
-    configJson.at("version").at("major").get_to(slVersion.major);
-    configJson.at("version").at("minor").get_to(slVersion.minor);
-    configJson.at("version").at("build").get_to(slVersion.patch);
+    feature_version commonRelease{};
+    auto& compatibilityVersion = State::Instance().streamlineVersion;
+    // Remaining operational readers still use this compatibility state. Keep
+    // their existing per-field/partial-parse behavior until their owner contracts
+    // are migrated; this is NOT an interposer-only observation or caps type tag.
+    configJson.at("version").at("major").get_to(commonRelease.major);
+    compatibilityVersion.major = commonRelease.major;
+    configJson.at("version").at("minor").get_to(commonRelease.minor);
+    compatibilityVersion.minor = commonRelease.minor;
+    configJson.at("version").at("build").get_to(commonRelease.patch);
+    compatibilityVersion.patch = commonRelease.patch;
 
     // Completely disables Streamline hooks
     // if (true)
@@ -1442,13 +1640,40 @@ bool StreamlineHooks::hkcommon_slOnPluginLoad(sl::param::IParameters* params, co
     //    configJson["exclusive_hooks"].clear();
     //}
 
-    PatchSL1PluginJson(configJson);
+    PatchSL1PluginJson(configJson, commonRelease.major == 1 && State::Instance().activeFgInput == FGInput::DLSSG);
 
-    config = configJson.dump();
+    const auto config = configJson.dump();
 
-    *pluginJSON = config.c_str();
+    return NrOwnedOnLoadJson(result,pluginJSON,config,"Common");
+}
 
-    return result;
+static void NrTraceNativeMfgReceipt(const Neurotic::Mfg::MfgRequestReceipt& request,
+    sl::RenderAPI actualApi, bool statePhase, uint32_t stateAbi = 0) noexcept
+{
+    if (!Config::Instance()->FGDLSSGNativeMfgExperimental.value_or_default() ||
+        actualApi != sl::RenderAPI::eD3D12 ||
+        State::Instance().swapchainApi != API::DX12 ||
+        request.generation != nrMfgHookGeneration.load() || request.stale) return;
+    try
+    {
+        static Neurotic::Mfg::MfgRequestTrace trace;
+        const auto publication = Neurotic::Mfg::AdaMfgSnapshot();
+        const auto stamp = trace.Select(request, publication, statePhase);
+        if (!stamp) return;
+        LOG_INFO("Native Ada MFG receipt: phase={} sequence={} first_attempt={} attempt={} viewport={} generation={} caller_abi={} state_abi={} selected={} selection_status={} game_enabled={} game_generated={} forwarded_enabled={} forwarded_generated={} setter_result={} override_result_known={} override_result={} fallback={} accepted={} raw_max_known={} raw_max={} presented_known={} presented_since_query={} presented_bucket_overflow={} publication_generation={} publication_status={} publication_reason={} published_profile={} published_sites={} published_max={} published_provider_fp={:016x} published_wrapper_fp={:016x}; counts since game query, not distinct-frame proof",
+            statePhase ? "state" : "setter", stamp->sequence, stamp->firstAttempt, request.attempt,
+            request.viewport, request.generation, request.callerAbi, stateAbi,
+            static_cast<unsigned>(request.selected), static_cast<unsigned>(request.selectionStatus),
+            request.gameEnabled, request.gameGenerated, request.forwardedEnabled, request.forwardedGenerated,
+            request.setterResult.value_or(0), request.overrideResult.has_value(), request.overrideResult.value_or(0),
+            request.fellBackToGame, request.accepted, request.observedMax.has_value(), request.observedMax.value_or(0),
+            request.observedPresented.has_value(), request.observedPresented.value_or(0),
+            request.observedPresented.has_value() && *request.observedPresented > 31,
+            publication.generation, static_cast<unsigned>(publication.status), static_cast<unsigned>(publication.reason),
+            publication.temporalProfile, publication.patchSites, publication.maxGenerated,
+            publication.providerFingerprint, publication.wrapperFingerprint);
+    }
+    catch (...) { /* A diagnostic failure must not alter the game's SDK call. */ }
 }
 
 sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSGOptions& options)
@@ -1457,11 +1682,11 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     Neurotic::Mfg::MfgSetterScope setterScope(nrMfgRequests);
     const auto captured = Neurotic::Mfg::CaptureOptions(options);
     const auto hookGeneration = nrMfgHookGeneration.load();
-    const auto providerGeneration = renderApi == sl::RenderAPI::eVulkan ?
+    const auto providerGeneration = renderApi.load() == sl::RenderAPI::eVulkan ?
         DlssNr::VulkanNrStreamlineAdapter().Generation() : 0;
     const auto currentInvocation = [&] {
         return hookGeneration == nrMfgHookGeneration.load() &&
-            (renderApi != sl::RenderAPI::eVulkan ||
+            (renderApi.load() != sl::RenderAPI::eVulkan ||
              providerGeneration == DlssNr::VulkanNrStreamlineAdapter().Generation());
     };
     auto& state = State::Instance();
@@ -1472,7 +1697,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
             state.dlssgLastSetMode = observed.mode;
             Neurotic::Semantic::Character::NativeFgWork().Requested(observed.mode!=sl::DLSSGMode::eOff);
         }
-        if (renderApi == sl::RenderAPI::eVulkan)
+        if (renderApi.load() == sl::RenderAPI::eVulkan)
             DlssNr::VulkanNrStreamlineAdapter().Options(static_cast<uint32_t>(viewport), observed,
                 captured.supported && result == sl::Result::eOk);
     };
@@ -1518,7 +1743,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
                                         newOptions.mode == sl::DLSSGMode::eAuto ||
                                         newOptions.mode == sl::DLSSGMode::eDynamic;
 
-    bool enableDynamicMode = renderApi!=sl::RenderAPI::eVulkan && Config::Instance()->FGDLSSGOverrideForceDMFG.value_or_default() &&
+    bool enableDynamicMode = renderApi.load()!=sl::RenderAPI::eVulkan && Config::Instance()->FGDLSSGOverrideForceDMFG.value_or_default() &&
                              state.dlssgGameDMFGSupported && dlssgPotentiallyActive;
 
     if (enableDynamicMode)
@@ -1564,7 +1789,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     prepareExperimentalMfgCapabilities();
     const auto experimental = Neurotic::Mfg::Experimental::ReadSnapshot();
     if (experimental.family != Neurotic::Mfg::Experimental::Family::None && experimental.requested &&
-        renderApi == sl::RenderAPI::eD3D12 && state.activeFgInput == FGInput::NoFG &&
+        renderApi.load() == sl::RenderAPI::eD3D12 && state.activeFgInput == FGInput::NoFG &&
         state.activeFgOutput == FGOutput::NoFG && state.activeFgNvngx == FGNvngxReplacement::None)
     {
         namespace EM = Neurotic::Mfg::Experimental;
@@ -1598,24 +1823,24 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     if (Config::Instance()->FGDLSSGNativeMfgExperimental.value_or_default() &&
         state.swapchainApi == API::DX12)
     {
-        const auto gpu = IdentifyGpu::getPrimaryGpu();
-        const bool ada = gpu.nvidiaArchInfo.architecture_id >= NV_GPU_ARCHITECTURE_AD100 &&
-            gpu.nvidiaArchInfo.architecture_id < NV_GPU_ARCHITECTURE_GB200;
-        nativeRecoveryRequest = ada && renderApi == sl::RenderAPI::eD3D12 &&
+        LUID adapter {};
+        const bool ada = nativeMfgAdapter(adapter).value_or(false);
+        nativeRecoveryRequest = ada && renderApi.load() == sl::RenderAPI::eD3D12 &&
             state.activeFgInput == FGInput::NoFG && state.activeFgOutput == FGOutput::NoFG &&
             state.activeFgNvngx == FGNvngxReplacement::None &&
             experimental.family == Neurotic::Mfg::Experimental::Family::None;
         const auto& configured = Config::Instance()->FGDLSSGOverrideInterpolationCount;
-        const auto selection = configured.has_value() && !enableDynamicMode &&
-            newOptions.mode != sl::DLSSGMode::eDynamic && ada ?
-            Neurotic::Mfg::SelectionFromStoredGenerated(configured.value()) :
-            Neurotic::Mfg::MfgSelection::Game;
+        const auto selection = configured.has_value() && configured.value() == 0 ?
+            Neurotic::Mfg::MfgSelection::Off :
+            configured.has_value() && !enableDynamicMode && newOptions.mode != sl::DLSSGMode::eDynamic ?
+                Neurotic::Mfg::SelectionFromStoredGenerated(configured.value()) :
+                Neurotic::Mfg::MfgSelection::Game;
         const auto generation = nrMfgHookGeneration.load();
         const auto selectedWrapper = mfgSelectedWrapper.load();
         const bool qualified = ada && dlssgPotentiallyActive &&
             state.activeFgInput != FGInput::DLSSG && state.activeFgOutput != FGOutput::DLSSG &&
             selectedWrapper && Neurotic::Mfg::TryPublishAdaMfg(selectedWrapper, generation,
-                static_cast<uint32_t>(captured.callerVersion), gpu.luid);
+                static_cast<uint32_t>(captured.callerVersion), adapter);
         const auto publication = Neurotic::Mfg::AdaMfgSnapshot();
         const auto qualifiedMax = qualified && publication.generation == generation &&
             publication.status == Neurotic::Mfg::MfgRuntimeStatus::Published ? publication.maxGenerated : 0u;
@@ -1638,7 +1863,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
             options.numFramesToGenerate, selection, decision);
     }
 
-    if (renderApi == sl::RenderAPI::eVulkan)
+    if (renderApi.load() == sl::RenderAPI::eVulkan)
     {
         const auto& configured = Config::Instance()->FGDLSSGOverrideInterpolationCount;
         const auto selected = configured.has_value() ?
@@ -1688,7 +1913,12 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
             static_cast<int>(overrideResult), static_cast<int>(result));
     }
     else if (mfgAttempt) nrMfgRequests.Complete(mfgAttempt, static_cast<int>(result));
-    if (renderApi == sl::RenderAPI::eVulkan)
+    if (mfgAttempt)
+    {
+        const auto receipt = nrMfgRequests.Current();
+        if (receipt.attempt == mfgAttempt) NrTraceNativeMfgReceipt(receipt, renderApi.load(), false);
+    }
+    if (renderApi.load() == sl::RenderAPI::eVulkan)
     {
         // Log changes, not per-frame setters. This includes borrowed calls so
         // the next game return can distinguish a pending UI choice from an
@@ -1715,14 +1945,14 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
         lastDlssgOptionsReplayable = true;
         lastDlssgOptionsHookGeneration = hookGeneration;
     }
-    if (renderApi == sl::RenderAPI::eD3D12 && result == sl::Result::eOk)
+    if (renderApi.load() == sl::RenderAPI::eD3D12 && result == sl::Result::eOk)
+    {
+        const auto providerOptions = DlssNr::PreFg::Admission::ClassifyD3D12(
+            DlssNr::PreFg::Admission::Capture(newOptions, static_cast<unsigned>(captured.callerVersion)));
         DlssNr::PreFg::PublishProvider(newOptions.mode != sl::DLSSGMode::eOff,
-            static_cast<uint32_t>(viewport) == 0 && newOptions.mode == sl::DLSSGMode::eOn &&
-            newOptions.numFramesToGenerate >= 1 && newOptions.numFramesToGenerate <= 5 &&
-            newOptions.queueParallelismMode == sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue &&
-            newOptions.enableUserInterfaceRecomposition != sl::Boolean::eTrue &&
-            static_cast<uint32_t>(newOptions.flags & sl::DLSSGFlags::eShowOnlyInterpolatedFrame) == 0,
-            newOptions.numFramesToGenerate);
+            providerOptions.supported, newOptions.numFramesToGenerate, static_cast<uint32_t>(viewport),
+            providerOptions.queueSupported, providerOptions.raw);
+    }
     if (DlssNr::FgLifecycle::Enabled())
         DlssNr::FgLifecycle::Options(diagnosticOperation, static_cast<uint32_t>(viewport),
         static_cast<int>(newOptions.mode), newOptions.numFramesToGenerate,
@@ -1749,11 +1979,12 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     }
     const auto originalStructVersion = state.structVersion;
     const auto hookGeneration = nrMfgHookGeneration.load();
-    const auto providerGeneration = renderApi == sl::RenderAPI::eVulkan ?
+    const auto providerGeneration = renderApi.load() == sl::RenderAPI::eVulkan ?
         DlssNr::VulkanNrStreamlineAdapter().Generation() : 0;
+    const auto requestAtQuery = nrMfgRequests.Current();
     const auto result = o_slDLSSGGetState(viewport, state, options);
     if (hookGeneration != nrMfgHookGeneration.load() ||
-        (renderApi == sl::RenderAPI::eVulkan &&
+        (renderApi.load() == sl::RenderAPI::eVulkan &&
          providerGeneration != DlssNr::VulkanNrStreamlineAdapter().Generation())) return result;
     const bool knownState = originalStructVersion >= 1 && originalStructVersion <= 4 &&
         state.structVersion == originalStructVersion && state.structType == sl::DLSSGState::s_structType;
@@ -1762,14 +1993,22 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
         originalStructVersion, observed && originalStructVersion >= 3 ? state.inputsProcessingCompletionFence : nullptr,
         observed && originalStructVersion >= 3 ? state.lastPresentInputsProcessingCompletionFenceValue : 0,
         observed ? state.numFramesActuallyPresented : 0);
-    if (renderApi == sl::RenderAPI::eVulkan)
+    if (renderApi.load()==sl::RenderAPI::eD3D12 && DlssNr::NativeFgTrace::Enabled())
+    {
+        const auto provider=DlssNr::PreFg::Provider();
+        DlssNr::NativeFgTrace::Completion(static_cast<uint32_t>(viewport),result,knownState,originalStructVersion,
+            observed && originalStructVersion>=3 ? state.inputsProcessingCompletionFence : nullptr,
+            observed && originalStructVersion>=3 ? state.lastPresentInputsProcessingCompletionFenceValue : 0,
+            observed ? state.numFramesActuallyPresented : 0,provider.generation,DlssNr::PreFg::OutputIdentity::Current());
+    }
+    if (renderApi.load() == sl::RenderAPI::eVulkan)
         DlssNr::VulkanNrStreamlineAdapter().State(static_cast<uint32_t>(viewport), state, observed);
     // Consume the game's actual query. Additional queries would reset its
     // presented-frame counter and lack the game's present-thread ownership.
     Neurotic::Mfg::Experimental::ObserveCapacity(observed && originalStructVersion >= 2 ? state.numFramesToGenerateMax : 0);
     if (!observed) return result;
     if (originalStructVersion >= 4)
-        State::Instance().dlssgGameDMFGSupported = renderApi != sl::RenderAPI::eVulkan &&
+        State::Instance().dlssgGameDMFGSupported = renderApi.load() != sl::RenderAPI::eVulkan &&
             state.bIsDynamicMFGSupported == sl::eTrue;
 
     auto& optiState = State::Instance();
@@ -1777,6 +2016,21 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
         nrMfgRequests.Observe(static_cast<uint32_t>(viewport), nrMfgHookGeneration.load(),
             originalStructVersion >= 2 ? std::optional<uint32_t>(state.numFramesToGenerateMax) : std::nullopt,
             state.numFramesActuallyPresented);
+
+    const auto requestAfterQuery = nrMfgRequests.Current();
+    if (requestAtQuery.attempt && !requestAtQuery.stale && requestAtQuery.setterResult.has_value() &&
+        requestAtQuery.viewport == static_cast<uint32_t>(viewport) &&
+        requestAtQuery.generation == hookGeneration && requestAfterQuery.attempt == requestAtQuery.attempt &&
+        !requestAfterQuery.stale && requestAfterQuery.generation == hookGeneration)
+    {
+        // Copy this query's raw values before advertisement. Another query may
+        // update the shared UI journal, so do not read its counters back here.
+        auto receipt = requestAtQuery;
+        receipt.observedMax = originalStructVersion >= 2 ?
+            std::optional<uint32_t>(state.numFramesToGenerateMax) : std::nullopt;
+        receipt.observedPresented = state.numFramesActuallyPresented;
+        NrTraceNativeMfgReceipt(receipt, renderApi.load(), true, static_cast<uint32_t>(originalStructVersion));
+    }
 
 
     // Cache raw capability before any explicit experimental advertisement.
@@ -1816,7 +2070,7 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
         Config::Instance()->FGDLSSGOverrideForceDMFG.set_volatile_value(false);
     }
 
-    if (renderApi != sl::RenderAPI::eVulkan && optiState.activeFgInput == FGInput::DLSSG)
+    if (renderApi.load() != sl::RenderAPI::eVulkan && optiState.activeFgInput == FGInput::DLSSG)
     {
         auto fg = optiState.currentFG;
 
@@ -1848,26 +2102,38 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     return result;
 }
 
-bool StreamlineHooks::hkreflex_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+bool StreamlineHooks::hkreflex_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                               const char** pluginJSON)
 {
     LOG_FUNC();
 
-    // TODO: do it better than "static" and hoping for the best
-    static std::string config;
+    auto* params = invocation.parameters;
 
+    const bool spoofRequested=Config::Instance()->StreamlineSpoofing.value_or_default();
+    std::optional<Neurotic::Hooks::StreamlineScopedCaps<SystemCaps>> modernCaps;
+    const bool legacyCaps=State::Instance().streamlineVersion.major<=1;
     uint32_t currentArch = 0;
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    if (spoofRequested)
     {
-        hookSystemCaps(params);
-        currentArch = getSystemCapsArch();
-        spoofArch(currentArch, sl::kFeatureReflex);
+        if (!legacyCaps)
+            NrBeginManagedCaps(modernCaps,params,sl::kFeatureReflex,Neurotic::Hooks::StreamlineCapsTarget::Game,
+                [&](const SystemCaps& caps){return getSystemCapsArch(&caps);});
+        else
+        {
+            hookSystemCaps(params);
+            currentArch=getSystemCapsArch();
+            spoofArch(currentArch,sl::kFeatureReflex);
+        }
     }
 
-    auto result = o_reflex_slOnPluginLoad(params, loaderJSON, pluginJSON);
+    auto result = invocation.original(params, loaderJSON, pluginJSON);
 
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    // End the actual managed borrow before JSON parsing or returning.
+    modernCaps.reset();
+    if (spoofRequested&&legacyCaps)
         setArch(currentArch);
+
+    if(!result||!pluginJSON||!*pluginJSON)return result;
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
@@ -1889,11 +2155,9 @@ bool StreamlineHooks::hkreflex_slOnPluginLoad(sl::param::IParameters* params, co
 
     PatchSL1PluginJson(configJson);
 
-    config = configJson.dump();
+    const auto config = configJson.dump();
 
-    *pluginJSON = config.c_str();
-
-    return result;
+    return NrOwnedOnLoadJson(result,pluginJSON,config,"Reflex");
 }
 
 sl::Result StreamlineHooks::hkslReflexSetOptions(const sl::ReflexOptions& options)
@@ -1920,7 +2184,36 @@ sl::Result StreamlineHooks::hkslReflexSleep(const sl::FrameToken& frame)
     //     return StreamlineProxy::ReflexSleep()(frame);
     // }
 
-    return o_slReflexSleep(frame);
+    return Neurotic::PacingTrace::Sleep([&] { return o_slReflexSleep(frame); });
+}
+
+namespace
+{
+struct DlssOnLoadDomain {};
+struct ReflexOnLoadDomain {};
+struct PclOnLoadDomain {};
+struct DlssgOnLoadDomain {};
+struct LocalDlssgOnLoadDomain {};
+
+template<class Bindings>
+void* NrBindFeatureOnLoad(typename Bindings::Load original,typename Bindings::Transform transform,const char* feature)
+{
+    const auto bound=Bindings::Bind(original,transform);
+    if(bound.status!=Bindings::Status::Wrapped&&bound.status!=Bindings::Status::OriginalNull&&
+       bound.status!=Bindings::Status::ProcessClosing)
+    {
+        static std::atomic<unsigned> warnings{0};
+        if(warnings.fetch_add(1,std::memory_order_relaxed)<64)
+        {
+            const char* reason=bound.status==Bindings::Status::CapacityExhausted?
+                "256 immutable callback entries exhausted":bound.status==Bindings::Status::StorageUnavailable?
+                "process-owned binding storage allocation failed":"callback code owner or unload observer unavailable";
+            try {LOG_WARN("{} OnLoad ownership wrapping unavailable: {}; exact upstream callback retained",feature,reason);}
+            catch(...) {} // Diagnostics never replace an actual upstream result.
+        }
+    }
+    return reinterpret_cast<void*>(bound.function);
+}
 }
 
 void* StreamlineHooks::hkdlss_slGetPluginFunction(const char* functionName)
@@ -1929,8 +2222,9 @@ void* StreamlineHooks::hkdlss_slGetPluginFunction(const char* functionName)
 
     if (strcmp(functionName, "slOnPluginLoad") == 0)
     {
-        o_dlss_slOnPluginLoad = (PFN_slOnPluginLoad) o_dlss_slGetPluginFunction(functionName);
-        return &hkdlss_slOnPluginLoad;
+        using Bindings=Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,DlssOnLoadDomain>;
+        const auto original=reinterpret_cast<PFN_slOnPluginLoad>(o_dlss_slGetPluginFunction(functionName));
+        return NrBindFeatureOnLoad<Bindings>(original,&hkdlss_slOnPluginLoad,"DLSS");
     }
 
     if (strcmp(functionName, "slDLSSGetOptimalSettings") == 0 &&
@@ -1946,50 +2240,54 @@ void* StreamlineHooks::hkdlss_slGetPluginFunction(const char* functionName)
 void* StreamlineHooks::hkdlssg_slGetPluginFunction(const char* functionName)
 {
     // LOG_DEBUG("{}", functionName);
+    const auto steamOverlay = KernelBaseProxy::GetModuleHandleA_()("gameoverlayrenderer64.dll");
+    const bool steamCaller = steamOverlay && Util::GetCallerModule(_ReturnAddress()) == steamOverlay;
 
     if (strcmp(functionName, "slOnPluginLoad") == 0)
     {
-        o_dlssg_slOnPluginLoad = (PFN_slOnPluginLoad) o_dlssg_slGetPluginFunction(functionName);
-        bindNativeMfgWrapper(reinterpret_cast<const void*>(o_dlssg_slOnPluginLoad));
-        return &hkdlssg_slOnPluginLoad;
+        using Bindings=Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,DlssgOnLoadDomain>;
+        const auto original=reinterpret_cast<PFN_slOnPluginLoad>(o_dlssg_slGetPluginFunction(functionName));
+        return NrBindFeatureOnLoad<Bindings>(original,&hkdlssg_slOnPluginLoad,"DLSSG");
     }
 
     if (strcmp(functionName, "slDLSSGSetOptions") == 0)
     {
+        const auto returnedGeneration = nrMfgHookGeneration.load();
         const auto next = (decltype(&slDLSSGSetOptions)) o_dlssg_slGetPluginFunction(functionName);
+        auto observation = !steamCaller ? Neurotic::Mfg::MfgWrapperResolution::FromPluginReturn(functionName,
+            reinterpret_cast<void*>(next), returnedGeneration, reinterpret_cast<const void*>(&hkslDLSSGSetOptions), reinterpret_cast<const void*>(&hkslDLSSGGetState)) : Neurotic::Mfg::MfgWrapperResolution{};
+        uint64_t ownAdvance = 0;
+        Neurotic::Mfg::MfgWrapperResolution invalidated;
         if (next != o_slDLSSGSetOptions)
         {
             std::lock_guard lock(lastDlssgOptionsMutex);
             lastDlssgOptionsReplayable = false;
             const auto generation = nrMfgHookGeneration.fetch_add(1) + 1;
+            ownAdvance = generation;
             nrMfgRequests.Invalidate(generation);
             Neurotic::Semantic::Character::NativeFgWork().Reset();
-            Neurotic::Mfg::InvalidateAdaMfg(generation);
+            invalidated = Neurotic::Mfg::InvalidateAdaMfg(generation);
         }
         o_slDLSSGSetOptions = next;
 
         // Give steam overlay the original as it seems to be hooking it
-        auto steamOverlay = KernelBaseProxy::GetModuleHandleA_()("gameoverlayrenderer64.dll");
-        if (steamOverlay != nullptr)
-        {
-            if (HMODULE callerModule = Util::GetCallerModule(_ReturnAddress()); callerModule == steamOverlay)
-                return o_slDLSSGSetOptions;
-        }
+        if (steamCaller) return o_slDLSSGSetOptions;
+        commitReturnedMfgCallback(observation, ownAdvance, &invalidated);
 
         return &hkslDLSSGSetOptions;
     }
 
     if (strcmp(functionName, "slDLSSGGetState") == 0)
     {
-        o_slDLSSGGetState = (decltype(&slDLSSGGetState)) o_dlssg_slGetPluginFunction(functionName);
+        const auto returnedGeneration = nrMfgHookGeneration.load();
+        const auto returned = (decltype(&slDLSSGGetState)) o_dlssg_slGetPluginFunction(functionName);
+        o_slDLSSGGetState = returned;
 
         // Give steam overlay the original as it seems to be hooking it
-        auto steamOverlay = KernelBaseProxy::GetModuleHandleA_()("gameoverlayrenderer64.dll");
-        if (steamOverlay != nullptr)
-        {
-            if (HMODULE callerModule = Util::GetCallerModule(_ReturnAddress()); callerModule == steamOverlay)
-                return o_slDLSSGGetState;
-        }
+        if (steamCaller) return o_slDLSSGGetState;
+        auto observation = Neurotic::Mfg::MfgWrapperResolution::FromPluginReturn(functionName,
+            reinterpret_cast<void*>(returned), returnedGeneration, reinterpret_cast<const void*>(&hkslDLSSGSetOptions), reinterpret_cast<const void*>(&hkslDLSSGGetState));
+        commitReturnedMfgCallback(observation);
 
         return &hkslDLSSGGetState;
     }
@@ -2008,10 +2306,30 @@ void* StreamlineHooks::hkdlssg_slGetPluginFunction(const char* functionName)
 
     // Ensure that we have those DLSSG calls
     if (!o_slDLSSGSetOptions)
-        o_slDLSSGSetOptions = (decltype(&slDLSSGSetOptions)) o_dlssg_slGetPluginFunction("slDLSSGSetOptions");
+    {
+        const auto returnedGeneration = nrMfgHookGeneration.load();
+        const auto returned = (decltype(&slDLSSGSetOptions)) o_dlssg_slGetPluginFunction("slDLSSGSetOptions");
+        o_slDLSSGSetOptions = returned;
+        if (!steamCaller)
+        {
+            auto observation = Neurotic::Mfg::MfgWrapperResolution::FromPluginReturn("slDLSSGSetOptions",
+                reinterpret_cast<void*>(returned), returnedGeneration, reinterpret_cast<const void*>(&hkslDLSSGSetOptions), reinterpret_cast<const void*>(&hkslDLSSGGetState));
+            commitReturnedMfgCallback(observation);
+        }
+    }
 
     if (!o_slDLSSGGetState)
-        o_slDLSSGGetState = (decltype(&slDLSSGGetState)) o_dlssg_slGetPluginFunction("slDLSSGGetState");
+    {
+        const auto returnedGeneration = nrMfgHookGeneration.load();
+        const auto returned = (decltype(&slDLSSGGetState)) o_dlssg_slGetPluginFunction("slDLSSGGetState");
+        o_slDLSSGGetState = returned;
+        if (!steamCaller)
+        {
+            auto observation = Neurotic::Mfg::MfgWrapperResolution::FromPluginReturn("slDLSSGGetState",
+                reinterpret_cast<void*>(returned), returnedGeneration, reinterpret_cast<const void*>(&hkslDLSSGSetOptions), reinterpret_cast<const void*>(&hkslDLSSGGetState));
+            commitReturnedMfgCallback(observation);
+        }
+    }
 
     return o_dlssg_slGetPluginFunction(functionName);
 }
@@ -2022,8 +2340,9 @@ void* StreamlineHooks::hklocal_dlssg_slGetPluginFunction(const char* functionNam
 
     if (strcmp(functionName, "slOnPluginLoad") == 0 && State::Instance().activeFgNvngx != FGNvngxReplacement::None)
     {
-        o_local_dlssg_slOnPluginLoad = (PFN_slOnPluginLoad) o_local_dlssg_slGetPluginFunction(functionName);
-        return &hklocal_dlssg_slOnPluginLoad;
+        using Bindings=Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,LocalDlssgOnLoadDomain>;
+        const auto original=reinterpret_cast<PFN_slOnPluginLoad>(o_local_dlssg_slGetPluginFunction(functionName));
+        return NrBindFeatureOnLoad<Bindings>(original,&hklocal_dlssg_slOnPluginLoad,"local DLSSG");
     }
 
     return o_local_dlssg_slGetPluginFunction(functionName);
@@ -2061,8 +2380,9 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(const char* functionName)
 
     if (strcmp(functionName, "slOnPluginLoad") == 0)
     {
-        o_reflex_slOnPluginLoad = (PFN_slOnPluginLoad) o_reflex_slGetPluginFunction(functionName);
-        return &hkreflex_slOnPluginLoad;
+        using Bindings=Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,ReflexOnLoadDomain>;
+        const auto original=reinterpret_cast<PFN_slOnPluginLoad>(o_reflex_slGetPluginFunction(functionName));
+        return NrBindFeatureOnLoad<Bindings>(original,&hkreflex_slOnPluginLoad,"Reflex");
     }
 
     if (strcmp(functionName, "slReflexSetOptions") == 0)
@@ -2077,13 +2397,14 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(const char* functionName)
         return &hkslReflexSleep;
     }
 
-    // TODO: Hopefully a game doesn't call both, maybe separate
-    if (strcmp(functionName, "slReflexSetMarker") == 0 &&
-        (State::Instance().gameQuirks & GameQuirk::FixSlSimulationMarkers ||
-         State::Instance().activeFgInput == FGInput::DLSSG))
+    // The legacy Reflex API also supplies authentic native Present markers.
+    // Keep its original separate when both Reflex and PCL are loaded.
+    if (strcmp(functionName, "slReflexSetMarker") == 0)
     {
-        o_slPCLSetMarker = (decltype(&slPCLSetMarker)) o_reflex_slGetPluginFunction(functionName);
-        return &hkslPCLSetMarker;
+        const auto original = reinterpret_cast<decltype(&slPCLSetMarker)>(o_reflex_slGetPluginFunction(functionName));
+        if (!original) return nullptr;
+        o_slReflexSetMarker = original;
+        return &hkslReflexSetMarker;
     }
 
     return o_reflex_slGetPluginFunction(functionName);
@@ -2091,6 +2412,18 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(const char* functionName)
 
 sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
 {
+    return ForwardPCLSetMarker(o_slPCLSetMarker, marker, frame);
+}
+
+sl::Result StreamlineHooks::hkslReflexSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
+{
+    return ForwardPCLSetMarker(o_slReflexSetMarker, marker, frame);
+}
+
+sl::Result StreamlineHooks::ForwardPCLSetMarker(decltype(&slPCLSetMarker) original,
+    sl::PCLMarker marker, const sl::FrameToken& frame)
+{
+    const DWORD entryError = GetLastError();
     const auto nrProvider=DlssNr::VulkanNrStreamlineAdapter().Generation();
     if (marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd)
         NR_FRAME_TRACE("nr-pcl", "phase=enter marker={} frame={} path=existing-hook",
@@ -2120,7 +2453,8 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
 
             LOG_WARN("Simulation start marker sent after end marker, offset: {}", correction_offset);
 
-            result = o_slPCLSetMarker(marker, *newFramePointer);
+            SetLastError(entryError);
+            result = original(marker, *newFramePointer);
             return result;
         }
     }
@@ -2151,7 +2485,9 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
         }
     }
 
-    const auto markerResult = o_slPCLSetMarker(marker, frame);
+    SetLastError(entryError);
+    const auto markerResult = original(marker, frame);
+    const DWORD markerError = GetLastError();
     NrVkPresentMarker(marker,frame,markerResult,nrProvider);
     if (marker == sl::PCLMarker::ePresentStart)
     {
@@ -2166,28 +2502,43 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
     if (marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd)
         NR_FRAME_TRACE("nr-pcl", "phase=return marker={} frame={} result={} path=existing-hook",
             static_cast<unsigned int>(marker), static_cast<uint32_t>(frame), static_cast<unsigned int>(markerResult));
+    SetLastError(markerError);
     return markerResult;
 }
 
-bool StreamlineHooks::hkpcl_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+bool StreamlineHooks::hkpcl_slOnPluginLoad(const OnLoadInvocation& invocation, const char* loaderJSON,
                                            const char** pluginJSON)
 {
     LOG_FUNC();
 
+    auto* params = invocation.parameters;
+
+    const bool spoofRequested=Config::Instance()->StreamlineSpoofing.value_or_default();
+    std::optional<Neurotic::Hooks::StreamlineScopedCaps<SystemCaps>> modernCaps;
+    const bool legacyCaps=State::Instance().streamlineVersion.major<=1;
     uint32_t currentArch = 0;
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    if (spoofRequested)
     {
-        hookSystemCaps(params);
-        currentArch = getSystemCapsArch();
-        spoofArch(currentArch, sl::kFeaturePCL);
+        if (!legacyCaps)
+            NrBeginManagedCaps(modernCaps,params,sl::kFeaturePCL,Neurotic::Hooks::StreamlineCapsTarget::Game,
+                [&](const SystemCaps& caps){return getSystemCapsArch(&caps);});
+        else
+        {
+            hookSystemCaps(params);
+            currentArch=getSystemCapsArch();
+            spoofArch(currentArch,sl::kFeaturePCL);
+        }
     }
 
-    auto result = o_pcl_slOnPluginLoad(params, loaderJSON, pluginJSON);
+    auto result = invocation.original(params, loaderJSON, pluginJSON);
 
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    // End the actual managed borrow before JSON parsing or returning.
+    modernCaps.reset();
+    if (spoofRequested&&legacyCaps)
         setArch(currentArch);
 
-    return result;
+    if(!result||!pluginJSON||!*pluginJSON)return result;
+    return NrOwnedOnLoadJson(result,pluginJSON,*pluginJSON,"PCL");
 }
 
 namespace
@@ -2195,12 +2546,15 @@ namespace
 std::atomic<decltype(&slPCLSetMarker)> associationPclMarker {nullptr};
 sl::Result AssociationPclMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
 {
+    const DWORD entryError = GetLastError();
     const auto nrProvider=DlssNr::VulkanNrStreamlineAdapter().Generation();
     const bool presentMarker = marker == sl::PCLMarker::ePresentStart || marker == sl::PCLMarker::ePresentEnd;
     if (presentMarker)
         NR_FRAME_TRACE("nr-pcl", "phase=enter marker={} frame={} path=observer",
             static_cast<unsigned int>(marker), static_cast<uint32_t>(frame));
+    SetLastError(entryError);
     const auto result = associationPclMarker.load(std::memory_order_acquire)(marker, frame);
+    const DWORD markerError = GetLastError();
     NrVkPresentMarker(marker,frame,result,nrProvider);
     if (marker == sl::PCLMarker::ePresentStart)
     {
@@ -2215,6 +2569,7 @@ sl::Result AssociationPclMarker(sl::PCLMarker marker, const sl::FrameToken& fram
     if (presentMarker)
         NR_FRAME_TRACE("nr-pcl", "phase=return marker={} frame={} result={} path=observer",
             static_cast<unsigned int>(marker), static_cast<uint32_t>(frame), static_cast<unsigned int>(result));
+    SetLastError(markerError);
     return result;
 }
 }
@@ -2243,14 +2598,15 @@ void* StreamlineHooks::hkpcl_slGetPluginFunction(const char* functionName)
 
     if (strcmp(functionName, "slOnPluginLoad") == 0)
     {
-        o_pcl_slOnPluginLoad = (PFN_slOnPluginLoad) o_pcl_slGetPluginFunction(functionName);
-        return &hkpcl_slOnPluginLoad;
+        using Bindings=Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,PclOnLoadDomain>;
+        const auto original=reinterpret_cast<PFN_slOnPluginLoad>(o_pcl_slGetPluginFunction(functionName));
+        return NrBindFeatureOnLoad<Bindings>(original,&hkpcl_slOnPluginLoad,"PCL");
     }
 
     return o_pcl_slGetPluginFunction(functionName);
 }
 
-bool StreamlineHooks::hk_setVoid(void* self, const char* key, void** value)
+void StreamlineHooks::hk_setVoid(void* self, const char* key, void* value)
 {
     // LOG_DEBUG("{}", key);
 
@@ -2273,7 +2629,7 @@ bool StreamlineHooks::hk_setVoid(void* self, const char* key, void** value)
         }
     }
 
-    return o_setVoid(self, key, value);
+    o_setVoid(self, key, value);
 }
 
 void StreamlineHooks::hkcommon_slSetParameters_sl1(void* params)
@@ -2308,10 +2664,27 @@ void* StreamlineHooks::hkcommon_slGetPluginFunction(const char* functionName)
 {
     // LOG_DEBUG("{}", functionName);
 
+    if(Neurotic::Runtime::IsProcessExiting())return nullptr;
+
     if (strcmp(functionName, "slOnPluginLoad") == 0)
     {
-        o_common_slOnPluginLoad = (PFN_slOnPluginLoad) o_common_slGetPluginFunction(functionName);
-        return &hkcommon_slOnPluginLoad;
+        using Bindings=Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters>;
+        const auto original=reinterpret_cast<PFN_slOnPluginLoad>(o_common_slGetPluginFunction(functionName));
+        const auto bound=Bindings::Bind(original,&hkcommon_slOnPluginLoad);
+        if(bound.status!=Bindings::Status::Wrapped&&bound.status!=Bindings::Status::OriginalNull&&
+            bound.status!=Bindings::Status::ProcessClosing)
+        {
+            static std::atomic<unsigned> warnings{0};
+            if(warnings.fetch_add(1,std::memory_order_relaxed)<64)
+            {
+                const char* reason=bound.status==Bindings::Status::CapacityExhausted?
+                    "256 immutable callback entries exhausted":bound.status==Bindings::Status::StorageUnavailable?
+                    "process-owned binding storage allocation failed":"callback code owner or unload observer unavailable";
+                try {LOG_WARN("Common OnLoad ownership wrapping unavailable: {}; exact upstream callback retained",reason);}
+                catch(...) {} // An unavailable diagnostic must not replace the upstream result.
+            }
+        }
+        return reinterpret_cast<void*>(bound.function);
     }
 
     // Used around Streamline v1.3, as 1.5 doesn't seem to have it anymore
@@ -2371,39 +2744,59 @@ void StreamlineHooks::updateDlssgOptions()
     }
 }
 
-void StreamlineHooks::bindNativeMfgWrapper(const void* function)
+void StreamlineHooks::commitReturnedMfgCallback(Neurotic::Mfg::MfgWrapperResolution& observation,
+    uint64_t ownAdvance, Neurotic::Mfg::MfgWrapperResolution* invalidated) noexcept
 {
-    HMODULE owner = nullptr;
-    if (!function || !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        reinterpret_cast<LPCWSTR>(function), &owner) || !owner ||
-        !Neurotic::Mfg::IsAdaMfgModule(owner)) return;
-    Neurotic::Mfg::Experimental::ObserveWrapper(owner);
-    if (mfgSelectedWrapper.exchange(owner) == owner) return;
-    const auto generation = nrMfgHookGeneration.fetch_add(1) + 1;
-    nrMfgRequests.Invalidate(generation);
-    Neurotic::Semantic::Character::NativeFgWork().Reset();
-    Neurotic::Mfg::InvalidateAdaMfg(generation);
+    if (!observation.HasNativeObservation()) return;
+    struct Notice { HMODULE module = nullptr; ~Notice(){ if (module) FreeLibrary(module); } } notice;
+    try
+    {
+        // This extra transient image reference survives metadata displacement
+        // through notification. No selection/runtime lock spans a loader call.
+        if (observation.function) GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            reinterpret_cast<LPCWSTR>(observation.function), &notice.module);
+        const auto binding = observation.Commit(nrMfgHookGeneration, ownAdvance, invalidated);
+        using Status = Neurotic::Mfg::MfgWrapperBindingStatus;
+        if (!binding.generation || nrMfgHookGeneration.load() != binding.generation) return;
+        if (binding.status == Status::Unchanged || binding.status == Status::Changed)
+        {
+            if (binding.wrapper) mfgSelectedWrapper.exchange(binding.wrapper);
+            if (binding.wrapper && binding.wrapper == notice.module)
+                Neurotic::Mfg::Experimental::ObserveWrapper(notice.module);
+        }
+        // The original cache-change branch already invalidated this ownAdvance.
+        // Only a new observation-owned advance needs these existing notifications.
+        if (!ownAdvance && (binding.status == Status::Changed || binding.status == Status::Ambiguous ||
+            binding.status == Status::TrackingUnavailable))
+        {
+            nrMfgRequests.Invalidate(binding.generation);
+            Neurotic::Semantic::Character::NativeFgWork().Reset();
+            Neurotic::Mfg::InvalidateAdaMfg(binding.generation);
+        }
+    }
+    catch (...) {} // Metadata/notification failure never replaces an upstream result.
 }
 
-void StreamlineHooks::wrapNativeDlssgFunction(const char* name, void*& function)
+void StreamlineHooks::wrapNativeDlssgFunction(const char* name, void*& function, Neurotic::Mfg::MfgWrapperResolution& observation)
 {
     if (!function) return;
+    uint64_t ownAdvance = 0;
+    Neurotic::Mfg::MfgWrapperResolution invalidated;
     if (std::strcmp(name, "slDLSSGSetOptions") == 0)
     {
         if (function == reinterpret_cast<void*>(&hkslDLSSGSetOptions)) return;
         // Passive observation has no companion query dependency. In particular,
         // resolving SetOptions must not require resolving or polling GetState.
-        bindNativeMfgWrapper(function);
         const auto next = reinterpret_cast<decltype(o_slDLSSGSetOptions)>(function);
         if (next != o_slDLSSGSetOptions)
         {
             std::lock_guard lock(lastDlssgOptionsMutex);
             lastDlssgOptionsReplayable = false;
             const auto generation = nrMfgHookGeneration.fetch_add(1) + 1;
+            ownAdvance = generation;
             nrMfgRequests.Invalidate(generation);
             Neurotic::Semantic::Character::NativeFgWork().Reset();
-            Neurotic::Mfg::InvalidateAdaMfg(generation);
+            invalidated = Neurotic::Mfg::InvalidateAdaMfg(generation);
         }
         o_slDLSSGSetOptions = next;
         function = reinterpret_cast<void*>(&hkslDLSSGSetOptions);
@@ -2411,10 +2804,10 @@ void StreamlineHooks::wrapNativeDlssgFunction(const char* name, void*& function)
     else if (std::strcmp(name, "slDLSSGGetState") == 0)
     {
         if (function == reinterpret_cast<void*>(&hkslDLSSGGetState)) return;
-        bindNativeMfgWrapper(function);
         o_slDLSSGGetState = reinterpret_cast<decltype(o_slDLSSGGetState)>(function);
         function = reinterpret_cast<void*>(&hkslDLSSGGetState);
     }
+    commitReturnedMfgCallback(observation, ownAdvance, &invalidated);
 }
 
 Neurotic::Mfg::MfgRequestReceipt StreamlineHooks::mfgRequestReceipt() noexcept
@@ -2429,21 +2822,60 @@ Neurotic::Mfg::MfgHighRatioRefusal StreamlineHooks::mfgHighRatioRefusal() noexce
 
 // SL INTERPOSER
 
-bool StreamlineHooks::PrepareVulkanFullFrame(uint64_t provider,uint64_t frame,uint32_t viewport)
+DlssNr::VkPresentProviderPreparation StreamlineHooks::PrepareVulkanFullFrame(uint64_t provider,uint64_t frame,uint32_t viewport,uint64_t sourceRevision,const DlssNr::VkNrPresentModelLifetime& sourceLifetime)
 {
+    using Stage=DlssNr::VkProviderPrepareStage;using Failure=DlssNr::VkProviderPrepareFailure;
+    DlssNr::VkPresentProviderPreparation result;
+    result.provider=provider;result.frame=frame;result.viewport=viewport;result.sourceRevision=sourceRevision;
+    result.expectedLifetime=sourceLifetime;result.stage=Stage::Preflight;
+    result.effects=DlssNr::VkProviderPrepareEffects::NoExternalEntry;
     auto& adapter=DlssNr::VulkanNrStreamlineAdapter();
-    if(!provider||provider!=adapter.Generation()||frame>UINT32_MAX||viewport==UINT32_MAX||
-       !adapter.Reason(viewport).empty()||!o_slGetNewFrameToken||!o_slSetTagForFrame)return false;
+    result.providerObservedAt=result.stage;result.observedProvider=adapter.Generation();
+    const auto fail=[&](Failure why){result.failure=why;return result;};
+    if(!provider||provider!=result.observedProvider)return fail(Failure::Provider);
+    if(frame>UINT32_MAX)return fail(Failure::Frame);
+    if(viewport==UINT32_MAX)return fail(Failure::Viewport);
+    result.adapterReason=adapter.Reason(viewport);
+    if(!result.adapterReason.empty())return fail(Failure::Adapter);
+    if(!o_slGetNewFrameToken)return fail(Failure::TokenApi);
+    if(!o_slSetTagForFrame)return fail(Failure::TagApi);
+    const auto current=[&]{
+        result.observedLifetime.reset();result.ownerObservedAt=Stage::NotStarted;
+        result.observedRevision=DlssNr::Connections::SignalPreferences().revision;
+        if(result.observedRevision!=sourceRevision){result.failure=Failure::SourceRevision;return false;}
+        if(!sourceLifetime.Qualified()){result.failure=Failure::UnqualifiedLifetime;return false;}
+        // The caller is outside the model locks. Unknown/busy owner never qualifies.
+        result.ownerObservedAt=result.stage;result.observedLifetime=DlssNr::CurrentVulkanPresentModelLifetimeVk();
+        if(!result.observedLifetime){result.failure=Failure::OwnerUnavailable;return false;}
+        if(*result.observedLifetime!=sourceLifetime){result.failure=Failure::OwnerMismatch;return false;}
+        return true;
+    };
+    result.stage=Stage::BeforeToken;if(!current())return result;
     const uint32_t id=static_cast<uint32_t>(frame);sl::FrameToken* token=nullptr;
-    if(o_slGetNewFrameToken(token,&id)!=sl::Result::eOk||!token||token->structVersion!=1||
-       static_cast<uint32_t>(*token)!=id)return false;
+    result.stage=Stage::Token;result.effects=DlssNr::VkProviderPrepareEffects::ExternalEntered;
+    result.token.entered=true;
+    const auto tokenResult=o_slGetNewFrameToken(token,&id);
+    result.token.returned=true;result.token.result=static_cast<int32_t>(tokenResult);
+    if(tokenResult!=sl::Result::eOk)return fail(Failure::TokenResult);
+    if(!token)return fail(Failure::TokenNull);
+    result.tokenVersion=token->structVersion;
+    if(result.tokenVersion!=1)return fail(Failure::TokenVersion);
+    result.tokenFrame=static_cast<uint32_t>(*token);
+    if(result.tokenFrame!=id)return fail(Failure::TokenFrame);
     sl::ResourceTag tags[]={
         {nullptr,sl::kBufferTypeHUDLessColor,sl::ResourceLifecycle::eValidUntilPresent},
         {nullptr,sl::kBufferTypeUIColorAndAlpha,sl::ResourceLifecycle::eValidUntilPresent},
         {nullptr,sl::kBufferTypeUIAlpha,sl::ResourceLifecycle::eValidUntilPresent}};
     // Original entry avoids our observation hooks. Optional tags stay cleared for
     // this frame: CPU Present return does not end asynchronous provider use.
-    return provider==adapter.Generation()&&o_slSetTagForFrame(*token,sl::ViewportHandle(viewport),tags,3,nullptr)==sl::Result::eOk;
+    result.stage=Stage::BeforeTags;if(!current())return result;
+    result.providerObservedAt=result.stage;result.observedProvider=adapter.Generation();
+    if(provider!=result.observedProvider)return fail(Failure::Provider);
+    result.stage=Stage::Tags;result.tags.entered=true;
+    const auto tagResult=o_slSetTagForFrame(*token,sl::ViewportHandle(viewport),tags,3,nullptr);
+    result.tags.returned=true;result.tags.result=static_cast<int32_t>(tagResult);
+    if(tagResult!=sl::Result::eOk)return fail(Failure::TagResult);
+    result.prepared=true;result.stage=Stage::Prepared;return result;
 }
 
 void StreamlineHooks::unhookInterposer()
@@ -2786,6 +3218,10 @@ void StreamlineHooks::hookDlss(HMODULE slDlss)
         return;
     }
 
+    // Prepare this family's independent observer before its getter can issue wrappers.
+    // Failure does not block the original callback; Bind reports exact passthrough.
+    (void)Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,DlssOnLoadDomain>::Prepare();
+
     if (o_dlss_slGetPluginFunction)
         unhookDlss();
 
@@ -2844,6 +3280,9 @@ void StreamlineHooks::hookDlssg(HMODULE slDlssg)
         return;
     }
 
+    // Independent family observer; failure preserves the exact upstream callback.
+    (void)Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,DlssgOnLoadDomain>::Prepare();
+
     if (o_dlssg_slGetPluginFunction)
         unhookDlssg();
 
@@ -2901,6 +3340,9 @@ void StreamlineHooks::hookLocalDlssg(HMODULE slDlssg)
         return;
     }
 
+    // Independent family observer; failure preserves the exact upstream callback.
+    (void)Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,LocalDlssgOnLoadDomain>::Prepare();
+
     if (o_local_dlssg_slGetPluginFunction)
         unhookLocalDlssg();
 
@@ -2951,6 +3393,10 @@ void StreamlineHooks::hookReflex(HMODULE slReflex)
         LOG_WARN("Reflex module in NULL");
         return;
     }
+
+    // Prepare this family's independent observer before its getter can issue wrappers.
+    // Failure does not block the original callback; Bind reports exact passthrough.
+    (void)Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,ReflexOnLoadDomain>::Prepare();
 
     if (o_reflex_slGetPluginFunction)
         unhookReflex();
@@ -3008,6 +3454,10 @@ void StreamlineHooks::hookPcl(HMODULE slPcl)
         return;
     }
 
+    // Prepare this family's independent observer before its getter can issue wrappers.
+    // Failure does not block the original callback; Bind reports exact passthrough.
+    (void)Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters,256,PclOnLoadDomain>::Prepare();
+
     if (o_pcl_slGetPluginFunction)
         unhookPcl();
 
@@ -3050,7 +3500,6 @@ void StreamlineHooks::unhookCommon()
     }
     else
     {
-        systemCaps = nullptr;
         systemCapsSl15 = nullptr;
         o_common_slGetPluginFunction = nullptr;
     }
@@ -3065,6 +3514,13 @@ void StreamlineHooks::hookCommon(HMODULE slCommon)
         LOG_WARN("Common module in NULL");
         return;
     }
+
+    if(Neurotic::Runtime::IsProcessExiting())return;
+    // Root's existing process pin owns the compiled wrappers. Register the
+    // process-owned unload observer before this getter can issue new bindings.
+    // Failure affects wrapping only; it never rejects a user's selected DLL.
+    if(!Neurotic::Hooks::StreamlineOnLoadBindings<sl::param::IParameters>::Prepare())
+        LOG_WARN("Common callback ownership observer unavailable; upstream callbacks remain usable");
 
     if (o_common_slGetPluginFunction)
         unhookCommon();

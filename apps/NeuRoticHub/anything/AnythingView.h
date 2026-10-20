@@ -5,6 +5,7 @@ namespace nh {
 struct HubModel;struct AnythingUiState;struct AnythingSnapshot;
 void RenderAnything(HubModel& model,float dpi);
 float AnythingCountdownWidth(float dpi);
+float AnythingCountdownHeight(float dpi,float width);
 void RenderAnythingCountdown(HubModel& model,float dpi);
 void RequestAnythingDiagnosticsDialog();
 void RenderAnythingAction(HubModel& model,float dpi,float width,float height=0);

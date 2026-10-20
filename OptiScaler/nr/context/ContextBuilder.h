@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "ContextMetadata.h"
 #include "NativeSampleQualification.h"
 #include "NativeJitterBasis.h"
@@ -96,7 +97,8 @@ template<class T> bool RecordContradiction(const ResolvedFact<T>& resolved,std::
 template<class T> ResolvedFact<T> ResolveMember(std::span<const AdmittedCandidate> candidates,
                                                 C::OptionalFact<T> C::AcquisitionCandidate::* member)
 {
-    std::array<FactCandidate<T>,64> values{};std::size_t count=0;
+    auto valuesStorage=std::make_unique<std::array<FactCandidate<T>,64>>();
+    auto& values=*valuesStorage;std::size_t count=0;
     for (const auto& item:candidates)
         values[count++]={item.candidate->header.record,item.candidate->*member,item.evidence};
     return ResolveEvidence<T>(std::span(values.data(),count));
@@ -161,7 +163,8 @@ bool ResolveDescription(std::span<const AdmittedCandidate> candidates,
 {
     // Callback-scoped references to immutable CPU bodies; do not copy 64 motion
     // descriptors (nearly 1 MiB) onto the caller's render thread stack.
-    std::array<FactCandidate<const T*>,64> values{};
+    auto valuesStorage=std::make_unique<std::array<FactCandidate<const T*>,64>>();
+    auto& values=*valuesStorage;
     std::array<const C::AcquisitionCandidate*,64> subjects{};std::size_t count=0;
     // An owner-published descriptor contradiction cannot be erased by a different
     // candidate's Known body. Ordinary missing optional descriptors remain local.
@@ -199,7 +202,8 @@ bool ResolveDescription(std::span<const AdmittedCandidate> candidates,
         const bool success=std::apply([&](const auto&... field){return ([&]{
             using Fact=std::remove_cvref_t<decltype(description.*(field.pointer))>;
             using Value=typename Fact::value_type;
-            std::array<FactCandidate<Value>,64> facts{};
+            auto factsStorage=std::make_unique<std::array<FactCandidate<Value>,64>>();
+            auto& facts=*factsStorage;
             for (std::size_t i=0;i<count;++i)
                 facts[i]={values[i].key,values[i].value.KnownPart()->value->*(field.pointer),values[i].evidence};
             if (!sameSubject)
@@ -243,7 +247,8 @@ bool ResolveClaimField(std::span<const AdmittedCandidate> candidates,
                        C::OptionalFact<T> C::SemanticClaim::* member,C::OptionalFact<T>& output,
                        C::BoundedList<C::Contradiction,8>& contradictions)
 {
-    std::array<FactCandidate<T>,64> facts{};std::size_t count=0;
+    auto factsStorage=std::make_unique<std::array<FactCandidate<T>,64>>();
+    auto& facts=*factsStorage;std::size_t count=0;
     for (std::size_t i=0;i<candidates.size();++i) if (lists[i])
         for (const auto& claim:*lists[i]) if (claim.field==name)
             facts[count++]={candidates[i].candidate->header.record,claim.*member,candidates[i].evidence};
@@ -271,7 +276,8 @@ bool ResolveClaims(std::span<const AdmittedCandidate> candidates,Store& store,C:
         }
     }
     std::sort(names.begin(),names.end(),[](const auto& a,const auto& b){return a.View()<b.View();});
-    C::BoundedList<C::SemanticClaim,16> fields;
+    auto fieldsStorage=std::make_unique<C::BoundedList<C::SemanticClaim,16>>();
+    auto& fields=*fieldsStorage;
     for (const auto& name:names)
     {
         C::SemanticClaim claim;claim.field=name;
@@ -291,7 +297,8 @@ bool ResolveMasks(std::span<const AdmittedCandidate> candidates,Store& store,C::
     const bool success=std::apply([&](const auto&... field){return ([&]{
         using Fact=std::remove_cvref_t<decltype(masks.*(field.pointer))>;
         using T=typename Fact::value_type;
-        std::array<FactCandidate<T>,64> facts{};std::size_t count=0;
+        auto factsStorage=std::make_unique<std::array<FactCandidate<T>,64>>();
+        auto& facts=*factsStorage;std::size_t count=0;
         for (const auto& item:candidates)
         {
             const auto* body=ResolveMetadata(item.candidate->masks,store);if (!body) return false;
@@ -316,7 +323,8 @@ bool ResolveContextJitter(std::span<const AdmittedCandidate> selected,const C::F
                           const C::RasterDescription& raster,Store& store,C::OptionalFact<C::Vec2>& output,
                           C::BoundedList<C::Contradiction,8>& contradictions)
 {
-    std::array<FactCandidate<C::Vec2>,64> facts{};std::size_t count=0;
+    auto factsStorage=std::make_unique<std::array<FactCandidate<C::Vec2>,64>>();
+    auto& facts=*factsStorage;std::size_t count=0;
     for (const auto& item:selected)
         facts[count++]={item.candidate->header.record,InterpretJitter(*item.candidate,frame,raster,store),item.evidence};
     const auto resolved=ResolveEvidence<C::Vec2>(std::span(facts.data(),count));output=resolved.value;
@@ -376,11 +384,22 @@ ContextResult BuildCanonicalFrameContext(const C::ObservationSet& observations,
     }
     std::sort(admitted.begin(),admitted.begin()+count,[](const auto& a,const auto& b){return KeyLess(a.candidate->header.record,b.candidate->header.record);});
     const std::span<const AdmittedCandidate> selected(admitted.data(),count);
-    C::CanonicalFrameContext context;
+    // Fixed capacities stay unchanged; each call owns its scratch off the
+    // host stack. Publishers copy values before this storage is released.
+    struct Scratch
+    {
+        C::CanonicalFrameContext context;
+        C::BoundedList<C::Contradiction,8> contradictions;
+        C::BoundedList<C::ContractRef<C::ContractId::C01>,64> coherent;
+        C::BoundedList<C::AccessRequirements,16> access;
+        C::BoundedList<C::GuideDescription,8> guides;
+    };
+    auto scratch=std::make_unique<Scratch>();
+    auto& context=scratch->context;
     context.header=request.header;context.frame=request.frame;context.boundary=request.boundary;
     context.generations=request.generations;context.renderRaster=request.renderRaster;context.outputRaster=request.outputRaster;
     context.continuity=request.continuity;
-    C::BoundedList<C::Contradiction,8> contradictions;
+    auto& contradictions=scratch->contradictions;
     const auto* renderRaster=ResolveMetadata(request.renderRaster,store);if (!renderRaster) return result;
     if (!ResolveContextJitter(selected,*frame,*renderRaster,store,context.jitter,contradictions) ||
         !ResolveContextMember(selected,&C::AcquisitionCandidate::rrActive,"rrActive",context.rrActive,contradictions) ||
@@ -389,9 +408,9 @@ ContextResult BuildCanonicalFrameContext(const C::ObservationSet& observations,
         !ResolveDescription(selected,&C::AcquisitionCandidate::depth,"depth",store,context.depth,contradictions) ||
         !ResolveDescription(selected,&C::AcquisitionCandidate::motion,"motion",store,context.motion,contradictions) ||
         !ResolveDescription(selected,&C::AcquisitionCandidate::exposure,"exposure",store,context.exposure,contradictions)) return result;
-    C::BoundedList<C::ContractRef<C::ContractId::C01>,64> coherent;
-    C::BoundedList<C::AccessRequirements,16> access;
-    C::BoundedList<C::GuideDescription,8> guides;
+    auto& coherent=scratch->coherent;
+    auto& access=scratch->access;
+    auto& guides=scratch->guides;
     for (const auto& item:selected)
     {
         C::Symbol type;type.Assign(C::AcquisitionCandidate::WireName);

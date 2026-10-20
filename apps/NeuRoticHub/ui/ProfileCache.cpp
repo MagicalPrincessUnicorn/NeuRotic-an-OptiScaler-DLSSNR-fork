@@ -1,5 +1,6 @@
 #include <menu/Localization.h>
 #include "ProfileCache.h"
+#include "GameTargetIdentity.h"
 #include "ManualLibrary.h"
 #include <objbase.h>
 #include <wincrypt.h>
@@ -61,7 +62,7 @@ bool Matches(const std::string& executable,const Json& inspection) {
     return target.suitable && inspection.is_object() && inspection.contains("target") && inspection["target"].is_object() &&
            inspection["target"].value("bitness",64)==target.bitness &&
            inspection["target"].contains("executable") && inspection["target"]["executable"].is_string() &&
-           Key(inspection["target"]["executable"].get<std::string>())==Key(executable) &&
+           GamePhysicalTargetKey(inspection["target"]["executable"].get<std::string>())==GamePhysicalTargetKey(executable) &&
            inspection.contains("state") && (inspection["state"].is_null()||inspection["state"].is_object());
 }
 Json Inputs(const std::string& executable,const Json& inspection) {
@@ -80,8 +81,8 @@ Json Inputs(const std::string& executable,const Json& inspection) {
     }
     return result;
 }
-std::filesystem::path CachePath(const std::string& executable) {
-    auto key=Utf8(Key(executable));HCRYPTPROV provider=0;HCRYPTHASH hash=0;
+std::filesystem::path CachePath(const std::string& executable,bool legacy=false) {
+    auto key=Utf8(legacy?Key(executable):GamePhysicalTargetKey(executable));HCRYPTPROV provider=0;HCRYPTHASH hash=0;
     if(!CryptAcquireContextW(&provider,nullptr,nullptr,PROV_RSA_AES,CRYPT_VERIFYCONTEXT))
         throw std::runtime_error(Neurotic::UiMessage("desktop.profilecache.profile_key_unavailable_73e25cbe", "Profile key unavailable"));
     BYTE digest[32]{};DWORD size=sizeof(digest);
@@ -117,9 +118,10 @@ std::string Now() {
 }
 std::optional<CachedGameProfile> LoadGameProfile(const std::string& executable) noexcept {
     try {
-        auto document=Json::parse(Read(CachePath(executable)));
+        auto path=CachePath(executable);if(!std::filesystem::exists(path))path=CachePath(executable,true);
+        auto document=Json::parse(Read(path));
         if(document.value("schemaVersion",0)!=1 || !document.contains("inspection") ||
-           Key(document.at("executable").get<std::string>())!=Key(executable) ||
+           GamePhysicalTargetKey(document.at("executable").get<std::string>())!=GamePhysicalTargetKey(executable) ||
            !Matches(executable,document["inspection"]) ||
            document.at("inputs")!=Inputs(executable,document["inspection"]))return {};
         auto when=document.at("checkedUtc").get<std::string>();if(when.size()!=20)return {};
@@ -141,7 +143,16 @@ bool SaveGameProfile(const std::string& executable,const Json& inspection) noexc
     }catch(...){return false;}
 }
 void RemoveGameProfile(const std::string& executable) noexcept {
-    try{auto path=CachePath(executable);NoLinks(path);if(std::filesystem::exists(path)){try{if(Json::parse(Read(path)).value("schemaVersion",0)>1)return;}catch(...){}}DeleteFileW(path.c_str());}catch(...){}
+    for(const bool legacy:{false,true})try{
+        auto path=CachePath(executable,legacy);NoLinks(path);if(!std::filesystem::exists(path))continue;
+        try{
+            const auto document=Json::parse(Read(path));if(document.value("schemaVersion",0)>1)continue;
+            // A folded legacy filename can belong to another real target.
+            // Never delete it without verifying its stored physical owner.
+            if(legacy&&(GamePhysicalTargetKey(document.at("executable").get<std::string>())!=GamePhysicalTargetKey(executable)||!Matches(executable,document.at("inspection"))))continue;
+        }catch(...){if(legacy)continue;}
+        DeleteFileW(path.c_str());
+    }catch(...){}
 }
 namespace {
 constexpr size_t MaximumKnownBytes=4*1024*1024,MaximumEnumerationBytes=64*1024*1024;
@@ -159,12 +170,25 @@ BulkUninstallTarget ReadKnown(const Json& record,const std::string& source){
 }
 bool RememberKnownInstallation(const std::string& executable,const std::string& title) noexcept {
  try{
-  const auto candidate=ReadKnown(Json{{"executable",executable},{Neurotic::UiLiteral("desktop.anythingview.title_07bed14a", "title"),title}},Neurotic::UiLiteral("desktop.profilecache.known_install_d08b4249", "Known install"));auto document=KnownDocument();bool found=false;
-  for(auto& item:document["targets"]){auto old=ReadKnown(item,Neurotic::UiLiteral("desktop.profilecache.known_install_d08b4249", "Known install"));if(Key(old.executable)==Key(executable)){if(!title.empty())item[Neurotic::UiLiteral("desktop.anythingview.title_07bed14a", "title")]=title;found=true;}}
-  if(!found){if(document["targets"].size()>=BulkUninstall::MaximumTargets)return false;document["targets"].push_back({{"executable",candidate.executable},{Neurotic::UiLiteral("desktop.anythingview.title_07bed14a", "title"),candidate.title}});}
+  const auto candidate=ReadKnown(Json{{"executable",executable},{Neurotic::UiLiteral("desktop.anythingview.title_07bed14a", "title"),title}},Neurotic::UiLiteral("desktop.profilecache.known_install_d08b4249", "Known install"));auto document=KnownDocument();bool found=false,changed=false;
+  for(auto& item:document["targets"]){auto old=ReadKnown(item,Neurotic::UiLiteral("desktop.profilecache.known_install_d08b4249", "Known install"));if(Key(old.executable)==Key(executable)){if(!title.empty()&&old.title!=title){item[Neurotic::UiLiteral("desktop.anythingview.title_07bed14a", "title")]=title;changed=true;}found=true;}}
+  if(!found){if(document["targets"].size()>=BulkUninstall::MaximumTargets)return false;document["targets"].push_back({{"executable",candidate.executable},{Neurotic::UiLiteral("desktop.anythingview.title_07bed14a", "title"),candidate.title}});changed=true;}
+  if(!changed)return true;
   auto bytes=document.dump();if(bytes.size()>MaximumKnownBytes)return false;SaveUserFile(KnownPath(),bytes);return true;
  }catch(...){return false;}
 }
+bool PreserveOperationKnowledge(const Json& request,const Json& receipt) noexcept try {
+ if(!receipt.is_object()||!receipt.contains("inspection"))return true;
+ const auto& inspection=receipt.at("inspection");
+ if(!inspection.is_object()||!inspection.contains("state"))return true;
+ // Invalid diagnostic state is not a valid installed-target record to migrate.
+ bool recorded=false;try{recorded=RecordedInstall(inspection.at("state"));}catch(...){return true;}
+ if(!recorded)return true;
+ auto target=ReadKnown(inspection.at("target"),"Operation record");
+ auto title=request.is_object()?request.value("gameTitle",std::string{}):std::string{};
+ if(title.empty())title=target.title;
+ return RememberKnownInstallation(target.executable,title);
+}catch(...){return false;}
 KnownInstallationInventory EnumerateKnownInstallations() noexcept {
  KnownInstallationInventory result;size_t bytesRead=0;
  try{auto document=KnownDocument();for(const auto& item:document["targets"]){try{result.targets.push_back(ReadKnown(item,Neurotic::UiLiteral("desktop.profilecache.known_install_d08b4249", "Known install")));}catch(const std::exception& e){result.issues.push_back(std::string(Neurotic::UiLiteral("desktop.profilecache.known_install_entry_4848614a", "Known-install entry: "))+e.what());}}}
@@ -180,7 +204,7 @@ KnownInstallationInventory EnumerateKnownInstallations() noexcept {
     if(length>MaximumEnumerationBytes-bytesRead){result.issues.push_back(Neurotic::UiLiteral("desktop.profilecache.saved_profile_metadata_read_limit_reached_remain_1b05b1e0", "Saved-profile metadata read limit reached; remaining entries were not inspected."));break;}
     bytesRead+=size_t(length);auto document=Json::parse(Read(item.path()));
     if(document.value("schemaVersion",0)!=1)throw std::runtime_error(Neurotic::UiMessage("desktop.profilecache.unsupported_saved_profile_schema_85a68ca1", "Unsupported saved-profile schema"));
-    auto candidate=ReadKnown(document,Neurotic::UiLiteral("desktop.profilecache.saved_profile_1fe4e82b", "Saved profile"));if(!Matches(candidate.executable,document.at("inspection"))||CachePath(candidate.executable).filename()!=item.path().filename())throw std::runtime_error(Neurotic::UiMessage("desktop.profilecache.saved_profile_target_identity_does_not_match_its_0beb44c3", "Saved-profile target identity does not match its file"));
+    auto candidate=ReadKnown(document,Neurotic::UiLiteral("desktop.profilecache.saved_profile_1fe4e82b", "Saved profile"));if(!Matches(candidate.executable,document.at("inspection"))||(CachePath(candidate.executable).filename()!=item.path().filename()&&CachePath(candidate.executable,true).filename()!=item.path().filename()))throw std::runtime_error(Neurotic::UiMessage("desktop.profilecache.saved_profile_target_identity_does_not_match_its_0beb44c3", "Saved-profile target identity does not match its file"));
     const auto& state=document["inspection"]["state"];
     if(RecordedInstall(state))result.targets.push_back(std::move(candidate));
    }catch(const std::exception& e){result.issues.push_back(Utf8(item.path().filename().wstring())+": "+e.what());}

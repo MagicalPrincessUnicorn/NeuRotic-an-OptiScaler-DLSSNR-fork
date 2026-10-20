@@ -1,0 +1,16 @@
+{
+  "base_commit": "c6efa6bf7f2027b3ec94f28578bb5965eabb9e55",
+  "patch_sha256": "36752a8d9ff55b3de11c26e974cb168a4ab550f8b168c35de9a63ba21cadd575",
+  "files": {
+    "ffx-api/src/dx12/ffx_provider_framegenerationswapchain_dx12.cpp": "ccfae7760c41442b4daa3a0b4eaba30549e928fe9382ecd2f655164a497a29cc",
+    "ffx-api/src/ffx_api.cpp": "5c16c049f5943107e7d16802cf1e3cea37f4555924de1a063b45fb340ba2c1c9",
+    "ffx-api/src/ffx_provider_framegeneration.cpp": "20bca5d4550eeed54eee23d8f8cb9b5a408700e19da19d1135ab08f5cf6e76ca",
+    "sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12.cpp": "ab76a19754d5a0e7c86ddffa2a5df024084ed526f37dd18a7390dd9073b21fa7",
+    "sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_Helpers.h": "50a47cc365a284bfb97fefb6ad72ba259f6d1374b15d9e7edd87a9dd4874f0a5",
+    "sdk/src/components/frameinterpolation/ffx_frameinterpolation.cpp": "2a9a5517bb60fe425cc39188c43d7e4a1de1ee03eb93253a13c7ebb48f9300bf",
+    "sdk/src/components/opticalflow/ffx_opticalflow.cpp": "651ba194803993c4a843caa450a012cfc88b571faabd1ec10691e7220fbbe4c8",
+    "sdk/src/shared/ffx_object_management.cpp": "1ccc27ace1f80e9b06dab5263dbb245fa2fa513f0d1f85991b32e922929d170e"
+  },
+  "application": "Apply to FidelityFX-SDK 1.1.4 base commit; preserve source raw bytes or verify product build receipt before exact binary reproduction",
+  "status": "LOCAL_PATCHED_SDK_SOURCE_FOR_PRIVATE_BACKUP"
+}

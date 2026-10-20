@@ -31,6 +31,11 @@ struct NativeProfilePreparationResult
     std::optional<C::ImmutableRecord<NativeProfilePreparationProjection>> projection;
     C::Symbol reason;
 };
+struct OwnedNativeProfilePreparationResult
+{
+    std::unique_ptr<C::ImmutableRecord<NativeProfilePreparationProjection>> projection;
+    C::Symbol reason;
+};
 inline bool SettingsBindings(const SettingsSnapshot& settings,BindingPlan& output)
 {
     constexpr std::array<std::string_view,7> keys={"DLSSNR.Hint.Render.Preset","DLSSNR.Style","DLSSNR.UseAutoMask",
@@ -99,13 +104,14 @@ template<class Reader> bool ApplyConsumerControls(const RepresentationUse& use,c
 }
 namespace Detail
 {
-template<class Store> NativeProfilePreparationResult BuildProfileProjection(
+template<class Store> OwnedNativeProfilePreparationResult BuildProfileProjectionOwned(
     const NativeProfilePreparationRequest& input,Store& store,const C::EvidenceRef& evidence,
     ProfilePreparationContent content=ProfilePreparationContent::ExactCurrent)
 {
-    NativeProfilePreparationResult result;result.reason=QualifyPreparation(input,store,content);if(!result.reason.Empty())return result;
     try
     {
+        OwnedNativeProfilePreparationResult result;
+        result.reason=QualifyPreparation(input,store,content);if(!result.reason.Empty())return result;
         auto product=std::make_unique<NativeProfilePreparationProjection>();auto& p=*product;
         const auto* context=S::ResolveMetadata(input.context,store);const auto* settings=S::ResolveMetadata(input.settings,store);
         if(!context||!settings)return {{},Symbol("RENDER.Profile.SourceDisappeared")};
@@ -127,8 +133,14 @@ template<class Store> NativeProfilePreparationResult BuildProfileProjection(
             certificate.nativeFreshness=S::NativeFreshness(*frame->nativeSample,*sample);
         }
         else certificate.maximumAge=C::OptionalFact<std::uint64_t>::FromKnown(0,evidence);
-        C::BoundedList<C::ContractRef<C::ContractId::C12>,32> plans;C::BoundedList<C::AccessRequirements,16> access;
-        S::TransformLineage conversions;
+        struct PublicationScratch
+        {
+            C::BoundedList<C::ContractRef<C::ContractId::C12>,32> plans;
+            C::BoundedList<C::AccessRequirements,16> access;
+            S::TransformLineage conversions;
+        };
+        auto scratch=std::make_unique<PublicationScratch>();
+        auto& plans=scratch->plans;auto& access=scratch->access;auto& conversions=scratch->conversions;
         if(native)
         {
             p.runtime=input.runtime;
@@ -198,10 +210,21 @@ template<class Store> NativeProfilePreparationResult BuildProfileProjection(
            !S::ValidValues(p.dependencies)||!S::ValidValues(p.inputRepresentations)||
            !S::ValidValues(p.representations)||!S::ValidValues(p.leaseRequests)||!S::ValidValues(p.conversions)||
            (native&&!S::ValidValues(p.expectedOutput)))return {{},Symbol("RENDER.Profile.InvalidProduct")};
-        result.projection.emplace(p);return result;
+        result.projection=std::make_unique<C::ImmutableRecord<NativeProfilePreparationProjection>>(p);return result;
     }
     catch(const std::bad_alloc&){return {{},Symbol("RENDER.Profile.AllocationFailure")};}
 }
+// Preserve the public value API for callers outside native invocation.
+template<class Store> NativeProfilePreparationResult BuildProfileProjection(
+    const NativeProfilePreparationRequest& input,Store& store,const C::EvidenceRef& evidence,
+    ProfilePreparationContent content=ProfilePreparationContent::ExactCurrent)
+{
+    const auto owned=BuildProfileProjectionOwned(input,store,evidence,content);
+    NativeProfilePreparationResult result;result.reason=owned.reason;
+    if(owned.projection)result.projection.emplace(owned.projection->Value());
+    return result;
+}
+
 }
 template<class Store> NativeProfilePreparationResult PrepareNativeProfile(const NativeProfilePreparationRequest& input,Store& store)
 {

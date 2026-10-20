@@ -1,0 +1,11 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <ItemGroup Label="ProjectConfigurations"><ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration></ItemGroup>
+ <PropertyGroup Label="Globals"><WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+ <PropertyGroup Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><PlatformToolset>v145</PlatformToolset><UseDebugLibraries>false</UseDebugLibraries></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+ <PropertyGroup><OutDir>$(MSBuildThisFileDirectory)..\..\..\builds\window-worker\nr\</OutDir><IntDir>$(OutDir)host-obj\</IntDir></PropertyGroup>
+ <ItemDefinitionGroup><ClCompile><LanguageStandard>stdcpp20</LanguageStandard><RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary><ExceptionHandling>Sync</ExceptionHandling><PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX</PreprocessorDefinitions><AdditionalIncludeDirectories>$(OutDir)generated;$(MSBuildThisFileDirectory)..\..\..\external\nvngx_dlss_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><WarningLevel>Level4</WarningLevel></ClCompile></ItemDefinitionGroup>
+ <ItemGroup><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\nr\NrHost.cpp"/><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\nr\NrPolicy.cpp"/><ClCompile Include="..\..\..\apps\NeuRoticWindowWorker\capture\ProcessingAdapter.cpp"/></ItemGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

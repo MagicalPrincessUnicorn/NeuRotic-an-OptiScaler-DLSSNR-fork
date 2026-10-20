@@ -1,0 +1,802 @@
+{
+  "schemaVersion": "1.0-draft",
+  "bundleId": "bundle:stale:100",
+  "recordRevision": 1,
+  "mode": "fixture",
+  "ownerDomain": "DiagnosticsFixture",
+  "sourceSnapshot": {
+    "presence": "observed",
+    "validity": "established",
+    "origin": "direct_contract",
+    "evidence": [
+      "E-EX-STALE-REFUSED"
+    ],
+    "value": "Chat-D-design-fixture"
+  },
+  "frameContext": {
+    "identity": {
+      "sessionId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "session:stale"
+      },
+      "renderStreamId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "stream:stale"
+      },
+      "viewId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "view:main"
+      },
+      "episodeId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "episode:stale:1"
+      },
+      "baseRealFrameId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "frame:stale:100"
+      },
+      "renderId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "render:stale:100"
+      },
+      "evaluationId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "eval:stale:100"
+      },
+      "presentId": {
+        "presence": "observed",
+        "validity": "established",
+        "origin": "direct_contract",
+        "evidence": [
+          "E-stale"
+        ],
+        "value": "present:stale:100"
+      },
+      "generatedFrameId": {
+        "presence": "not_applicable",
+        "validity": "established",
+        "origin": "none",
+        "evidence": []
+      },
+      "finalSealId": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-stale"
+        ],
+        "reasonIds": [
+          "SEM.FRAME.FINAL_LINEAGE_MISSING"
+        ]
+      }
+    },
+    "associations": [
+      {
+        "edgeId": "edge:E-EX-STALE-REFUSED:same_evaluation",
+        "type": "same_evaluation",
+        "from": "eval:stale:100",
+        "to": "frame:stale:100",
+        "validity": "established",
+        "scope": "one provider evaluation and view",
+        "evidence": [
+          "E-EX-STALE-REFUSED"
+        ],
+        "reasonIds": []
+      }
+    ],
+    "routeGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-STALE-REFUSED"
+      ],
+      "value": 1
+    },
+    "historyGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-STALE-REFUSED"
+      ],
+      "value": 1
+    },
+    "modelGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-STALE-REFUSED"
+      ],
+      "value": 1
+    },
+    "fgPolicyGeneration": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-STALE-REFUSED"
+      ],
+      "value": 1
+    },
+    "contextEvidence": [
+      "E-EX-STALE-REFUSED"
+    ]
+  },
+  "signals": [
+    {
+      "recordId": "sig:stale:depth",
+      "recordRevision": 1,
+      "signalRole": "depth",
+      "payloadKind": "resource",
+      "source": {
+        "provider": "NVSDK_NGX",
+        "providerIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "NVSDK_NGX:incarnation:1"
+        },
+        "adapter": "NgxDx12Adapter",
+        "sourceSchema": "NVSDK_NGX_Parameter",
+        "sourceVersion": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "fixture"
+        },
+        "sourceBoundary": "feature_evaluate",
+        "sourceKeys": [
+          "Depth",
+          "providerFrameToken",
+          "contentRevision"
+        ],
+        "observationId": "obs:stale:100",
+        "observationRevision": 1
+      },
+      "frameAssociation": {
+        "identity": {
+          "sessionId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "session:stale"
+          },
+          "renderStreamId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "stream:stale"
+          },
+          "viewId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "view:main"
+          },
+          "episodeId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "episode:stale:1"
+          },
+          "baseRealFrameId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "frame:stale:100"
+          },
+          "renderId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "render:stale:100"
+          },
+          "evaluationId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "eval:stale:100"
+          },
+          "presentId": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-stale"
+            ],
+            "value": "present:stale:100"
+          },
+          "generatedFrameId": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "finalSealId": {
+            "presence": "missing",
+            "validity": "unknown",
+            "origin": "none",
+            "evidence": [
+              "E-stale"
+            ],
+            "reasonIds": [
+              "SEM.FRAME.FINAL_LINEAGE_MISSING"
+            ]
+          }
+        },
+        "edges": [
+          {
+            "edgeId": "edge:E-EX-STALE-REFUSED:same_evaluation",
+            "type": "same_evaluation",
+            "from": "eval:stale:100",
+            "to": "frame:stale:100",
+            "validity": "established",
+            "scope": "one provider evaluation and view",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "reasonIds": []
+          }
+        ]
+      },
+      "spatial": {
+        "allocationExtent": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "activeRect": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "validCoverage": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "resolutionDomain": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "render"
+        },
+        "origin": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "top_left"
+        },
+        "axisSigns": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": {
+            "x": 1,
+            "y": 1
+          }
+        },
+        "pixelCenter": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "samplingIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "sampling:render:1920x1080"
+        },
+        "sourceToCanonicalMapping": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": {
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "semantics": {
+        "kind": "depth",
+        "facts": {
+          "encoding": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": "device_depth"
+          },
+          "inverted": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": true
+          }
+        }
+      },
+      "lineage": [],
+      "evidenceNodes": [
+        "E-EX-STALE-REFUSED"
+      ],
+      "validation": {
+        "hardGates": [
+          {
+            "checkId": "identity",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          },
+          {
+            "checkId": "frame_association",
+            "state": "fail",
+            "hard": true,
+            "reasonIds": [
+              "SEM.FRAME.PROVIDER_TOKEN_MISMATCH"
+            ],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          },
+          {
+            "checkId": "spatial_bounds",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          },
+          {
+            "checkId": "device_queue",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          },
+          {
+            "checkId": "access_lifetime",
+            "state": "fail",
+            "hard": true,
+            "reasonIds": [
+              "SEM.LIFE.REVOKED"
+            ],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          },
+          {
+            "checkId": "content_freshness",
+            "state": "fail",
+            "hard": true,
+            "reasonIds": [
+              "SEM.ID.CONTENT_STALE"
+            ],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          },
+          {
+            "checkId": "required_semantics",
+            "state": "pass",
+            "hard": true,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          }
+        ],
+        "semanticChecks": [
+          {
+            "checkId": "semantic_contract",
+            "state": "pass",
+            "hard": false,
+            "reasonIds": [],
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ]
+          }
+        ],
+        "admission": "refused",
+        "reasonIds": [
+          "SEM.FRAME.PROVIDER_TOKEN_MISMATCH",
+          "SEM.LIFE.REVOKED",
+          "SEM.ID.CONTENT_STALE"
+        ],
+        "consumerProfile": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "NativeTemporal-Minimum-v1"
+        }
+      },
+      "representationPlanRef": {
+        "presence": "missing",
+        "validity": "unknown",
+        "origin": "none",
+        "evidence": [
+          "E-EX-STALE-REFUSED"
+        ],
+        "reasonIds": [
+          "SEM.XFORM.PLAN_NOT_COMMITTED"
+        ]
+      },
+      "resource": {
+        "api": "d3d12",
+        "opaqueNativeToken": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "opaque:stale-depth",
+          "scope": "in-process diagnostic token; not serialized native pointer"
+        },
+        "objectIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "obj:stale-depth:1"
+        },
+        "resourceIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "res:stale-depth:1"
+        },
+        "viewIncarnation": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "view:stale-depth:0:0:0:1"
+        },
+        "resourceGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": 4
+        },
+        "representationGeneration": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": 1
+        },
+        "contentRevision": {
+          "presence": "observed",
+          "validity": "stale",
+          "origin": "source_observation",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": 99,
+          "reasonIds": [
+            "SEM.ID.CONTENT_STALE"
+          ]
+        },
+        "subresource": {
+          "mip": 0,
+          "arrayLayer": 0,
+          "plane": 0,
+          "levelCount": 1,
+          "layerCount": 1,
+          "aspectMask": "color"
+        },
+        "descriptor": {
+          "dimension": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": "2d"
+          },
+          "format": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": "R32_FLOAT"
+          },
+          "allocationExtent": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": {
+              "width": 1920,
+              "height": 1080
+            }
+          },
+          "sampleCount": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": 1
+          },
+          "usage": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": [
+              "shader_read"
+            ]
+          }
+        },
+        "deviceIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "device:0"
+        },
+        "adapterIdentity": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "adapter:0"
+        },
+        "accessState": {
+          "stateOrLayout": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": "D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE"
+          },
+          "queueIdentity": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": "graphics:0"
+          },
+          "queueFamily": {
+            "presence": "not_applicable",
+            "validity": "established",
+            "origin": "none",
+            "evidence": []
+          },
+          "accessMode": {
+            "presence": "observed",
+            "validity": "established",
+            "origin": "direct_contract",
+            "evidence": [
+              "E-EX-STALE-REFUSED"
+            ],
+            "value": "read"
+          }
+        }
+      },
+      "lease": {
+        "leaseId": "lease:stale:depth",
+        "ownerDomain": "AdapterOwner",
+        "scope": "until_fence",
+        "readyProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "fence:producer:10"
+        },
+        "retirementProof": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "fence:consumer:20"
+        },
+        "revocationGeneration": {
+          "presence": "observed",
+          "validity": "contradicted",
+          "origin": "source_observation",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": 6,
+          "reasonIds": [
+            "SEM.LIFE.REVOKED"
+          ]
+        },
+        "releaseMethod": {
+          "presence": "observed",
+          "validity": "established",
+          "origin": "direct_contract",
+          "evidence": [
+            "E-EX-STALE-REFUSED"
+          ],
+          "value": "owner_releases_after_retirement"
+        }
+      }
+    }
+  ],
+  "bundleValidation": {
+    "hardGates": [],
+    "semanticChecks": [],
+    "admission": "refused",
+    "reasonIds": [
+      "SEM.FRAME.PROVIDER_TOKEN_MISMATCH",
+      "SEM.LIFE.REVOKED",
+      "SEM.ID.CONTENT_STALE"
+    ],
+    "consumerProfile": {
+      "presence": "observed",
+      "validity": "established",
+      "origin": "direct_contract",
+      "evidence": [
+        "E-EX-STALE-REFUSED"
+      ],
+      "value": "fixture_bundle_validation"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+#include <cstdint>
+#include <cstdio>
+namespace DlssNr::MenuStatus {
+// ACTUAL_ACTIVITY
+}
+enum class MenuReadiness {Waiting,Ready,Blocked};
+struct Telemetry {
+ uint64_t selectedNativeObservations=0,frames=0,lifecycleGeneration=1,nativeInputGeneration=1;
+ struct {uint64_t observations=0;} nativeInputs;
+ unsigned frameWidth=1920,frameHeight=1080;
+ bool lifecycleOpen=true,enabled=false,failed=false,outputQuarantined=false,transitionPending=false,resetPending=false,running=false;
+} current;
+bool isVulkan=true;
+bool IsVulkanInput(){return isVulkan;}
+Telemetry SelectedNativeTelemetry(){return current;}
+namespace DlssNr {
+MenuReadiness Probe(bool enabled,uint64_t selection,double now){
+ const bool vulkan=IsVulkanInput();
+ static MenuStatus::ActivityObservation nativeObservation;
+// ACTUAL_MENU_TAIL
+}
+unsigned checks=0,failed=0;
+void Check(bool value,const char* label){++checks;failed+=!value;std::printf("%s %s\n",value?"PASS":"FAIL",label);}
+int main(){using namespace DlssNr;
+ current.nativeInputs.observations=10;Check(Probe(false,1,0)==MenuReadiness::Waiting,"disabled Vulkan selection waits for actual new raw progress");
+ ++current.nativeInputs.observations;Check(Probe(false,1,0.1)==MenuReadiness::Ready&&!current.running,"fresh disabled raw inputs become Ready without claiming NR running");
+ ++current.nativeInputGeneration;Check(Probe(false,1,0.2)==MenuReadiness::Waiting,"raw source generation change resets disabled freshness");
+ ++current.nativeInputs.observations;Check(Probe(false,1,0.3)==MenuReadiness::Ready,"new raw owner becomes ready only after its own progress");
+ Check(Probe(false,1,1.4)==MenuReadiness::Waiting,"disabled raw activity expires after timeout");
+ current.enabled=true;current.running=true;current.selectedNativeObservations=5;
+ Check(Probe(true,2,2)==MenuReadiness::Waiting,"enabled selection resets observation to selected lifecycle");
+ ++current.nativeInputs.observations;Check(Probe(true,2,2.1)==MenuReadiness::Waiting,"enabled duplicate raw callback cannot refresh selected operational status");
+ ++current.selectedNativeObservations;Check(Probe(true,2,2.2)==MenuReadiness::Ready,"enabled genuine selected work advances readiness");
+ current.failed=true;Check(Probe(true,2,2.3)==MenuReadiness::Blocked,"current enabled selected failure remains blocked");current.failed=false;
+ ++current.lifecycleGeneration;Check(Probe(true,2,2.4)==MenuReadiness::Waiting,"enabled operational lifecycle change resets freshness");
+ isVulkan=false;current.enabled=false;current.running=false;current.frames=9;
+ Check(Probe(false,3,3)==MenuReadiness::Waiting,"DX12 existing counter resets on new selection");
+ ++current.frames;Check(Probe(false,3,3.1)==MenuReadiness::Ready,"DX12 existing input-plus-frame progress stays unchanged");
+ std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}

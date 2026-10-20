@@ -141,7 +141,7 @@ static VkResult VKAPI_CALL AppPresent(VkQueue queue,const VkPresentInfoKHR* info
         if(refusal.empty()&&observed&&frame){
             const auto instance=_instance?_instance:State::Instance().VulkanInstance;
             execution=executor.BeforePresent(*observed,instance,*info,std::make_shared<NrConfigSnapshot<Config>>(*settings),guides,{},
-                [id=*frame]{return StreamlineHooks::PrepareVulkanFullFrame(id.provider,id.frame,id.viewport);});
+                [id=*frame](uint64_t revision,const DlssNr::VkNrPresentModelLifetime& lifetime){return StreamlineHooks::PrepareVulkanFullFrame(id.provider,id.frame,id.viewport,revision,lifetime);});
             if(execution.handoff.state==DlssNr::VkPresentHandoffState::Accepted)DlssNr::ApplyVkPresentHandoff(local,execution.handoff);
             else if(execution.handoff.state==DlssNr::VkPresentHandoffState::Uncertain){
                 ReportVkPresentResult(queue,*info,&*observed,&execution,false,execution.handoff.result,execution.reason.c_str());

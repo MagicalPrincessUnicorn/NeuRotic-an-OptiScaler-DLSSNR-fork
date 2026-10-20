@@ -1,11 +1,14 @@
 @echo off
 setlocal
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
+set "ROOT=%~dp0.."
+set "OUT=%ROOT%\builds\moonshot-w03-reconciliation\gpu-safety"
+if not exist "%OUT%" mkdir "%OUT%"
+call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 >nul
 if errorlevel 1 exit /b 1
-pushd "%~dp0.."
-cl /nologo /std:c++20 /EHsc /W4 /I OptiScaler /I OptiScaler\include tests\nr_gpu_safety.cpp /Fe:C:\OptiScaler-NR-Dev\logs\nr_gpu_safety_test.exe /Fo:C:\OptiScaler-NR-Dev\logs\nr_gpu_safety_test.obj /link d3d12.lib dxgi.lib OptiScaler\library\detours\detours.lib
+pushd "%ROOT%"
+cl /nologo /std:c++20 /EHsc /W4 /I OptiScaler /I OptiScaler\include tests\nr_gpu_safety.cpp /Fe:"%OUT%\test.exe" /Fo:"%OUT%\test.obj" /link d3d12.lib dxgi.lib OptiScaler\library\detours\detours.lib
 if errorlevel 1 (popd & exit /b 1)
-C:\OptiScaler-NR-Dev\logs\nr_gpu_safety_test.exe
+"%OUT%\test.exe"
 set "testResult=%ERRORLEVEL%"
 popd
 exit /b %testResult%

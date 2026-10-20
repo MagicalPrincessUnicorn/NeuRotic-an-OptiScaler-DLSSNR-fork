@@ -10,10 +10,13 @@
 #include <nvsdk_ngx_vk.h>
 #include <nvsdk_ngx_helpers_vk.h>
 #include "VulkanNrSession.h"
+#include "VulkanNrFrameParams.h"
 #include "VulkanNrStreamline.h"
 #include "VulkanNrCapabilities.h"
 #include "VulkanNrResolution.h"
+#include "VulkanNrNativeObservation.h"
 #include "VulkanNrPassPlan.h"
+#include "VulkanPresentInitialization.h"
 
 // Native Windows Vulkan NR. Model generations own images, parameters and temporal history.
 // Composition descriptors and constants remain immutable until their recording uses end.
@@ -29,13 +32,15 @@ namespace DlssNr
 struct TelemetrySnapshot;
 namespace Capability { struct NativeObservation; class WriterPort; }
 TelemetrySnapshot NativeTelemetryVk();
+struct VkPresentStatusSnapshot;
+VkPresentStatusSnapshot PresentTelemetryVk(const NrConfigSnapshot<Config>&);
 // Requires new NR admission gated and render callbacks joined. Read-only;
 // inactive maintenance must independently retire any retained owners.
 bool CanYieldVulkanOutput(std::string& reason);
 Capability::NativeObservation CopyCapabilityObservationVk(const Capability::WriterPort&,
     const Capability::WriterPort* lifecycle) noexcept;
-void ObserveNativeVk(NVSDK_NGX_Parameter*, const VkNrTemporalMetadata*, const NrConfigSnapshot<Config>&, bool rayReconstruction);
-void ObserveNativeResultVk(const VkRecordResult&, bool beforeSr, bool bound, bool srSucceeded, bool selected=true);
+void ObserveNativeResultVk(const VkNrNativeObservation&, const NrConfigSnapshot<Config>&,
+    const VkRecordResult&, bool beforeSr, bool bound, bool srSucceeded, bool selected=true);
 
 // Runs the model over what the upscaler just wrote, on the same command buffer.
 //
@@ -48,10 +53,13 @@ VkRecordResult EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Param
                                       VkPhysicalDevice physicalDevice, VkDevice device,
                                       const NrConfigSnapshot<Config>* settings = nullptr,
                                       const VkNrTemporalMetadata* temporal = nullptr, bool rayReconstruction = false,
-                                      const VkNrEvaluationIdentity* evaluation = nullptr);
+                                      const VkNrEvaluationIdentity* evaluation = nullptr,
+                                      const VkFrame::PostSrOutputObservation* output = nullptr);
 // Records image-only Present using private caller-owned color and neutral guide images.
 // targetColor must be private storage; it must never be the game's swapchain image.
 VkRecordResult EvaluatePresentImageVk(const VkFrameRequest& request);
+VkPresentInitializationStep PreparePresentModelsVk(const VkPresentInitializationRequest&, VkCommandBuffer, VkNrUseId);
+void PollPresentInitializationVk();
 VkRecordResult EvaluateBeforeUpscaleVk(const VkFrameRequest&, NVSDK_NGX_Parameter*, const NrConfigSnapshot<Config>&);
 VkNrCapabilitySnapshot CurrentVulkanNrCapabilities();
 void ClearSelectedVkNrFinalColor(VkCommandBuffer);
@@ -63,6 +71,8 @@ void CompletePreSrVk(const VkRecordResult&, bool bound, bool srSucceeded);
 // A discarded Present command buffer may contain model creation or evaluation commands.
 // Prevent reuse of that model state after the buffer is discarded or submission is rejected.
 void AbandonPresentRecordingVk(bool currentCounted = true);
+bool BeginAbandonPresentRecordingVk(VkNrUseId,const VkNrRecordingOwner::UseRecordingSnapshot& beforeReset);
+bool AbandonPresentRecordingVk(VkNrUseId,const VkNrRecordingOwner::UseRecordingSnapshot& beforeReset);
 void MarkPresentRuntimeUncertainVk(const char* reason);
 
 // Whether the native Vulkan path is up, and why not if it is not.
@@ -95,7 +105,7 @@ void RetryShutdownVk(VkDevice device);
 // Render-boundary maintenance; uses try-locks and actual completion/recording
 // ownership, never a device-idle or fence wait. Does not shut down the provider.
 void RetireInactiveVk(VkDevice device,bool enabled,uint32_t selectedRoute);
-void DeviceDestroyedVk(VkDevice device);
+void DeviceDestroyedVk(VkDevice device,uint64_t sourceRetirementGeneration);
 void NotifyDeviceInitVk();
 
 } // namespace DlssNr

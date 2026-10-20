@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <nr/diagnostics/PacingTrace.h>
 #include "FrameLimit.h"
 
 #include "Config.h"
@@ -63,7 +64,9 @@ inline int FrameLimit::combined_sleep(int64_t ns)
 
 void FrameLimit::sleep(bool fgActive)
 {
-    if (auto fpsCap = Config::Instance()->FramerateLimit.value_or_default(); fpsCap != 0.0f)
+    const auto fpsCap = Config::Instance()->FramerateLimit.value_or_default();
+    Neurotic::PacingTrace::ExplicitCap(fpsCap,fgActive);
+    if (fpsCap != 0.0f)
     {
         uint64_t min_interval_us = std::clamp((uint64_t) (1'000'000 / fpsCap), 0ULL, 100'000'000ULL);
 

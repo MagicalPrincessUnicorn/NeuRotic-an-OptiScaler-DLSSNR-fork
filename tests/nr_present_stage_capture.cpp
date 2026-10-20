@@ -10,6 +10,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <json.hpp>
 
 using Microsoft::WRL::ComPtr;
 namespace Safety = DlssNr::GpuSafety;
@@ -83,12 +84,13 @@ static void CheckFreshSrRestoration()
 }
 
 static std::filesystem::path FindScreenshot(const std::filesystem::path& root, const std::string& tag,
-                                          const std::filesystem::path& exclude = {})
+                                          const std::filesystem::path& exclude = {}, bool rawBatch = false)
 {
     std::filesystem::path result;
     for (const auto& entry : std::filesystem::directory_iterator(root))
     {
         assert(entry.is_regular_file());
+        if (rawBatch && (entry.path().extension() == ".raw" || entry.path().filename().string().ends_with("_CAPTURE.json"))) continue;
         assert(entry.path().extension() == ".png");
         {
             const auto text = DlssNr::Screenshots::ReadPngManifest(entry.path());
@@ -152,6 +154,14 @@ int main(int argc, char** argv)
     std::array<ComPtr<ID3D12GraphicsCommandList>, Capture::MaxFrames> lists;
     std::vector<ComPtr<ID3D12Resource>> uploads;
     Capture capture;
+    // Provider identity follows the selected owner, not a retained handle from another route.
+    int authoredSession = 0;
+    std::ostringstream sessionText; sessionText << static_cast<const void*>(&authoredSession);
+    const auto proxyContext = DlssNr::StageCapture::DescribeProviderContext(true, &authoredSession, 7);
+    const auto forwarderContext = DlssNr::StageCapture::DescribeProviderContext(false, &authoredSession, 7);
+    assert(proxyContext.find("provider_selection=proxy; submitted_session=unknown; submitted_generation=unknown") == 0);
+    assert(proxyContext.find("forwarder_context_session=" + sessionText.str()) != std::string::npos);
+    assert(forwarderContext.find("provider_selection=forwarder; submitted_session=" + sessionText.str()) == 0);
     capture.request(GetTickCount64());
     assert(!capture.wantsFrame(GetTickCount64()));
     capture.cancel(); capture.poll(root);
@@ -188,7 +198,8 @@ int main(int argc, char** argv)
             lists[frame]->ResourceBarrier(1, &barrier);
             uploads.push_back(upload);
         }
-        assert(capture.record(lists[frame].Get(), device.Get(), inputs, 100 + frame, false, "fixture"));
+        assert(capture.record(lists[frame].Get(), device.Get(), inputs, 100 + frame, false, "fixture", {},
+                              "actual_jitter_sample=" + std::to_string(frame) + "; exposure_texel=unobserved"));
         Check(lists[frame]->Close());
         ID3D12CommandList* submitted[] = {lists[frame].Get()};
         queue->ExecuteCommandLists(1, submitted);
@@ -210,6 +221,15 @@ int main(int argc, char** argv)
     assert(!capture.active() && capture.status().find("Saved:") == 0);
     auto directory = std::filesystem::directory_iterator(root)->path();
     assert(std::filesystem::exists(directory / "manifest.txt"));
+    {
+        std::ifstream file(directory / "manifest.txt",std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+        // Changing per-frame observations must not look like a settings edit,
+        // cancel the batch, or silently collapse all frames onto the last value.
+        for(unsigned frame=0;frame<8;++frame)
+            assert(text.find("actual_jitter_sample="+std::to_string(frame)+"; exposure_texel=unobserved")!=std::string::npos);
+        assert(text.find("frame_observation")!=std::string::npos);
+    }
     for (unsigned int frame = 0; frame < 8; ++frame)
         for (unsigned int stage = 0; stage < 3; ++stage)
         {
@@ -242,6 +262,18 @@ int main(int argc, char** argv)
         capture.request(GetTickCount64(), 0);
         assert(capture.record(lists[0].Get(), device.Get(), inputs, 400, false, "fixture"));
         assert(!capture.record(lists[0].Get(), device.Get(), inputs, 401, reset, reset ? "fixture" : "changed"));
+        Check(lists[0]->Close()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        capture.poll(root); assert(!capture.active());
+    }
+    // Recipe changes cancel independently from per-frame observation changes above.
+    for (const char* changedRecipe : {"DlssNrReversibleMode=1;DlssNrSecondLayerReversibleMode=0",
+                                     "DlssNrReversibleMode=0;DlssNrSecondLayerReversibleMode=1"})
+    {
+        capture.request(GetTickCount64(), 0);
+        assert(capture.record(lists[0].Get(), device.Get(), inputs, 410, false,
+            "DlssNrReversibleMode=0;DlssNrSecondLayerReversibleMode=0", {}, "jitter=0.25"));
+        assert(!capture.record(lists[0].Get(), device.Get(), inputs, 411, false,
+            changedRecipe, {}, "jitter=0.25"));
         Check(lists[0]->Close()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
         capture.poll(root); assert(!capture.active());
     }
@@ -303,10 +335,12 @@ int main(int argc, char** argv)
     std::vector<DlssNr::StageCapture::StageInput> screenshotInputs {inputs[0], inputs[2]};
     screenshotInputs[0].name = "NR-Off";
     screenshotInputs[1].name = "Present-NR-On";
-    capture.request(GetTickCount64(), 0, 1, true, "integration-test-build");
+    screenshotInputs.push_back(inputs[0]); screenshotInputs.back().name = "layer1_input";
+    screenshotInputs.push_back(inputs[1]); screenshotInputs.back().name = "layer1_raw";
+    capture.request(GetTickCount64(), 0, 1, true, "integration-test-build", true);
     assert(capture.wantsFrame(GetTickCount64()));
     assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 600, false, "same_evaluation true",
-        DlssNr::Screenshots::Identity {2, 123, 4, 5, 1}));
+        DlssNr::Screenshots::Identity {2, 123, 4, 5, 1, 3, 3}, "raw_game_jitter=unknown; label=\"frame\"\nexposure_texel=unobserved"));
     capture.awaitPublication();
     assert(capture.count() == 1 && capture.wanted() == 1);
     assert(!capture.record(lists[0].Get(), device.Get(), screenshotInputs, 601, false, "same_evaluation true"));
@@ -320,9 +354,9 @@ int main(int argc, char** argv)
     capture.poll(root / "screenshots");
     assert(!capture.active() && capture.status().find("Saved:") == 0);
     const auto pngDir = root / "screenshots";
-    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 2);
-    const auto offPng = FindScreenshot(pngDir, "NROFF");
-    const auto presentPng = FindScreenshot(pngDir, "NRONPRESENT");
+    assert(std::distance(std::filesystem::directory_iterator(pngDir), std::filesystem::directory_iterator()) == 9);
+    const auto offPng = FindScreenshot(pngDir, "NROFF", {}, true);
+    const auto presentPng = FindScreenshot(pngDir, "NRONPRESENT", {}, true);
     const auto offName = offPng.filename().string();
     const auto batchPrefix = offName.substr(0, offName.size() - std::string("_NROFF.png").size());
     assert(presentPng.filename() == batchPrefix + "_NRONPRESENT.png");
@@ -332,10 +366,65 @@ int main(int argc, char** argv)
         assert(manifest.find("integration-test-build") != std::string::npos);
         assert(manifest.find("Present Enhanced") != std::string::npos);
         assert(manifest.find("\"provider_frame\":123") != std::string::npos);
+        assert(manifest.find("\"requested_passes\":3,\"completed_passes\":3") != std::string::npos);
+        // Compare the decoded value: JSON \n and \u000a encode the same newline.
+        const auto parsedManifest = nlohmann::json::parse(manifest);
+        assert(parsedManifest.at("frames").size() == 1);
+        assert(parsedManifest.at("frames").at(0).at("observation").get<std::string>() ==
+            "raw_game_jitter=unknown; label=\"frame\"\nexposure_texel=unobserved");
+        std::ifstream observationSidecar(pngDir / (batchPrefix + "_CAPTURE.json"), std::ios::binary);
+        assert(observationSidecar.is_open());
+        assert(nlohmann::json::parse(observationSidecar) == parsedManifest);
         assert(manifest.find(offPng.filename().string()) != std::string::npos);
         assert(manifest.find(presentPng.filename().string()) != std::string::npos);
+        assert(manifest.find("\"raw_file\"") != std::string::npos);
+        assert(manifest.find("\"row_pitch\"") != std::string::npos);
+        auto rawBefore = offPng; rawBefore.replace_extension(".raw");
+        auto rawAfter = presentPng; rawAfter.replace_extension(".raw");
+        assert(std::filesystem::file_size(rawBefore) == sizes[0] && std::filesystem::file_size(rawAfter) == sizes[2]);
+        for (const auto& [path, expected] : {std::pair {rawBefore, 72}, std::pair {rawAfter, 74}})
+        {
+            std::ifstream image(path, std::ios::binary);
+            assert(image.get() == expected); // Last uploaded frame7, independent known bytes.
+        }
+        std::ifstream sidecar(pngDir / (batchPrefix + "_CAPTURE.json"), std::ios::binary);
+        const std::string json((std::istreambuf_iterator<char>(sidecar)), std::istreambuf_iterator<char>());
+        assert(json == manifest);
+        // Intermediate PNG/raw pairs have distinct names and preserve independently known bytes.
+        for (const auto& [tag, expected] : {std::pair {"L1INPUT", 72}, std::pair {"L1RAW", 73}})
+        {
+            const auto png = pngDir / (batchPrefix + "_" + tag + ".png");
+            assert(std::filesystem::exists(png));
+            assert(DlssNr::Screenshots::ReadPngManifest(png) == manifest);
+            auto raw = png; raw.replace_extension(".raw");
+            std::ifstream image(raw, std::ios::binary);
+            assert(image.get() == expected);
+        }
     }
     assert(!std::filesystem::exists(pngDir / (batchPrefix + "_CAPTURE.txt")));
+    // The new Native four-stage request has its own NRON pair, never an alias of L1INPUT/L1RAW.
+    auto nativeInputs = screenshotInputs;
+    nativeInputs[1].name = "Native-NR-On";
+    capture.request(GetTickCount64(), 0, 1, true, "native-four-stage-test", true);
+    assert(capture.record(lists[0].Get(), device.Get(), nativeInputs, 604, false,
+        "Native post-upscale", DlssNr::Screenshots::Identity {0, 0, 0, 7, 0, 1, 1}, forwarderContext));
+    Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+    assert(Safety::Drain(10000));
+    Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+    const auto nativeDir = root / "native-four-stage";
+    capture.poll(nativeDir);
+    assert(!capture.active() && capture.status().find("Saved:") == 0);
+    assert(std::distance(std::filesystem::directory_iterator(nativeDir), std::filesystem::directory_iterator()) == 9);
+    for (const auto& [tag, expected] : {std::pair {"NROFF", 72}, std::pair {"NRON", 74},
+                                      std::pair {"L1INPUT", 72}, std::pair {"L1RAW", 73}})
+    {
+        const auto png = FindScreenshot(nativeDir, tag, {}, true);
+        const auto manifest = DlssNr::Screenshots::ReadPngManifest(png);
+        assert(manifest.find("Native-NR-On") != std::string::npos);
+        assert(manifest.find("native-four-stage-test") != std::string::npos);
+        auto raw = png; raw.replace_extension(".raw");
+        std::ifstream image(raw, std::ios::binary); assert(image.get() == expected);
+    }
     // Completed GPU copies do not imply successful Present publication.
     capture.request(GetTickCount64(), 0, 1, true);
     assert(capture.record(lists[0].Get(), device.Get(), screenshotInputs, 602, false, "failed publication"));
@@ -392,6 +481,33 @@ int main(int argc, char** argv)
         verifyPng(pngDir / "bgra.png", 1, 1, {200, 30, 9});
         assert(!DlssNr::Screenshots::WritePng(pngDir / "bad.png", bgra, 2, 1, 4, DXGI_FORMAT_B8G8R8A8_UNORM));
         assert(!DlssNr::Screenshots::WritePng(pngDir / "bad.png", bgra, 1, 1, 8, DXGI_FORMAT_R32_FLOAT));
+        // 100-nit scRGB gray exported with the same fixed 200-nit SDR-preview
+        // reference for both images must not be clamped to display white.
+        const float hdrGray[] {1.25f, 1.25f, 1.25f, 1.0f};
+        assert(DlssNr::Screenshots::WritePng(pngDir / "scrgb.png", reinterpret_cast<const unsigned char*>(hdrGray),
+            1, 1, 16, DXGI_FORMAT_R32G32B32A32_FLOAT, 2.5f, DlssNr::Screenshots::Encoding::ScRgb));
+        verifyPng(pngDir / "scrgb.png", 1, 1, {178, 178, 178});
+        using DlssNr::Screenshots::Encoding;
+        using DlssNr::Screenshots::DisplayConversion;
+        assert(DisplayConversion(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709)->encoding == Encoding::ScRgb);
+        assert(DisplayConversion(DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020)->encoding == Encoding::Hdr10Pq);
+        assert(DisplayConversion(DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709)->whitePoint == 0);
+        assert(!DisplayConversion(DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_COLOR_SPACE_CUSTOM));
+        assert(!DisplayConversion(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020));
+        // PQ code 520/1023 is approximately 100.23 nits: 10-bit quantization
+        // lands one SDR byte above the exact 100-nit scRGB sample.
+        const UINT pqGray = 520u | (520u << 10) | (520u << 20);
+        assert(DlssNr::Screenshots::WritePng(pngDir / "pq.png", reinterpret_cast<const unsigned char*>(&pqGray),
+            1, 1, 4, DXGI_FORMAT_R10G10B10A2_UNORM, 2.5f, Encoding::Hdr10Pq));
+        verifyPng(pngDir / "pq.png", 1, 1, {179, 179, 179});
+        float pqBlack[3] {}; DlssNr::Screenshots::Pq2020ToScRgb(pqBlack);
+        assert(pqBlack[0] == 0 && pqBlack[1] == 0 && pqBlack[2] == 0);
+        float pqRed[3] {1,0,0}; DlssNr::Screenshots::Pq2020ToScRgb(pqRed);
+        assert(std::abs(pqRed[0] - 207.561375f) < 0.001f && pqRed[1] < 0 && pqRed[2] < 0);
+        assert(!DlssNr::Screenshots::WritePng(pngDir / "bad-pq.png", bgra, 1, 1, 8,
+            DXGI_FORMAT_B8G8R8A8_UNORM, 2.5f, Encoding::Hdr10Pq));
+        assert(!DlssNr::Screenshots::WritePng(pngDir / "bad-scrgb.png", reinterpret_cast<const unsigned char*>(hdrGray),
+            1, 1, 16, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, Encoding::ScRgb));
         const unsigned short halfPixel[] {0x3800, 0x3c00, 0, 0};
         assert(DlssNr::Screenshots::WritePng(pngDir / "half.png", reinterpret_cast<const unsigned char*>(halfPixel),
             1, 1, 8, DXGI_FORMAT_R16G16B16A16_FLOAT));
@@ -482,6 +598,115 @@ int main(int argc, char** argv)
         capture.poll(root / "native-pair"); assert(!capture.active());
         verifyPng(FindScreenshot(root / "native-pair", "NROFF"), 7, 5, {219, 219, 219});
         verifyPng(FindScreenshot(root / "native-pair", "NRON"), 7, 5, {252, 252, 252});
+        // Raw Native diagnostics retain the same held scene planes and keep
+        // upstream provider identity unknown rather than relabeling this fixture.
+        capture.request(GetTickCount64(), 0, 1, true, "diagnostic-owned-fixture", true);
+        assert(capture.record(lists[0].Get(), device.Get(), nativeInputs, 650, false, "Native raw matched pair",
+            DlssNr::Screenshots::Identity {0, 0, 0, 5, 0, 1, 1}));
+        Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+        assert(Safety::Drain(10000));
+        capture.poll(root / "native-raw"); assert(capture.active());
+        Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        capture.poll(root / "native-raw"); assert(!capture.active());
+        const auto rawNativePng = FindScreenshot(root / "native-raw", "NRON", {}, true);
+        auto rawNative = rawNativePng; rawNative.replace_extension(".raw");
+        auto rawNativeBefore = FindScreenshot(root / "native-raw", "NROFF", {}, true);
+        rawNativeBefore.replace_extension(".raw");
+        assert(std::filesystem::file_size(rawNative) == std::filesystem::file_size(rawNativeBefore));
+        const auto rawNativeManifest = DlssNr::Screenshots::ReadPngManifest(rawNativePng);
+        assert(rawNativeManifest.find("\"provider_frame\":0") != std::string::npos);
+        assert(rawNativeManifest.find("\"requested_passes\":1,\"completed_passes\":1") != std::string::npos);
+        // Carry an explicit display-HDR conversion through real GPU readback and
+        // embedded metadata, using the same exposure for the two retained images.
+        for (auto& input : nativeInputs) { input.whitePoint = 2.5f; input.encoding = Encoding::ScRgb; }
+        capture.request(GetTickCount64(), 0, 1, true);
+        assert(capture.record(lists[0].Get(), device.Get(), nativeInputs, 651, false, "Matched HDR SDR previews"));
+        Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+        assert(Safety::Drain(10000));
+        capture.poll(root / "hdr-pair"); assert(capture.active());
+        Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        capture.poll(root / "hdr-pair"); assert(!capture.active());
+        const auto hdrBefore = FindScreenshot(root / "hdr-pair", "NROFF");
+        verifyPng(hdrBefore, 7, 5, {254, 254, 254});
+        verifyPng(FindScreenshot(root / "hdr-pair", "NRON"), 7, 5, {255, 255, 255});
+        std::ifstream hdrFile(hdrBefore, std::ios::binary);
+        const std::string hdrBytes((std::istreambuf_iterator<char>(hdrFile)), {});
+        assert(hdrBytes.find("scRGB709 to SDR preview") != std::string::npos);
+        assert(hdrBytes.find("\"preview_white_point\":2.5") != std::string::npos);
+        // Exercise the actual requested single-pass stage selector. The retained
+        // scene is independent of both model stages; no reconstruction from P/R.
+        std::vector<DlssNr::StageCapture::StageInput> presentStages {inputs[0], inputs[1], nativeInputs[1]};
+        presentStages.back().name = "final_composed";
+        presentStages.back().whitePoint = 0.0f;
+        presentStages.back().encoding = Encoding::DisplayEncoded;
+        const Neurotic::Context::ModelColorOperation displayHdr {0, 2.5f, 1, 0, 1.0f, 0};
+        auto multipassStages = presentStages;
+        multipassStages.insert(multipassStages.end(), presentStages.begin(), presentStages.end());
+        assert(!DlssNr::StageCapture::AddSinglePassPresentOriginal(
+            multipassStages, 2, 2, nativeImages[0].Get(), displayHdr));
+        assert(multipassStages.size() == 6 && multipassStages.back().whitePoint == 0.0f);
+        auto incompleteStages = presentStages;
+        assert(!DlssNr::StageCapture::AddSinglePassPresentOriginal(
+            incompleteStages, 2, 1, nativeImages[0].Get(), displayHdr));
+        assert(!DlssNr::StageCapture::AddSinglePassPresentOriginal(
+            incompleteStages, 1, 0, nativeImages[0].Get(), displayHdr));
+        assert(incompleteStages.size() == 3);
+        auto sdrStages = presentStages;
+        const Neurotic::Context::ModelColorOperation displaySdr {1, 2.5f, 0, 0, 1.0f, 0};
+        assert(DlssNr::StageCapture::AddSinglePassPresentOriginal(
+            sdrStages, 1, 1, nativeImages[0].Get(), displaySdr));
+        assert(sdrStages.size() == 4 && sdrStages.front().whitePoint == 0.0f && sdrStages.back().whitePoint == 0.0f);
+        assert(sdrStages.front().encoding == Encoding::DisplayEncoded && sdrStages.back().encoding == Encoding::DisplayEncoded);
+        assert(DlssNr::StageCapture::AddSinglePassPresentOriginal(
+            presentStages, 1, 1, nativeImages[0].Get(), displayHdr));
+        assert(presentStages.size() == 4 && std::string_view(presentStages[0].name) == "scene_original");
+        assert(presentStages[0].image == nativeImages[0].Get() && presentStages[0].image != presentStages[1].image &&
+               presentStages[0].image != presentStages[2].image && presentStages[0].image != presentStages[3].image);
+        assert(presentStages[0].state == D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        assert(presentStages[0].whitePoint == 2.5f && presentStages[3].whitePoint == 2.5f);
+        assert(presentStages[0].encoding == Encoding::ScRgb && presentStages[3].encoding == Encoding::ScRgb);
+        assert(presentStages[1].whitePoint == 0.0f && presentStages[2].whitePoint == 0.0f);
+        assert(presentStages[1].encoding == Encoding::DisplayEncoded && presentStages[2].encoding == Encoding::DisplayEncoded);
+        D3D12_RESOURCE_BARRIER sceneState {}; sceneState.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        sceneState.Transition = {nativeImages[0].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
+        lists[0]->ResourceBarrier(1, &sceneState);
+        capture.request(GetTickCount64(), 0, 1, true, "present-singlepass-original", true);
+        assert(capture.record(lists[0].Get(), device.Get(), presentStages, 652, false, "Present singlepass O/P/R/F",
+            DlssNr::Screenshots::Identity {0, 0, 0, 7, 0, 1, 1}, "game_frame_id=unknown; downstream_delivery=unobserved"));
+        // copy() must restore NON_PIXEL_SHADER_RESOURCE before this transition.
+        std::swap(sceneState.Transition.StateBefore, sceneState.Transition.StateAfter);
+        lists[0]->ResourceBarrier(1, &sceneState);
+        Check(lists[0]->Close()); queue->ExecuteCommandLists(1, submitted);
+        assert(Safety::Drain(10000));
+        const auto fourStageRoot = root / "present-singlepass-original";
+        capture.poll(fourStageRoot); assert(capture.active() && !std::filesystem::exists(fourStageRoot));
+        Check(allocators[0]->Reset()); Check(lists[0]->Reset(allocators[0].Get(), nullptr));
+        capture.poll(fourStageRoot); assert(!capture.active());
+        assert(std::distance(std::filesystem::directory_iterator(fourStageRoot), std::filesystem::directory_iterator()) == 9);
+        const auto originalPng = FindScreenshot(fourStageRoot, "SCENE", {}, true);
+        const auto composedPng = FindScreenshot(fourStageRoot, "NRON", {}, true);
+        verifyPng(originalPng, 7, 5, {254, 254, 254});
+        verifyPng(composedPng, 7, 5, {255, 255, 255});
+        const auto originalManifest = DlssNr::Screenshots::ReadPngManifest(originalPng);
+        assert(originalManifest == DlssNr::Screenshots::ReadPngManifest(composedPng));
+        assert(originalManifest.find("scene_original") != std::string::npos &&
+               originalManifest.find("scRGB709 to SDR preview") != std::string::npos &&
+               originalManifest.find("game_frame_id=unknown; downstream_delivery=unobserved") != std::string::npos);
+        for (const auto& [png, expected] : {std::pair {originalPng, 16.0f}, std::pair {composedPng, 64.0f}})
+        {
+            auto raw = png; raw.replace_extension(".raw");
+            std::ifstream data(raw, std::ios::binary); float pixel[4]{};
+            data.read(reinterpret_cast<char*>(pixel), sizeof(pixel));
+            assert(data && pixel[0] == expected && pixel[1] == expected && pixel[2] == expected && pixel[3] == 0.0f);
+        }
+        for (const auto& [tag, expected] : {std::pair {"L1INPUT", 72}, std::pair {"L1RAW", 73}})
+        {
+            const auto png = FindScreenshot(fourStageRoot, tag, {}, true);
+            assert(DlssNr::Screenshots::ReadPngManifest(png) == originalManifest);
+            auto raw = png; raw.replace_extension(".raw");
+            std::ifstream data(raw, std::ios::binary); assert(data.get() == expected);
+        }
         const UINT r11White = 960u | (960u << 11) | (480u << 22);
         assert(DlssNr::Screenshots::WritePng(pngDir / "r11.png", reinterpret_cast<const unsigned char*>(&r11White),
             1, 1, 4, DXGI_FORMAT_R11G11B10_FLOAT, 1.0f));
@@ -602,5 +827,6 @@ int main(int argc, char** argv)
     std::cout << "PASS screenshots: every selection mask, exactly one matched GPU frame, PNG decode/pixel/dimension checks, RGBA/BGRA/R10, opaque alpha and invalid-format/stride rejection.\n";
     std::cout << "PASS full output: immediate request, completion-owned private submission, pre-overlay pixels, repeat capture, real readback pair above 512 MiB and distinct missing-buffer failure.\n";
     std::cout << "PASS Native: one full-resolution linear pair, fixed exposure, typeless float and R11 PNG pixels, exact completion/recording-seal gate.\n";
+    std::cout << "PASS HDR export: explicit scRGB/PQ versus SDR selection, decoded PNG pixel values and invalid-format refusal; matched GPU HDR pair carries identical reference and embedded color metadata.\n";
     std::cout << "PASS flat naming: PNG-only with embedded provenance, shared pair prefix, final NR tags and repeated capture preserves earlier pixels.\n";
 }

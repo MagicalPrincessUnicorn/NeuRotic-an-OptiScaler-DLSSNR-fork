@@ -104,7 +104,14 @@ class Package {
     HMODULE observedProviderModule_=nullptr; // observation only; the forwarder retains the loader reference
     const VerificationScope scope_;
     unsigned long long snapshotTick_=0;
-    void Fail(const char* error)noexcept{failed_=true;try{if(error_.empty())error_=error;}catch(...) {}}
+    void Fail(const char* error)noexcept{try{if(!failed_)error_=error;}catch(...) {}failed_=true;}
+    bool ObservationUnavailable(const char* stage,DWORD error) {
+        // An unavailable OS snapshot refuses this observation, not the pinned
+        // identity for the rest of the process. Never publish partial admission.
+        observed_=false;providerObserved_=false;observedProviderModule_=nullptr;loaded_.clear();
+        error_=std::string(stage)+":win32="+std::to_string(error);
+        return false;
+    }
     static fs::path ModulePath(HMODULE module) {
         std::wstring value(32768,L'\0');
         DWORD n=GetModuleFileNameW(module,value.data(),static_cast<DWORD>(value.size()));
@@ -146,11 +153,20 @@ class Package {
     bool Observe(HMODULE requiredProvider=nullptr,bool requireSelectedPath=false)noexcept {
         try {
             if(failed_||!prepared_)return false;
-            observed_=false;providerObserved_=false;observedProviderModule_=nullptr;loaded_.clear();snapshotTick_=GetTickCount64();
-            Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,GetCurrentProcessId()));
-            if(snapshot.value==INVALID_HANDLE_VALUE)throw std::runtime_error("MODULE_SNAPSHOT");
+            observed_=false;providerObserved_=false;observedProviderModule_=nullptr;loaded_.clear();error_.clear();snapshotTick_=GetTickCount64();
+            Handle snapshot;
+            DWORD snapshotError=ERROR_SUCCESS;
+            // Windows documents BAD_LENGTH during loader-list changes. Bound
+            // immediate retries on the render thread; later probes start fresh.
+            for(unsigned attempt=0;attempt<4;++attempt) {
+                snapshot.value=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,GetCurrentProcessId());
+                if(snapshot.value!=INVALID_HANDLE_VALUE)break;
+                snapshotError=GetLastError();
+                if(snapshotError!=ERROR_BAD_LENGTH)break;
+            }
+            if(snapshot.value==INVALID_HANDLE_VALUE)return ObservationUnavailable("MODULE_SNAPSHOT",snapshotError);
             MODULEENTRY32W entry{};entry.dwSize=sizeof(entry);
-            if(!Module32FirstW(snapshot.value,&entry))throw std::runtime_error("MODULE_ENUMERATION");
+            if(!Module32FirstW(snapshot.value,&entry))return ObservationUnavailable("MODULE_ENUMERATION",GetLastError());
             bool requiredFound=requiredProvider==nullptr;
             do {
                 if(scope_==VerificationScope::DirectNr&&_wcsicmp(entry.szModule,L"nvngx_dlssnr.dll")!=0) {
@@ -231,14 +247,15 @@ class Package {
                     if(required)throw std::runtime_error("MIXED_MODULE_UNLISTED:"+Utf8(name));
                 }
             } while(Module32NextW(snapshot.value,&entry));
-            if(GetLastError()!=ERROR_NO_MORE_FILES)throw std::runtime_error("MODULE_ENUMERATION_INCOMPLETE");
+            const auto enumerationError=GetLastError();
+            if(enumerationError!=ERROR_NO_MORE_FILES)return ObservationUnavailable("MODULE_ENUMERATION_INCOMPLETE",enumerationError);
             if(!requiredFound)throw std::runtime_error("ACTUAL_PROVIDER_MODULE_MISSING");
             observed_=true;return true;
         } catch(const std::exception& error){Fail(error.what());return false;}
           catch(...){Fail("MODULE_OBSERVATION_EXCEPTION");return false;}
     }
     const std::string& Error()const noexcept{return error_;}
-    bool ProviderObserved()const noexcept{return providerObserved_;}
+    bool ProviderObserved()const noexcept{return !failed_&&observed_&&providerObserved_;}
     HMODULE ObservedProviderModule()const noexcept {
         return !failed_&&observed_?observedProviderModule_:nullptr;
     }
@@ -260,7 +277,8 @@ class Package {
            <<",\"selection_verified\":"<<(prepared_?"true":"false")
            <<",\"package_verified\":"<<(prepared_&&scope_==VerificationScope::MatchedReference?"true":"false")
            <<",\"module_snapshot_complete\":"<<(observed_?"true":"false")
-           <<",\"provider_loaded\":"<<(providerObserved_?"true":"false")<<",\"refused\":"<<(failed_?"true":"false")<<",\"error\":"<<Quote(error_)
+           <<",\"provider_loaded\":"<<(ProviderObserved()?"true":"false")<<",\"refused\":"<<((failed_||!error_.empty())?"true":"false")<<",\"error\":"<<Quote(error_)
+           <<",\"observation_retryable\":"<<(!failed_&&!error_.empty()?"true":"false")
            <<",\"hash_scope\":\"locked on-disk files at observed module paths; not executable-memory attestation\""
            <<",\"observation_scope\":\"admission snapshot; does not control future foreign DLL loads\",\"members\":[";
         bool first=true;

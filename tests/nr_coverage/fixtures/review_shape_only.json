@@ -1,0 +1,15 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "review_event",
+  "review_id": "ncov:review:2:1433c0c93b12d902e3011f695baa380035b2b2a3d4294dd702d7e2ec0c0279f3",
+  "target_evidence_id": "ncov:evidence:2:596fc6a9b1ef7c887df96f4c198d682e09bbe54f93a533620fd6b62aec7b4f8f",
+  "action": "ADD_LIMITATION",
+  "actor_ref": "fixture-local-reviewer",
+  "occurred_utc": "2026-09-23T23:00:00Z",
+  "scope_sha256": "f53741f9b027a9e8697346baad1f21e089dea5db7f640d8e69bf1a95101bd95a",
+  "policy_sha256": "35e9aa2798f40d7c05ab642a87c60a3cc20ccdcb3786bd8b4911863d18c686a3",
+  "basis_artifact_hashes": [],
+  "supersedes_review_ids": [],
+  "related_evidence_ids": [],
+  "reason": "Design-only review shape example. Not locally registered; grants no qualification."
+}

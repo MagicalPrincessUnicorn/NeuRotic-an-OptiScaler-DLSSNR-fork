@@ -194,7 +194,19 @@ ClosureResult StreamCoordinatorKernel::Close()
 
 void StreamCoordinatorKernel::SweepInvocations()
 {
-    auto& p=*impl_;std::array<Impl::Operation,16> candidates,retired;
+    // Each operation carries retained identity and retirement metadata. Keep
+    // the two bounded snapshots per-call, without consuming the caller stack.
+    struct SweepStorage { std::array<Impl::Operation,16> candidates,retired; };
+    std::unique_ptr<SweepStorage> storage;
+    try { storage=std::make_unique<SweepStorage>(); }
+    catch(...)
+    {
+        // Nothing was changed or polled. Retain all operations for a later
+        // admission/closure attempt; allocation failure proves no retirement.
+        return;
+    }
+    auto& p=*impl_;
+    auto& candidates=storage->candidates;auto& retired=storage->retired;
     // Poll every retained tail on ordinary active admissions as well as close.
     // Failed FSR enrollment has no feature-local entry to drive this work.
     // Keep sweeping false during owner callbacks so genuine acknowledgments can

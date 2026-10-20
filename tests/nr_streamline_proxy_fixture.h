@@ -9,16 +9,19 @@ class IdentityProxy final : public IUnknown
 {
     std::atomic<ULONG> refs {1};
     Microsoft::WRL::ComPtr<IUnknown> base;
+    GUID baseInterface;
   public:
     enum Mode { Normal, NullBase, Self, Error, Unsupported };
     Mode mode;
-    IdentityProxy(IUnknown* value, Mode behavior = Normal) : base(value), mode(behavior) {}
+    IdentityProxy(IUnknown* value, Mode behavior = Normal,
+                  REFGUID baseId = DlssNr::NativeIdentity::streamlineBase)
+        : base(value), baseInterface(baseId), mode(behavior) {}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override
     {
         if (!out) return E_POINTER;
         *out = nullptr;
         if (id == __uuidof(IUnknown)) { *out = this; AddRef(); return S_OK; }
-        if (id != DlssNr::NativeIdentity::streamlineBase || mode == Unsupported) return E_NOINTERFACE;
+        if (id != baseInterface || mode == Unsupported) return E_NOINTERFACE;
         if (mode == Error) return E_FAIL;
         if (mode == NullBase) return S_OK;
         auto* value = mode == Self ? static_cast<IUnknown*>(this) : base.Get();

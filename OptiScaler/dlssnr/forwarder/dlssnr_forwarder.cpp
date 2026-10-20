@@ -1,3 +1,5 @@
+#include "../NativeProviderEntry.h"
+#include "../Feature18HostContract.h"
 // DLSS Neural Rendering calls, isolated in a module the snippet will accept as a caller.
 //
 // The snippet resolves the module owning its return address and requires that module's path to contain
@@ -14,6 +16,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <d3d12.h>
+#include "../CanonicalProviderIdentity.h"
+#include <mutex>
+#include <cstring>
 
 namespace {
 
@@ -73,22 +78,163 @@ struct Snippet {
 };
 
 Snippet g_snip;
+std::recursive_mutex g_d3d12CallMutex;
+#ifdef NR_FORWARDER_CONTRACT_TEST
+bool g_contractTestIdentity=false;
+#endif
+DlssNr::Canonical::Package g_canonical{DlssNr::Canonical::VerificationScope::DirectNr};
+std::mutex g_canonicalMutex;
+std::string g_admissionJson,g_admissionSignature;
+bool g_initEntered=false,g_createEntered=false;
+// Last returned provider calls remain readable after later readiness probes.
+// Their observed flags prevent default zero/false values becoming verdicts.
+bool g_lastInitObserved=false,g_lastCreateObserved=false,g_lastCreateFeatureReturned=false;
+int g_lastInitResult=0,g_lastCreateResult=0;
 
-bool loadSnippet(const wchar_t *path) {
-    if (g_snip.module) {
-        return g_snip.create != nullptr;
-    }
-    g_snip.module = LoadLibraryExW(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-    if (!g_snip.module) {
-        return false;
-    }
+unsigned SnippetExportMask() noexcept {
+    return (g_snip.init?1u:0u)|(g_snip.create?2u:0u)|(g_snip.evaluate?4u:0u)|
+           (g_snip.release?8u:0u)|(g_snip.shutdown?16u:0u);
+}
+
+// Bounded stage diagnostics, including refusals before NGX result words exist.
+// The product's existing OutputDebugString hook records this in OptiScaler.log;
+// a sidecar beside this forwarder also survives disabled trace logging.
+void ReportAdmission(const char* stage,const wchar_t* requested,DWORD error=0,
+                     int nativeResult=0,bool featureReturned=false) noexcept {
+    const auto savedError=GetLastError();
+    try {
+        if(std::strcmp(stage,"INIT_RETURNED")==0){g_lastInitObserved=true;g_lastInitResult=nativeResult;}
+        if(std::strcmp(stage,"CREATE_RETURNED")==0){g_lastCreateObserved=true;g_lastCreateResult=nativeResult;g_lastCreateFeatureReturned=featureReturned;}
+        const auto provider=DlssNr::Canonical::Utf8(requested?requested:L"");
+        const auto mask=SnippetExportMask();
+        std::string identityError;
+        {std::lock_guard<std::mutex> lock(g_canonicalMutex);identityError=g_canonical.Error();}
+        const auto signature=std::string(stage)+provider+std::to_string(error)+":"+
+            std::to_string(mask)+":"+std::to_string(nativeResult)+":"+
+            std::to_string(g_initEntered)+std::to_string(g_createEntered)+std::to_string(featureReturned)+":"+
+            std::to_string(g_lastInitObserved)+":"+std::to_string(g_lastInitResult)+":"+
+            std::to_string(g_lastCreateObserved)+":"+std::to_string(g_lastCreateResult)+":"+std::to_string(g_lastCreateFeatureReturned)+":"+identityError;
+        if(signature==g_admissionSignature){SetLastError(savedError);return;}
+        HMODULE self=nullptr;DWORD selfError=0;
+        std::wstring selfPath(32768,L'\0');
+        if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                              reinterpret_cast<LPCWSTR>(&g_snip),&self)) {
+            selfError=GetLastError();selfPath.clear();
+        } else {
+            const auto length=GetModuleFileNameW(self,selfPath.data(),static_cast<DWORD>(selfPath.size()));
+            if(!length||length>=selfPath.size()){selfError=GetLastError();selfPath.clear();}
+            else selfPath.resize(length);
+        }
+        // Optional enrichment must never suppress the primary refusal.
+        std::string identity="null";
+        {std::lock_guard<std::mutex> lock(g_canonicalMutex);
+         identityError=g_canonical.Error();
+         try {identity=g_canonical.Json();}catch(...) {identityError+=";IDENTITY_JSON_UNAVAILABLE";}}
+        using DlssNr::Canonical::Quote;
+        g_admissionJson="{\"schema_version\":1,\"build\":\"r32-provider-scope\",\"pid\":"+
+            std::to_string(GetCurrentProcessId())+",\"stage\":"+Quote(stage)+
+            ",\"forwarder_path\":"+Quote(DlssNr::Canonical::Utf8(selfPath))+
+            ",\"self_lookup_error\":"+std::to_string(selfError)+
+            ",\"identity_error\":"+Quote(identityError)+
+            ",\"requested_provider\":"+Quote(provider)+",\"win32_error\":"+std::to_string(error)+
+            ",\"export_mask\":"+std::to_string(mask)+",\"required_export_mask\":31"+
+            ",\"init_entered\":"+(g_initEntered?"true":"false")+
+            ",\"create_entered\":"+(g_createEntered?"true":"false")+
+            ",\"native_result\":"+std::to_string(nativeResult)+
+            ",\"feature_returned\":"+(featureReturned?"true":"false")+
+            ",\"last_init\":{\"observed\":"+(g_lastInitObserved?"true":"false")+
+            ",\"native_result\":"+std::to_string(g_lastInitResult)+"}"+
+            ",\"last_create\":{\"observed\":"+(g_lastCreateObserved?"true":"false")+
+            ",\"native_result\":"+std::to_string(g_lastCreateResult)+
+            ",\"feature_returned\":"+(g_lastCreateFeatureReturned?"true":"false")+"}"+
+            ",\"identity\":"+identity+"}";
+        g_admissionSignature=signature;
+        OutputDebugStringA(("NeuRotic NR admission "+g_admissionJson).c_str());
+        auto persist=[&](const std::filesystem::path& path) {
+            const auto file=CreateFileW(path.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                                   nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+            if(file==INVALID_HANDLE_VALUE)return false;
+            DWORD written=0;
+            const bool ok=WriteFile(file,g_admissionJson.data(),static_cast<DWORD>(g_admissionJson.size()),&written,nullptr)
+                &&written==g_admissionJson.size();
+            CloseHandle(file);return ok;
+        };
+        // The selected provider directory is available even if module lookup
+        // is intercepted. Fall back to the user's temp folder if it is unwritable.
+        const auto base=requested&&*requested?std::filesystem::path(requested).parent_path():
+                                             std::filesystem::path(selfPath).parent_path();
+        if(!persist(base/L"NeuRotic-NR-admission.json")) {
+            wchar_t temp[32768]{};const auto n=GetTempPathW(32768,temp);
+            if(n&&n<32768)persist(std::filesystem::path(temp)/
+                (L"NeuRotic-NR-admission-"+std::to_wstring(GetCurrentProcessId())+L".json"));
+        }
+    } catch (...) {}
+    SetLastError(savedError);
+}
+
+bool canonicalBeforeLoad(const wchar_t* path) noexcept {
+#ifdef NR_FORWARDER_CONTRACT_TEST
+    // Controlled Create writer test only. Never let this build load a DLL:
+    // loadSnippet must take its already-present executable-module branch.
+    return path && wcscmp(path, L"CONTROLLED_FAKE_MODULE") == 0 &&
+        g_contractTestIdentity && g_snip.module == GetModuleHandleW(nullptr);
+#else
+    try {
+        std::lock_guard<std::mutex> lock(g_canonicalMutex);
+        return path && g_canonical.Open(path);
+    } catch (...) { return false; }
+#endif
+}
+bool canonicalObserved(HMODULE module) noexcept {
+#ifdef NR_FORWARDER_CONTRACT_TEST
+    return module && g_contractTestIdentity;
+#else
+    try {
+        std::lock_guard<std::mutex> lock(g_canonicalMutex);
+        return module && g_canonical.Observe(module);
+    } catch (...) { return false; }
+#endif
+}
+
+void resolveSnippetExports() {
     g_snip.init = (PFN_NrInitExt) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_Init_Ext");
     g_snip.create = (PFN_NrCreate) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_CreateFeature");
     g_snip.evaluate = (PFN_NrEvaluate) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_EvaluateFeature");
     g_snip.release = (PFN_NrRelease) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_ReleaseFeature");
     g_snip.shutdown = (PFN_NrShutdown) GetProcAddress(g_snip.module, "NVSDK_NGX_D3D12_Shutdown");
+}
+
+bool loadSnippet(const wchar_t *path) {
+    if(g_admissionJson.empty())ReportAdmission("ADMISSION_ENTERED",path);
+    if (!canonicalBeforeLoad(path)) {ReportAdmission("PROVIDER_IDENTITY_REFUSED",path);return false;}
+    if (g_snip.module) {
+        if(!canonicalObserved(g_snip.module)){ReportAdmission("LOADED_IDENTITY_REFUSED",path);return false;}
+        // A previous post-load observation may have refused before binding.
+        // Only bind after the new complete identity observation succeeds.
+        if(SnippetExportMask()==0)resolveSnippetExports();
+        ReportAdmission(SnippetExportMask()==31?"EXPORTS_READY":"REQUIRED_EXPORTS_MISSING",path);
+        return g_snip.create != nullptr && g_snip.evaluate != nullptr;
+    }
+    HMODULE observed=nullptr;
+    {std::lock_guard<std::mutex> lock(g_canonicalMutex);observed=g_canonical.ObservedProviderModule();}
+    if(observed) {
+        // Reuse the already loaded matching module rather than creating a
+        // second provider instance from the caller's unrelocated path.
+        if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                              reinterpret_cast<LPCWSTR>(observed),&g_snip.module)) {
+            const auto error=GetLastError();ReportAdmission("MODULE_RETAIN_FAILED",path,error);return false;
+        }
+    } else g_snip.module = LoadLibraryExW(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    if (!g_snip.module) {
+        const auto error=GetLastError();ReportAdmission("LOAD_LIBRARY_FAILED",path,error);
+        return false;
+    }
+    // Refusal never unloads a module or releases possible provider/GPU work.
+    if (!canonicalObserved(g_snip.module)) {ReportAdmission("LOADED_IDENTITY_REFUSED",path);return false;}
+    resolveSnippetExports();
 
 
+    ReportAdmission(SnippetExportMask()==31?"EXPORTS_READY":"REQUIRED_EXPORTS_MISSING",path);
     return g_snip.create != nullptr && g_snip.evaluate != nullptr;
 }
 
@@ -97,9 +243,33 @@ bool loadSnippet(const wchar_t *path) {
 
 extern "C" {
 
+__declspec(dllexport) unsigned long long dlssnr_call_admission_diagnostic_v1(char* output,
+                                                                          unsigned long long capacity) noexcept {
+    try {
+        std::lock_guard<std::recursive_mutex> lock(g_d3d12CallMutex);
+        const auto required=static_cast<unsigned long long>(g_admissionJson.size()+1);
+        if(output&&capacity>=required)std::memcpy(output,g_admissionJson.c_str(),static_cast<size_t>(required));
+        return required;
+    } catch (...) {return 0;}
+}
+
+// Copy the latest identity snapshot without entering the provider. Return the
+// required byte count including NUL; an undersized buffer is left untouched.
+__declspec(dllexport) unsigned long long dlssnr_call_canonical_identity(char* output,
+                                                                      unsigned long long capacity) noexcept {
+    try {
+        std::lock_guard<std::mutex> lock(g_canonicalMutex);
+        const auto json=g_canonical.Json();
+        const auto required=static_cast<unsigned long long>(json.size()+1);
+        if(output && capacity>=required)std::memcpy(output,json.c_str(),json.size()+1);
+        return required;
+    } catch (...) { return 0; }
+}
+
 // Capability surface for the opt-in Present adapter. No NGX state is created: this only proves the
 // exact direct D3D12 entry points required by Feature 18 exist in the selected model DLL.
 __declspec(dllexport) int dlssnr_call_probe_d3d12(const wchar_t *snippetPath) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     if (!loadSnippet(snippetPath)) return 0;
     int bits = 0;
     if (g_snip.init) bits |= 1;
@@ -112,6 +282,7 @@ __declspec(dllexport) int dlssnr_call_probe_d3d12(const wchar_t *snippetPath) {
 
 // Called once, after the host has worked out which slot this block keeps floats in.
 __declspec(dllexport) void dlssnr_call_set_float_slot(int slot) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     if (slot >= 0 && slot < 8) {
         g_floatSlot = slot;
     }
@@ -120,6 +291,7 @@ __declspec(dllexport) void dlssnr_call_set_float_slot(int slot) {
 // Writes a float through an arbitrary slot, so the host can find the right one by testing.
 __declspec(dllexport) void dlssnr_call_probe_float(void *params, const char *name, float value,
                                                    int slot) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     if (!params || slot < 0 || slot >= 8) {
         return;
     }
@@ -134,6 +306,7 @@ __declspec(dllexport) int dlssnr_call_last_create = 0;
 // The host releases every feature before ending this generation. Keep the module loaded: callbacks
 // and other API surfaces may still refer to its code. Never tail-call past the caller gate.
 __declspec(dllexport) int dlssnr_call_shutdown() {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     volatile int result = 1;
     if (g_snip.initialised) {
         if (!g_snip.shutdown) return -1;
@@ -245,6 +418,7 @@ __declspec(dllexport) int dlssnr_last_ratio_stage = 0;
 // far it got, so a zero can be told apart from a snippet that would not load at all.
 __declspec(dllexport) int dlssnr_query_scaling_ratio(const wchar_t *snippetPath, void *capabilityParams,
                                                      unsigned int perfQuality, float *outRatio) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     dlssnr_last_ratio_stage = 0;
 
     if (!loadSnippet(snippetPath) || !capabilityParams || !outRatio) {
@@ -816,16 +990,30 @@ __declspec(dllexport) void *dlssnr_call_create(const wchar_t *snippetPath, const
                                                int style, float localStructure, float localTone,
                                                float skinStructure, int useAutoMask,
                                                int uiCorrection) {
-    if (!loadSnippet(snippetPath) || !capabilityParams || !device || !g_snip.init ||
-        !g_snip.shutdown || !g_snip.release || !g_snip.evaluate) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
+    // These result words describe this attempt. Historical returned results
+    // remain available separately in the admission record.
+    dlssnr_call_last_init=dlssnr_call_last_create=0;
+    g_initEntered=g_createEntered=false;
+    if (!loadSnippet(snippetPath))return nullptr;
+    if (!capabilityParams || !device) {
+        ReportAdmission("CREATE_ARGUMENTS_INVALID",snippetPath);
         return nullptr;
     }
-    if (g_snip.initialised && g_snip.device != device) return nullptr;
+    if (!g_snip.init || !g_snip.shutdown || !g_snip.release || !g_snip.evaluate) {
+        ReportAdmission("REQUIRED_EXPORTS_MISSING",snippetPath);
+        return nullptr;
+    }
+    if (g_snip.initialised && g_snip.device != device) {
+        ReportAdmission("CREATE_DEVICE_MISMATCH",snippetPath);return nullptr;
+    }
     if (!g_snip.initialised && g_snip.init) {
         // OptiScaler's own generic application id, the one it already hands DLSS when a game's id is
         // not wanted. What was here before was 0x4350324B -- "CP2K" -- so every game that ever loaded
         // this announced itself to the driver as Cyberpunk 2077.
+        g_initEntered=true;ReportAdmission("INIT_ENTERED",snippetPath);
         dlssnr_call_last_init = g_snip.init(0x24480451ull, dataPath, device, 0x0000015, capabilityParams);
+        ReportAdmission("INIT_RETURNED",snippetPath,0,dlssnr_call_last_init);
         g_snip.initialised = (dlssnr_call_last_init == 1);
         if (!g_snip.initialised) {
             return nullptr;
@@ -853,7 +1041,11 @@ __declspec(dllexport) void *dlssnr_call_create(const wchar_t *snippetPath, const
     setUInt(capabilityParams, "DLSSNR.UseAutoMask", (unsigned int) useAutoMask);
     setUInt(capabilityParams, "DLSSNR.UICorrection", (unsigned int) uiCorrection);
     void *handle = nullptr;
+    // Init can itself load plugins. Re-observe at the next provider boundary.
+    if (!canonicalObserved(g_snip.module)) {ReportAdmission("PRE_CREATE_IDENTITY_REFUSED",snippetPath);return nullptr;}
+    g_createEntered=true;ReportAdmission("CREATE_ENTERED",snippetPath);
     dlssnr_call_last_create = g_snip.create(cmd, 18, capabilityParams, &handle);
+    ReportAdmission("CREATE_RETURNED",snippetPath,0,dlssnr_call_last_create,handle!=nullptr);
     return handle;
 }
 
@@ -870,9 +1062,21 @@ static int evaluateWithGuideOrigins(ID3D12GraphicsCommandList *cmd, void *featur
                                                float localTone, float skinStructure, int useAutoMask,
                                                float mvScaleX, float mvScaleY,
                                                float jitterX, float jitterY,
-                                               const unsigned int* origins) {
-    if (!feature || !capabilityParams || !g_snip.evaluate) {
+                                               const unsigned int* origins, const DlssNr::ProviderEntryCallbacks* callbacks=nullptr, bool hostRecorded=false) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
+    if (!feature || !capabilityParams || !g_snip.evaluate || !canonicalObserved(g_snip.module)) {
         return 0;
+    }
+    DlssNr::ProviderEntryScope entry(callbacks);
+    if(callbacks&&!entry.Enter())return 0;
+    try {
+    if(hostRecorded) {
+        // This matched route has no UI/backbuffer inputs. Clear their whole
+        // binding within the same serialized borrow as this evaluation.
+        for(const char* key:{"DLSSNR.UI","DLSSNR.UIAlpha","DLSSNR.Backbuffer"})setResource(capabilityParams,key,nullptr);
+        for(const char* key:{"DLSSNR.UISubrectBaseX","DLSSNR.UISubrectBaseY","DLSSNR.UISubrectWidth","DLSSNR.UISubrectHeight",
+            "DLSSNR.UIAlphaSubrectBaseX","DLSSNR.UIAlphaSubrectBaseY","DLSSNR.UIAlphaSubrectWidth","DLSSNR.UIAlphaSubrectHeight",
+            "DLSSNR.BackbufferSubrectBaseX","DLSSNR.BackbufferSubrectBaseY","DLSSNR.BackbufferSubrectWidth","DLSSNR.BackbufferSubrectHeight"})setUInt(capabilityParams,key,0);
     }
     setResource(capabilityParams, "DLSSNR.Color", color);
     setResource(capabilityParams, "DLSSNR.Depth", depth);
@@ -932,7 +1136,15 @@ static int evaluateWithGuideOrigins(ID3D12GraphicsCommandList *cmd, void *featur
     // caller to whoever called us and rejects it. Keeping the value in a volatile forces a real call and
     // a return through this module, which is the whole reason this file exists.
     volatile int result = g_snip.evaluate(cmd, feature, capabilityParams, nullptr);
+    if(callbacks)entry.Returned(result==1);
     return result;
+    } catch(...) {
+        // Do not unwind a C++ exception across the exported C ABI. Explicitly
+        // close the CPU borrow as unsuccessful; possible recorded effects stay
+        // owned until the exact recording and downstream tails become terminal.
+        if(callbacks)entry.Returned(false);
+        return 0;
+    }
 }
 
 // Preserve the existing ABI and zero-origin Native behavior. Enhanced opts into a separate export.
@@ -974,6 +1186,37 @@ __declspec(dllexport) int dlssnr_call_evaluate_guides_v2(ID3D12GraphicsCommandLi
         structure, tone, skin, mask, mvX, mvY, jitterX, jitterY, origins);
 }
 
+__declspec(dllexport) int dlssnr_call_evaluate_guides_v3(ID3D12GraphicsCommandList* cmd, void* feature,
+    void* params, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
+    ID3D12Resource* output, unsigned int width, unsigned int height, unsigned int depthWidth,
+    unsigned int depthHeight, unsigned int motionWidth, unsigned int motionHeight,
+    int inverted, int reset, float intensity, int style, float structure, float tone, float skin,
+    int mask, float mvX, float mvY, float jitterX, float jitterY, const unsigned int* origins, const DlssNr::ProviderEntryCallbacks* callbacks) {
+    if (!origins || !callbacks) return 0;
+    return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
+        depthWidth, depthHeight, motionWidth, motionHeight, inverted, reset, intensity, style,
+        structure, tone, skin, mask, mvX, mvY, jitterX, jitterY, origins, callbacks);
+}
+
+// Host-policy handshake for the actual selected DLL, independent of provider
+// version/hash/cohort. Export presence is not proof of provider compatibility.
+__declspec(dllexport) const char* dlssnr_call_host_recorded_contract_v1() {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
+    if(SnippetExportMask()!=31||!canonicalObserved(g_snip.module))return nullptr;
+    return DlssNr::Feature18HostContractIdentity;
+}
+__declspec(dllexport) int dlssnr_call_evaluate_guides_v4(ID3D12GraphicsCommandList* cmd, void* feature,
+    void* params, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
+    ID3D12Resource* output, unsigned int width, unsigned int height, unsigned int depthWidth,
+    unsigned int depthHeight, unsigned int motionWidth, unsigned int motionHeight,
+    int inverted, int reset, float intensity, int style, float structure, float tone, float skin,
+    int mask, float mvX, float mvY, float jitterX, float jitterY, const unsigned int* origins, const DlssNr::ProviderEntryCallbacks* callbacks) {
+    if (!origins || !callbacks) return 0;
+    return evaluateWithGuideOrigins(cmd, feature, params, color, depth, motion, output, width, height,
+        depthWidth, depthHeight, motionWidth, motionHeight, inverted, reset, intensity, style,
+        structure, tone, skin, mask, mvX, mvY, jitterX, jitterY, origins, callbacks, true);
+}
+
 // Inputs NVIDIA's own Streamline plugin sets that the positional exports predate: the model's global
 // tone strength (read at create), and the interface as the game draws it -- its layer, its alpha, and
 // the composited back buffer -- which is what the model's UI correction was designed around. Called
@@ -984,6 +1227,7 @@ __declspec(dllexport) void dlssnr_call_set_extras(void *capabilityParams, float 
                                                   ID3D12Resource *backbuffer, unsigned int uiWidth,
                                                   unsigned int uiHeight, unsigned int bbWidth,
                                                   unsigned int bbHeight) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     if (!capabilityParams) {
         return;
     }
@@ -1010,7 +1254,38 @@ __declspec(dllexport) void dlssnr_call_set_extras(void *capabilityParams, float 
     setUInt(capabilityParams, "DLSSNR.BackbufferSubrectHeight", bbHeight);
 }
 
+// Keep SEH in a trivial frame; the outer C++ frame owns serialization.
+// This helper may propagate C++ exceptions to that outer catch. C linkage
+// would let /EHsc assume it cannot throw and optimize away the catch path.
+extern "C++" {
+static DlssNr::FeatureReleaseResult releaseCheckedNative(void* feature) {
+    DlssNr::FeatureReleaseResult result;
+    __try {
+        volatile int native=g_snip.release(feature); // preserve this caller module frame
+        result.nativeResult=native;result.disposition=DlssNr::FeatureReleaseDisposition::Returned;
+    } __except(GetExceptionCode()==0xe06d7363u?EXCEPTION_CONTINUE_SEARCH:EXCEPTION_EXECUTE_HANDLER) {
+        result.disposition=DlssNr::FeatureReleaseDisposition::Exceptional;
+        result.exceptionCode=GetExceptionCode();
+    }
+    return result;
+}
+}
+// Return 1 means the result structure was written, NOT that ReleaseFeature succeeded.
+__declspec(dllexport) int dlssnr_call_release_checked_v1(void* feature,DlssNr::FeatureReleaseResult* output) noexcept {
+    if(!output||output->size!=sizeof(*output))return 0;
+    *output={};
+    try {
+        std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
+        if(feature&&g_snip.release)*output=releaseCheckedNative(feature);
+    } catch(...) {
+        output->disposition=DlssNr::FeatureReleaseDisposition::Exceptional;
+        output->exceptionCode=0xe06d7363u;
+    }
+    return 1;
+}
+
 __declspec(dllexport) void dlssnr_call_release(void *feature) {
+    std::lock_guard<std::recursive_mutex> callLock(g_d3d12CallMutex);
     if (feature && g_snip.release) {
         volatile int result = g_snip.release(feature); // not a tail call, for the reason above
         (void) result;

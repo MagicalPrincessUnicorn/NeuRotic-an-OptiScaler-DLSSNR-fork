@@ -1,0 +1,382 @@
+// The production translation unit is included verbatim except for application includes.
+// Vulkan dispatch is fake because deterministic allocation failures and paused Present
+// cannot be exercised safely against an application's real device.
+#include <vulkan/vulkan.h>
+#include <atomic>
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <set>
+#include <string>
+#include <thread>
+#include <vector>
+using UINT=unsigned; using UINT64=uint64_t; using ULONG64=uint64_t; using HWND=void*;
+#define LOG_FUNC(...) do {} while (0)
+#define LOG_FUNC_RESULT(...) do {} while (0)
+#define LOG_WARN(...) do {} while (0)
+#define LOG_ERROR(...) do {} while (0)
+#define LOG_INFO(...) do {} while (0)
+#define LOG_DEBUG(...) do {} while (0)
+#define IM_ALLOC(n) calloc(1,n)
+#define IM_FREE(p) free(p)
+struct ImGui_ImplVulkanH_Frame { VkCommandPool CommandPool{}; VkCommandBuffer CommandBuffer{}; VkFence Fence{}; VkImage Backbuffer{}; VkImageView BackbufferView{}; VkFramebuffer Framebuffer{}; };
+struct ImGui_ImplVulkan_InitInfo { VkInstance Instance{}; VkPhysicalDevice PhysicalDevice{}; VkDevice Device{}; uint32_t QueueFamily{}; VkQueue Queue{}; VkDescriptorPool DescriptorPool{}; unsigned Subpass{},MinImageCount{},ImageCount{}; const VkAllocationCallbacks* Allocator{}; VkRenderPass RenderPass{}; };
+struct ImGuiIO { struct {float x=1280,y=720;} DisplaySize; void* BackendRendererUserData{}; unsigned BackendFlags{}; bool MouseDrawCursor=false,WantCaptureKeyboard=false,WantCaptureMouse=false; };
+constexpr unsigned ImGuiBackendFlags_RendererHasTextures=1;
+static ImGuiIO fixtureIo;
+namespace ImGui { ImGuiIO& GetIO(){return fixtureIo;} void* GetCurrentContext(){return &fixtureIo;} void* GetDrawData(){return nullptr;} void DestroyContext(){} }
+static bool renderEnabled=true; static int openUiFrames=0,uiFramesBegun=0;
+static bool menuRequested=true,inputCapture=false,manualCapture=false,captureAvailable=false;
+static unsigned unavailableInputs=0;
+namespace OptiInput { bool IsFocused(){return true;} void SetMenuVisible(bool visible){inputCapture=visible;} void EndFrame(bool visible){SetMenuVisible(visible);} }
+struct Config {static Config* Instance(){static Config c;return &c;} };
+struct State { static State& Instance(){static State s;return s;} };
+namespace Neurotic::Sleek { inline void* waterColorCapture=nullptr; }
+namespace Neurotic { inline const char* UiLiteral(const char*,const char* fallback){return fallback;} }
+static struct Water {void Reset(){}} menuWater; static void* waterMenuRoot=nullptr;static int waterMenuFrame=-1;
+// Real capture pixels use the separate GPU fixture; this boundary double lets
+// the production overlay exercise deterministic submission/teardown failures.
+namespace Neurotic::Semantic::Character {
+void StopCharacterWorker(){} void ResetInspectorPreviewSession(){}
+struct CpuFrame {};
+struct ExternalCharacterSource {unsigned api=2,width=0,height=0,colorPolicy=0;uint64_t deviceIdentity=0,swapchainGeneration=0,resizeGeneration=0;bool srgbAttachment=false,fgActive=false,focused=false,qualified=false;};
+static unsigned inspectorPolls=0;static unsigned inspectorRecords=0,inspectorSubmits=0,inspectorCancels=0,inspectorReleases=0,inspectorAbandons=0;
+static VkImage inspectorImage{};static VkFence inspectorFence{};static bool inspectorPending=false;
+void CharacterSourceInvalidated(){}
+int ReadSettings(const Config&){return 0;}
+std::optional<CpuFrame> CharacterBeginExternalFrame(const ExternalCharacterSource& source,int){return source.qualified?std::optional<CpuFrame>(CpuFrame{}):std::nullopt;}
+bool CharacterPublishExternalFrame(CpuFrame&&){return true;}
+struct Activity {bool active=false;};struct Fg {Activity Read(uint64_t){return {};}};
+Fg NativeFgWork(){return {};}uint64_t CharacterActivityNow(){return 1;}
+class CharacterCaptureVk {bool ready=false;public:
+static std::optional<unsigned> ColorPolicy(VkFormat,VkColorSpaceKHR){return 0u;}
+bool Initialize(VkPhysicalDevice,VkDevice,VkFormat,VkColorSpaceKHR,VkExtent2D){ready=true;return true;}
+bool Ready(){return ready;}
+int Record(VkCommandBuffer,VkImage image,CpuFrame){++inspectorRecords;inspectorImage=image;inspectorPending=true;return 0;}
+void Cancel(int index){if(index>=0&&inspectorPending){++inspectorCancels;inspectorPending=false;}}
+void Submitted(int index,VkFence fence){if(index>=0){++inspectorSubmits;inspectorFence=fence;inspectorPending=false;}}
+std::optional<CpuFrame> Poll(){++inspectorPolls;return {};}
+void ReleaseAfterIdle(){if(ready)++inspectorReleases;ready=false;}
+void AbandonDestroyedDevice(){if(ready)++inspectorAbandons;ready=false;}
+};
+}
+namespace Util {double MillisecondsNow(){return 1.;}}
+static bool pendingShortcut=false;
+namespace DlssNr { void CancelAdvisorAnalysis(Config*,const char* =nullptr){} namespace ExperimentalPolicy {void DiscardDraft(){}} }
+void ImGui_ImplWin32_Shutdown(){} void ImGui_ImplUwp_Shutdown(){}
+class MenuCommon { public:
+ inline static bool& _isVisible=menuRequested;
+ inline static bool& _rendererOwnsCapture=manualCapture;
+ inline static bool& _rendererCaptureAvailable=captureAvailable;
+ inline static std::atomic<uint64_t> _visibilityGeneration{0};
+ inline static double _rendererCapturePresentedAt=0.;
+ inline static bool _isInited=true,_isUWP=false,capturingKey=false,_showMipmapCalcWindow=false,_showHudlessWindow=false;
+ inline static HWND _handle=(HWND)1;
+ struct Draft {bool initialized;}; inline static Draft menuInputDraft{false};
+ struct Escape {bool armed;}; inline static Escape escapeClose{false};
+ static void FinalizeFrame(){--openUiFrames;}
+ static void SetVisibility(bool); static void DeferInputCapture(); static void SetRendererCaptureAvailable(bool);
+ static void HideMenu(); static void Shutdown();
+ static bool CanRetainRendererCaptureOnBusyFrame();
+ struct RenderMenuContext {State& state;Config* config;ImGuiIO& io;double now=0.;};
+ static void UpdateRenderTiming(RenderMenuContext&){++unavailableInputs;}
+ static void UpdateMenuInputMode(RenderMenuContext&){}
+ static void HandleMenuShortcuts(RenderMenuContext&){if(pendingShortcut){pendingShortcut=false;SetVisibility(!_isVisible);}}
+ static void ProcessUnavailableInput();
+};
+// PRODUCTION_CAPTURE
+class MenuOverlayBase { public: static bool IsInited(){return true;} static HWND Handle(){return (HWND)1;} static void Init(HWND,bool){} static void Shutdown(){} static void VulkanReady(){} static bool RenderMenu(){inputCapture=menuRequested&&(!manualCapture||captureAvailable);if(renderEnabled){++openUiFrames;++uiFramesBegun;}return renderEnabled;} };
+static bool acquireComplete=false, fixtureFgKnown=false, fixtureFgOn=false, queueQualified=true;
+static uint64_t acquisition=1; static uint64_t observedImageBase=10;
+static uint64_t fixtureSwapchainGeneration=1;
+static std::vector<uint64_t> fixtureAncestors;
+namespace DlssNr {
+struct VkNrAcquireProof {
+ VkDevice device{}; uint64_t deviceGeneration=1,swapchainGeneration=1,acquireGeneration=0;
+ VkSwapchainKHR swapchain{}; uint32_t imageIndex=0; uint64_t priorPresentSerial=0;
+ VkQueue priorPresentQueue{}; std::vector<uint64_t> predecessorGenerations;
+ bool completed=false; bool Complete()const{return completed;}
+};
+static uint64_t fixtureSerial=0;
+static unsigned polls=0;
+static std::vector<std::shared_ptr<VkNrAcquireProof>> proofs;
+static unsigned completeAfterPolls=0;
+void PollVkNrCompletions(){++polls;if(completeAfterPolls&&polls>=completeAfterPolls)for(auto& p:proofs)p->completed=true;}
+struct VkObservedPresent {
+ struct {bool queueObserved=true,presentQueueAccessQualified=true,swapchainPNextKnown=true;VkQueueFlags queueFlags=VK_QUEUE_GRAPHICS_BIT;} capabilities;
+ struct {uint32_t imageIndex=0;bool acquiredObserved=true,fgStateKnown=false,fgKnownActive=false;uint64_t acquireGeneration=1,deviceGeneration=1,swapchainGeneration=1;VkSwapchainCreateFlagsKHR flags=0;VkImageUsageFlags imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;VkFormat format=VK_FORMAT_R8G8B8A8_UNORM;VkColorSpaceKHR colorSpace=VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;VkExtent2D extent{1280,720};unsigned arrayLayers=1;} request;
+ VkQueue queue{};VkDevice device{};VkSwapchainKHR swapchain{};VkPhysicalDevice physicalDevice{};uint32_t queueFamily=7;VkImage image{};
+};
+std::optional<int> VkNrRecordingQueueContext(VkDevice,uint32_t,VkQueue){return queueQualified?std::optional<int>(1):std::nullopt;}
+class VulkanPresentRegistry {public:
+ bool AcquireConsumed(VkSwapchainKHR,uint32_t,uint64_t expected){return acquireComplete&&expected==acquisition;}
+ std::shared_ptr<const VkNrAcquireProof> AcquireProof(VkSwapchainKHR swap,uint32_t index,uint64_t gen){
+  if(!gen)return {}; for(auto& p:proofs)if(p->swapchain==swap&&p->imageIndex==index&&p->acquireGeneration==gen){if(acquireComplete)p->completed=true;return p;}
+  auto p=std::make_shared<VkNrAcquireProof>();p->device=reinterpret_cast<VkDevice>(1);p->swapchain=swap;p->swapchainGeneration=fixtureSwapchainGeneration;p->predecessorGenerations=fixtureAncestors;p->imageIndex=index;p->acquireGeneration=gen;p->completed=acquireComplete;p->priorPresentSerial=fixtureSerial;p->priorPresentQueue=reinterpret_cast<VkQueue>(4);proofs.push_back(p);return p;
+ }
+ uint64_t LastPresentSerial(VkSwapchainKHR,uint32_t)const{return fixtureSerial;}
+};
+VulkanPresentRegistry& GetVulkanPresentRegistry(){static VulkanPresentRegistry r;return r;}
+}
+namespace MenuOverlayVk {
+VkResult CompositeGenerated(const std::unique_lock<std::mutex>&,VkSwapchainKHR,VkCommandBuffer,VkImage,unsigned,unsigned);
+void GeneratedPresentationFinished(const std::unique_lock<std::mutex>&,VkResult);
+struct BoundaryContext{uint64_t generation=0;DlssNr::VulkanPresentRegistry* registry=nullptr;PFN_vkGetSwapchainImagesKHR getImages=nullptr;}; enum class QueuePresentStatus {Bypassed,Accepted,FailedBeforeSubmit,SubmitUncertain}; using PresentLock=std::unique_lock<std::mutex>; PresentLock LockPresent(); void Unavailable(); void Presented(const PresentLock&,bool,BoundaryContext boundary={}); QueuePresentStatus QueuePresent(VkQueue,VkPresentInfoKHR*,const PresentLock&,const DlssNr::VkObservedPresent*,BoundaryContext boundary={}); void DestroyVulkanObjects(bool); void ShutdownDevice(VkDevice); void ShutdownSwapchain(VkDevice,VkSwapchainKHR); void NotifyDeviceDestroyed(VkDevice); void CreateSwapchain(VkDevice,VkPhysicalDevice,VkInstance,HWND,const VkSwapchainCreateInfoKHR*,const VkAllocationCallbacks*,VkSwapchainKHR*,BoundaryContext boundary={}); }
+static std::map<uint64_t,std::string> live;
+static std::vector<std::string> events;
+static uint64_t nextHandle=100;
+static unsigned imageCount=3, queueCount=1, imageFillCalls=0, guessedQueueCalls=0;
+static bool badCaptureOrder=false,badWaitStage=false,badFenceReset=false,needPoll=false;static unsigned waitPollBaseline=0;
+static bool incompleteImages=false, failedFramebuffer=false, growQueues=false;
+static VkResult idleResult=VK_SUCCESS, submitResult=VK_SUCCESS, fenceResult=VK_SUCCESS,endResult=VK_SUCCESS;
+static uint64_t fenceTimeout=0;
+static std::atomic<unsigned> idleCalls=0, submitCalls=0;
+static std::mutex submitMutex;
+static std::condition_variable submitCv;
+static bool blockSubmit=false, enteredSubmit=false, releaseSubmit=false;
+static bool blockEnumeration=false, enteredEnumeration=false, releaseEnumeration=false;
+static bool backendDestroyedBeforeIdle=false;
+template<class T> T handle(uint64_t n){return reinterpret_cast<T>(n);}
+template<class T> T create(const char* name){auto n=++nextHandle;live[n]=name;return handle<T>(n);}
+template<class T> void destroy(T h,const char* name){auto n=reinterpret_cast<uint64_t>(h);if(!live.erase(n))throw std::runtime_error("double or unknown destroy");events.push_back(name);}
+static size_t count(const char* name){return std::count_if(live.begin(),live.end(),[&](auto& x){return x.second==name;});}
+VKAPI_ATTR VkResult VKAPI_CALL vkDeviceWaitIdle(VkDevice){++idleCalls;events.push_back("idle");return idleResult;}
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance,const char*){return nullptr;}
+VKAPI_ATTR VkResult VKAPI_CALL vkGetSwapchainImagesKHR(VkDevice,VkSwapchainKHR,uint32_t* n,VkImage* out){if(blockEnumeration){std::unique_lock lock(submitMutex);enteredEnumeration=true;submitCv.notify_all();submitCv.wait(lock,[]{return releaseEnumeration;});}if(!out){*n=imageCount;return VK_SUCCESS;}++imageFillCalls;if(incompleteImages&&imageFillCalls==1){*n=0;return VK_INCOMPLETE;}auto written=std::min(*n,imageCount);for(unsigned i=0;i<written;++i)out[i]=handle<VkImage>(10+i);*n=written;return VK_SUCCESS;}
+VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice,uint32_t* n,VkQueueFamilyProperties* out){if(!out){*n=queueCount;return;}auto written=std::min(*n,queueCount);for(unsigned i=0;i<written;++i){out[i]={};out[i].queueFlags=(!growQueues || i==11)?VK_QUEUE_GRAPHICS_BIT:0;out[i].queueCount=1;}*n=written;if(growQueues)queueCount=12;}
+VKAPI_ATTR void VKAPI_CALL vkGetDeviceQueue(VkDevice,uint32_t,uint32_t,VkQueue* q){++guessedQueueCalls;*q=handle<VkQueue>(4);}
+#define CREATE(Name, Type, Info) VKAPI_ATTR VkResult VKAPI_CALL vkCreate##Name(VkDevice,const Info*,const VkAllocationCallbacks*,Type* out){*out=create<Type>(#Name);return VK_SUCCESS;}
+CREATE(DescriptorPool,VkDescriptorPool,VkDescriptorPoolCreateInfo)
+CREATE(RenderPass,VkRenderPass,VkRenderPassCreateInfo)
+CREATE(ImageView,VkImageView,VkImageViewCreateInfo)
+CREATE(CommandPool,VkCommandPool,VkCommandPoolCreateInfo)
+CREATE(Fence,VkFence,VkFenceCreateInfo)
+CREATE(Semaphore,VkSemaphore,VkSemaphoreCreateInfo)
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateFramebuffer(VkDevice,const VkFramebufferCreateInfo*,const VkAllocationCallbacks*,VkFramebuffer* out){if(failedFramebuffer)return VK_ERROR_OUT_OF_DEVICE_MEMORY;*out=create<VkFramebuffer>("Framebuffer");return VK_SUCCESS;}
+#define DESTROY(Name,Type) VKAPI_ATTR void VKAPI_CALL vkDestroy##Name(VkDevice,Type h,const VkAllocationCallbacks*){destroy(h,#Name);}
+DESTROY(DescriptorPool,VkDescriptorPool) DESTROY(RenderPass,VkRenderPass) DESTROY(ImageView,VkImageView) DESTROY(Framebuffer,VkFramebuffer) DESTROY(CommandPool,VkCommandPool) DESTROY(Fence,VkFence) DESTROY(Semaphore,VkSemaphore)
+VKAPI_ATTR VkResult VKAPI_CALL vkAllocateCommandBuffers(VkDevice,const VkCommandBufferAllocateInfo*,VkCommandBuffer* out){*out=create<VkCommandBuffer>("CommandBuffer");return VK_SUCCESS;}
+VKAPI_ATTR void VKAPI_CALL vkFreeCommandBuffers(VkDevice,VkCommandPool,uint32_t n,const VkCommandBuffer* out){for(unsigned i=0;i<n;++i)destroy(out[i],"CommandBuffer");}
+VKAPI_ATTR VkResult VKAPI_CALL vkResetCommandPool(VkDevice,VkCommandPool,VkCommandPoolResetFlags){return VK_SUCCESS;}
+VKAPI_ATTR VkResult VKAPI_CALL vkBeginCommandBuffer(VkCommandBuffer,const VkCommandBufferBeginInfo*){return VK_SUCCESS;}
+VKAPI_ATTR VkResult VKAPI_CALL vkEndCommandBuffer(VkCommandBuffer){return endResult;}
+VKAPI_ATTR VkResult VKAPI_CALL vkQueueSubmit(VkQueue,uint32_t,const VkSubmitInfo* info,VkFence){for(unsigned i=0;i<info->waitSemaphoreCount;++i)if(!(info->pWaitDstStageMask[i]&VK_PIPELINE_STAGE_ALL_COMMANDS_BIT))badWaitStage=true;++submitCalls;std::unique_lock lock(submitMutex);if(blockSubmit){enteredSubmit=true;submitCv.notify_all();submitCv.wait(lock,[]{return releaseSubmit;});}return submitResult;}
+VKAPI_ATTR VkResult VKAPI_CALL vkWaitForFences(VkDevice,uint32_t,const VkFence*,VkBool32,uint64_t timeout){fenceTimeout=timeout;using namespace Neurotic::Semantic::Character;if(fenceResult==VK_SUCCESS&&inspectorPolls){needPoll=true;waitPollBaseline=inspectorPolls;}return fenceResult;}
+VKAPI_ATTR VkResult VKAPI_CALL vkResetFences(VkDevice,uint32_t,const VkFence*){if(needPoll&&Neurotic::Semantic::Character::inspectorPolls<=waitPollBaseline)badFenceReset=true;needPoll=false;return VK_SUCCESS;}
+VKAPI_ATTR void VKAPI_CALL vkCmdBeginRenderPass(VkCommandBuffer,const VkRenderPassBeginInfo*,VkSubpassContents){if(Neurotic::Semantic::Character::inspectorRecords && !Neurotic::Semantic::Character::inspectorPending)badCaptureOrder=true;}
+VKAPI_ATTR void VKAPI_CALL vkCmdEndRenderPass(VkCommandBuffer){}
+bool ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo*){fixtureIo.BackendRendererUserData=(void*)1;return true;}
+void ImGui_ImplVulkan_Shutdown(bool){if(events.empty()||events.back()!="idle")backendDestroyedBeforeIdle=true;fixtureIo.BackendRendererUserData=nullptr;events.push_back("backend");}
+void ImGui_ImplVulkan_NewFrame(){}
+static unsigned overlayDraws=0, overlayBarriers=0;
+void ImGui_ImplVulkan_RenderDrawData(void*,VkCommandBuffer){++overlayDraws;}
+VKAPI_ATTR void VKAPI_CALL vkCmdPipelineBarrier(VkCommandBuffer,VkPipelineStageFlags,VkPipelineStageFlags,VkDependencyFlags,uint32_t,const VkMemoryBarrier*,uint32_t,const VkBufferMemoryBarrier*,uint32_t count,const VkImageMemoryBarrier* barriers){if(count==1&&barriers->image==handle<VkImage>(11))++overlayBarriers;}
+// PRODUCTION_OVERLAY
+static VkResult VKAPI_CALL alternateImages(VkDevice device,VkSwapchainKHR swap,uint32_t* count,VkImage* images){auto result=vkGetSwapchainImagesKHR(device,swap,count,images);if(images)for(uint32_t i=0;i<*count;++i)images[i]=handle<VkImage>(110+i);return result;}
+static auto observation(VkQueue q,VkPresentInfoKHR* info) {DlssNr::VkObservedPresent o;o.queue=q;o.device=handle<VkDevice>(1);o.physicalDevice=handle<VkPhysicalDevice>(2);o.swapchain=info->pSwapchains[0];o.request.imageIndex=info->pImageIndices[0];o.request.acquireGeneration=acquisition;o.request.swapchainGeneration=fixtureSwapchainGeneration;o.request.fgStateKnown=fixtureFgKnown;o.request.fgKnownActive=fixtureFgOn;o.image=handle<VkImage>(observedImageBase+o.request.imageIndex);return o;}
+static auto draw(VkQueue q,VkPresentInfoKHR* info,MenuOverlayVk::BoundaryContext boundary={}) {auto guard=MenuOverlayVk::LockPresent();auto o=observation(q,info);auto result=MenuOverlayVk::QueuePresent(q,info,guard,&o,boundary);if(result==MenuOverlayVk::QueuePresentStatus::Accepted){++DlssNr::fixtureSerial;MenuOverlayVk::Presented(guard,true,boundary);}return result;}
+static void require(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
+static void make(MenuOverlayVk::BoundaryContext boundary={}){VkSwapchainCreateInfoKHR info{};info.imageExtent={1280,720};info.minImageCount=2;info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;info.imageFormat=VK_FORMAT_R8G8B8A8_UNORM;auto swap=handle<VkSwapchainKHR>(5);MenuOverlayVk::CreateSwapchain(handle<VkDevice>(1),handle<VkPhysicalDevice>(2),handle<VkInstance>(3),(HWND)1,&info,nullptr,&swap,boundary);VkPresentInfoKHR present{};uint32_t index=0;present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;renderEnabled=false;draw(handle<VkQueue>(4),&present,boundary);renderEnabled=true;}
+int main(int argc,char** argv){try{
+ const std::string mode=argc>1?argv[1]:"recreate";
+ if(mode=="fg-startup-no-idle") {
+  fixtureFgKnown=true;fixtureFgOn=true;
+  // Provider work may be waiting for this intercepted Present to return.
+  // make() initializes with overlay drawing disabled: no upload is needed.
+  make();
+  require(_vulkanObjectsCreated&&_isInited,"FG startup did not initialize the overlay");
+  require(idleCalls==0,"overlay startup drains the device inside provider Present");
+  require(submitCalls==0,"overlay startup submitted an empty upload");
+  auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;auto wait=handle<VkSemaphore>(990);
+  VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,nullptr,1,&wait,1,&swap,&index};
+  require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"first FG overlay draw failed");
+  require(submitCalls==1&&idleCalls==0,"first draw did not use just its fenced submission");
+  require(present.waitSemaphoreCount==1&&*present.pWaitSemaphores!=wait,"first draw lost the replacement wait");
+  MenuOverlayVk::DestroyVulkanObjects(false);
+  require(idleCalls==1&&!backendDestroyedBeforeIdle,"startup repair removed teardown lifetime protection");
+ }
+ if(mode=="generated-overlay") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;
+  VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;
+  auto guard=MenuOverlayVk::LockPresent();auto observed=observation(handle<VkQueue>(4),&present);
+  require(MenuOverlayVk::QueuePresent(handle<VkQueue>(4),&present,guard,&observed)==MenuOverlayVk::QueuePresentStatus::Accepted,"real overlay not submitted");
+  const auto before=overlayDraws;
+  require(MenuOverlayVk::CompositeGenerated(guard,swap,handle<VkCommandBuffer>(900),handle<VkImage>(11),1280,720)==VK_SUCCESS,"generated overlay missing");
+  require(overlayDraws==before+1&&overlayBarriers==2,"overlay not replayed between layout barriers");
+  fenceResult=VK_TIMEOUT;
+  require(MenuOverlayVk::CompositeGenerated(guard,swap,handle<VkCommandBuffer>(900),handle<VkImage>(11),1280,720)==VK_TIMEOUT&&overlayDraws==before+1,"busy shared UI uploads reused");
+  fenceResult=VK_SUCCESS;guard.unlock();
+  require(MenuOverlayVk::CompositeGenerated(guard,swap,handle<VkCommandBuffer>(900),handle<VkImage>(11),1280,720)!=VK_SUCCESS,"unpinned backend replayed");
+  guard=MenuOverlayVk::LockPresent();
+  MenuOverlayVk::GeneratedPresentationFinished(guard,VK_ERROR_OUT_OF_DATE_KHR);
+  require(!_vkOverlaySubmissionUncertain,"normal WSI recreation poisoned overlay");
+  MenuOverlayVk::GeneratedPresentationFinished(guard,VK_ERROR_DEVICE_LOST);
+  require(MenuOverlayVk::QueuePresent(handle<VkQueue>(4),&present,guard,&observed)==MenuOverlayVk::QueuePresentStatus::SubmitUncertain&&overlayDraws==before+1,"uncertain generated submission reused ImGui uploads");
+  guard.unlock();
+  idleResult=VK_ERROR_DEVICE_LOST;const auto retained=live;MenuOverlayVk::DestroyVulkanObjects(false);
+  require(live==retained,"failed idle freed uncertain generated overlay");idleResult=VK_SUCCESS;
+  MenuOverlayVk::DestroyVulkanObjects(false);
+ }
+ if(mode=="inspector-capture"||mode=="inspector-uncertain"||mode=="inspector-busy"||mode=="inspector-end-failure") {
+  using namespace Neurotic::Semantic::Character;
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=2;auto wait=handle<VkSemaphore>(990);
+  VkPresentInfoKHR caller{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,nullptr,1,&wait,1,&swap,&index};auto local=caller;
+  if(mode=="inspector-uncertain")submitResult=VK_ERROR_DEVICE_LOST;
+  if(mode=="inspector-busy")fenceResult=VK_TIMEOUT;
+  if(mode=="inspector-end-failure")endResult=VK_ERROR_OUT_OF_HOST_MEMORY;
+  const auto beforeSubmit=submitCalls.load();const auto result=draw(handle<VkQueue>(4),&local);
+  if(mode=="inspector-end-failure"){
+   require(result==MenuOverlayVk::QueuePresentStatus::FailedBeforeSubmit&&inspectorRecords==1&&inspectorSubmits==0&&inspectorCancels==1&&submitCalls==beforeSubmit,"failed recording did not cancel without submitting");
+   require(local.pWaitSemaphores==&wait&&local.waitSemaphoreCount==1,"failed recording changed caller waits");
+  }else if(mode=="inspector-busy"){
+   require(result==MenuOverlayVk::QueuePresentStatus::FailedBeforeSubmit&&inspectorRecords==0&&submitCalls==beforeSubmit,"busy overlay recorded capture or submitted");
+   require(local.pWaitSemaphores==caller.pWaitSemaphores&&local.waitSemaphoreCount==1,"busy capture consumed caller waits");
+  }else{
+   require(inspectorRecords==1&&inspectorSubmits==1&&!badCaptureOrder&&!badWaitStage&&!badFenceReset,"capture ordering, fence binding, or wait stage failed");
+   require(inspectorImage==handle<VkImage>(12)&&inspectorFence==_ImVulkan_Frames[2].Fence,"capture borrowed another physical image or completion fence");
+   require(inspectorCancels==0,"submitted/uncertain capture cancelled prematurely");
+   if(mode=="inspector-uncertain"){
+    require(result==MenuOverlayVk::QueuePresentStatus::SubmitUncertain&&local.pWaitSemaphores==&wait,"uncertain capture forwarded a replacement wait");
+    idleResult=VK_ERROR_DEVICE_LOST;MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));require(inspectorReleases==0,"failed idle released live capture");
+    MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));require(inspectorAbandons==1,"dead capture handles not abandoned");
+   }else{
+    require(result==MenuOverlayVk::QueuePresentStatus::Accepted&&local.pWaitSemaphores!=&wait,"successful capture did not forward overlay semaphore");
+    MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));require(inspectorReleases==1,"idle capture not released before owner fence destruction");
+   }
+  }
+ }
+ if(mode=="recreate") { make();make();require(count("Framebuffer")==3,"old framebuffers leaked on recreation");require(count("DescriptorPool")==1,"old descriptor pool ownership lost");require(count("RenderPass")==1,"old render pass ownership lost");require(!backendDestroyedBeforeIdle,"backend destroyed before GPU drain");MenuOverlayVk::DestroyVulkanObjects(false);require(count("Framebuffer")==0,"framebuffers not destroyed");require(count("ImageView")==0&&count("CommandPool")==0,"render children retained after successful drain");require(count("DescriptorPool")==0&&count("RenderPass")==0,"parent objects not retired");auto fb=std::find(events.begin(),events.end(),"Framebuffer");auto view=std::find(events.begin(),events.end(),"ImageView");require(fb<view,"framebuffer must be destroyed before image view");MenuOverlayVk::DestroyVulkanObjects(false); }
+ if(mode=="idle-failure") {make();events.clear();idleResult=VK_ERROR_DEVICE_LOST;auto before=live;MenuOverlayVk::DestroyVulkanObjects(false);require(live==before,"failed idle freed potentially live objects");require(fixtureIo.BackendRendererUserData,"failed idle destroyed backend");make();require(live==before,"failed drain recreation overwrote ownership");idleResult=VK_SUCCESS;MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="partial") {failedFramebuffer=true;make();require(count("DescriptorPool")==1,"fixture did not reach pool allocation");require(!_isInited,"partial initialization advertised VulkanReady");failedFramebuffer=false;make();require(count("DescriptorPool")==1,"partial initialization pool leaked on retry");require(count("ImageView")==3,"partial image view allocation leaked on retry");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="incomplete") {incompleteImages=true;imageCount=12;queueCount=12;make();require(_vulkanObjectsCreated,"VK_INCOMPLETE image enumeration never recovered");require(count("Framebuffer")==12,"image count larger than eight not constructed");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="present-pin") {make();auto queue=handle<VkQueue>(4);auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;blockSubmit=true;std::thread render([&]{draw(queue,&present);});{std::unique_lock lock(submitMutex);submitCv.wait(lock,[]{return enteredSubmit;});}auto calls=idleCalls.load();std::thread cleanup([]{MenuOverlayVk::DestroyVulkanObjects(false);});std::this_thread::sleep_for(std::chrono::milliseconds(40));bool excluded=idleCalls.load()==calls;{std::lock_guard lock(submitMutex);releaseSubmit=true;}submitCv.notify_all();render.join();cleanup.join();require(excluded,"cleanup entered idle while Present submission was active");require(draw(queue,&present)==MenuOverlayVk::QueuePresentStatus::Bypassed,"deferred cleanup allowed new overlay submissions");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="wsi-retained") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"fixture overlay submission failed");MenuOverlayVk::DestroyVulkanObjects(false);require(count("Semaphore")==1,"idle alone destroyed semaphore with unresolved Present wait");require(count("Framebuffer")==0,"retained WSI wait also retained drained render objects");}
+ if(mode=="queue-growth") {growQueues=true;make();require(_vulkanObjectsCreated,"observed graphics queue could not initialize");require(guessedQueueCalls==0,"overlay fetched unobserved family/index-zero queue");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="semaphore-reuse") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"first draw failed");auto first=*present.pWaitSemaphores;present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"second draw failed");require(*present.pWaitSemaphores!=first,"binary semaphore reused without reacquire completion");MenuOverlayVk::DestroyVulkanObjects(false);require(count("Semaphore")==2,"unresolved wait ownership lost");}
+ if(mode=="downstream-pin") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;auto guard=MenuOverlayVk::LockPresent();auto o=observation(handle<VkQueue>(4),&present);require(MenuOverlayVk::QueuePresent(handle<VkQueue>(4),&present,guard,&o)==MenuOverlayVk::QueuePresentStatus::Accepted,"guarded render failed");auto before=live;auto calls=idleCalls.load();auto wait=*present.pWaitSemaphores;MenuOverlayVk::DestroyVulkanObjects(false);require(idleCalls==calls&&live==before,"downstream Present resources not pinned");require(*present.pWaitSemaphores==wait,"replacement wait changed during downstream call");make();require(live==before,"reentrant creation mutated pinned objects");guard.unlock();MenuOverlayVk::DestroyVulkanObjects(false);require(count("Framebuffer")==0,"cleanup retry did not retire render resources");}
+ if(mode=="uncertain") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;submitResult=VK_ERROR_DEVICE_LOST;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::SubmitUncertain,"failed submission treated as safe bypass");idleResult=VK_ERROR_DEVICE_LOST;auto before=live;MenuOverlayVk::DestroyVulkanObjects(true);require(live==before,"shutdown freed uncertain work after idle failure");idleResult=VK_SUCCESS;MenuOverlayVk::DestroyVulkanObjects(true);require(count("Semaphore")==1,"uncertain submit semaphore lost");}
+ if(mode=="wrong-swapchain") {make();auto swap=handle<VkSwapchainKHR>(55);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Bypassed,"foreign swapchain drawn with global image array");require(present.waitSemaphoreCount==0&&present.pWaitSemaphores==nullptr,"bypass changed original waits");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="queue-change") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(8),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"qualified observed queue change did not recreate overlay");require(_ImVulkan_Info.Queue==handle<VkQueue>(8),"overlay submitted on a different queue");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="foreign-backend") {failedFramebuffer=true;fixtureIo.BackendRendererUserData=(void*)2;make();MenuOverlayVk::DestroyVulkanObjects(false);require(fixtureIo.BackendRendererUserData==(void*)2,"partial init destroyed an unowned renderer backend");}
+ if(mode=="acquire-proof") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;auto render=[&]{present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"proof draw failed");return *present.pWaitSemaphores;};auto first=render();acquisition=2;acquireComplete=true;fixtureFgKnown=true;fixtureFgOn=true;auto second=render();require(second==first,"completed acquisition at the same WSI boundary was gated on FG state");acquireComplete=false;acquisition=3;auto third=render();require(third!=second,"incomplete acquire allowed reuse");acquireComplete=true;auto fourth=render();require(fourth!=third,"same acquire incarnation allowed reuse");acquisition=4;auto fifth=render();require(fifth==fourth,"proven later acquisition did not permit reuse");require(_vkRetainedWaits.empty(),"completed image acquisition did not retire detached waits");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="retention-budget") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;bool bypass=false;for(unsigned i=0;i<1100;++i){present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;auto result=draw(handle<VkQueue>(4),&present);if(result==MenuOverlayVk::QueuePresentStatus::Bypassed){bypass=true;require(present.waitSemaphoreCount==0&&!present.pWaitSemaphores,"budget bypass consumed waits");break;}}require(bypass&&count("Semaphore")<=1024,"unresolved semaphore ownership was unbounded");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="unknown-queue") {queueQualified=false;make();require(!_vulkanObjectsCreated&&live.empty(),"unobserved queue initialized renderer");queueQualified=true;auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"observed queue did not recover deferred initialization");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="busy-frame") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;fenceResult=VK_TIMEOUT;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::FailedBeforeSubmit,"busy frame was submitted");require(fenceTimeout==0,"per-frame GPU wait has no bounded bypass");require(openUiFrames==0,"busy frame left an ImGui frame unfinished");require(present.waitSemaphoreCount==0&&!present.pWaitSemaphores,"busy-frame bypass changed waits");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="invisible-capture") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;fenceResult=VK_TIMEOUT;draw(handle<VkQueue>(4),&present);require(!inputCapture,"busy overlay retained invisible mouse capture");fenceResult=VK_SUCCESS;draw(handle<VkQueue>(4),&present);MenuOverlayVk::DestroyVulkanObjects(false);require(!inputCapture,"destroyed renderer retained invisible capture");}
+ if(mode=="create-retry") {failedFramebuffer=true;make();require(!_vulkanObjectsCreated,"fixture creation did not fail");failedFramebuffer=false;std::this_thread::sleep_for(std::chrono::milliseconds(550));auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;for(unsigned i=0;i<180&&!_vulkanObjectsCreated;++i)draw(handle<VkQueue>(4),&present);require(_vulkanObjectsCreated,"failed creation lost retry admission");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="cpu-ahead-proof") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;for(unsigned i=0;i<2200;++i){++acquisition;present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;for(auto& proof:DlssNr::proofs)if(proof->acquireGeneration+8<acquisition)proof->completed=true;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"CPU-ahead overlay exhausted budget despite later exact completion");}require(count("Semaphore")<20,"completed detached acquisition leases accumulated");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="proof-after-bypass") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;draw(handle<VkQueue>(4),&present);++acquisition;present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;draw(handle<VkQueue>(4),&present);require(!_vkRetainedWaits.empty(),"fixture did not retain wait");for(auto& proof:DlssNr::proofs)proof->completed=true;queueQualified=false;MenuOverlayVk::Unavailable();require(_vkRetainedWaits.empty(),"unavailable renderer did not retire completed pinned acquisition");require(!inputCapture,"unavailable renderer kept capture");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="capture-owner") {
+  MenuCommon::DeferInputCapture();menuRequested=true;MenuOverlayBase::RenderMenu();MenuCommon::FinalizeFrame();require(!inputCapture,"requested menu captured before presentation");
+  MenuCommon::SetRendererCaptureAvailable(true);require(inputCapture,"successful renderer did not capture requested menu");MenuCommon::HideMenu();require(!inputCapture&&!menuRequested,"HideMenu did not immediately release actual hook policy");
+  menuRequested=true;MenuCommon::SetRendererCaptureAvailable(true);MenuCommon::Shutdown();require(!inputCapture&&!menuRequested,"Shutdown did not immediately release actual hook policy");
+ }
+ if(mode=="shutdown-owner") {menuRequested=true;MenuCommon::SetRendererCaptureAvailable(true);MenuCommon::Shutdown();require(!inputCapture&&!menuRequested,"Shutdown did not release hook capture without another frame");}
+ if(mode=="unavailable-shortcut") {make();menuRequested=true;MenuCommon::SetRendererCaptureAvailable(true);queueQualified=false;pendingShortcut=true;MenuOverlayVk::Unavailable();require(!inputCapture&&!menuRequested&&!pendingShortcut,"unavailable backend failed to process close shortcut");pendingShortcut=true;MenuOverlayVk::Unavailable();require(!inputCapture&&menuRequested&&!pendingShortcut,"unavailable backend failed to preserve requested reopen without capture");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="capture-failed-present") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;draw(handle<VkQueue>(4),&present);require(inputCapture,"successful Present did not grant capture");
+  {auto guard=MenuOverlayVk::LockPresent();MenuOverlayVk::Presented(guard,false);}require(!inputCapture&&menuRequested,"failed forwarded Present did not release capture while preserving requested state");
+  fenceResult=VK_TIMEOUT;draw(handle<VkQueue>(4),&present);require(!inputCapture,"busy frame reacquired invisible capture");MenuOverlayVk::DestroyVulkanObjects(false);
+ }
+ if(mode=="lineage-retirement") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;draw(handle<VkQueue>(4),&present);
+  acquireComplete=true;
+  for(uint64_t generation=2;generation<80;++generation){auto old=swap;swap=handle<VkSwapchainKHR>(5+generation);fixtureAncestors.push_back(generation-1);fixtureSwapchainGeneration=generation;
+   VkSwapchainCreateInfoKHR info{};info.oldSwapchain=old;info.imageExtent={1280,720};info.minImageCount=2;info.imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;info.imageFormat=VK_FORMAT_R8G8B8A8_UNORM;
+   MenuOverlayVk::CreateSwapchain(handle<VkDevice>(1),handle<VkPhysicalDevice>(2),handle<VkInstance>(3),(HWND)1,&info,nullptr,&swap);MenuOverlayVk::ShutdownSwapchain(handle<VkDevice>(1),old);
+   ++acquisition;present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"successor first Present failed");
+   ++acquisition;present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"successor acquisition failed");require(_vkRetainedWaits.empty(),"successor presentation completion did not retire exact predecessor waits");
+  }require(count("Semaphore")==3,"repeated recreation accumulated retired semaphore owners");MenuOverlayVk::DestroyVulkanObjects(false);
+ }
+ if(mode=="capacity-recovery") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;bool bypass=false;
+  for(unsigned i=0;i<1100&&!bypass;++i){++acquisition;present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;bypass=draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Bypassed;}
+  require(bypass&&!inputCapture,"bounded failure did not release invisible capture");for(auto& proof:DlssNr::proofs)proof->completed=true;
+  ++acquisition;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"completed leases could not recover exhausted capacity");require(inputCapture&&count("Semaphore")<10,"capacity recovery failed to restore bounded visible overlay");MenuOverlayVk::DestroyVulkanObjects(false);
+ }
+ if(mode=="device-notification") {make();auto before=live;auto calls=idleCalls.load();MenuOverlayVk::ShutdownDevice(handle<VkDevice>(99));MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(99));require(live==before&&idleCalls==calls&&_vulkanObjectsCreated,"wrong-device notification changed current owner");idleResult=VK_ERROR_DEVICE_LOST;MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));require(live==before,"failed live shutdown freed work");calls=idleCalls.load();auto dispatches=events.size();MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));require(events.size()==dispatches&&idleCalls==calls,"dead-device notification dispatched Vulkan");require(_vkRestartRequired&&!_vulkanObjectsCreated,"failed-drain backend did not quarantine");MenuOverlayVk::DestroyVulkanObjects(true);make();require(events.size()==dispatches&&idleCalls==calls,"quarantined backend called dead dispatch or reinitialized");}
+ if(mode=="detached-device") {make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;draw(handle<VkQueue>(4),&present);MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));require(_vkRetainedWaits.size()==1,"fixture lacks detached WSI wait");auto dispatches=events.size();MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));require(_vkRetainedWaits.empty()&&events.size()==dispatches,"dead-device detached wait removal dispatched driver");require(!_vkRestartRequired,"successfully retired backend unnecessarily quarantined");}
+ if(mode=="close-during-create"||mode=="device-close-during-create") {blockEnumeration=true;std::thread initializer([]{make();});{std::unique_lock lock(submitMutex);submitCv.wait(lock,[]{return enteredEnumeration;});}if(mode=="close-during-create")MenuOverlayVk::DestroyVulkanObjects(false);else MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));{std::lock_guard lock(submitMutex);releaseEnumeration=true;}submitCv.notify_all();initializer.join();require(_vkClosingRequested,"creation erased or missed a concurrent shutdown request");auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Bypassed,"closed creation admitted a new render");MenuOverlayVk::DestroyVulkanObjects(false);}
+ if(mode=="boundary-isolation") {DlssNr::VulkanPresentRegistry otherRegistry;MenuOverlayVk::BoundaryContext firstBoundary{1,&DlssNr::GetVulkanPresentRegistry(),vkGetSwapchainImagesKHR},secondBoundary{2,&otherRegistry,vkGetSwapchainImagesKHR};make(firstBoundary);auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present,firstBoundary)==MenuOverlayVk::QueuePresentStatus::Accepted,"first boundary render failed");present.waitSemaphoreCount=0;present.pWaitSemaphores=nullptr;require(draw(handle<VkQueue>(4),&present,secondBoundary)==MenuOverlayVk::QueuePresentStatus::Bypassed,"different boundary borrowed current backend");make(secondBoundary);require(_vkRetainedWaits.size()==1,"old boundary did not preserve wait owner");acquireComplete=true;++acquisition;require(draw(handle<VkQueue>(4),&present,secondBoundary)==MenuOverlayVk::QueuePresentStatus::Accepted,"second boundary could not render");require(_vkRetainedWaits.size()==1,"new boundary consumed old boundary proof");MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));}
+ if(mode=="boundary-images") {observedImageBase=110;MenuOverlayVk::BoundaryContext boundary{1,&DlssNr::GetVulkanPresentRegistry(),alternateImages};make(boundary);auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;VkPresentInfoKHR present{};present.swapchainCount=1;present.pSwapchains=&swap;present.pImageIndices=&index;require(draw(handle<VkQueue>(4),&present,boundary)==MenuOverlayVk::QueuePresentStatus::Accepted,"overlay did not enumerate images through pinned boundary getter");DlssNr::VulkanPresentRegistry otherRegistry;auto wrong=boundary;wrong.registry=&otherRegistry;require(draw(handle<VkQueue>(4),&present,wrong)==MenuOverlayVk::QueuePresentStatus::Bypassed,"same generation borrowed another registry");wrong=boundary;wrong.generation=2;require(draw(handle<VkQueue>(4),&present,wrong)==MenuOverlayVk::QueuePresentStatus::Bypassed,"same registry borrowed another boundary generation");wrong=boundary;wrong.getImages=vkGetSwapchainImagesKHR;require(draw(handle<VkQueue>(4),&present,wrong)==MenuOverlayVk::QueuePresentStatus::Bypassed,"changed image dispatch borrowed prior boundary");MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));}
+ if(mode=="fg-running") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;auto wait=handle<VkSemaphore>(990);
+  VkSetPresentConfigNV metering{static_cast<VkStructureType>(1000613000),nullptr,2,0};
+  VkPresentInfoKHR caller{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,&metering,1,&wait,1,&swap,&index,nullptr};
+  fixtureFgKnown=true;fixtureFgOn=true;acquireComplete=true;
+  const auto frames=uiFramesBegun;const auto submits=submitCalls.load();
+  for(unsigned i=0;i<180;++i){
+   index=i%3;++acquisition;metering.numFramesPerBatch=2+i%5;auto local=caller;
+   require(draw(handle<VkQueue>(4),&local)==MenuOverlayVk::QueuePresentStatus::Accepted,"running FG skipped visible overlay");
+   require(inputCapture&&openUiFrames==0,"FG overlay lost input or leaked an ImGui frame");
+   require(local.pNext==&metering&&metering.numFramesPerBatch==2+i%5&&caller.pWaitSemaphores==&wait,
+       "overlay rewrote FG metadata or original wait storage");
+  }
+  require(uiFramesBegun-frames==180&&submitCalls-submits==180,"overlay did not draw once per physical Present");
+  require(count("Semaphore")<10&&_vkRetainedWaits.empty(),"completed FG overlay waits accumulated");
+  MenuOverlayVk::DestroyVulkanObjects(false);
+ }
+ if(mode=="present-metering") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;auto wait=handle<VkSemaphore>(990);VkResult result=VK_NOT_READY;
+  uint64_t id=7;VkPresentIdKHR ids{VK_STRUCTURE_TYPE_PRESENT_ID_KHR,nullptr,1,&id};
+  // The bundled header guards this enum with VK_ENABLE_BETA_EXTENSIONS.
+  VkSetPresentConfigNV metering{static_cast<VkStructureType>(1000613000),&ids,2,0x1234};
+  VkPresentInfoKHR caller{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,&metering,1,&wait,1,&swap,&index,&result};auto local=caller;
+  fixtureFgKnown=true;fixtureFgOn=true;
+  require(draw(handle<VkQueue>(8),&local)==MenuOverlayVk::QueuePresentStatus::Accepted,"FG metering metadata blocked overlay queue transition");
+  require(_ImVulkan_Info.Queue==handle<VkQueue>(8)&&inputCapture,"FG overlay failed to select qualified queue or publish capture");
+  require(local.pNext==&metering&&metering.pNext==&ids&&metering.numFramesPerBatch==2&&metering.presentConfigFeedback==0x1234&&id==7,"overlay changed borrowed metering metadata");
+  require(local.pResults==&result&&caller.pWaitSemaphores==&wait&&caller.waitSemaphoreCount==1&&local.pWaitSemaphores!=&wait,"overlay changed caller or lost downstream result destination");
+  // Model the synchronous driver's in-place feedback through the exact borrowed chain.
+  auto* forwarded=const_cast<VkSetPresentConfigNV*>(static_cast<const VkSetPresentConfigNV*>(local.pNext));forwarded->presentConfigFeedback=0;
+  require(metering.presentConfigFeedback==0,"forwarded metering feedback did not reach provider storage");
+  auto submits=submitCalls.load();VkPresentRegionsKHR regions{VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR};metering.pNext=&regions;local=caller;
+  require(draw(handle<VkQueue>(8),&local)==MenuOverlayVk::QueuePresentStatus::Bypassed&&submitCalls==submits,"metering prefix admitted unsupported damage metadata");
+  MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));
+ }
+ if(mode=="present-chain") {
+  make();auto swap=handle<VkSwapchainKHR>(5);uint32_t index=0;auto wait=handle<VkSemaphore>(990);VkResult result=VK_NOT_READY;
+  VkRectLayerKHR rectangle{{2,3},{4,5},0};VkPresentRegionKHR region{1,&rectangle};VkPresentRegionsKHR regions{VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR,nullptr,1,&region};
+  VkPresentInfoKHR caller{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,&regions,1,&wait,1,&swap,&index,&result};auto local=caller;auto before=live;auto frames=uiFramesBegun;auto submits=submitCalls.load();
+  require(draw(handle<VkQueue>(4),&local)==MenuOverlayVk::QueuePresentStatus::Bypassed,"incremental damage allowed invisible overlay mutation");
+  require(submitCalls==submits&&live==before&&uiFramesBegun==frames&&openUiFrames==0&&!inputCapture&&unavailableInputs>0,"unsupported chain changed GPU ownership or stranded CPU UI");
+  require(local.pNext==&regions&&local.pWaitSemaphores==&wait&&result==VK_NOT_READY&&rectangle.extent.width==4,"unsupported chain mutated caller memory");
+  VkBaseInStructure unknown{static_cast<VkStructureType>(0x7ffffffe),nullptr};local.pNext=&unknown;
+  require(draw(handle<VkQueue>(4),&local)==MenuOverlayVk::QueuePresentStatus::Bypassed,"unknown extension admitted GPU mutation");
+  VkDeviceGroupPresentInfoKHR group{VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR};local.pNext=&group;
+  require(draw(handle<VkQueue>(4),&local)==MenuOverlayVk::QueuePresentStatus::Bypassed,"device group extension admitted unsupported device mask");
+  uint64_t id=7;VkPresentTimeGOOGLE time{8,9};VkPresentTimesInfoGOOGLE times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE,nullptr,1,&time};
+  VkPresentIdKHR ids{VK_STRUCTURE_TYPE_PRESENT_ID_KHR,&times,1,&id};VkFence fence=handle<VkFence>(991);
+  VkSwapchainPresentFenceInfoEXT fences{VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT,&ids,1,&fence};VkPresentModeKHR modeValue=VK_PRESENT_MODE_FIFO_KHR;
+  VkSwapchainPresentModeInfoEXT modes{VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,&fences,1,&modeValue};caller.pNext=&modes;local=caller;
+  require(draw(handle<VkQueue>(4),&local)==MenuOverlayVk::QueuePresentStatus::Accepted,"benign metadata chain refused");
+  require(local.pNext==caller.pNext&&local.pResults==caller.pResults&&caller.pWaitSemaphores==&wait&&caller.waitSemaphoreCount==1&&result==VK_NOT_READY&&id==7&&time.desiredPresentTime==9&&fences.pFences==&fence,"benign chain or caller mutated");
+  MenuOverlayVk::ShutdownDevice(handle<VkDevice>(1));MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));
+ }
+ if(mode=="chain-before-create") {
+  VkSwapchainCreateInfoKHR info{};info.imageExtent={1280,720};auto swap=handle<VkSwapchainKHR>(5);
+  MenuOverlayVk::CreateSwapchain(handle<VkDevice>(1),handle<VkPhysicalDevice>(2),handle<VkInstance>(3),(HWND)1,&info,nullptr,&swap);
+  uint32_t index=0;VkPresentRegionsKHR regions{VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR};VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,&regions,0,nullptr,1,&swap,&index};
+  require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Bypassed&&live.empty()&&submitCalls==0,"unsupported chain allocated GPU objects before refusal");
+ }
+ if(mode=="swapchain-shutdown") {
+  make();auto before=live;auto calls=idleCalls.load();MenuOverlayVk::ShutdownSwapchain(handle<VkDevice>(99),handle<VkSwapchainKHR>(5));MenuOverlayVk::ShutdownSwapchain(handle<VkDevice>(1),handle<VkSwapchainKHR>(99));
+  require(live==before&&idleCalls==calls&&!_vkClosingRequested,"foreign swapchain shutdown touched current owner");
+  VkSwapchainCreateInfoKHR info{};info.imageExtent={1280,720};info.imageFormat=VK_FORMAT_R8G8B8A8_UNORM;auto next=handle<VkSwapchainKHR>(6);
+  MenuOverlayVk::CreateSwapchain(handle<VkDevice>(1),handle<VkPhysicalDevice>(2),handle<VkInstance>(3),(HWND)1,&info,nullptr,&next);
+  MenuOverlayVk::ShutdownSwapchain(handle<VkDevice>(1),handle<VkSwapchainKHR>(5));
+  require(count("Framebuffer")==0&&_vkCreationPending&&!_vkClosingRequested,"old swapchain shutdown blocked previously admitted replacement");
+  uint32_t index=0;VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,nullptr,0,nullptr,1,&next,&index};
+  require(draw(handle<VkQueue>(4),&present)==MenuOverlayVk::QueuePresentStatus::Accepted,"replacement did not initialize after old swapchain destruction");
+  MenuOverlayVk::ShutdownSwapchain(handle<VkDevice>(1),next);require(count("Framebuffer")==0&&count("Semaphore")==1,"matching shutdown leaked render objects or lost pending WSI wait");
+  MenuOverlayVk::NotifyDeviceDestroyed(handle<VkDevice>(1));
+ }
+ std::cout<<"PASS "<<mode<<"\n";return 0;
+ }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<"\n";return 1;}}

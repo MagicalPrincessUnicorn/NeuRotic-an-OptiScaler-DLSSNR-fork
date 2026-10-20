@@ -4,6 +4,7 @@
 #include "DlssNr_MenuControls.h"
 #include "NrStatusPanel.h"
 #include <menu/Localization.h>
+#include <menu/ItemHelp.h>
 #include <imgui/imgui.h>
 #include <cstdio>
 
@@ -139,6 +140,17 @@ inline bool SentenceCombo(const char* id, const char* prefix, const char* suffix
     return changed;
 }
 
+template<class C> std::string ResolutionDisplayText(const C& snapshot,int choice)
+{
+    if(snapshot.DlssNrRoute.value_or_default()==0)
+    {
+        if(choice==1)return Neurotic::UiMessage("ingame.native-resolution.pre",NativeResolutionChoices[1]);
+        if(choice==MatchNativePostChoice)return Neurotic::UiMessage("ingame.native-resolution.post",NativeResolutionChoices[MatchNativePostChoice]);
+        if(choice<0)return Neurotic::UiMessage("ingame.native-resolution.unknown","Unknown Native resolution preference");
+    }
+    return Neurotic::Translate(ResolutionChoiceLabel(snapshot,choice));
+}
+
 // Shared by the production page and the headless ImGui navigation/layout fixture.
 template<class C> bool RenderControls(C& config, bool basicOwnsResolution = false,
                                       bool nativeAfterOnly = false, bool showPlacementRefusal = true,
@@ -175,8 +187,7 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
     {
         NrConfigSynchronization::Transaction transaction;
         const auto inputPolicy = config.DlssNrPresentInputPolicy;
-        method = methodChoices[method];
-        SelectUnifiedMethod(config, method);
+        SelectUnifiedMethod(config, methodChoices[method]);
         config.DlssNrPresentInputPolicy = inputPolicy;
         changed = true;
     }
@@ -191,27 +202,34 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
     const float helpWidth = ImGui::CalcTextSize("(?)").x;
     const float minimumComboWidth = ImGui::GetFontSize() * 7.0f;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const bool sameRow = rowWidth >= minimumComboWidth + labelWidth + helpWidth + spacing * 2.0f;
+    const bool nativeResolution=snapshot.DlssNrRoute.value_or_default()==0;
+    const bool sameRow = !nativeResolution && rowWidth >= minimumComboWidth + labelWidth + helpWidth + spacing * 2.0f;
     const float dropdownRoom = rowWidth - helpWidth - spacing -
         (sameRow ? labelWidth + spacing : 0.0f);
     ImGui::SetNextItemWidth((std::min)(ImGui::GetFontSize() * 14.0f,
         (std::max)(minimumComboWidth, dropdownRoom)));
-    if (stackedLabels) ImGui::SetNextItemWidth(-1.0f);
+    if (stackedLabels || nativeResolution) ImGui::SetNextItemWidth(-1.0f);
     auto* controlDraw = ImGui::GetWindowDrawList();
     const ImVec2 controlMin = ImGui::GetCursorScreenPos();
     const ImVec2 controlMax(controlMin.x + ImGui::CalcItemWidth(),
                             controlMin.y + ImGui::GetFrameHeight());
-    const bool resolutionOpen = ImGui::BeginCombo("##NrResolution", ResolutionChoices[resolution]);
+    const auto resolutionLabel=ResolutionDisplayText(snapshot,resolution);
+    const bool resolutionHelp=nativeResolution&&Neurotic::RegionHelpHovered(ImGui::GetID("##NrResolution"),controlMin,controlMax);
+    const bool resolutionOpen = ImGui::BeginCombo("##NrResolution", resolutionLabel.c_str());
     if (!stackedLabels) MenuControls::HighlightItem(controlDraw, controlMin, controlMax,
                                 ImGui::IsItemFocused() || ImGui::IsItemActive());
     if (resolutionOpen)
     {
-        const int resolutionDisplayOrder[] = { 1, 0, 2 };
+        const int resolutionDisplayOrder[] = { 1, MatchNativePostChoice, 0, 2 };
         for (int choice : resolutionDisplayOrder)
         {
+            if(choice==MatchNativePostChoice&&!nativeResolution)continue;
             const char* refusal = UnifiedResolutionRefusal(snapshot, choice, nativeAfterOnly);
             ImGui::BeginDisabled(refusal != nullptr);
-            if (ImGui::Selectable(ResolutionChoices[choice], choice == resolution))
+            const auto choiceLabel=ResolutionDisplayText(snapshot,choice);
+            ImGui::PushID(choice);
+            const auto stableLabel=choiceLabel+"###NrResolutionChoice";
+            if (ImGui::Selectable(stableLabel.c_str(), choice == resolution))
             {
                 NrConfigSynchronization::Transaction transaction;
                 const auto inputPolicy = config.DlssNrPresentInputPolicy;
@@ -219,10 +237,17 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
                 config.DlssNrPresentInputPolicy = inputPolicy;
                 changed = true;
             }
+            ImGui::PopID();
             ImGui::EndDisabled();
             if (refusal) ImGui::TextWrapped("%s",Neurotic::Translate(refusal).c_str());
         }
         ImGui::EndCombo();
+    }
+    if(resolutionHelp&&!resolutionOpen)
+    {
+        const auto help=Neurotic::UiMessage("ingame.native-resolution.help",
+            "Both Match Native options use the native input dimensions. The selected stage controls when Neural Rendering runs.");
+        ImGui::SetTooltip("%s\n\n%s",resolutionLabel.c_str(),help.c_str());
     }
     if (!stackedLabels)
     {
@@ -230,6 +255,8 @@ template<class C> bool RenderControls(C& config, bool basicOwnsResolution = fals
         else ImGui::TextUnformatted(Neurotic::UiLiteral("ingame.dlssnr-stagecontrols.nr_resolution_399e2689", "NR Resolution"));
     }
     ImGui::EndDisabled();
+    if(const auto reason=NativeResolution::SelectionRefusal(snapshot))
+        ImGui::TextWrapped("%s",Neurotic::Translate(reason).c_str());
     if (showPlacementRefusal)
     {
         if (placementRefusal)

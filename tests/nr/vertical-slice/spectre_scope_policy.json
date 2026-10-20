@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "scope_id": "W03-ORIGINAL-LAYER-CONSTRUCTION-V1",
+  "case_map_sha256": "08a375c7fe6abd3424477fc489421f5ad8025fad5b5919dfbfcb5811835e55a2",
+  "meaning": "All 58 recovered original case/layer cells. This construction scope cannot grant G2 or whole-series runtime qualification.",
+  "layer_axes": {
+    "unit": ["CPU"],
+    "integration": ["CPU"],
+    "mutation": ["CPU"],
+    "state-machine": ["CPU"],
+    "structural": ["SOURCE_ANALYSIS"],
+    "compile-time": ["SOURCE_ANALYSIS"],
+    "controlled D3D12 host": ["WARP_MECHANICS"],
+    "live GPU/game/G2": ["HARDWARE_MECHANICS", "LIVE_GAME"]
+  },
+  "always_missing_for_whole_series_until_separately_bound": [
+    "REAL_MODEL", "REAL_PROVIDER", "PERFORMANCE", "INDEPENDENT_REVIEW", "human G2"
+  ]
+}

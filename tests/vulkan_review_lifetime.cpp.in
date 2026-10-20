@@ -1,0 +1,56 @@
+#include "NrConfigFixture.h"
+#include "dlssnr/VulkanNrNativeObservation.h"
+#include "inputs/VulkanNativeFeatures.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+std::mutex nativeFeaturesMutex;
+VulkanNativeFeatures::Registry nativeFeatures;
+// ACTUAL_DEVICE_BRIDGE
+namespace DlssNr {
+std::mutex g_vkMutex,g_nativeRecordMutex;
+VkNrNativeRawStatus g_nativeRawVk;
+struct StateProjection {VkDevice device=VK_NULL_HANDLE;VkNrNativeSelectedStatus<NrConfigSnapshot<TestConfig>> nativeStatus;VkNrResetRevision resetState{1};} g_nativeVk;
+StateProjection& PassStateVk(VkNrRoute,uint32_t){return g_nativeVk;}
+struct Executor {void DeviceDestroyed(VkDevice){}};
+Executor& GetVulkanPresentExecutor(){static Executor e;return e;}
+bool g_vkSessionClosed=false;
+void ShutdownVkSessionsLocked(bool,VkDevice,std::unique_lock<std::mutex>&,std::optional<uint64_t> =std::nullopt){std::abort();}
+// ACTUAL_NATIVE_TERMINAL
+// ACTUAL_DEVICE_DESTROYED
+}
+unsigned checks=0,failed=0;
+void Check(bool value,const char* label){++checks;failed+=!value;std::printf("%s %s\n",value?"PASS":"FAIL",label);}
+std::optional<DlssNr::VkNrNativeObservation> Observe(uint32_t handleId,uint64_t invocation){
+ TestConfig config;config.SetDlssNrEnabled(true);config.DlssNrRoute=0u;
+ std::optional<NrConfigSnapshot<TestConfig>> nrSettings{config};
+ std::optional<DlssNr::VkNrTemporalMetadata> nrTemporal;
+ const auto nrIdentity=nativeFeatures.Observe(handleId);
+ const DlssNr::VkNrEvaluationIdentity selectedEvaluation{reinterpret_cast<VkCommandBuffer>(3),1,invocation,nrIdentity.generation};
+ NVSDK_NGX_Parameter* InParameters=nullptr;const bool bridged=false,isRrRoute=false;
+// ACTUAL_CAPTURE
+ return nrObservation;
+}
+int main(){using namespace DlssNr;
+ const auto a=reinterpret_cast<VkDevice>(8),b=reinterpret_cast<VkDevice>(9);
+ TestConfig config;config.SetDlssNrEnabled(true);config.DlssNrRoute=0u;const NrConfigSnapshot<TestConfig> cfg(config);
+ nativeFeatures.Register(42,1,reinterpret_cast<uintptr_t>(a));nativeFeatures.Register(43,1,reinterpret_cast<uintptr_t>(b));
+ auto first=Observe(42,1),late=Observe(42,2),other=Observe(43,3);
+ ObserveNativeResultVk(*first,cfg,{},false,false,false,true);
+ Check(g_nativeVk.nativeStatus.observation&&!g_nativeVk.nativeStatus.accepted&&g_nativeRawVk.observations==1,"actual SR failure publishes before any Native model allocation");
+ DeviceDestroyedVk(a,VulkanNativeFeatures::BeginDeviceRetirement(reinterpret_cast<uintptr_t>(a)));
+ Check(!g_nativeRawVk.observation&&!g_nativeVk.nativeStatus.observation,"actual destroy clears raw and selected failure with no model owner");
+ Check(!first->Current(0)&&!late->Current(0),"actual device retirement revokes previously captured source lifetime");
+ ObserveNativeResultVk(*late,cfg,{},false,false,false,true);
+ Check(!g_nativeRawVk.observation&&!g_nativeVk.nativeStatus.observation,"late captured terminal cannot republish after device destruction");
+ Check(other->Current(0)&&nativeFeatures.Current(43).generation,"other device registry and captured observation remain current");
+ const auto oldGeneration=first->frame.evaluation.featureGeneration;
+ auto recreated=nativeFeatures.Register(42,1,reinterpret_cast<uintptr_t>(a));auto fresh=Observe(42,4);
+ Check(recreated.generation>oldGeneration&&fresh->Current(0)&&!late->Current(0),"same-address device and handle reuse requires genuine fresh feature generation");
+ ObserveNativeResultVk(*fresh,cfg,{},false,false,false,true);
+ Check(g_nativeRawVk.observations==1&&g_nativeVk.nativeStatus.latestInvocation==4,"fresh recreated source can publish without a reference identity allowlist");
+ DeviceDestroyedVk(b,VulkanNativeFeatures::BeginDeviceRetirement(reinterpret_cast<uintptr_t>(b)));
+ Check(g_nativeVk.nativeStatus.observation&&g_nativeVk.nativeStatus.observation->device==a&&fresh->Current(0)&&!other->Current(0),"retiring another device preserves current selected source");
+ std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}

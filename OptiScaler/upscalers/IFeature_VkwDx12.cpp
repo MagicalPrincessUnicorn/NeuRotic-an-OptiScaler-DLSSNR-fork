@@ -2155,6 +2155,9 @@ bool IFeature_VkwDx12::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Parameter
         if (!Config::Instance()->DisableReactiveMask.value_or(false) && vkReactive.Dx12Resource != nullptr)
             InParameters->Set(NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask, (void*) vkReactive.Dx12Resource);
 
+        const auto nrSettings=TryNrConfigSnapshot(*Config::Instance());
+        const auto nrRenderObservation=nrSettings&&DlssNr::NativeResolution::PostSelected(*nrSettings)
+            ? DlssNr::ObserveRenderBeforeUpscale(InParameters) : DlssNr::NativeResolution::RenderObservation{};
         LOG_DEBUG("Dispatch!!");
         dx12EvalResult = dx12Feature->Evaluate(cmdList, InParameters);
 
@@ -2169,8 +2172,9 @@ bool IFeature_VkwDx12::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Parameter
                      dx12EvalResult, Config::Instance()->GetDlssNrRuntimeSnapshot().enabled);
         }
 
-        if (dx12EvalResult && Config::Instance()->GetDlssNrRuntimeSnapshot().enabled)
-            DlssNr::EvaluateAfterUpscale(cmdList, InParameters, Dx12CommandQueue);
+        if (dx12EvalResult && nrSettings && nrSettings->GetDlssNrRuntimeSnapshot().enabled)
+            DlssNr::EvaluateAfterUpscale(cmdList, InParameters, Dx12CommandQueue, false,
+                &*nrSettings, nullptr, &nrRenderObservation);
 
     } while (false);
 

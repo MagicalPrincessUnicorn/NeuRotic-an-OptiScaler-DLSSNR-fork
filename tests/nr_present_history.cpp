@@ -1,4 +1,5 @@
 #include "dlssnr/DlssNr_PresentHistory.h"
+#include "dlssnr/DlssNr_PresentEffects.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -17,6 +18,16 @@ static void Check(bool condition, const char* message)
 
 int main()
 {
+    Check(DlssNr::PresentEffects::FallbackPlacement(false) ==
+              std::string_view("Original Present fallback"),
+          "refusal before copyback leaves original output");
+    Check(DlssNr::PresentEffects::FallbackPlacement(true) ==
+              std::string_view("Present output may have changed"),
+          "failure after copyback submission cannot claim untouched output");
+    DlssNr::PresentHistory::HostReturnGate host;
+    Check(host.Accept(11), "first host callback accepted");
+    Check(!host.Accept(11) && !host.Accept(10), "duplicate and stale host callbacks refused");
+    Check(host.Accept(12), "new host callback accepted after stale callback");
     Continuity history;
     Check(history.ResetForNextEvaluation(), "initial admitted frame resets Feature 18");
     Check(history.CompletedFrames() == 0, "initial history has no completed output");

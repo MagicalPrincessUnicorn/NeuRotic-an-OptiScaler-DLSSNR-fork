@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <cstdint>
+#include <filesystem>
 namespace nh {
 struct AnythingUiState {
  bool cursor=true,wasReady=false,overlay=true,awaitingCountdown=false;
@@ -15,6 +16,13 @@ struct AnythingUiState {
  std::string notice;
  int comparison=0,stripes=6,look=0,comparisonDirection=0;
  bool preferencesLoaded=false,selectRequested=false;
+ // Disk projection and source continuity belong to preferences, not sessions.
+ // The original bytes retain unknown/unrecovered fields until an explicit edit.
+ bool preferenceSnapshotKnown=false,preferenceFileExisted=false;
+ nlohmann::json preferenceBaseline=nlohmann::json::object();
+ std::string preferenceSourceBytes;
+ std::filesystem::path preferenceSourcePath;
+ uint32_t preferenceEdits=0;
  bool windowListPending=false;
  bool clearTargetPending=false;
  uint64_t targetCheckAfter=0;

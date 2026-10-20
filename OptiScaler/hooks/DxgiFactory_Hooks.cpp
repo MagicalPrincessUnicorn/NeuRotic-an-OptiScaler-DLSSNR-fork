@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "DxgiFactory_Hooks.h"
+#include "DxgiSwapchainExtent.h"
+#include <intrin.h>
+#include <cstdint>
 
 #include "D3D11_Hooks.h"
 #include "D3D12_Hooks.h"
@@ -23,6 +26,31 @@
 #ifdef DETAILED_SC_LOGS
 #include <magic_enum.hpp>
 #endif
+
+static HRESULT FinishWindowSwapchainCreation(const char* api,HRESULT result,IDXGISwapChain* chain,
+    HWND window,UINT requestedWidth,UINT requestedHeight,std::uintptr_t caller,bool admitted)
+{
+    const auto observed=DxgiSwapchainExtent::ObserveCreated(result,chain);
+    if(admitted&&DxgiSwapchainExtent::ApplyObservedDescription(observed,State::Instance().currentSwapchainDesc)){
+        if(window&&Util::GetProcessWindow()==window)
+            DxgiSwapchainExtent::ApplyObservedExtent(observed,State::Instance().currentSwapchainDesc,
+                State::Instance().screenWidth,State::Instance().screenHeight);
+    }
+    if(DxgiSwapchainExtent::TakeReceipt(DxgiSwapchainExtent::creationReceipts)){
+        bool wrapped=false;
+        if(SUCCEEDED(result)&&chain){
+            WrappedIDXGISwapChain4* existing=nullptr;
+            if(SUCCEEDED(chain->QueryInterface(IID_PPV_ARGS(&existing)))&&existing){wrapped=true;existing->Release();}
+        }
+        LOG_INFO("DXGI window creation: api={} caller={:X} window={:X} request={}x{} automatic={} "
+                 "result={:08X} descriptionResult={:08X} resolvedKnown={} resolved={}x{} admitted={} wrapped={} chain={:X}",
+            api,caller,reinterpret_cast<std::uintptr_t>(window),requestedWidth,requestedHeight,
+            requestedWidth==0||requestedHeight==0,static_cast<unsigned>(result),static_cast<unsigned>(observed.descriptionResult),
+            observed.DescriptionKnown(),observed.actual.BufferDesc.Width,observed.actual.BufferDesc.Height,
+            admitted,wrapped,reinterpret_cast<std::uintptr_t>(chain));
+    }
+    return result;
+}
 
 static bool PrepareDx12InteropDesc(DXGI_SWAP_CHAIN_DESC& desc)
 {
@@ -232,6 +260,10 @@ void DxgiFactoryHooks::HookToDLSSGFactory(IDXGIFactory* pFactory)
 HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
                                           IDXGISwapChain** ppSwapChain)
 {
+    const UINT requestedWidth=pDesc?pDesc->BufferDesc.Width:0,requestedHeight=pDesc?pDesc->BufferDesc.Height:0;
+    const HWND requestedWindow=pDesc?pDesc->OutputWindow:nullptr;
+    const auto requestCaller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+
     *ppSwapChain = nullptr;
 
     if (State::Instance().vulkanCreatingSC)
@@ -247,7 +279,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
         ScopedSkipParentWrapping skipParentWrapping {};
 
         auto res = o_CreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
-        return res;
+        return FinishWindowSwapchainCreation(__FUNCTION__,res,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     if (pDevice == nullptr || pDesc == nullptr)
@@ -258,18 +290,18 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
         ScopedSkipParentWrapping skipParentWrapping {};
 
         auto res = o_CreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
-        return res;
+        return FinishWindowSwapchainCreation(__FUNCTION__,res,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
-    if (pDesc->BufferDesc.Height < 100 || pDesc->BufferDesc.Width < 100)
+    if (DxgiSwapchainExtent::BypassSmallExplicitWindowExtent(pDesc->BufferDesc.Width,pDesc->BufferDesc.Height))
     {
-        LOG_WARN("Overlay call!");
+        LOG_WARN("Small explicit window swapchain bypass: {}x{}",pDesc->BufferDesc.Width,pDesc->BufferDesc.Height);
 
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
         ScopedSkipParentWrapping skipParentWrapping {};
 
         auto res = o_CreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
-        return res;
+        return FinishWindowSwapchainCreation(__FUNCTION__,res,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     DXGI_SWAP_CHAIN_DESC localDesc {};
@@ -377,8 +409,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
 
             if (FGSCResult == S_OK)
             {
-                State::Instance().currentSwapchainDesc = localDesc;
-                return FGSCResult;
+                return FinishWindowSwapchainCreation(__FUNCTION__,FGSCResult,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
             }
         }
     }
@@ -450,9 +481,12 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
                             fgSwapChain->QueryInterface(IID_PPV_ARGS(&fgSwapChain4));
                     }
 
+                    if (SUCCEEDED(realScResult) && realDx11SwapChain != nullptr && fgSwapChain4 != nullptr &&
+                        (requestedWidth==0||requestedHeight==0))
+                        realScResult=DxgiSwapchainExtent::MatchHiddenBufferExtent(realDx11SwapChain,fgSwapChain4);
+
                     if (SUCCEEDED(realScResult) && realDx11SwapChain != nullptr && fgSwapChain4 != nullptr)
                     {
-                        State::Instance().currentSwapchainDesc = localDesc;
                         State::Instance().currentRealSwapchain = realDx11SwapChain;
                         State::Instance().currentD3D11Device = device;
                         State::Instance().currentD3D12Device = WithDx12::GetD3D12Device();
@@ -476,7 +510,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
                         if (fgSwapChain != nullptr)
                             fgSwapChain->Release();
                         device->Release();
-                        return S_OK;
+                        return FinishWindowSwapchainCreation(__FUNCTION__,S_OK,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
                     }
 
                     LOG_WARN("Dx11wDx12 swapchain creation failed: real {:X}, fg {:X}", (UINT) realScResult,
@@ -525,7 +559,6 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
 
         if (result == S_OK)
         {
-            State::Instance().currentSwapchainDesc = localDesc;
             State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
 
             // Check for SL proxy
@@ -538,12 +571,6 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
             IUnknown* realDevice = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &realDevice))
                 realDevice = pDevice;
-
-            if (Util::GetProcessWindow() == localDesc.OutputWindow)
-            {
-                State::Instance().screenWidth = static_cast<float>(localDesc.BufferDesc.Width);
-                State::Instance().screenHeight = static_cast<float>(localDesc.BufferDesc.Height);
-            }
 
             LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (UINT64) *ppSwapChain,
                       (UINT64) localDesc.OutputWindow);
@@ -574,7 +601,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
         LOG_ERROR("CreateSwapChain failed: {:X}", (UINT) result);
     }
 
-    return result;
+    return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
 }
 
 HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUnknown* pDevice, HWND hWnd,
@@ -582,6 +609,10 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                                                  const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
                                                  IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain)
 {
+    const UINT requestedWidth=pDesc?pDesc->Width:0,requestedHeight=pDesc?pDesc->Height:0;
+    const HWND requestedWindow=hWnd;
+    const auto requestCaller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+
     *ppSwapChain = nullptr;
 
     static bool firstCall = static_cast<bool>(State::Instance().gameQuirks & GameQuirk::NoFSRFGFirstSwapchain);
@@ -607,7 +638,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
         if (firstCall)
             _skipFGSwapChainCreation = false;
 
-        return result;
+        return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     if (pDevice == nullptr || pDesc == nullptr)
@@ -625,12 +656,12 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
         if (firstCall)
             _skipFGSwapChainCreation = false;
 
-        return result;
+        return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
-    if (pDesc->Height < 100 || pDesc->Width < 100)
+    if (DxgiSwapchainExtent::BypassSmallExplicitWindowExtent(pDesc->Width,pDesc->Height))
     {
-        LOG_WARN("Overlay call!");
+        LOG_WARN("Small explicit window swapchain bypass: {}x{}",pDesc->Width,pDesc->Height);
         HRESULT result;
 
         {
@@ -643,7 +674,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
         if (firstCall)
             _skipFGSwapChainCreation = false;
 
-        return result;
+        return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     DXGI_SWAP_CHAIN_DESC1 localDesc {};
@@ -765,8 +796,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
 
             if (FGSCResult == S_OK)
             {
-                ((IDXGISwapChain*) *ppSwapChain)->GetDesc(&State::Instance().currentSwapchainDesc);
-                return FGSCResult;
+                return FinishWindowSwapchainCreation(__FUNCTION__,FGSCResult,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
             }
         }
     }
@@ -844,10 +874,12 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                             fgSwapChain1->QueryInterface(IID_PPV_ARGS(&fgSwapChain4));
                     }
 
+                    if (realScResult == S_OK && realDx11SwapChain1 != nullptr && fgSwapChain4 != nullptr &&
+                        (requestedWidth==0||requestedHeight==0))
+                        realScResult=DxgiSwapchainExtent::MatchHiddenBufferExtent(realDx11SwapChain1,fgSwapChain4);
+
                     if (realScResult == S_OK && realDx11SwapChain1 != nullptr && fgSwapChain4 != nullptr)
                     {
-                        ((IDXGISwapChain*) realDx11SwapChain1)->GetDesc(&State::Instance().currentSwapchainDesc);
-                        State::Instance().currentSwapchainDesc.OutputWindow = hWnd;
                         State::Instance().currentRealSwapchain = realDx11SwapChain1;
                         State::Instance().currentD3D11Device = device;
                         State::Instance().currentD3D12Device = WithDx12::GetD3D12Device();
@@ -872,7 +904,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                             fgSwapChain1->Release();
 
                         device->Release();
-                        return S_OK;
+                        return FinishWindowSwapchainCreation(__FUNCTION__,S_OK,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
                     }
 
                     LOG_WARN("Dx11wDx12 HWND swapchain creation failed: real {:X}, fg {:X}", (UINT) realScResult,
@@ -941,13 +973,6 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &readDevice))
                 readDevice = pDevice;
 
-            if (Util::GetProcessWindow() == hWnd)
-            {
-                State::Instance().screenWidth = static_cast<float>(localDesc.Width);
-                State::Instance().screenHeight = static_cast<float>(localDesc.Height);
-            }
-
-            realSC->GetDesc(&State::Instance().currentSwapchainDesc);
 
             LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (uintptr_t) *ppSwapChain, (uintptr_t) hWnd);
 
@@ -982,7 +1007,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
         firstCall = false;
     }
 
-    return result;
+    return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
 }
 
 HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactory, IUnknown* pDevice, IUnknown* pWindow,
@@ -1102,6 +1127,10 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
 HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice,
                                                DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain)
 {
+    const UINT requestedWidth=pDesc?pDesc->BufferDesc.Width:0,requestedHeight=pDesc?pDesc->BufferDesc.Height:0;
+    const HWND requestedWindow=pDesc?pDesc->OutputWindow:nullptr;
+    const auto requestCaller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+
     *ppSwapChain = nullptr;
 
     if (State::Instance().vulkanCreatingSC)
@@ -1117,7 +1146,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
         ScopedSkipParentWrapping skipParentWrapping {};
 
         auto res = o_DLSSGCreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
-        return res;
+        return FinishWindowSwapchainCreation(__FUNCTION__,res,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     if (pDevice == nullptr || pDesc == nullptr)
@@ -1128,18 +1157,18 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
         ScopedSkipParentWrapping skipParentWrapping {};
 
         auto res = o_DLSSGCreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
-        return res;
+        return FinishWindowSwapchainCreation(__FUNCTION__,res,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
-    if (pDesc->BufferDesc.Height < 100 || pDesc->BufferDesc.Width < 100)
+    if (DxgiSwapchainExtent::BypassSmallExplicitWindowExtent(pDesc->BufferDesc.Width,pDesc->BufferDesc.Height))
     {
-        LOG_WARN("Overlay call!");
+        LOG_WARN("Small explicit window swapchain bypass: {}x{}",pDesc->BufferDesc.Width,pDesc->BufferDesc.Height);
 
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
         ScopedSkipParentWrapping skipParentWrapping {};
 
         auto res = o_DLSSGCreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
-        return res;
+        return FinishWindowSwapchainCreation(__FUNCTION__,res,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     DXGI_SWAP_CHAIN_DESC localDesc {};
@@ -1255,8 +1284,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
 
             if (FGSCResult == S_OK)
             {
-                State::Instance().currentSwapchainDesc = localDesc;
-                return FGSCResult;
+                return FinishWindowSwapchainCreation(__FUNCTION__,FGSCResult,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
             }
         }
     }
@@ -1323,7 +1351,6 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
 
         if (result == S_OK)
         {
-            State::Instance().currentSwapchainDesc = localDesc;
 
             // Check for SL proxy
             IDXGISwapChain* realSC = nullptr;
@@ -1335,12 +1362,6 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
             IUnknown* realDevice = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &realDevice))
                 realDevice = pDevice;
-
-            if (Util::GetProcessWindow() == localDesc.OutputWindow)
-            {
-                State::Instance().screenWidth = static_cast<float>(localDesc.BufferDesc.Width);
-                State::Instance().screenHeight = static_cast<float>(localDesc.BufferDesc.Height);
-            }
 
             LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (UINT64) *ppSwapChain,
                       (UINT64) localDesc.OutputWindow);
@@ -1371,7 +1392,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
         LOG_ERROR("CreateSwapChain failed: {:X}", (UINT) result);
     }
 
-    return result;
+    return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
 }
 
 HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUnknown* pDevice, HWND hWnd,
@@ -1379,6 +1400,10 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
                                                       const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
                                                       IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain)
 {
+    const UINT requestedWidth=pDesc?pDesc->Width:0,requestedHeight=pDesc?pDesc->Height:0;
+    const HWND requestedWindow=hWnd;
+    const auto requestCaller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+
     *ppSwapChain = nullptr;
 
     static bool firstCall = static_cast<bool>(State::Instance().gameQuirks & GameQuirk::NoFSRFGFirstSwapchain);
@@ -1404,7 +1429,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
         if (firstCall)
             _skipFGSwapChainCreation = false;
 
-        return result;
+        return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     if (pDevice == nullptr || pDesc == nullptr)
@@ -1422,12 +1447,12 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
         if (firstCall)
             _skipFGSwapChainCreation = false;
 
-        return result;
+        return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
-    if (pDesc->Height < 100 || pDesc->Width < 100)
+    if (DxgiSwapchainExtent::BypassSmallExplicitWindowExtent(pDesc->Width,pDesc->Height))
     {
-        LOG_WARN("Overlay call!");
+        LOG_WARN("Small explicit window swapchain bypass: {}x{}",pDesc->Width,pDesc->Height);
         HRESULT result;
 
         {
@@ -1440,7 +1465,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
         if (firstCall)
             _skipFGSwapChainCreation = false;
 
-        return result;
+        return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,false);
     }
 
     DXGI_SWAP_CHAIN_DESC1 localDesc {};
@@ -1570,8 +1595,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
 
             if (FGSCResult == S_OK)
             {
-                ((IDXGISwapChain*) *ppSwapChain)->GetDesc(&State::Instance().currentSwapchainDesc);
-                return FGSCResult;
+                return FinishWindowSwapchainCreation(__FUNCTION__,FGSCResult,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
             }
         }
     }
@@ -1653,13 +1677,6 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &readDevice))
                 readDevice = pDevice;
 
-            if (Util::GetProcessWindow() == hWnd)
-            {
-                State::Instance().screenWidth = static_cast<float>(localDesc.Width);
-                State::Instance().screenHeight = static_cast<float>(localDesc.Height);
-            }
-
-            realSC->GetDesc(&State::Instance().currentSwapchainDesc);
 
             LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (uintptr_t) *ppSwapChain, (uintptr_t) hWnd);
 
@@ -1693,7 +1710,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
         firstCall = false;
     }
 
-    return result;
+    return FinishWindowSwapchainCreation(__FUNCTION__,result,*ppSwapChain,requestedWindow,requestedWidth,requestedHeight,requestCaller,true);
 }
 
 HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realFactory, IUnknown* pDevice,

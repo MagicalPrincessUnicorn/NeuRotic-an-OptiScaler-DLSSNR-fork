@@ -27,6 +27,7 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
+builds/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
@@ -441,3 +442,17 @@ CyberFSR/imgui.ini
 /OptiScaler/misc/Telemetry.cpp
 /OptiScaler/misc/Telemetry.h
 release
+
+# Original AFNR intake and historical evidence are retained locally, outside source packages.
+/references/alternate-frame-nr/20260928/
+/tools/nr_semantic_worker/models/
+__pycache__/
+/tools/nr_semantic_worker/runtime/
+/tools/nr_semantic_worker/packages/
+
+# Preserve downloaded MFG research originals locally; imported source has its own provenance.
+/references/mfg-rtx20-30/20261003/upstream/
+/references/mfg-rtx20-30/20261003/alternatives/
+
+# Isolated Depth Anything developer dependencies, model exports and upstream source.
+/_deps/depth-anything-v2/

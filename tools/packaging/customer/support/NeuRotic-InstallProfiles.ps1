@@ -7,7 +7,7 @@ function Get-NeuroticField($Object,[string]$Name,$Default=$null){
  if($Object -is [Collections.IDictionary]){if($Object.Contains($Name)){return $Object[$Name]};return $Default}
  if($null -ne $Object -and $Object.PSObject.Properties.Name -contains $Name){return $Object.$Name};return $Default
 }
-function Get-NeuroticExecutableArchitecture([string]$Executable){
+function Get-NeuroticExecutableArchitecture([string]$Executable,[switch]$RequireExecutable){
  $stream=[IO.File]::OpenRead($Executable)
  try{
   $header=New-Object byte[] 64
@@ -18,16 +18,28 @@ function Get-NeuroticExecutableArchitecture([string]$Executable){
   if($stream.Read($header,0,26) -ne 26 -or [BitConverter]::ToUInt32($header,0) -ne 17744){throw 'Invalid executable signature'}
   $machine=[BitConverter]::ToUInt16($header,4);$size=[BitConverter]::ToUInt16($header,20);$magic=[BitConverter]::ToUInt16($header,24)
   if($size -gt 4096 -or $pe+24+$size -gt $stream.Length){throw 'Invalid executable optional header'}
+  if($RequireExecutable){
+   $sections=[BitConverter]::ToUInt16($header,6);$characteristics=[BitConverter]::ToUInt16($header,22)
+   if(-not ($characteristics -band 0x0002) -or ($characteristics -band 0x2000) -or -not $sections){throw 'Select an actual game executable'}
+   if($pe+24+$size+[long]$sections*40 -gt $stream.Length){throw 'Invalid executable section table'}
+  }
   if($machine -eq 0x8664 -and $magic -eq 0x20b -and $size -ge 240){return 'x64'}
   if($machine -eq 0x14c -and $magic -eq 0x10b -and $size -ge 224){return 'x86'}
+  if($machine -in @(0x8664,0x14c)){throw 'Executable machine and optional header disagree'}
+  # Installation copies a selected package; it does not execute this target.
+  # Preserve an unfamiliar machine identity without inventing compatibility.
+  if($magic -eq 0x20b -and $size -ge 240){return ('pe64-machine-{0:x4}' -f $machine)}
+  if($magic -eq 0x10b -and $size -ge 224){return ('pe32-machine-{0:x4}' -f $machine)}
   return 'unknown'
  }finally{$stream.Dispose()}
 }
 function Get-NeuroticInstallProfile([string]$Executable,$Package,$GameIdentity){
- $architecture=Get-NeuroticExecutableArchitecture $Executable
+ $architecture=Get-NeuroticExecutableArchitecture $Executable -RequireExecutable
  $limitations=@();$route='native-x64'
  if($architecture -ne 'x64' -or (Get-NeuroticField $Package 'architecture' 'x64') -ne 'x64'){
-  $route='unsupported';$limitations+=('A compatible in-game integration is unavailable for this executable/package architecture. Use NR Anything.')
+  $code='desktop.installation.other_architecture_warning';$reason='Executable architecture differs from this package. If compatible in-game integration is unavailable, use NR Anything.'
+  if($architecture -eq 'x86'){$code='desktop.installation.architecture_warning';$reason='32-bit executable. This 64-bit package cannot provide in-game integration. Use NR Anything until a compatible integration is available.'}
+  $limitations+=([pscustomobject]@{reasonCode=$code;messageParameters=@{};reason=$reason})
  }
  $catalog=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'NeuRotic-GameCatalog.json') -Raw|ConvertFrom-Json
  $row=$null;$store=Get-NeuroticField $GameIdentity 'store';$id=Get-NeuroticField $GameIdentity 'storeId'
@@ -101,6 +113,12 @@ function Get-NeuroticAutomaticSetupPatches($Requirements,[bool]$Enabled=$false){
  return @(
   [pscustomobject]@{section='DlssNr';key='Enabled';value=$Enabled.ToString().ToLowerInvariant();policy='default'},
   [pscustomobject]@{section='DlssNr';key='Route';value=[string]$d.route;policy='default'},
+  [pscustomobject]@{section='DlssNr';key='NativeResolution';value=[string]$d.nativeResolution;policy='default'},
+  [pscustomobject]@{section='DlssNr';key='RenderingMode';value=[string]$d.renderingMode;policy='default'},
+  [pscustomobject]@{section='DlssNr';key='PerformanceMode';value=($d.renderingMode -ne 0).ToString().ToLowerInvariant();policy='default'},
+  [pscustomobject]@{section='DlssNr';key='RunBeforeSR';value=($d.renderingMode -ne 0).ToString().ToLowerInvariant();policy='default'},
+  [pscustomobject]@{section='DlssNr';key='WorkingScale';value='1';policy='default'},
+  [pscustomobject]@{section='DlssNr';key='UiManualResolution';value='false';policy='default'},
   [pscustomobject]@{section='DlssNr';key='Style';value=[string]$d.style;policy='default'},
   [pscustomobject]@{section='DlssNr';key='InputSource';value=[string]$d.inputSource;policy='default'},
   [pscustomobject]@{section='DlssNr';key='InputTransport';value=[string]$d.inputTransport;policy='default'},

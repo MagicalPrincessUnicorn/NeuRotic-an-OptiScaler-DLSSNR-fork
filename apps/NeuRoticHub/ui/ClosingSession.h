@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 #include <algorithm>
 #include <chrono>
@@ -7,39 +7,40 @@
 #include <menu/Localization.h>
 #include "json.hpp"
 #include "imgui.h"
-#include "storage/UserFile.h"
+#include "install/DiagnosticRetention.h"
 
 namespace nh {
 // UI-thread coordinator. Readiness comes from the owners, never elapsed time.
 // Thread-affine owners stay on this thread; only their asynchronous work stops.
 class ClosingSession {
  bool active=false;ULONGLONG began=0;
- std::array<bool,8> pending{};bool observed=false;
- std::filesystem::path logPath;std::string log;
- static constexpr const char* stages[]={"artwork","update","bundle","diagnostics","anything","installer","discovery","preflight"};
+ std::array<bool,9> pending{};bool observed=false;
+ std::filesystem::path journalRoot;std::string log;
+ static constexpr const char* stages[]={"artwork","update","bundle","diagnostics","anything","installer","discovery","preflight","nr_dll_files"};
 public:
- enum Work{Artwork,Update,Bundle,Diagnostics,Anything,Installer,Discovery,Preflight};
+ enum Work{Artwork,Update,Bundle,Diagnostics,Anything,Installer,Discovery,Preflight,NrDll};
  bool Active()const{return active;}
  void Record(const char* event,const char* stage="desktop"){
-  if(logPath.empty()||log.size()>60000)return;
+  if(journalRoot.empty()||log.size()>60000)return;
   const auto utc=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-  log+=nlohmann::json{{"utc_ms",utc},{"elapsed_ms",GetTickCount64()-began},{"thread",GetCurrentThreadId()},{"event",event},{"stage",stage}}.dump()+'\n';
-  // Replace the last-session receipt through the existing pinned user-file owner.
-  // Never follow an existing log symlink/hardlink or make logging a close gate.
-  try{SaveUserFile(logPath,log);}catch(...){}
+  const auto record=nlohmann::json{{"utc_ms",utc},{"elapsed_ms",GetTickCount64()-began},{"thread",GetCurrentThreadId()},{"event",event},{"stage",stage}};
+  log+=record.dump()+'\n';
+  // Use the same bounded session journal. Logging never becomes a close gate.
+  DiagnosticRetention::AppendSessionEvent(journalRoot,record);
  }
  void Begin(const std::filesystem::path& root){
   if(active)return;active=true;began=GetTickCount64();
   // Diagnostics must not make closing fail when user-data logging is unavailable.
-  logPath=root/L"desktop-close.jsonl";
+  journalRoot=root;
   Record("close_requested");
  }
- void Observe(const std::array<bool,8>& actual){
+ void Observe(const std::array<bool,9>& actual){
   for(size_t i=0;i<actual.size();++i)if(!observed||actual[i]!=pending[i])Record(actual[i]?"waiting":"completed",stages[i]);
   pending=actual;observed=true;
  }
+ template<size_t N> requires(N==8) void Observe(const std::array<bool,N>& legacy){std::array<bool,9> actual{};std::copy(legacy.begin(),legacy.end(),actual.begin());Observe(actual);}
  bool Settled()const{return active&&observed&&std::none_of(pending.begin(),pending.end(),[](bool value){return value;});}
- const std::array<bool,8>& Pending()const{return pending;}
+ const std::array<bool,9>& Pending()const{return pending;}
 };
 
 inline void RenderClosing(const ClosingSession& session,void* brand,float dpi){
@@ -51,7 +52,8 @@ inline void RenderClosing(const ClosingSession& session,void* brand,float dpi){
   Neurotic::UiLiteral("desktop.closing.anything","Stopping NR Anything"),
   Neurotic::UiLiteral("desktop.closing.installer","Finishing installation operation"),
   Neurotic::UiLiteral("desktop.closing.discovery","Finishing library scan"),
-  Neurotic::UiLiteral("desktop.closing.preflight","Finishing pre-flight check")};
+  Neurotic::UiLiteral("desktop.closing.preflight","Finishing pre-flight check"),
+  Neurotic::UiLiteral("desktop.nrdll.closing","Finishing NR DLL file operation")};
  const auto viewport=ImGui::GetMainViewport();
  ImGui::SetNextWindowPos(viewport->Pos);ImGui::SetNextWindowSize(viewport->Size);
  ImGui::PushFont(nullptr,18);

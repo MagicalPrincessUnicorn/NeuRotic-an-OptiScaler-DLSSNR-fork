@@ -52,7 +52,7 @@ bool UseGuides(const NrOptions &o, const FrameStamp &f, const GuideResult *g)
         return false;
     if (g->stamp.session != f.session || g->stamp.sequence != f.sequence ||
         g->stamp.timestampQpc != f.timestampQpc || g->stamp.width != f.width || g->stamp.height != f.height ||
-        g->stamp.reset != f.reset || g->stamp.streamEpoch!=f.streamEpoch || g->stamp.geometryEpoch!=f.geometryEpoch || g->stamp.configEpoch!=f.configEpoch || !g->width || !g->height || g->width > f.width || g->height > f.height ||
+        g->stamp.colorEpoch!=f.colorEpoch || g->stamp.reset != f.reset || g->stamp.streamEpoch!=f.streamEpoch || g->stamp.geometryEpoch!=f.geometryEpoch || g->stamp.configEpoch!=f.configEpoch || !g->width || !g->height || g->width > f.width || g->height > f.height ||
         g->width > 16384 || g->height > 16384)
         return false;
     const size_t count = size_t(g->width) * g->height;
@@ -63,10 +63,10 @@ bool UseGuides(const NrOptions &o, const FrameStamp &f, const GuideResult *g)
 }
 bool ResetHistory(const FrameStamp &f, const FrameStamp &p)
 {
-    return f.reset || !p.sequence || f.session != p.session || f.streamEpoch!=p.streamEpoch || f.geometryEpoch!=p.geometryEpoch || f.configEpoch!=p.configEpoch || f.width != p.width || f.height != p.height ||
+    return f.colorEpoch!=p.colorEpoch || f.reset || !p.sequence || f.session != p.session || f.streamEpoch!=p.streamEpoch || f.geometryEpoch!=p.geometryEpoch || f.configEpoch!=p.configEpoch || f.width != p.width || f.height != p.height ||
            f.sequence != p.sequence + 1 || f.timestampQpc <= p.timestampQpc;
 }
-bool AdmitShape(uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight, std::string &reason)
+bool AdmitShape(uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight, std::string &reason,bool hdr)
 {
     if (!width || !height || !workWidth || !workHeight || width > 16384 || height > 16384 ||
         workWidth > width || workHeight > height)
@@ -77,12 +77,13 @@ bool AdmitShape(uint32_t width, uint32_t height, uint32_t workWidth, uint32_t wo
     // Conservative bound for owned shared colour, float composition/model images,
     // guide copies/uploads, readback, CPU conversion and independently owned output.
     // Opaque NVIDIA feature/driver allocation is not measured by this admission.
-    constexpr uint64_t budget = 1280ull * 1024 * 1024;
+    const uint64_t budget = (hdr?1536ull:1280ull) * 1024 * 1024; // bounded FP16 transport/rings; unchanged SDR allowance
     const uint64_t ownedBytes =
-        uint64_t(width) * height * 100 + uint64_t(workWidth) * workHeight * 24 + 32ull * 1024 * 1024;
+        uint64_t(width) * height * (hdr?140:100) + uint64_t(workWidth) * workHeight * 24 + 32ull * 1024 * 1024;
     if (ownedBytes > budget)
     {
         reason =
+            hdr?"HDR owned transport/image admission exceeds 1536 MiB budget; opaque provider and optional analysis memory excluded":
             "NR owned transport/image admission exceeds 1280 MiB budget; opaque provider memory excluded";
         return false;
     }

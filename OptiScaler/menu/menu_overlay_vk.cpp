@@ -481,7 +481,7 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
         }
     }
 
-    // Initialize ImGui and upload fonts
+    // Initialize the backend; texture uploads are owned by its drawing path.
     {
         _ImVulkan_Info.Instance = instance;
         _ImVulkan_Info.PhysicalDevice = pd;
@@ -502,55 +502,11 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
         if (!initResult)
             return;
 
-        // Upload Fonts
-        // Use any command queue
-        VkCommandPool command_pool = _ImVulkan_Frames[0].CommandPool;
-        VkCommandBuffer command_buffer = _ImVulkan_Frames[0].CommandBuffer;
-        result = vkResetCommandPool(device, command_pool, 0);
-        if (result != VK_SUCCESS)
-        {
-            LOG_ERROR("vkBeginCommandBuffer error: {0:X}", (UINT) result);
-            return;
-        }
-
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        result = vkBeginCommandBuffer(command_buffer, &begin_info);
-        if (result != VK_SUCCESS)
-        {
-            LOG_ERROR("vkBeginCommandBuffer error: {0:X}", (UINT) result);
-            return;
-        }
-
-        // initResult = ImGui_ImplVulkan_CreateFontsTexture();
-        // LOG_DEBUG("ImGui_ImplVulkan_CreateFontsTexture result: {}", initResult);
-
-        VkSubmitInfo end_info = {};
-        end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        end_info.commandBufferCount = 1;
-        end_info.pCommandBuffers = &command_buffer;
-
-        result = vkEndCommandBuffer(command_buffer);
-        if (result != VK_SUCCESS)
-        {
-            LOG_ERROR("vkEndCommandBuffer error: {0:X}", (UINT) result);
-            return;
-        }
-
-        result = vkQueueSubmit(queue, 1, &end_info, VK_NULL_HANDLE);
-        if (result != VK_SUCCESS)
-        {
-            LOG_ERROR("vkQueueSubmit error: {0:X}", (UINT) result);
-            return;
-        }
-
-        result = vkDeviceWaitIdle(device);
-        if (result != VK_SUCCESS)
-        {
-            LOG_ERROR("vkDeviceWaitIdle error: {0:X}", (UINT) result);
-            return;
-        }
+        // No commands are recorded during creation. Do not submit an empty
+        // upload or drain the device from inside a provider's Present call:
+        // other FG queues may need that Present to return before completing.
+        // The backend uploads actual textures when drawing; submitted overlay
+        // work retains its existing per-frame fences and teardown protection.
     }
 
     _vulkanObjectsCreated = true;

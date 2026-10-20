@@ -6,7 +6,7 @@ def _defaults(profile):
     if profile not in ('public', 'internal-testing'):
         raise ValueError('Unknown logging profile: ' + str(profile))
     return {'LogToFile': 'true' if profile == 'internal-testing' else 'false',
-            'LogLevel': '0' if profile == 'internal-testing' else '2',
+            'LogLevel': '0' if profile == 'internal-testing' else '6',
             'LogToConsole': 'false', 'LogToNGX': 'false',
             'LogToDebug': 'false', 'OpenConsole': 'false'}
 

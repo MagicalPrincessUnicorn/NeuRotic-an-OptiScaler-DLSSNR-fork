@@ -52,14 +52,24 @@ template<class Reader> bool ValidLineage(const TransformLineage& steps,bool appl
     }
     return true;
 }
+namespace Detail
+{
+// result must be fresh private scratch. Discard it when comparison fails.
+template<class Reader> bool CompareLineageInto(const TransformLineage& applied,
+    const TransformLineage& requested,const Reader& reader,LineageComparison& result)
+{
+    if(!ValidLineage(applied,true,reader)||!ValidLineage(requested,false,reader)||applied.Size()>requested.Size())return false;
+    for(std::size_t i=0;i<applied.Size();++i)if(!SameTransform(*applied.Get(i),*requested.Get(i),reader))return false;
+    for(std::size_t i=applied.Size();i<requested.Size();++i)if(!result.delta.Push(*requested.Get(i)))return false;
+    result.compatible=true;return true;
+}
+}
 template<class Reader> LineageComparison CompareLineage(const TransformLineage& applied,
                                                         const TransformLineage& requested,const Reader& reader)
 {
     LineageComparison result;
-    if(!ValidLineage(applied,true,reader)||!ValidLineage(requested,false,reader)||applied.Size()>requested.Size())return result;
-    for(std::size_t i=0;i<applied.Size();++i)if(!SameTransform(*applied.Get(i),*requested.Get(i),reader))return result;
-    for(std::size_t i=applied.Size();i<requested.Size();++i)if(!result.delta.Push(*requested.Get(i)))return {};
-    result.compatible=true;return result;
+    if(!Detail::CompareLineageInto(applied,requested,reader,result))return {};
+    return result;
 }
 // Explicit versioned recipe declaration, not an inferred rewrite by operation name.
 struct FusionRule

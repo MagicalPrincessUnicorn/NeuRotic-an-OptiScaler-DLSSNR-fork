@@ -1,0 +1,1613 @@
+diff --git a/ffx-api/src/dx12/ffx_provider_framegenerationswapchain_dx12.cpp b/ffx-api/src/dx12/ffx_provider_framegenerationswapchain_dx12.cpp
+index 9fac8ee..19a63a8 100644
+--- a/ffx-api/src/dx12/ffx_provider_framegenerationswapchain_dx12.cpp
++++ b/ffx-api/src/dx12/ffx_provider_framegenerationswapchain_dx12.cpp
+@@ -27,6 +27,7 @@
+ #include <FidelityFX/host/backends/dx12/ffx_dx12.h>
+ 
+ #include <stdlib.h>
++#include "../../../../FidelityFX-CheckedClosure/CheckedSdkRegistry.h"
+ 
+ bool ffxProvider_FrameGenerationSwapChain_DX12::CanProvide(uint64_t type) const
+ {
+@@ -67,6 +68,7 @@ ffxReturnCode_t ffxProvider_FrameGenerationSwapChain_DX12::CreateContext(ffxCont
+         // reference tracked by internal_context
+         internal_context->fiSwapChain->AddRef();
+ 
++        ffx::nr::createdRegistry().bindAlias(internal_context->fiSwapChain, internal_context);
+         *context = internal_context;
+         return FFX_API_RETURN_OK;
+     }
+@@ -83,6 +85,7 @@ ffxReturnCode_t ffxProvider_FrameGenerationSwapChain_DX12::CreateContext(ffxCont
+         // reference tracked by internal_context
+         internal_context->fiSwapChain->AddRef();
+ 
++        ffx::nr::createdRegistry().bindAlias(internal_context->fiSwapChain, internal_context);
+         *context = internal_context;
+         return FFX_API_RETURN_OK;
+     }
+@@ -99,6 +102,7 @@ ffxReturnCode_t ffxProvider_FrameGenerationSwapChain_DX12::CreateContext(ffxCont
+         // reference tracked by internal_context
+         internal_context->fiSwapChain->AddRef();
+ 
++        ffx::nr::createdRegistry().bindAlias(internal_context->fiSwapChain, internal_context);
+         *context = internal_context;
+         return FFX_API_RETURN_OK;
+     }
+@@ -115,6 +119,12 @@ ffxReturnCode_t ffxProvider_FrameGenerationSwapChain_DX12::DestroyContext(ffxCon
+ 
+     InternalFgScContext* internal_context = reinterpret_cast<InternalFgScContext*>(*context);
+ 
++    auto checked = ffx::nr::createdRegistry().find(internal_context);
++    if (ffx::nr::registryLookupBusy && ffx::nr::checkedModeRequested.load())
++        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
++    ffx::nr::DestroyScope lifecycle(checked);
++    if (!lifecycle) return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
++    ffx::nr::createdRegistry().unbindAlias(internal_context);
+     internal_context->fiSwapChain->Release();
+ 
+     alloc.dealloc(internal_context);
+diff --git a/ffx-api/src/ffx_api.cpp b/ffx-api/src/ffx_api.cpp
+index 9852e63..e6c4a50 100644
+--- a/ffx-api/src/ffx_api.cpp
++++ b/ffx-api/src/ffx_api.cpp
+@@ -25,6 +25,7 @@
+ #include <ffx_api/ffx_api.h>
+ #include "ffx_provider.h"
+ #include "backends.h"
++#include "../../../FidelityFX-CheckedClosure/CheckedAlgorithmState.h"
+ 
+ static uint64_t GetVersionOverride(const ffxApiHeader* header)
+ {
+@@ -55,6 +56,8 @@ FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(ffxContext* context, ffxCreateCon
+ FFX_API_ENTRY ffxReturnCode_t ffxDestroyContext(ffxContext* context, const ffxAllocationCallbacks* memCb)
+ {
+     VERIFY(context != nullptr, FFX_API_RETURN_ERROR_PARAMETER);
++    ffx::nr::AlgorithmApiScope checkedAlgorithm(*context,true);
++    VERIFY(checkedAlgorithm, FFX_API_RETURN_ERROR_RUNTIME_ERROR);
+ 
+     Allocator alloc{memCb};
+     return GetAssociatedProvider(context)->DestroyContext(context, alloc);
+@@ -64,6 +67,8 @@ FFX_API_ENTRY ffxReturnCode_t ffxConfigure(ffxContext* context, const ffxConfigu
+ {
+     VERIFY(desc != nullptr, FFX_API_RETURN_ERROR_PARAMETER);
+     VERIFY(context != nullptr, FFX_API_RETURN_ERROR_PARAMETER);
++    ffx::nr::AlgorithmApiScope checkedAlgorithm(*context);
++    VERIFY(checkedAlgorithm, FFX_API_RETURN_ERROR_RUNTIME_ERROR);
+ 
+     return GetAssociatedProvider(context)->Configure(context, desc);
+ }
+@@ -98,6 +103,8 @@ FFX_API_ENTRY ffxReturnCode_t ffxQuery(ffxContext* context, ffxQueryDescHeader*
+         }
+     }
+ 
++    ffx::nr::AlgorithmApiScope checkedAlgorithm(*context);
++    VERIFY(checkedAlgorithm, FFX_API_RETURN_ERROR_RUNTIME_ERROR);
+     if (auto desc = ffx::DynamicCast<ffxQueryGetProviderVersion>(header))
+     {
+         if (context != nullptr)
+@@ -127,6 +134,8 @@ FFX_API_ENTRY ffxReturnCode_t ffxDispatch(ffxContext* context, const ffxDispatch
+ {
+     VERIFY(desc != nullptr, FFX_API_RETURN_ERROR_PARAMETER);
+     VERIFY(context != nullptr, FFX_API_RETURN_ERROR_PARAMETER);
++    ffx::nr::AlgorithmApiScope checkedAlgorithm(*context);
++    VERIFY(checkedAlgorithm, FFX_API_RETURN_ERROR_RUNTIME_ERROR);
+ 
+     return GetAssociatedProvider(context)->Dispatch(context, desc);
+ }
+diff --git a/ffx-api/src/ffx_provider_framegeneration.cpp b/ffx-api/src/ffx_provider_framegeneration.cpp
+index 5b6e9d7..88e3d39 100644
+--- a/ffx-api/src/ffx_provider_framegeneration.cpp
++++ b/ffx-api/src/ffx_provider_framegeneration.cpp
+@@ -29,6 +29,7 @@
+ #include <FidelityFX/gpu/fsr3/ffx_fsr3_resources.h>
+ 
+ #include <stdlib.h>
++#include "../../../FidelityFX-CheckedClosure/CheckedAlgorithmState.h"
+ 
+ bool ffxProvider_FrameGeneration::CanProvide(uint64_t type) const
+ {
+@@ -179,6 +180,14 @@ ffxReturnCode_t ffxProvider_FrameGeneration::CreateContext(ffxContext* context,
+         }
+ 
+         *context = internal_context;
++        // Copy the creator's allocator callbacks; never borrow its stack descriptor.
++        const bool customAllocator=alloc.cb!=nullptr;
++        const ffxAllocationCallbacks callbacks=customAllocator?*alloc.cb:ffxAllocationCallbacks{};
++        try {ffx::nr::algorithmRegistry().add(internal_context,[internal_context,customAllocator,callbacks,this]() mutable ->int32_t {
++            Allocator allocator{customAllocator?&callbacks:nullptr};ffxContext exact=internal_context;
++            return static_cast<int32_t>(this->DestroyContext(&exact,allocator));
++        },!customAllocator && desc->flags==0 &&
++          desc->backBufferFormat==FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,GetDevice(header));}catch(...){/* Legacy creation remains usable; experimental selection is unavailable. */}
+         return FFX_API_RETURN_OK;
+     }
+     else
+@@ -193,6 +202,9 @@ ffxReturnCode_t ffxProvider_FrameGeneration::DestroyContext(ffxContext* context,
+     VERIFY(*context, FFX_API_RETURN_ERROR_PARAMETER);
+ 
+     InternalFgContext* internal_context = reinterpret_cast<InternalFgContext*>(*context);
++    auto algorithm=ffx::nr::algorithmRegistry().find(internal_context);
++    if(algorithm && algorithm->selected() && ffx::nr::algorithmDestroyPermit!=algorithm.get())return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
++    ffx::nr::AlgorithmCleanup cleanup;
+     
+     { // copied from ffxFsr3ContextDestroy, simplified.
+         for (FfxUInt32 i = 0; i < FFX_FSR3_RESOURCE_IDENTIFIER_COUNT; i++)
+@@ -207,9 +219,12 @@ ffxReturnCode_t ffxProvider_FrameGeneration::DestroyContext(ffxContext* context,
+         TRY2(internal_context->backendInterfaceShared.fpDestroyBackendContext(&internal_context->backendInterfaceShared, internal_context->effectContextIdShared));
+     }
+ 
++    if(cleanup.Result()!=0)return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+     alloc.dealloc(internal_context->backendInterfaceFi.scratchBuffer);
+     alloc.dealloc(internal_context->backendInterfaceShared.scratchBuffer);
+     alloc.dealloc(internal_context);
++    *context=nullptr;
++    ffx::nr::algorithmRegistry().removeLegacy(internal_context);
+ 
+     return FFX_API_RETURN_OK;
+ }
+@@ -223,6 +238,13 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Configure(ffxContext* context, cons
+     InternalFgContext* internal_context = reinterpret_cast<InternalFgContext*>(*context);
+     if (auto desc = ffx::DynamicCast<ffxConfigureDescFrameGeneration>(header))
+     {
++        auto algorithm=ffx::nr::algorithmRegistry().find(internal_context);
++        if(algorithm && algorithm->selected()) {
++            const auto owner=algorithm->owner();
++            if(header->pNext || desc->swapChain!=owner->object || desc->allowAsyncWorkloads || desc->flags || !desc->frameGenerationEnabled ||
++               desc->presentCallback || desc->frameGenerationCallback || desc->HUDLessColor.resource || desc->onlyPresentGenerated ||
++               !algorithm->configure(desc->frameID))return FFX_API_RETURN_ERROR_PARAMETER;
++        }
+         FfxFrameGenerationConfig config{};
+         config.allowAsyncWorkloads = desc->allowAsyncWorkloads;
+         config.flags = desc->flags;
+@@ -238,13 +260,11 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Configure(ffxContext* context, cons
+ 
+         config.frameGenerationCallback = nullptr;
+         config.frameGenerationCallbackContext = nullptr;
+-        if (desc->frameGenerationCallback != nullptr)
++        if (desc->frameGenerationCallback != nullptr || (algorithm && algorithm->selected()))
+         {
+             config.frameGenerationCallback = [](const FfxFrameGenerationDispatchDescription* desc, void* ctx) -> FfxErrorCode {
+                 size_t callbacksIndex = desc->frameID % MAX_QUEUED_FRAMES;
+                 InternalFgContext* internal_context = reinterpret_cast<InternalFgContext*>(ctx);
+-                auto callbacks = &internal_context->callbacks[callbacksIndex];
+-                VERIFY(callbacks->frameGenerationCallback, FFX_ERROR_BACKEND_API_ERROR);
+                 
+                 ffx::DispatchDescFrameGeneration dispatchDesc{};
+                 
+@@ -265,6 +285,14 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Configure(ffxContext* context, cons
+                 dispatchDesc.generationRect.width = desc->interpolationRect.width;
+                 dispatchDesc.frameID = desc->frameID;
+                 
++                auto algorithm=ffx::nr::algorithmRegistry().find(internal_context);
++                if(algorithm && algorithm->selected()) {
++                    auto admission=algorithm->enter();if(!admission)return FFX_ERROR_BACKEND_API_ERROR;
++                    ffxContext exact=internal_context;
++                    return Instance.Dispatch(&exact,&dispatchDesc.header)==FFX_API_RETURN_OK?FFX_OK:FFX_ERROR_BACKEND_API_ERROR;
++                }
++                auto callbacks = &internal_context->callbacks[callbacksIndex];
++                VERIFY(callbacks->frameGenerationCallback, FFX_ERROR_BACKEND_API_ERROR);
+                 if (FFX_API_RETURN_OK != callbacks->frameGenerationCallback(&dispatchDesc, callbacks->frameGenerationCallbackUserContext))
+                     return FFX_ERROR_BACKEND_API_ERROR;
+                 return FFX_OK;
+@@ -415,6 +443,12 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Dispatch(ffxContext* context, const
+     InternalFgContext* internal_context = reinterpret_cast<InternalFgContext*>(*context);
+     if (auto desc = ffx::DynamicCast<ffxDispatchDescFrameGeneration>(header))
+     {
++        auto algorithm=ffx::nr::algorithmRegistry().find(internal_context);
++        const bool checked=algorithm && algorithm->selected();
++        if(checked && (header->pNext || desc->numGeneratedFrames!=1 ||
++            !algorithm->dispatch(desc->commandList,desc->frameID,static_cast<ID3D12Resource*>(desc->presentColor.resource),static_cast<ID3D12Resource*>(desc->outputs[0].resource))))return FFX_API_RETURN_ERROR_PARAMETER;
++        ffx::nr::AlgorithmState::ConsumerScope consumer(checked?algorithm.get():nullptr);
++        if(checked && !consumer)return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+         const ffxDispatchDescFrameGenerationPrepare* prepDesc = &internal_context->prepareDescriptions[desc->frameID % MAX_QUEUED_FRAMES];
+ 
+         // Optical flow
+@@ -519,10 +553,14 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Dispatch(ffxContext* context, const
+             TRY2(ffxFrameInterpolationDispatch(&internal_context->fiContext, &fiDispatchDesc));
+         }
+ 
++        if(checked)consumer.succeeded();
+         return FFX_API_RETURN_OK;
+     }
+     else if (auto desc = ffx::DynamicCast<ffxDispatchDescFrameGenerationPrepare>(header))
+     {
++        auto algorithm=ffx::nr::algorithmRegistry().find(internal_context);
++        if(algorithm && algorithm->selected() && (header->pNext || desc->flags ||
++            !algorithm->prepare(desc->commandList,desc->frameID,static_cast<ID3D12Resource*>(desc->depth.resource),static_cast<ID3D12Resource*>(desc->motionVectors.resource))))return FFX_API_RETURN_ERROR_PARAMETER;
+         internal_context->prepareDescriptions[desc->frameID % MAX_QUEUED_FRAMES] = *desc;
+ 
+         internal_context->sharedResoureFrameToggle = (internal_context->sharedResoureFrameToggle + 1) & 1;
+diff --git a/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12.cpp b/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12.cpp
+index d952196..f34eea3 100644
+--- a/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12.cpp
++++ b/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12.cpp
+@@ -21,8 +21,11 @@
+ // THE SOFTWARE.
+ 
+ #include <tuple>
++#include <cstdio>
+ #include <initguid.h>
+ #include "FrameInterpolationSwapchainDX12.h"
++#include "../../../../../../FidelityFX-CheckedClosure/CheckedSdkService.h"
++#include "../../../../../../FidelityFX-CheckedClosure/CheckedAlgorithmState.h"
+ 
+ #include <FidelityFX/host/backends/dx12/ffx_dx12.h>
+ #include "FrameInterpolationSwapchainDX12_UiComposition.h"
+@@ -317,18 +320,27 @@ HRESULT compositeSwapChainFrame(FrameinterpolationPresentInfo* presenter, Pacing
+ 
+     const PacingData::FrameInfo& frameInfo = pacingEntry->frames[frameID];
+ 
+-    presenter->presentQueue->Wait(presenter->interpolationFence, frameInfo.interpolationCompletedFenceValue);
++    // Real frames have no per-frame interpolation work; the entry-wide wait
++    // already orders the present queue. Interpolated-frame waits stay required.
++    if (frameID == PacingData::FrameType::Real)
++        ffx::nr::queueWaitForPreviousUse(presenter->presentQueue, presenter->interpolationFence, frameInfo.interpolationCompletedFenceValue);
++    else
++        ffx::nr::queueWait(presenter->presentQueue, presenter->interpolationFence, frameInfo.interpolationCompletedFenceValue);
+ 
+     if (pacingEntry->drawDebugPacingLines)
+     {
+         auto gpuCommands = presenter->commandPool.get(presenter->presentQueue, L"compositeSwapChainFrame");
++        if (!gpuCommands) return E_FAIL;
+ 
+         uint32_t        currBackbufferIndex = presenter->swapChain->GetCurrentBackBufferIndex();
+         ID3D12Resource* swapchainBackbuffer = nullptr;
+-        presenter->swapChain->GetBuffer(currBackbufferIndex, IID_PPV_ARGS(&swapchainBackbuffer));
++        const auto bufferResult = ffx::nr::observeResult(presenter->swapChain->GetBuffer(currBackbufferIndex, IID_PPV_ARGS(&swapchainBackbuffer)));
++        if (ffx::nr::activeContext && (FAILED(bufferResult) || !swapchainBackbuffer)) { gpuCommands->drop(); return E_FAIL; }
+ 
+         FfxPresentCallbackDescription desc{};
+-        desc.commandList            = ffxGetCommandListDX12(gpuCommands->reset());
++        auto checkedList = gpuCommands->reset();
++        if (ffx::nr::activeContext && !checkedList) { SafeRelease(swapchainBackbuffer); return E_FAIL; }
++        desc.commandList            = ffxGetCommandListDX12(checkedList);
+         desc.device                 = presenter->device;
+         desc.isInterpolatedFrame    = frameID != PacingData::FrameType::Real;
+         desc.outputSwapChainBuffer  = ffxGetResourceDX12(swapchainBackbuffer, ffxGetResourceDescriptionDX12(swapchainBackbuffer), nullptr, FFX_RESOURCE_STATE_PRESENT);
+@@ -348,13 +360,17 @@ HRESULT compositeSwapChainFrame(FrameinterpolationPresentInfo* presenter, Pacing
+     if (pacingEntry->presentCallback)
+     {
+         auto gpuCommands = presenter->commandPool.get(presenter->presentQueue, L"compositeSwapChainFrame");
++        if (!gpuCommands) return E_FAIL;
+ 
+         uint32_t        currBackbufferIndex = presenter->swapChain->GetCurrentBackBufferIndex();
+         ID3D12Resource* swapchainBackbuffer = nullptr;
+-        presenter->swapChain->GetBuffer(currBackbufferIndex, IID_PPV_ARGS(&swapchainBackbuffer));
++        const auto bufferResult = ffx::nr::observeResult(presenter->swapChain->GetBuffer(currBackbufferIndex, IID_PPV_ARGS(&swapchainBackbuffer)));
++        if (ffx::nr::activeContext && (FAILED(bufferResult) || !swapchainBackbuffer)) { gpuCommands->drop(); return E_FAIL; }
+ 
+         FfxPresentCallbackDescription desc{};
+-        desc.commandList            = ffxGetCommandListDX12(gpuCommands->reset());
++        auto checkedList = gpuCommands->reset();
++        if (ffx::nr::activeContext && !checkedList) { SafeRelease(swapchainBackbuffer); return E_FAIL; }
++        desc.commandList            = ffxGetCommandListDX12(checkedList);
+         desc.device                 = presenter->device;
+         desc.isInterpolatedFrame    = frameID != PacingData::FrameType::Real;
+         desc.outputSwapChainBuffer  = ffxGetResourceDX12(swapchainBackbuffer, ffxGetResourceDescriptionDX12(swapchainBackbuffer), nullptr, FFX_RESOURCE_STATE_PRESENT);
+@@ -363,15 +379,16 @@ HRESULT compositeSwapChainFrame(FrameinterpolationPresentInfo* presenter, Pacing
+         desc.usePremulAlpha         = pacingEntry->usePremulAlphaComposite;
+         desc.frameID                = pacingEntry->currentFrameID;
+ 
+-        pacingEntry->presentCallback(&desc, pacingEntry->presentCallbackContext);
++        const auto compositionResult = pacingEntry->presentCallback(&desc, pacingEntry->presentCallbackContext);
++        if (ffx::nr::activeContext && compositionResult != FFX_OK) { ffx::nr::activeContext->closure.recordFailure(E_FAIL); gpuCommands->drop(); SafeRelease(swapchainBackbuffer); return E_FAIL; }
+ 
+         gpuCommands->execute(true);
+ 
+         SafeRelease(swapchainBackbuffer);
+     }
+ 
+-    presenter->presentQueue->Signal(presenter->compositionFenceGPU, frameInfo.presentIndex);
+-    presenter->compositionFenceCPU->Signal(frameInfo.presentIndex);
++    ffx::nr::signal(presenter->presentQueue, presenter->compositionFenceGPU, frameInfo.presentIndex);
++    ffx::nr::signal(presenter->compositionFenceCPU, frameInfo.presentIndex);
+ 
+     return S_OK;
+ }
+@@ -405,16 +422,17 @@ void presentToSwapChain(FrameinterpolationPresentInfo* presenter, PacingData* pa
+         }
+     }
+ 
+-    presenter->swapChain->Present(uSyncInterval, uFlags);
++    ffx::nr::observeResult(presenter->swapChain->Present(uSyncInterval, uFlags));
+ 
+     // tick frames sent for presentation
+-    presenter->presentQueue->Signal(presenter->presentFence, frameInfo.presentIndex);
++    ffx::nr::signal(presenter->presentQueue, presenter->presentFence, frameInfo.presentIndex);
+ 
+ }
+ 
+ DWORD WINAPI presenterThread(LPVOID param)
+ {
+     FrameinterpolationPresentInfo* presenter = static_cast<FrameinterpolationPresentInfo*>(param);
++    ffx::nr::WorkerScope checkedWorker(presenter, 1);
+ 
+     if (presenter)
+     {
+@@ -430,16 +448,18 @@ DWORD WINAPI presenterThread(LPVOID param)
+ 
+         presenter->previousPresentQpc = 0;
+ 
+-        while (!presenter->shutdown)
++        while (!ffx::nr::workerStopping(presenter, presenter->shutdown))
+         {
+ 
+-            WaitForSingleObject(presenter->pacerEvent, INFINITE);
++            if (ffx::nr::waitWorkerEvent(presenter, presenter->pacerEvent) != WAIT_OBJECT_0) continue;
+ 
+-            if (!presenter->shutdown)
++            if (!ffx::nr::workerStopping(presenter, presenter->shutdown))
+             {
+                 EnterCriticalSection(&presenter->criticalSectionScheduledFrame);
+ 
+                 PacingData entry = presenter->scheduledPresents;
++                ffx::nr::WorkScope checkedJob(presenter, 1);
++                if (!checkedJob) { LeaveCriticalSection(&presenter->criticalSectionScheduledFrame); continue; }
+                 presenter->scheduledPresents.invalidate();
+ 
+                 LeaveCriticalSection(&presenter->criticalSectionScheduledFrame);
+@@ -447,8 +467,8 @@ DWORD WINAPI presenterThread(LPVOID param)
+                 if (entry.numFramesToPresent > 0)
+                 {
+                     // we might have dropped entries so have to update here, oterwise we might deadlock
+-                    presenter->presentQueue->Signal(presenter->presentFence, entry.numFramesSentForPresentationBase);
+-                    presenter->presentQueue->Wait(presenter->interpolationFence, entry.interpolationCompletedFenceValue);
++                    ffx::nr::signal(presenter->presentQueue, presenter->presentFence, entry.numFramesSentForPresentationBase);
++                    ffx::nr::queueWait(presenter->presentQueue, presenter->interpolationFence, entry.interpolationCompletedFenceValue);
+ 
+                     for (uint32_t frameType = 0; frameType < PacingData::FrameType::Count; frameType++)
+                     {
+@@ -460,7 +480,7 @@ DWORD WINAPI presenterThread(LPVOID param)
+                             // signal replacement buffer availability
+                             if (frameInfo.presentIndex == entry.replacementBufferFenceSignal)
+                             {
+-                                presenter->presentQueue->Signal(presenter->replacementBufferFence, entry.replacementBufferFenceSignal);
++                                ffx::nr::signal(presenter->presentQueue, presenter->replacementBufferFence, entry.replacementBufferFenceSignal);
+                             }
+ 
+                             
+@@ -475,7 +495,7 @@ DWORD WINAPI presenterThread(LPVOID param)
+                             }
+ 
+                             // pacing without composition
+-                            waitForFenceValue(presenter->compositionFenceGPU, frameInfo.presentIndex);
++                            ffx::nr::waitFence(presenter->compositionFenceGPU, frameInfo.presentIndex);
+                             uint64_t targetQpc = presenter->previousPresentQpc + frameInfo.presentQpcDelta;
+                             waitForPerformanceCount(targetQpc, qpcFrequency, timerCaps.wPeriodMin, presenter->hybridSpinTime);
+ 
+@@ -493,7 +513,8 @@ DWORD WINAPI presenterThread(LPVOID param)
+             }
+         }
+ 
+-        waitForFenceValue(presenter->presentFence, numFramesSentForPresentation);
++        ffx::nr::PassiveScope terminalObservation(presenter);
++        ffx::nr::waitFence(presenter->presentFence, numFramesSentForPresentation);
+     }
+ 
+     return 0;
+@@ -502,10 +523,12 @@ DWORD WINAPI presenterThread(LPVOID param)
+ DWORD WINAPI interpolationThread(LPVOID param)
+ {
+     FrameinterpolationPresentInfo* presenter = static_cast<FrameinterpolationPresentInfo*>(param);
++    ffx::nr::WorkerScope checkedWorker(presenter, 0);
+ 
+     if (presenter)
+     {
+         HANDLE presenterThreadHandle = CreateThread(nullptr, 0, presenterThread, param, 0, nullptr);
++        ffx::nr::noteWorker(presenter, 1, presenterThreadHandle);
+         FFX_ASSERT(presenterThreadHandle != NULL);
+ 
+         if (presenterThreadHandle != 0)
+@@ -520,15 +543,17 @@ DWORD WINAPI interpolationThread(LPVOID param)
+             int64_t qpcFrequency;
+             QueryPerformanceFrequency(reinterpret_cast<LARGE_INTEGER*>(&qpcFrequency)); 
+ 
+-            while (!presenter->shutdown)
++            while (!ffx::nr::workerStopping(presenter, presenter->shutdown))
+             {
+-                WaitForSingleObject(presenter->presentEvent, INFINITE);
++                if (ffx::nr::waitWorkerEvent(presenter, presenter->presentEvent) != WAIT_OBJECT_0) continue;
+ 
+-                if (!presenter->shutdown)
++                if (!ffx::nr::workerStopping(presenter, presenter->shutdown))
+                 {
+                     EnterCriticalSection(&presenter->criticalSectionScheduledFrame);
+ 
+                     PacingData entry = presenter->scheduledInterpolations;
++                ffx::nr::WorkScope checkedJob(presenter, 0);
++                if (!checkedJob) { LeaveCriticalSection(&presenter->criticalSectionScheduledFrame); continue; }
+                     presenter->scheduledInterpolations.invalidate();
+ 
+                     LeaveCriticalSection(&presenter->criticalSectionScheduledFrame);
+@@ -541,7 +566,7 @@ DWORD WINAPI interpolationThread(LPVOID param)
+                     //Risk of late wake if overthreading. If allowed, use WaitForSingleObject to wait for interpolationFence if the target is more than 2ms later.
+                     if (previousPresentQPC && (targetDelta * 1000000) / qpcFrequency > 2000)  
+                     {
+-                        waitForFenceValue(
++                        ffx::nr::waitFence(
+                             presenter->interpolationFence, 
+                             entry.frames[PacingData::FrameType::Interpolated_1].interpolationCompletedFenceValue, 
+                             INFINITE,
+@@ -553,7 +578,7 @@ DWORD WINAPI interpolationThread(LPVOID param)
+                     else
+                     {
+                         // spin to wait for interpolationFence if the target is less than 2ms.
+-                        waitForFenceValue(
++                        ffx::nr::waitFence(
+                             presenter->interpolationFence, 
+                             entry.frames[PacingData::FrameType::Interpolated_1].interpolationCompletedFenceValue, 
+                             INFINITE,
+@@ -562,7 +587,7 @@ DWORD WINAPI interpolationThread(LPVOID param)
+                         );
+                     }
+                     
+-                    SetEvent(presenter->interpolationEvent);
++                    ffx::nr::publishEvent(presenter->interpolationEvent);
+ 
+                     int64_t currentQpc = 0;
+                     QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&currentQpc));
+@@ -592,15 +617,17 @@ DWORD WINAPI interpolationThread(LPVOID param)
+                     
+                     // schedule presents
+                     EnterCriticalSection(&presenter->criticalSectionScheduledFrame);
+-                    presenter->scheduledPresents = entry;
++                    ffx::nr::publishJob(1);
++    presenter->scheduledPresents = entry;
+                     LeaveCriticalSection(&presenter->criticalSectionScheduledFrame);
+-                    SetEvent(presenter->pacerEvent);
++                    ffx::nr::publishEvent(presenter->pacerEvent);
+                 }
+             }
+ 
+             // signal event to allow thread to finish
+-            SetEvent(presenter->pacerEvent);
+-            WaitForSingleObject(presenterThreadHandle, INFINITE);
++            ffx::nr::publishEvent(presenter->pacerEvent);
++            ffx::nr::PassiveScope terminalObservation(presenter);
++            ffx::nr::waitHandle(presenterThreadHandle, INFINITE);
+             SafeCloseHandle(presenterThreadHandle);
+         }
+     }
+@@ -619,6 +646,8 @@ bool FrameInterpolationSwapChainDX12::verifyBackbufferDuplicateResources()
+         if (SUCCEEDED(buffer->GetDevice(IID_PPV_ARGS(&device))))
+         {
+             auto bufferDesc = buffer->GetDesc();
++            if (auto state=ffx::nr::createdRegistry().findForDestruction(this); state && (state->enrollmentFlags.load() & ffx::nr::ControlledOutputEnrollment))
++                bufferDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+             D3D12_CLEAR_VALUE clearValue{ bufferDesc.Format, 0.f, 0.f, 0.f, 1.f };
+ 
+             D3D12_HEAP_PROPERTIES heapProperties{};
+@@ -711,9 +740,9 @@ HRESULT FrameInterpolationSwapChainDX12::init(HWND
+         InitializeCriticalSection(&criticalSection);
+         InitializeCriticalSection(&criticalSectionUpdateConfig);
+         InitializeCriticalSection(&presentInfo.criticalSectionScheduledFrame);
+-        presentInfo.presentEvent       = CreateEvent(NULL, FALSE, FALSE, nullptr);
+-        presentInfo.interpolationEvent = CreateEvent(NULL, FALSE, TRUE, nullptr);
+-        presentInfo.pacerEvent         = CreateEvent(NULL, FALSE, FALSE, nullptr);
++        if (FAILED(hr = ffx::nr::createCheckedEvent(false, presentInfo.presentEvent))) return hr;
++        if (FAILED(hr = ffx::nr::createCheckedEvent(true, presentInfo.interpolationEvent))) return hr;
++        if (FAILED(hr = ffx::nr::createCheckedEvent(false, presentInfo.pacerEvent))) return hr;
+         tearingSupported               = isTearingSupported(dxgiFactory);
+ 
+         // Create presentation queue
+@@ -773,7 +802,7 @@ HRESULT FrameInterpolationSwapChainDX12::init(HWND
+         presentInfo.device->CreateFence(framesSentForPresentation, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&presentInfo.compositionFenceCPU));
+         presentInfo.compositionFenceCPU->SetName(L"AMD FSR CompositionFence CPU");
+ 
+-        replacementFrameLatencyWaitableObjectHandle = CreateEvent(0, FALSE, TRUE, nullptr);
++        if (FAILED(hr = ffx::nr::createCheckedEvent(true, replacementFrameLatencyWaitableObjectHandle))) return hr;
+ 
+         // Create interpolation queue
+         D3D12_COMMAND_QUEUE_DESC queueDesc = queue->GetDesc();
+@@ -788,6 +817,158 @@ HRESULT FrameInterpolationSwapChainDX12::init(HWND
+         presentInfo.interpolationQueue = presentInfo.gameQueue;
+     }
+ 
++    if (SUCCEEDED(hr)) ffx::nr::registerCreated(this, &presentInfo, 0xF65CDD1201001003ULL);
++    if (auto state = ffx::nr::createdRegistry().find(this))
++    {
++        state->deviceIdentity=presentInfo.device;
++        state->enrollOwner = [](void* object) -> FfxNrStatusV1 {
++            auto self = static_cast<FrameInterpolationSwapChainDX12*>(object);
++            auto state = ffx::nr::createdRegistry().find(self);
++            if (!state || !TryEnterCriticalSection(&self->criticalSectionUpdateConfig)) return FFX_NR_BUSY;
++            if (!TryEnterCriticalSection(&self->criticalSection)) { LeaveCriticalSection(&self->criticalSectionUpdateConfig); return FFX_NR_BUSY; }
++            const bool supported = self->presentCount == 0 && self->interpolationEnabled && self->frameGenerationCallback &&
++                self->presentInfo.interpolationQueue == self->presentInfo.gameQueue &&
++                self->presentCallback == ffxFrameInterpolationUiComposition && !self->presentInfo.currentUiSurface.resource &&
++                !self->presentInfo.waitCallback && !self->drawDebugPacingLines &&
++                !(self->gameFlags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) &&
++                !state->rawListEscaped.load() && state->observer.begin_submit && state->observer.end_submit;
++            if (!supported) {
++                // Report the source-owned predicates under the same locks as the
++                // decision. These observations grant no enrollment authority.
++                std::fprintf(stderr,"W03_ENROLL_REFUSAL phase=swapchain owner=%llu no_presents=%u enabled=%u fg_callback=%u same_queue=%u default_present=%u no_ui=%u no_wait_callback=%u no_debug_pacing=%u no_waitable_flag=%u no_raw_list=%u begin_observer=%u end_observer=%u worker0=%u worker1=%u\n",
++                    static_cast<unsigned long long>(state->identity.owner_id),unsigned(self->presentCount==0),unsigned(self->interpolationEnabled),unsigned(bool(self->frameGenerationCallback)),
++                    unsigned(self->presentInfo.interpolationQueue==self->presentInfo.gameQueue),unsigned(self->presentCallback==ffxFrameInterpolationUiComposition),unsigned(!self->presentInfo.currentUiSurface.resource),
++                    unsigned(!self->presentInfo.waitCallback),unsigned(!self->drawDebugPacingLines),unsigned(!(self->gameFlags&DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)),
++                    unsigned(!state->rawListEscaped.load()),unsigned(bool(state->observer.begin_submit)),unsigned(bool(state->observer.end_submit)),unsigned(bool(state->workerHandles[0].load())),unsigned(bool(state->workerHandles[1].load())));
++                std::fflush(stderr);
++            }
++            LeaveCriticalSection(&self->criticalSection); LeaveCriticalSection(&self->criticalSectionUpdateConfig);
++            if (!supported) return FFX_NR_UNSUPPORTED;
++            const auto published=ffx::nr::waitWorkerPublication(*state);
++            if(published!=FFX_NR_COMPLETE) {
++                std::fprintf(stderr,"W03_ENROLL_REFUSAL phase=worker_publication owner=%llu result=%u worker0=%u worker1=%u quarantined=%u\n",
++                    static_cast<unsigned long long>(state->identity.owner_id),unsigned(published),unsigned(bool(state->workerHandles[0].load())),unsigned(bool(state->workerHandles[1].load())),unsigned(state->quarantined.load()));
++                std::fflush(stderr);return published;
++            }
++            DWORD eventFlags = 0;
++            if (!self->presentInfo.interpolationEvent || !GetHandleInformation(self->presentInfo.interpolationEvent, &eventFlags)) {
++                state->quarantined = true; state->closure.recordFailure(HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE)); return FFX_NR_API_FAILURE_RETAINED;
++            }
++            HANDLE events[] = {self->presentInfo.presentEvent, self->presentInfo.pacerEvent};
++            const auto acknowledged = ffx::nr::acknowledgeWorkers(*state, events);
++            if (acknowledged != FFX_NR_COMPLETE) return acknowledged;
++            if (FAILED(self->presentInfo.device->GetDeviceRemovedReason())) return FFX_NR_DEVICE_REMOVED_RETAINED;
++            for (unsigned i = 0; i < 2; ++i) {
++                if (!DuplicateHandle(GetCurrentProcess(), state->workerHandles[i].load(), GetCurrentProcess(),
++                        &state->workerObservations[i], SYNCHRONIZE, FALSE, 0)) return FFX_NR_API_FAILURE_RETAINED;
++                ffx::nr::Domain domain{}; domain.context = state->workerObservations[i]; domain.observe = ffx::nr::observeWorker;
++                domain.evidence.domain_id = reinterpret_cast<uintptr_t>(domain.context); domain.evidence.domain_generation = 1;
++                domain.evidence.domain_kind = 5; domain.evidence.logical_role_bits = 1u << (24 + i);
++                domain.evidence.required_target = 1; domain.evidence.last_successful_target = 1;
++                state->closure.updateDomain(domain);
++            }
++            ID3D12Fence* shared[] = {self->presentInfo.gameFence, self->presentInfo.interpolationFence, self->presentInfo.presentFence,
++                self->presentInfo.replacementBufferFence, self->presentInfo.compositionFenceGPU, self->presentInfo.compositionFenceCPU};
++            for (unsigned i = 0; i < 6; ++i) {
++                if (!shared[i]) return FFX_NR_INCOMPLETE_COVERAGE;
++                ffx::nr::Domain domain{}; domain.context = shared[i]; domain.observe = ffx::nr::observeFence;
++                domain.evidence.domain_id = reinterpret_cast<uintptr_t>(shared[i]); domain.evidence.domain_generation = 1;
++                domain.evidence.fence_id = domain.evidence.domain_id; domain.evidence.fence_generation = 1;
++                domain.evidence.domain_kind = i == 5 ? 2 : 1; domain.evidence.logical_role_bits = 1u << i;
++                state->closure.updateDomain(domain);
++            }
++            if (!self->presentInfo.commandPool.registerCheckedSlots(*state)) return FFX_NR_BUSY;
++            ID3D12CommandQueue* queues[] = {self->presentInfo.gameQueue, self->presentInfo.presentQueue};
++            for (unsigned i = 0; i < 2; ++i) {
++                ID3D12Fence* marker = nullptr;
++                const auto result = self->presentInfo.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&marker));
++                if (FAILED(result)) { state->closure.recordFailure(result); return FFX_NR_API_FAILURE_RETAINED; }
++                queues[i]->AddRef(); state->queues[i] = queues[i]; state->queueMarkers[i] = marker;
++            }
++            return FFX_NR_COMPLETE;
++        };
++        state->stopWorkers = [](void* object) -> FfxNrStatusV1 {
++            auto self = static_cast<FrameInterpolationSwapChainDX12*>(object);
++            auto state = ffx::nr::createdRegistry().find(self); if (!state) return FFX_NR_STALE_CONTEXT;
++            state->workerShutdownRequested = true;
++            if (!ffx::nr::publishEvent(self->presentInfo.presentEvent) || !ffx::nr::publishEvent(self->presentInfo.pacerEvent)) {
++                state->closure.recordFailure(HRESULT_FROM_WIN32(GetLastError())); return FFX_NR_API_FAILURE_RETAINED;
++            }
++            for (auto handle : state->workerObservations) {
++                const auto value = WaitForSingleObject(handle, 0);
++                if (value == WAIT_FAILED) { state->closure.recordFailure(HRESULT_FROM_WIN32(GetLastError())); return FFX_NR_API_FAILURE_RETAINED; }
++                if (value != WAIT_OBJECT_0) return FFX_NR_PENDING;
++            }
++            return FFX_NR_COMPLETE;
++        };
++        state->writeOwnedOutput = [](void* object,const ffx::nr::OwnedWriterCallbacks& callbacks,void* user,ffx::nr::OwnedWriteReceipt& receipt)->FfxNrStatusV1 {
++            auto self=static_cast<FrameInterpolationSwapChainDX12*>(object);auto owner=ffx::nr::createdRegistry().find(self);
++            if(!owner || owner->rawBufferEscaped.load()) return FFX_NR_UNSUPPORTED;
++            bool expected=false;if(!owner->writerActive.compare_exchange_strong(expected,true)) return FFX_NR_BUSY;
++            struct Writing {std::atomic<bool>& flag;~Writing(){flag=false;}} writing{owner->writerActive};
++            if(owner->ownedOutput) return FFX_NR_UNSUPPORTED;
++            if(!TryEnterCriticalSection(&self->criticalSection)) return FFX_NR_BUSY;
++            if(self->presentCount || !self->verifyBackbufferDuplicateResources()) {LeaveCriticalSection(&self->criticalSection);return FFX_NR_UNSUPPORTED;}
++            auto resource=self->replacementSwapBuffers[self->replacementSwapBufferIndex].resource;
++            const auto desc=resource->GetDesc();D3D12_FEATURE_DATA_FORMAT_SUPPORT support{desc.Format};
++            const bool compatible=desc.Format==DXGI_FORMAT_R16G16B16A16_FLOAT && (desc.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) &&
++                SUCCEEDED(self->presentInfo.device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,&support,sizeof(support))) && (support.Support2&D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE);
++            if(!compatible) {LeaveCriticalSection(&self->criticalSection);return FFX_NR_UNSUPPORTED;}
++            auto commands=self->presentInfo.commandPool.get(self->presentInfo.gameQueue,L"owned caller Output");
++            if(!commands) {LeaveCriticalSection(&self->criticalSection);return FFX_NR_API_FAILURE_RETAINED;}
++            std::shared_ptr<ffx::nr::OwnedOutputImplementation> lease;
++            try {lease=std::make_shared<ffx::nr::OwnedOutputImplementation>(owner,resource,self->presentInfo.gameQueue);}
++            catch(...) {LeaveCriticalSection(&self->criticalSection);commands->drop();owner->closure.recordFailure(E_OUTOFMEMORY);return FFX_NR_API_FAILURE_RETAINED;}
++            owner->ownedOutput=lease;
++            commands->ownedWriterReserved=true;owner->ownedWriterCommands=commands;
++            std::shared_ptr<ffx::nr::OwnedOutputLease> view=lease;
++            auto list=commands->getList();lease->writerRecording(list,0);
++            LeaveCriticalSection(&self->criticalSection); // no SDK lock across caller hooks/recording
++            if(owner->algorithm && !std::static_pointer_cast<ffx::nr::AlgorithmState>(owner->algorithm)->bindOutput(view)) {
++                commands->drop();owner->closure.recordFailure(E_FAIL);return FFX_NR_API_FAILURE_RETAINED;
++            }
++            receipt={};void* guard=nullptr;bool opened=false,admitted=false;
++            try {
++                receipt.prepareResult=callbacks.prepare(user,view,list);
++                if(SUCCEEDED(receipt.prepareResult)) {
++                    list=commands->resetChecked();opened=list!=nullptr;
++                    if(opened) {lease->writerRecording(list,ffx::nr::lastResetIncarnation);lease->openWriter();receipt.callbackResult=callbacks.write(user,view,list);}
++                }
++                if(opened && SUCCEEDED(receipt.callbackResult)) admitted=SUCCEEDED(callbacks.beginSubmit(user,view,&guard));
++            } catch(...) {owner->closure.recordFailure(E_UNEXPECTED);}
++            const auto submission=admitted ? commands->executeChecked(true):commands->dropChecked(opened);
++            receipt.closeResult=submission.closeResult;receipt.signalResult=submission.result;receipt.executeInvoked=submission.executeInvoked;
++            const auto command=commands->snapshotChecked();receipt.fence=command.fence;receipt.target=command.target;
++            const bool submitted=admitted && submission.executeInvoked && submission.signalSucceeded;
++            lease->writerSubmitted(submitted);
++            if(!submitted) owner->closure.recordFailure(E_FAIL);
++            try {callbacks.endSubmit(user,guard,receipt);} catch(...) {owner->closure.recordFailure(E_UNEXPECTED);}
++            lease->closeWriter();
++            return submitted && !owner->closure.failed()?FFX_NR_COMPLETE:FFX_NR_API_FAILURE_RETAINED;
++        };
++        state->finishWriter=[](void* object,ffx::nr::OwnedWriterRetirementReceipt& receipt)->FfxNrStatusV1 {
++            auto* self=static_cast<FrameInterpolationSwapChainDX12*>(object);auto* owner=ffx::nr::activeContext;
++            if(!owner || !owner->ownedOutput || owner->closure.failed())return FFX_NR_API_FAILURE_RETAINED;
++            if(!TryEnterCriticalSection(&self->criticalSection))return FFX_NR_BUSY;
++            struct Unlock {CRITICAL_SECTION* section;~Unlock(){LeaveCriticalSection(section);}} unlock{&self->criticalSection};
++            if(owner->outputReady){receipt=owner->writerRetirement;return FFX_NR_COMPLETE;}
++            auto view=owner->ownedOutput->inspect();auto* commands=static_cast<Dx12Commands*>(owner->ownedWriterCommands);
++            if(!view.writerSubmitted || view.writerActive || view.actionActive || !commands)return FFX_NR_PENDING;
++            const auto completion=commands->availableChecked();if(completion==S_FALSE)return FFX_NR_PENDING;
++            if(FAILED(completion)){owner->closure.recordFailure(completion);return FFX_NR_API_FAILURE_RETAINED;}
++            auto snapshot=commands->snapshotChecked();auto& result=owner->writerRetirement;
++            result.list=snapshot.list;result.queue=snapshot.queue;result.fence=snapshot.fence;result.target=snapshot.target;result.oldRecording=view.writerRecording;result.completed=true;
++            auto* list=commands->resetChecked();result.resetResult=list?S_OK:E_FAIL;
++            if(!list)return FFX_NR_API_FAILURE_RETAINED;
++            result.newRecording=ffx::nr::lastResetIncarnation;result.closeResult=list->Close();
++            if(FAILED(result.closeResult)){owner->closure.recordFailure(result.closeResult);return FFX_NR_API_FAILURE_RETAINED;}
++            result.oldRecordingRetired=true;commands->ownedWriterReserved=false;owner->ownedWriterCommands=nullptr;
++            std::static_pointer_cast<ffx::nr::OwnedOutputImplementation>(owner->ownedOutput)->writerRetired();
++            owner->outputReady=true;receipt=result;return FFX_NR_COMPLETE;
++        };
++        state->retainPin = [](void* object) { static_cast<FrameInterpolationSwapChainDX12*>(object)->AddRef(); };
++        state->releasePin = [](void* object) { static_cast<FrameInterpolationSwapChainDX12*>(object)->Release(); };
++    }
+     return hr;
+ }
+ 
+@@ -798,6 +979,7 @@ FrameInterpolationSwapChainDX12::FrameInterpolationSwapChainDX12()
+ 
+ FrameInterpolationSwapChainDX12::~FrameInterpolationSwapChainDX12()
+ {
++    ffx::nr::createdRegistry().remove(this);
+     shutdown();
+ }
+ 
+@@ -836,6 +1018,30 @@ IDXGISwapChain4* FrameInterpolationSwapChainDX12::real()
+ 
+ HRESULT FrameInterpolationSwapChainDX12::shutdown()
+ {
++    if (auto state = ffx::nr::createdRegistry().findForDestruction(this); state && state->enrolled.load())
++    {
++        if (!state->destroyReady.load()) return E_PENDING;
++        // Complete consumed the frozen prefix: this path creates no new queue work.
++        for (auto& buffer : replacementSwapBuffers) buffer.destroy();
++        for (auto& buffer : interpolationOutputs) buffer.destroy();
++        uiReplacementBuffer.destroy(); SafeRelease(realBackBuffer0);
++        presentInfo.commandPool.releaseAfterCheckedComplete();
++        SafeCloseHandle(interpolationThreadHandle);
++        SafeCloseHandle(presentInfo.presentEvent); SafeCloseHandle(presentInfo.interpolationEvent); SafeCloseHandle(presentInfo.pacerEvent);
++        SafeCloseHandle(replacementFrameLatencyWaitableObjectHandle);
++        for (auto& observation : state->workerObservations) SafeCloseHandle(observation);
++        for (unsigned i = 0; i < state->queues.size(); ++i) {
++            auto marker = static_cast<ID3D12Fence*>(state->queueMarkers[i]); SafeRelease(marker); state->queueMarkers[i] = nullptr;
++            auto queue = static_cast<ID3D12CommandQueue*>(state->queues[i]); SafeRelease(queue); state->queues[i] = nullptr;
++        }
++        SafeRelease(presentInfo.asyncComputeQueue); SafeRelease(presentInfo.presentQueue);
++        SafeRelease(presentInfo.gameFence); SafeRelease(presentInfo.interpolationFence); SafeRelease(presentInfo.presentFence);
++        SafeRelease(presentInfo.replacementBufferFence); SafeRelease(presentInfo.compositionFenceGPU); SafeRelease(presentInfo.compositionFenceCPU);
++        SafeRelease(presentInfo.swapChain); SafeRelease(presentInfo.device);
++        DeleteCriticalSection(&criticalSection); DeleteCriticalSection(&criticalSectionUpdateConfig); DeleteCriticalSection(&presentInfo.criticalSectionScheduledFrame);
++        state->enrolled = false; ffx::nr::createdRegistry().remove(this);
++        return S_OK;
++    }
+     //m_pDevice will be nullptr already shutdown
+     if (presentInfo.device)
+     {
+@@ -855,8 +1061,8 @@ HRESULT FrameInterpolationSwapChainDX12::shutdown()
+         {
+             if (presentInfo.interpolationFence)
+             {
+-                presentInfo.interpolationQueue->Signal(presentInfo.interpolationFence, ++interpolationFenceValue);
+-                waitForFenceValue(presentInfo.interpolationFence, interpolationFenceValue, INFINITE, presentInfo.waitCallback);
++                ffx::nr::signal(presentInfo.interpolationQueue, presentInfo.interpolationFence, ++interpolationFenceValue);
++                ffx::nr::waitFence(presentInfo.interpolationFence, interpolationFenceValue, INFINITE, presentInfo.waitCallback);
+             }
+         }
+         
+@@ -873,7 +1079,7 @@ HRESULT FrameInterpolationSwapChainDX12::shutdown()
+ 
+         if (presentInfo.gameFence)
+         {
+-            waitForFenceValue(presentInfo.gameFence, gameFenceValue, INFINITE, presentInfo.waitCallback);
++            ffx::nr::waitFence(presentInfo.gameFence, gameFenceValue, INFINITE, presentInfo.waitCallback);
+         }
+         SafeRelease(presentInfo.gameFence);
+ 
+@@ -895,7 +1101,7 @@ bool FrameInterpolationSwapChainDX12::killPresenterThread()
+         presentInfo.shutdown = true;
+ 
+         // signal event to allow thread to finish
+-        SetEvent(presentInfo.presentEvent);
++        ffx::nr::publishEvent(presentInfo.presentEvent);
+         WaitForSingleObject(interpolationThreadHandle, INFINITE);
+         SafeCloseHandle(interpolationThreadHandle);
+     }
+@@ -910,6 +1116,7 @@ bool FrameInterpolationSwapChainDX12::spawnPresenterThread()
+         presentInfo.shutdown      = false;
+         interpolationThreadHandle = CreateThread(nullptr, 0, interpolationThread, reinterpret_cast<void*>(&presentInfo), 0, nullptr);
+         
++        ffx::nr::noteWorker(&presentInfo, 0, interpolationThreadHandle);
+         FFX_ASSERT(interpolationThreadHandle != NULL);
+ 
+         if (interpolationThreadHandle != 0)
+@@ -918,7 +1125,7 @@ bool FrameInterpolationSwapChainDX12::spawnPresenterThread()
+             SetThreadDescription(interpolationThreadHandle, L"AMD FSR Interpolation Thread");
+         }
+ 
+-        SetEvent(presentInfo.interpolationEvent);
++        ffx::nr::publishEvent(presentInfo.interpolationEvent);
+     }
+ 
+     return interpolationThreadHandle != NULL;
+@@ -939,6 +1146,14 @@ void FrameInterpolationSwapChainDX12::discardOutstandingInterpolationCommandList
+ 
+ void FrameInterpolationSwapChainDX12::setFrameGenerationConfig(FfxFrameGenerationConfig const* config)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return;
++    if (ffx::nr::activeContext && (!config || config->allowAsyncWorkloads || !config->frameGenerationEnabled ||
++        (config->presentCallback && config->presentCallback != presentCallback) ||
++        config->frameGenerationCallback != frameGenerationCallback || config->frameGenerationCallbackContext != frameGenerationCallbackContext ||
++        config->presentCallbackContext != presentCallbackContext || config->drawDebugPacingLines ||
++        configFlags != (FfxFsr3FrameGenerationFlags)config->flags))
++    { ffx::nr::activeContext->closure.recordFailure(E_NOTIMPL); return; }
++
+     EnterCriticalSection(&criticalSectionUpdateConfig);
+ 
+     FFX_ASSERT(config);
+@@ -985,7 +1200,7 @@ void FrameInterpolationSwapChainDX12::setFrameGenerationConfig(FfxFrameGeneratio
+             // change interpolation queue and reset fence value
+             presentInfo.interpolationQueue = inputInterpolationQueue;
+             interpolationFenceValue        = 0;
+-            presentInfo.interpolationQueue->Signal(presentInfo.interpolationFence, interpolationFenceValue);
++            ffx::nr::signal(presentInfo.interpolationQueue, presentInfo.interpolationFence, interpolationFenceValue);
+         }
+ 
+         if (interpolationEnabled != config->frameGenerationEnabled || presentCallback != inputPresentCallback ||
+@@ -1075,32 +1290,32 @@ bool FrameInterpolationSwapChainDX12::destroyReplacementResources()
+     // if we didn't init correctly, some parameters may not exist
+     if (presentInfo.gameFence)
+     {
+-        presentInfo.gameFence->Signal(gameFenceValue);
++        ffx::nr::signal(presentInfo.gameFence, gameFenceValue);
+     }
+     
+     if (presentInfo.interpolationFence)
+     {
+-        presentInfo.interpolationFence->Signal(interpolationFenceValue);
++        ffx::nr::signal(presentInfo.interpolationFence, interpolationFenceValue);
+     }
+     
+     if (presentInfo.presentFence)
+     {
+-        presentInfo.presentFence->Signal(framesSentForPresentation);
++        ffx::nr::signal(presentInfo.presentFence, framesSentForPresentation);
+     }
+ 
+     if (presentInfo.replacementBufferFence)
+     {
+-        presentInfo.replacementBufferFence->Signal(framesSentForPresentation);
++        ffx::nr::signal(presentInfo.replacementBufferFence, framesSentForPresentation);
+     }
+ 
+     if (presentInfo.compositionFenceGPU)
+     {
+-        presentInfo.compositionFenceGPU->Signal(framesSentForPresentation);
++        ffx::nr::signal(presentInfo.compositionFenceGPU, framesSentForPresentation);
+     }
+ 
+     if (presentInfo.compositionFenceCPU)
+     {
+-        presentInfo.compositionFenceCPU->Signal(framesSentForPresentation);
++        ffx::nr::signal(presentInfo.compositionFenceCPU, framesSentForPresentation);
+     }
+ 
+     frameInterpolationResetCondition = true;
+@@ -1119,10 +1334,11 @@ bool FrameInterpolationSwapChainDX12::destroyReplacementResources()
+ 
+ bool FrameInterpolationSwapChainDX12::waitForPresents()
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return false;
+     // wait for interpolation to finish
+-    waitForFenceValue(presentInfo.gameFence, gameFenceValue, INFINITE, presentInfo.waitCallback);
+-    waitForFenceValue(presentInfo.interpolationFence, interpolationFenceValue, INFINITE, presentInfo.waitCallback);
+-    waitForFenceValue(presentInfo.presentFence, framesSentForPresentation, INFINITE, presentInfo.waitCallback);
++    ffx::nr::waitFence(presentInfo.gameFence, gameFenceValue, INFINITE, presentInfo.waitCallback);
++    ffx::nr::waitFence(presentInfo.interpolationFence, interpolationFenceValue, INFINITE, presentInfo.waitCallback);
++    ffx::nr::waitFence(presentInfo.presentFence, framesSentForPresentation, INFINITE, presentInfo.waitCallback);
+ 
+     return true;
+ }
+@@ -1188,11 +1404,13 @@ ULONG STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Release()
+ // IDXGIObject
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetPrivateData(REFGUID Name, UINT DataSize, const void* pData)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
+     return real()->SetPrivateData(Name, DataSize, pData);
+ }
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetPrivateDataInterface(REFGUID Name, const IUnknown* pUnknown)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
+     return real()->SetPrivateDataInterface(Name, pUnknown);
+ }
+ 
+@@ -1214,6 +1432,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetDevice(REFIID riid
+ 
+ void FrameInterpolationSwapChainDX12::registerUiResource(FfxResource uiResource, uint32_t flags)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return;
++    if (ffx::nr::selected(this)) return;
+     EnterCriticalSection(&criticalSection);
+ 
+     presentInfo.currentUiSurface = uiResource;
+@@ -1226,11 +1446,15 @@ void FrameInterpolationSwapChainDX12::registerUiResource(FfxResource uiResource,
+ 
+ void FrameInterpolationSwapChainDX12::setWaitCallback(FfxWaitCallbackFunc waitCallbackFunc)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return;
++    if (ffx::nr::selected(this)) return;
+     presentInfo.waitCallback = waitCallbackFunc;
+ }
+ 
+ void FrameInterpolationSwapChainDX12::setFramePacingTuning(const FfxSwapchainFramePacingTuning* framePacingTuning)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return;
++    if (ffx::nr::selected(this)) return;
+     presentInfo.safetyMarginInSec = static_cast<double> (framePacingTuning->safetyMarginInMs) / 1000.0;
+     presentInfo.varianceFactor = static_cast<double> (framePacingTuning->varianceFactor);
+     presentInfo.allowHybridSpin = framePacingTuning->allowHybridSpin;
+@@ -1248,10 +1472,13 @@ void FrameInterpolationSwapChainDX12::presentPassthrough(UINT SyncInterval, UINT
+ {
+     ID3D12Resource* dx12SwapchainBuffer    = nullptr;
+     UINT            currentBackBufferIndex = presentInfo.swapChain->GetCurrentBackBufferIndex();
+-    presentInfo.swapChain->GetBuffer(currentBackBufferIndex, IID_PPV_ARGS(&dx12SwapchainBuffer));
++    const auto bufferResult = ffx::nr::observeResult(presentInfo.swapChain->GetBuffer(currentBackBufferIndex, IID_PPV_ARGS(&dx12SwapchainBuffer)));
++    if (ffx::nr::activeContext && (FAILED(bufferResult) || !dx12SwapchainBuffer)) return;
+ 
+     auto passthroughList = presentInfo.commandPool.get(presentInfo.presentQueue, L"passthroughList()");
++        if (!passthroughList) return;
+     auto list            = passthroughList->reset();
++    if (ffx::nr::activeContext && !list) { SafeRelease(dx12SwapchainBuffer); return; }
+ 
+     ID3D12Resource* dx12ResourceSrc = replacementSwapBuffers[replacementSwapBufferIndex].resource;
+     ID3D12Resource* dx12ResourceDst = dx12SwapchainBuffer;
+@@ -1291,15 +1518,15 @@ void FrameInterpolationSwapChainDX12::presentPassthrough(UINT SyncInterval, UINT
+ 
+     passthroughList->execute(true);
+ 
+-    presentInfo.presentQueue->Signal(presentInfo.replacementBufferFence, ++framesSentForPresentation);
+-    presentInfo.presentQueue->Signal(presentInfo.compositionFenceGPU, framesSentForPresentation);
+-    presentInfo.compositionFenceCPU->Signal(framesSentForPresentation);
++    ffx::nr::signal(presentInfo.presentQueue, presentInfo.replacementBufferFence, ++framesSentForPresentation);
++    ffx::nr::signal(presentInfo.presentQueue, presentInfo.compositionFenceGPU, framesSentForPresentation);
++    ffx::nr::signal(presentInfo.compositionFenceCPU, framesSentForPresentation);
+ 
+     setSwapChainBufferResourceInfo(presentInfo.swapChain, false);
+-    presentInfo.swapChain->Present(SyncInterval, Flags);
++    ffx::nr::observeResult(presentInfo.swapChain->Present(SyncInterval, Flags));
+ 
+-    presentInfo.presentQueue->Signal(presentInfo.presentFence, framesSentForPresentation);
+-    presentInfo.gameQueue->Wait(presentInfo.presentFence, framesSentForPresentation);
++    ffx::nr::signal(presentInfo.presentQueue, presentInfo.presentFence, framesSentForPresentation);
++    ffx::nr::queueWait(presentInfo.gameQueue, presentInfo.presentFence, framesSentForPresentation);
+ 
+     SafeRelease(dx12SwapchainBuffer);
+ }
+@@ -1307,11 +1534,14 @@ void FrameInterpolationSwapChainDX12::presentPassthrough(UINT SyncInterval, UINT
+ void FrameInterpolationSwapChainDX12::presentWithUiComposition(UINT SyncInterval, UINT Flags)
+ {
+     auto uiCompositionList = presentInfo.commandPool.get(presentInfo.presentQueue, L"uiCompositionList()");
++        if (!uiCompositionList) return;
+     auto list              = uiCompositionList->reset();
++    if (ffx::nr::activeContext && !list) return;
+ 
+     ID3D12Resource* dx12SwapchainBuffer    = nullptr;
+     UINT            currentBackBufferIndex = presentInfo.swapChain->GetCurrentBackBufferIndex();
+-    presentInfo.swapChain->GetBuffer(currentBackBufferIndex, IID_PPV_ARGS(&dx12SwapchainBuffer));
++    const auto bufferResult = ffx::nr::observeResult(presentInfo.swapChain->GetBuffer(currentBackBufferIndex, IID_PPV_ARGS(&dx12SwapchainBuffer)));
++    if (ffx::nr::activeContext && (FAILED(bufferResult) || !dx12SwapchainBuffer)) return;
+ 
+     FfxResourceDescription outBufferDesc = ffxGetResourceDescriptionDX12(dx12SwapchainBuffer);
+     FfxResourceDescription inBufferDesc  = ffxGetResourceDescriptionDX12(replacementSwapBuffers[replacementSwapBufferIndex].resource);
+@@ -1334,19 +1564,20 @@ void FrameInterpolationSwapChainDX12::presentWithUiComposition(UINT SyncInterval
+     desc.usePremulAlpha             = (presentInfo.uiCompositionFlags & FFX_UI_COMPOSITION_FLAG_USE_PREMUL_ALPHA) != 0;
+     desc.frameID                    = currentFrameID;
+ 
+-    presentCallback(&desc, presentCallbackContext);
++    const auto compositionResult = presentCallback(&desc, presentCallbackContext);
++    if (ffx::nr::activeContext && compositionResult != FFX_OK) { ffx::nr::activeContext->closure.recordFailure(E_FAIL); uiCompositionList->drop(); SafeRelease(dx12SwapchainBuffer); return; }
+ 
+     uiCompositionList->execute(true);
+ 
+-    presentInfo.presentQueue->Signal(presentInfo.replacementBufferFence, ++framesSentForPresentation);
+-    presentInfo.presentQueue->Signal(presentInfo.compositionFenceGPU, framesSentForPresentation);
+-    presentInfo.compositionFenceCPU->Signal(framesSentForPresentation);
++    ffx::nr::signal(presentInfo.presentQueue, presentInfo.replacementBufferFence, ++framesSentForPresentation);
++    ffx::nr::signal(presentInfo.presentQueue, presentInfo.compositionFenceGPU, framesSentForPresentation);
++    ffx::nr::signal(presentInfo.compositionFenceCPU, framesSentForPresentation);
+ 
+     setSwapChainBufferResourceInfo(presentInfo.swapChain, false);
+-    presentInfo.swapChain->Present(SyncInterval, Flags);
++    ffx::nr::observeResult(presentInfo.swapChain->Present(SyncInterval, Flags));
+ 
+-    presentInfo.presentQueue->Signal(presentInfo.presentFence, framesSentForPresentation);
+-    presentInfo.gameQueue->Wait(presentInfo.presentFence, framesSentForPresentation);
++    ffx::nr::signal(presentInfo.presentQueue, presentInfo.presentFence, framesSentForPresentation);
++    ffx::nr::queueWait(presentInfo.gameQueue, presentInfo.presentFence, framesSentForPresentation);
+ 
+     SafeRelease(dx12SwapchainBuffer);
+ }
+@@ -1364,21 +1595,23 @@ void FrameInterpolationSwapChainDX12::dispatchInterpolationCommands(FfxResource*
+     *pRealFrame = backbuffer;
+ 
+     // interpolation queue must wait for output resource to become available
+-    presentInfo.interpolationQueue->Wait(presentInfo.compositionFenceGPU, interpolationOutputs[interpolationBufferIndex].availabilityFenceValue);
++    ffx::nr::queueWaitForPreviousUse(presentInfo.interpolationQueue, presentInfo.compositionFenceGPU, interpolationOutputs[interpolationBufferIndex].availabilityFenceValue);
+ 
+     auto pRegisteredCommandList = registeredInterpolationCommandLists[currentBackBufferIndex];
+     if (pRegisteredCommandList != nullptr)
+     {
+         pRegisteredCommandList->execute(true);
+ 
+-        presentInfo.interpolationQueue->Signal(presentInfo.interpolationFence, ++interpolationFenceValue);
++        ffx::nr::signal(presentInfo.interpolationQueue, presentInfo.interpolationFence, ++interpolationFenceValue);
+ 
+         *pInterpolatedFrame = interpolationOutput();
+         frameInterpolationResetCondition = false;
+     }
+     else {
+         Dx12Commands* interpolationCommandList = presentInfo.commandPool.get(presentInfo.interpolationQueue, L"getInterpolationCommandList()");
++        if (!interpolationCommandList) return;
+         auto dx12CommandList = interpolationCommandList->reset();
++        if (ffx::nr::activeContext && !dx12CommandList) { ffx::nr::activeContext->closure.recordFailure(E_FAIL); return; }
+ 
+         FfxFrameGenerationDispatchDescription desc{};
+         desc.commandList = dx12CommandList;
+@@ -1392,11 +1625,49 @@ void FrameInterpolationSwapChainDX12::dispatchInterpolationCommands(FfxResource*
+         desc.interpolationRect  = interpolationRect;
+         desc.frameID            = currentFrameID;
+ 
+-        if (frameGenerationCallback(&desc, frameGenerationCallbackContext) == FFX_OK)
++        bool checkedPublication = false;
++        ffx::nr::DispatchScope checkedDispatch(dx12CommandList, presentInfo.interpolationQueue, pCurrentBackBuffer, currentFrameID);
++        if(ffx::nr::activeContext && ffx::nr::activeContext->closure.failed()) {interpolationCommandList->drop(true);return;}
++        int32_t callbackResult = FFX_OK;
++        if (ffx::nr::activeContext) {
++            try { callbackResult = frameGenerationCallback(&desc, frameGenerationCallbackContext); }
++            catch (...) { callbackResult = E_UNEXPECTED; ffx::nr::activeContext->closure.recordFailure(E_UNEXPECTED); }
++        } else callbackResult = frameGenerationCallback(&desc, frameGenerationCallbackContext);
++        if (ffx::nr::activeContext)
++        {
++            auto& observer = ffx::nr::activeContext->observer;
++            FfxNrSubmitResultV1 receipt{};
++            receipt.size = sizeof(receipt); receipt.version = 1;
++            receipt.dispatch = checkedDispatch.ticket(); receipt.callback_result = callbackResult;
++            receipt.close_result = E_FAIL; receipt.signal_result = E_FAIL;
++            void* callGuard = nullptr;
++            const bool admitted = callbackResult == FFX_OK && observer.begin_submit && observer.end_submit &&
++                observer.begin_submit(observer.user, &receipt.dispatch, &callGuard) == FFX_NR_COMPLETE;
++            if (admitted)
++            {
++                const auto submission = interpolationCommandList->executeChecked(true);
++                receipt.close_result = submission.closeResult;
++                receipt.execute_invoked = submission.executeInvoked;
++                receipt.signal_result = submission.result;
++                if (submission.signalSucceeded)
++                    receipt.signal_result = ffx::nr::signal(presentInfo.interpolationQueue, presentInfo.interpolationFence, ++interpolationFenceValue);
++                checkedPublication = submission.mayPublish(true, desc.numInterpolatedFrames) && SUCCEEDED(receipt.signal_result);
++                receipt.output_published = checkedPublication;
++                ffx::nr::activeContext->closure.recordFailure(receipt.signal_result);
++            }
++            else
++            {
++                const auto dropped = interpolationCommandList->dropChecked(true);
++                receipt.close_result = dropped.closeResult; receipt.signal_result = dropped.result;
++                ffx::nr::activeContext->closure.recordFailure(E_FAIL);
++            }
++            if(ffx::nr::activeContext->ownedOutput)std::static_pointer_cast<ffx::nr::OwnedOutputImplementation>(ffx::nr::activeContext->ownedOutput)->publishSubmission(receipt);
++            if (observer.end_submit) observer.end_submit(observer.user, callGuard, &receipt);
++        }
++        else if (callbackResult == FFX_OK)
+         {
+             interpolationCommandList->execute(true);
+-
+-            presentInfo.interpolationQueue->Signal(presentInfo.interpolationFence, ++interpolationFenceValue);
++            ffx::nr::signal(presentInfo.interpolationQueue, presentInfo.interpolationFence, ++interpolationFenceValue);
+         }
+         else
+         {
+@@ -1404,7 +1675,7 @@ void FrameInterpolationSwapChainDX12::dispatchInterpolationCommands(FfxResource*
+         }
+ 
+         // reset condition if at least one frame was interpolated
+-        if (desc.numInterpolatedFrames > 0)
++        if (desc.numInterpolatedFrames > 0 && (!ffx::nr::activeContext || checkedPublication))
+         {
+             frameInterpolationResetCondition = false;
+             *pInterpolatedFrame = interpolationOutput();
+@@ -1417,8 +1688,8 @@ void FrameInterpolationSwapChainDX12::presentInterpolated(UINT SyncInterval, UIN
+     const bool bVsync = SyncInterval > 0;
+ 
+     // interpolation needs to wait for the game queue
+-    presentInfo.gameQueue->Signal(presentInfo.gameFence, ++gameFenceValue);
+-    presentInfo.interpolationQueue->Wait(presentInfo.gameFence, gameFenceValue);
++    ffx::nr::signal(presentInfo.gameQueue, presentInfo.gameFence, ++gameFenceValue);
++    ffx::nr::queueWait(presentInfo.interpolationQueue, presentInfo.gameFence, gameFenceValue);
+ 
+     FfxResource interpolatedFrame{}, realFrame{};
+     dispatchInterpolationCommands(&interpolatedFrame, &realFrame);
+@@ -1474,17 +1745,18 @@ void FrameInterpolationSwapChainDX12::presentInterpolated(UINT SyncInterval, UIN
+     interpolationOutputs[interpolationBufferIndex].availabilityFenceValue = entry.numFramesSentForPresentationBase + fiInterpolated.doPresent;
+ 
+     presentInfo.resetTimer              = frameInterpolationResetCondition;
++    ffx::nr::publishJob(0);
+     presentInfo.scheduledInterpolations = entry;
+     LeaveCriticalSection(&presentInfo.criticalSectionScheduledFrame);
+ 
+     // Set event to kick off async CPU present thread
+-    SetEvent(presentInfo.presentEvent);
++    ffx::nr::publishEvent(presentInfo.presentEvent);
+ 
+     // hold the replacement object back until previous frame or interpolated is presented
+     nextPresentWaitValue = entry.numFramesSentForPresentationBase;
+     
+     UINT64 frameLatencyObjectWaitValue = (entry.numFramesSentForPresentationBase - 1) * (entry.numFramesSentForPresentationBase > 0);
+-    FFX_ASSERT(SUCCEEDED(presentInfo.presentFence->SetEventOnCompletion(frameLatencyObjectWaitValue, replacementFrameLatencyWaitableObjectHandle)));
++    if (!ffx::nr::activeContext) FFX_ASSERT(SUCCEEDED(presentInfo.presentFence->SetEventOnCompletion(frameLatencyObjectWaitValue, replacementFrameLatencyWaitableObjectHandle)));
+ 
+ }
+ 
+@@ -1501,7 +1773,7 @@ bool FrameInterpolationSwapChainDX12::verifyUiDuplicateResource()
+         {
+             uint64_t resourceSize = GetResourceGpuMemorySize(uiReplacementBuffer.resource);
+             totalUsageInBytes -= resourceSize;
+-            waitForFenceValue(presentInfo.compositionFenceGPU, framesSentForPresentation, INFINITE, presentInfo.waitCallback);
++            ffx::nr::waitFence(presentInfo.compositionFenceGPU, framesSentForPresentation, INFINITE, presentInfo.waitCallback);
+             SafeRelease(uiReplacementBuffer.resource);
+             uiReplacementBuffer = {};
+         }
+@@ -1516,7 +1788,7 @@ bool FrameInterpolationSwapChainDX12::verifyUiDuplicateResource()
+ 
+             if (uiResourceDesc.Format != internalDesc.Format || uiResourceDesc.Width != internalDesc.Width || uiResourceDesc.Height != internalDesc.Height)
+             {
+-                waitForFenceValue(presentInfo.compositionFenceGPU, framesSentForPresentation, INFINITE, presentInfo.waitCallback);
++                ffx::nr::waitFence(presentInfo.compositionFenceGPU, framesSentForPresentation, INFINITE, presentInfo.waitCallback);
+                 SafeRelease(uiReplacementBuffer.resource);
+             }
+         }
+@@ -1563,7 +1835,9 @@ bool FrameInterpolationSwapChainDX12::verifyUiDuplicateResource()
+ void FrameInterpolationSwapChainDX12::copyUiResource()
+ {
+     auto copyList = presentInfo.commandPool.get(presentInfo.gameQueue, L"uiResourceCopyList");
++        if (!copyList) return;
+     auto dx12List = copyList->reset();
++    if (ffx::nr::activeContext && !dx12List) return;
+ 
+     ID3D12Resource* dx12ResourceSrc = reinterpret_cast<ID3D12Resource*>(presentInfo.currentUiSurface.resource);
+     ID3D12Resource* dx12ResourceDst = uiReplacementBuffer.resource;
+@@ -1609,12 +1883,17 @@ void FrameInterpolationSwapChainDX12::copyUiResource()
+     // IDXGISwapChain1
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Present(UINT SyncInterval, UINT Flags)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if(ffx::nr::activeContext && (ffx::nr::activeContext->enrollmentFlags.load()&ffx::nr::ControlledOutputEnrollment)) {
++        auto& owner=*ffx::nr::activeContext;
++        if(!owner.outputReady.load() || !owner.ownedOutput || !owner.ownedOutput->inspect().writerSubmitted || owner.outputConsumed.exchange(true)) return DXGI_ERROR_INVALID_CALL;
++    }
+ 
+     const UINT64 previousFramesSentForPresentation = framesSentForPresentation;
+ 
+     if (Flags & DXGI_PRESENT_TEST)
+     {
+-        return presentInfo.swapChain->Present(SyncInterval, Flags);
++        return ffx::nr::observeResult(presentInfo.swapChain->Present(SyncInterval, Flags));
+     }
+ 
+     setFrameGenerationConfig(&nextFrameGenerationConfig);
+@@ -1629,8 +1908,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Present(UINT SyncInte
+     const bool runInterpolation        = interpolationEnabled && (fgCallbackConfigured || fgCommandListConfigured);
+ 
+     // Ensure presenter thread has signaled before applying any wait to the game queue
+-    waitForFenceValue(presentInfo.compositionFenceCPU, previousFramesSentForPresentation);
+-    presentInfo.gameQueue->Wait(presentInfo.compositionFenceGPU, previousFramesSentForPresentation);
++    ffx::nr::waitFence(presentInfo.compositionFenceCPU, previousFramesSentForPresentation);
++    ffx::nr::queueWaitForPreviousUse(presentInfo.gameQueue, presentInfo.compositionFenceGPU, previousFramesSentForPresentation);
+ 
+     // Verify integrity of internal Ui resource
+     if (verifyUiDuplicateResource())
+@@ -1644,15 +1923,17 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Present(UINT SyncInte
+     previousFrameWasInterpolated = runInterpolation;
+     if (runInterpolation)
+     {
+-        WaitForSingleObject(presentInfo.interpolationEvent, INFINITE);
++        if (ffx::nr::waitHandle(presentInfo.interpolationEvent, INFINITE) != WAIT_OBJECT_0 && ffx::nr::activeContext) {
++            LeaveCriticalSection(&criticalSection); return DXGI_ERROR_WAS_STILL_DRAWING;
++        }
+ 
+         presentInterpolated(SyncInterval, Flags);
+     }
+     else
+     {
+         // if no interpolation, then we copied directly to the swapchain. Render UI, present and be done
+-        presentInfo.gameQueue->Signal(presentInfo.gameFence, ++gameFenceValue);
+-        presentInfo.presentQueue->Wait(presentInfo.gameFence, gameFenceValue);
++        ffx::nr::signal(presentInfo.gameQueue, presentInfo.gameFence, ++gameFenceValue);
++        ffx::nr::queueWait(presentInfo.presentQueue, presentInfo.gameFence, gameFenceValue);
+ 
+         if (presentCallback != nullptr)
+         {
+@@ -1665,7 +1946,7 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Present(UINT SyncInte
+ 
+         // respect game provided latency settings
+         UINT64 frameLatencyObjectWaitValue = (framesSentForPresentation - gameMaximumFrameLatency) * (framesSentForPresentation >= gameMaximumFrameLatency);
+-        FFX_ASSERT(SUCCEEDED(presentInfo.presentFence->SetEventOnCompletion(frameLatencyObjectWaitValue, replacementFrameLatencyWaitableObjectHandle)));
++        if (!ffx::nr::activeContext) FFX_ASSERT(SUCCEEDED(presentInfo.presentFence->SetEventOnCompletion(frameLatencyObjectWaitValue, replacementFrameLatencyWaitableObjectHandle)));
+     }
+ 
+     replacementSwapBuffers[currentBackBufferIndex].availabilityFenceValue = framesSentForPresentation;
+@@ -1680,13 +1961,18 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Present(UINT SyncInte
+ 
+     LeaveCriticalSection(&criticalSection);
+ 
+-    waitForFenceValue(presentInfo.replacementBufferFence, replacementSwapBuffers[replacementSwapBufferIndex].availabilityFenceValue, INFINITE, presentInfo.waitCallback);
++    ffx::nr::waitFence(presentInfo.replacementBufferFence, replacementSwapBuffers[replacementSwapBufferIndex].availabilityFenceValue, INFINITE, presentInfo.waitCallback);
+ 
+     return S_OK;
+ }
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if(auto state=ffx::nr::createdRegistry().findForDestruction(this)) {
++        if(state->enrolled.load() && (state->enrollmentFlags.load()&ffx::nr::ControlledOutputEnrollment)) {if(ppSurface) *ppSurface=nullptr;return DXGI_ERROR_INVALID_CALL;}
++        state->rawBufferEscaped=true;
++    }
+     EnterCriticalSection(&criticalSection);
+ 
+     HRESULT hr = E_FAIL;
+@@ -1711,6 +1997,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetBuffer(UINT Buffer
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetFullscreenState(BOOL Fullscreen, IDXGIOutput* pTarget)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     return real()->SetFullscreenState(Fullscreen, pTarget);
+ }
+ 
+@@ -1737,6 +2025,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetDesc(DXGI_SWAP_CHA
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::ResizeBuffers(UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     destroyReplacementResources();
+ 
+     EnterCriticalSection(&criticalSection);
+@@ -1760,6 +2050,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::ResizeBuffers(UINT Bu
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::ResizeTarget(const DXGI_MODE_DESC* pNewTargetParameters)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     return real()->ResizeTarget(pNewTargetParameters);
+ }
+ 
+@@ -1820,6 +2112,7 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetCoreWindow(REFIID
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::Present1(UINT SyncInterval, UINT PresentFlags, const DXGI_PRESENT_PARAMETERS*)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
+     return Present(SyncInterval, PresentFlags);
+ }
+ 
+@@ -1845,6 +2138,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetBackgroundColor(DX
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetRotation(DXGI_MODE_ROTATION Rotation)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     return real()->SetRotation(Rotation);
+ }
+ 
+@@ -1856,6 +2151,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetRotation(DXGI_MODE
+ // IDXGISwapChain2
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetSourceSize(UINT Width, UINT Height)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     return real()->SetSourceSize(Width, Height);
+ }
+ 
+@@ -1866,6 +2163,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetSourceSize(UINT* p
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetMaximumFrameLatency(UINT MaxLatency)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     // store value, so correct value is returned if game asks for it
+     gameMaximumFrameLatency = MaxLatency;
+ 
+@@ -1884,11 +2183,15 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetMaximumFrameLatenc
+ 
+ HANDLE STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::GetFrameLatencyWaitableObject(void)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return nullptr;
++    if (ffx::nr::selected(this)) return nullptr;
+     return replacementFrameLatencyWaitableObjectHandle;
+ }
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetMatrixTransform(const DXGI_MATRIX_3X2_F* pMatrix)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     return real()->SetMatrixTransform(pMatrix);
+ }
+ 
+@@ -1916,6 +2219,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::CheckColorSpaceSuppor
+ 
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetColorSpace1(DXGI_COLOR_SPACE_TYPE ColorSpace)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     switch (ColorSpace)
+     {
+     case DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709:
+@@ -1945,6 +2250,8 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::ResizeBuffers1(
+ // IDXGISwapChain4
+ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData)
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return DXGI_ERROR_INVALID_CALL;
++    if (ffx::nr::selected(this)) return DXGI_ERROR_INVALID_CALL;
+     if (Size > 0 && pMetaData != nullptr)
+     {
+         DXGI_HDR_METADATA_HDR10* HDR10MetaData = NULL;
+@@ -1974,6 +2281,9 @@ HRESULT STDMETHODCALLTYPE FrameInterpolationSwapChainDX12::SetHDRMetaData(DXGI_H
+ 
+ ID3D12GraphicsCommandList* FrameInterpolationSwapChainDX12::getInterpolationCommandList()
+ {
++    ffx::nr::WorkScope checkedRoot(this); if (!checkedRoot) return nullptr;
++    if (auto context = ffx::nr::createdRegistry().find(this)) context->rawListEscaped = true;
++    if (ffx::nr::selected(this)) return nullptr;
+     EnterCriticalSection(&criticalSection);
+ 
+     ID3D12GraphicsCommandList* dx12CommandList = nullptr;
+diff --git a/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_Helpers.h b/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_Helpers.h
+index 855b502..fc45a80 100644
+--- a/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_Helpers.h
++++ b/sdk/src/backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_Helpers.h
+@@ -22,6 +22,7 @@
+ 
+ #pragma once
+ 
++#include "../../../../../../FidelityFX-CheckedClosure/CheckedCommands.h"
+ #include <Windows.h>
+ #include <d3d12.h>
+ #include <dxgi1_6.h>
+@@ -120,6 +121,8 @@ static DXGI_FORMAT convertFormatSrv(DXGI_FORMAT format)
+     }
+ }
+ 
++#include "../../../../../../FidelityFX-CheckedClosure/CheckedSdkRuntime.h"
++
+ class Dx12Commands
+ {
+     ID3D12CommandQueue*        queue                = nullptr;
+@@ -129,6 +132,7 @@ class Dx12Commands
+     UINT64                     availableFenceValue  = 0;
+ 
+ public:
++    bool ownedWriterReserved=false;
+     void release()
+     {
+         SafeRelease(allocator);
+@@ -147,6 +151,25 @@ public:
+         return allocator != nullptr;
+     }
+ 
++    HRESULT verifyChecked(ID3D12CommandQueue* pQueue)
++    {
++        if (initiated()) return S_OK;
++        if (!pQueue) return E_INVALIDARG;
++        ID3D12Device* device = nullptr;
++        HRESULT result = pQueue->GetDevice(IID_PPV_ARGS(&device));
++        if (SUCCEEDED(result)) {
++            const auto desc = pQueue->GetDesc();
++            result = device->CreateCommandAllocator(desc.Type, IID_PPV_ARGS(&allocator));
++            if (SUCCEEDED(result)) result = device->CreateCommandList(desc.NodeMask, desc.Type, allocator, nullptr, IID_PPV_ARGS(&list));
++            if (SUCCEEDED(result)) result = list->Close();
++            if (SUCCEEDED(result)) result = device->CreateFence(availableFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
++            device->Release();
++        }
++        if (FAILED(result)) release();
++        if (ffx::nr::activeContext) ffx::nr::activeContext->closure.recordFailure(result);
++        return result;
++    }
++
+     bool verify(ID3D12CommandQueue* pQueue)
+     {
+         HRESULT hr = initiated() ? S_OK : E_FAIL;
+@@ -184,10 +207,33 @@ public:
+         return SUCCEEDED(hr);
+     }
+ 
++    static ffx::nr::FenceObservation observeReservation(void* value)
++    {
++        auto self = static_cast<Dx12Commands*>(value);
++        return self->fence ? ffx::nr::observeFence(self->fence) : ffx::nr::FenceObservation{0, 0};
++    }
++    void recordReservation(ffx::nr::CreatedContext& owner, bool submitted = false)
++    {
++        ffx::nr::Domain domain{};
++        domain.context = this; domain.observe = observeReservation;
++        domain.evidence.domain_id = reinterpret_cast<uintptr_t>(this);
++        domain.evidence.domain_generation = 1;
++        domain.evidence.domain_kind = 3;
++        domain.evidence.fence_id = reinterpret_cast<uintptr_t>(fence);
++        domain.evidence.fence_generation = fence ? 1 : 0;
++        domain.evidence.queue_id = reinterpret_cast<uintptr_t>(queue);
++        domain.evidence.queue_generation = queue ? 1 : 0;
++        domain.evidence.required_target = availableFenceValue;
++        domain.evidence.last_attempted_target = availableFenceValue;
++        domain.evidence.last_successful_target = submitted ? availableFenceValue : 0;
++        domain.evidence.evidence_flags = fence ? 0 : 1; // explicitly unused slot
++        owner.closure.updateDomain(domain);
++    }
+     void occupy(ID3D12CommandQueue* pQueue, const wchar_t* name)
+     {
+         availableFenceValue++;
+         queue = pQueue;
++        if (ffx::nr::activeContext) recordReservation(*ffx::nr::activeContext);
+         allocator->SetName(name);
+         list->SetName(name);
+         fence->SetName(name);
+@@ -195,6 +241,7 @@ public:
+ 
+     ID3D12GraphicsCommandList* reset()
+     {
++        if (ffx::nr::activeContext) return resetChecked();
+         if (SUCCEEDED(allocator->Reset()))
+         {
+             if (SUCCEEDED(list->Reset(allocator, nullptr)))
+@@ -212,6 +259,7 @@ public:
+ 
+     void execute(bool listIsOpen = false)
+     {
++        if (ffx::nr::activeContext) { const auto result = executeChecked(listIsOpen); ffx::nr::activeContext->closure.recordFailure(result.result); return; }
+         if (listIsOpen)
+         {
+             list->Close();
+@@ -224,6 +272,7 @@ public:
+ 
+     void drop(bool listIsOpen = false)
+     {
++        if (ffx::nr::activeContext) { const auto result = dropChecked(listIsOpen); ffx::nr::activeContext->closure.recordFailure(result.result); return; }
+         if (listIsOpen)
+         {
+             getList()->Close();
+@@ -231,6 +280,50 @@ public:
+         queue->Signal(fence, availableFenceValue);
+     }
+ 
++    // Checked entrypoints are additive: legacy methods retain their behavior.
++    ffx::nr::CheckedCommandSnapshot snapshotChecked() const
++    {
++        return {queue, fence, list, availableFenceValue};
++    }
++    HRESULT availableChecked() const
++    {
++        return ffx::nr::checkedFenceCompletion(fence, availableFenceValue);
++    }
++    ID3D12GraphicsCommandList* resetChecked()
++    {
++        HRESULT result = allocator && list ? allocator->Reset() : E_POINTER;
++        if (SUCCEEDED(result)) result = list->Reset(allocator, nullptr);
++        if (FAILED(result)) { if (ffx::nr::activeContext) ffx::nr::activeContext->closure.recordFailure(result); return nullptr; }
++        ffx::nr::recordingReset(list);
++        return list;
++    }
++    ffx::nr::CheckedCommandSubmission executeChecked(bool listIsOpen = false)
++    {
++        ffx::nr::CheckedCommandSubmission outcome{};
++        if (ffx::nr::activeContext && ffx::nr::activeContext->closure.failed()) return outcome;
++        if (!queue || !list || !fence || availableFenceValue == UINT64_MAX) return outcome;
++        outcome.closeResult = listIsOpen ? list->Close() : S_OK;
++        if (FAILED(outcome.closeResult)) { outcome.result = outcome.closeResult; return outcome; }
++        ID3D12CommandList* lists[] = {list};
++        queue->ExecuteCommandLists(1, lists);
++        outcome.executeInvoked = true;
++        outcome.result = ffx::nr::signal(queue, fence, availableFenceValue);
++        outcome.signalSucceeded = SUCCEEDED(outcome.result);
++        if (ffx::nr::activeContext) recordReservation(*ffx::nr::activeContext, outcome.signalSucceeded);
++        return outcome;
++    }
++    ffx::nr::CheckedCommandSubmission dropChecked(bool listIsOpen = false)
++    {
++        ffx::nr::CheckedCommandSubmission outcome{};
++        if (!queue || !list || !fence || availableFenceValue == UINT64_MAX) return outcome;
++        outcome.closeResult = listIsOpen ? list->Close() : S_OK;
++        if (FAILED(outcome.closeResult)) { outcome.result = outcome.closeResult; return outcome; }
++        outcome.result = ffx::nr::signal(queue, fence, availableFenceValue);
++        outcome.signalSucceeded = SUCCEEDED(outcome.result);
++        if (ffx::nr::activeContext) recordReservation(*ffx::nr::activeContext, outcome.signalSucceeded);
++        return outcome;
++    }
++
+     bool available()
+     {
+         return fence->GetCompletedValue() >= availableFenceValue;
+@@ -275,6 +368,24 @@ public:
+         DeleteCriticalSection(&criticalSection);
+     }
+ 
++    void releaseAfterCheckedComplete()
++    {
++        // Only the SDK lifecycle owner may call this after consuming its terminal receipt.
++        for (size_t type = 0; type < 4; ++type)
++            for (size_t index = 0; index < Capacity; ++index)
++                buffer[type][index].release();
++    }
++
++    bool registerCheckedSlots(ffx::nr::CreatedContext& owner)
++    {
++        if (!TryEnterCriticalSection(&criticalSection)) return false;
++        for (size_t type = 0; type < 4; ++type)
++            for (size_t index = 0; index < Capacity; ++index)
++                buffer[type][index].recordReservation(owner);
++        LeaveCriticalSection(&criticalSection);
++        return true;
++    }
++
+     Dx12Commands* get(ID3D12CommandQueue* pQueue, const wchar_t* name)
+     {
+         D3D12_COMMAND_QUEUE_DESC queueDesc = pQueue->GetDesc();
+@@ -285,12 +396,21 @@ public:
+         for (size_t idx = 0; idx < Capacity && (pCommands == nullptr); idx++)
+         {
+             auto& cmds = buffer[queueDesc.Type][idx];
+-            if (cmds.verify(pQueue) && cmds.available())
++            if(cmds.ownedWriterReserved)continue;
++            if (ffx::nr::activeContext ? SUCCEEDED(cmds.verifyChecked(pQueue)) : cmds.verify(pQueue))
+             {
+-                pCommands = &cmds;
++                if (ffx::nr::activeContext) {
++                    const auto completion = cmds.availableChecked();
++                    ffx::nr::activeContext->closure.recordFailure(completion);
++                    if (completion == S_OK) pCommands = &cmds;
++                } else if (cmds.available()) pCommands = &cmds;
+             }
+         }
+ 
++        if (!pCommands && ffx::nr::activeContext) {
++            ffx::nr::activeContext->closure.recordFailure(E_FAIL);
++            LeaveCriticalSection(&criticalSection); return nullptr;
++        }
+         FFX_ASSERT(pCommands);
+ 
+         pCommands->occupy(pQueue, name);
+diff --git a/sdk/src/components/frameinterpolation/ffx_frameinterpolation.cpp b/sdk/src/components/frameinterpolation/ffx_frameinterpolation.cpp
+index a60ff6a..add291f 100644
+--- a/sdk/src/components/frameinterpolation/ffx_frameinterpolation.cpp
++++ b/sdk/src/components/frameinterpolation/ffx_frameinterpolation.cpp
+@@ -519,9 +519,13 @@ static FfxErrorCode frameinterpolationCreate(FfxFrameInterpolationContext_Privat
+     return FFX_OK;
+ }
+ 
++// Observe actual helper returns; their historical void wrappers must not hide
++// failure from the creating provider's checked destruction path.
++#include "../../../../../FidelityFX-CheckedClosure/CheckedAlgorithmCleanup.h"
+ static FfxErrorCode frameinterpolationRelease(FfxFrameInterpolationContext_Private* context)
+ {
+     FFX_ASSERT(context);
++    ffx::nr::AlgorithmCleanup cleanup;
+ 
+     ffxSafeReleasePipeline(&context->contextDescription.backendInterface, &context->pipelineFiReconstructAndDilate, context->effectContextId);
+     ffxSafeReleasePipeline(&context->contextDescription.backendInterface, &context->pipelineFiSetup, context->effectContextId);
+@@ -537,6 +541,9 @@ static FfxErrorCode frameinterpolationRelease(FfxFrameInterpolationContext_Priva
+ 
+     // unregister resources not created internally
+     context->srvResources[FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_CURRENT_INTERPOLATION_SOURCE]          = {FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL};
++    // Borrowed in both dispatch branches: either a separate HUD-present input
++    // or an alias of CURRENT_INTERPOLATION_SOURCE. Never owned by this effect.
++    context->srvResources[FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_PRESENT_BACKBUFFER]                    = {FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL};
+     context->srvResources[FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR]                   = {FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL};
+     context->srvResources[FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_CONFIDENCE]               = {FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL};
+     context->srvResources[FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_GLOBAL_MOTION]            = {FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_NULL};
+@@ -562,9 +569,10 @@ static FfxErrorCode frameinterpolationRelease(FfxFrameInterpolationContext_Priva
+     }
+ 
+     // Destroy the context
+-    context->contextDescription.backendInterface.fpDestroyBackendContext(&context->contextDescription.backendInterface, context->effectContextId);
+-
+-    return FFX_OK;
++    if(cleanup.Result()!=FFX_OK)return static_cast<FfxErrorCode>(cleanup.Result());
++    const auto destroyed=context->contextDescription.backendInterface.fpDestroyBackendContext(&context->contextDescription.backendInterface, context->effectContextId);
++    ffx::nr::AlgorithmCleanup::Observe(destroyed);
++    return static_cast<FfxErrorCode>(cleanup.Result());
+ }
+ 
+ static void scheduleDispatch(FfxFrameInterpolationContext_Private* context, const FfxPipelineState* pipeline, uint32_t dispatchX, uint32_t dispatchY)
+diff --git a/sdk/src/components/opticalflow/ffx_opticalflow.cpp b/sdk/src/components/opticalflow/ffx_opticalflow.cpp
+index ae94c2d..35582f9 100644
+--- a/sdk/src/components/opticalflow/ffx_opticalflow.cpp
++++ b/sdk/src/components/opticalflow/ffx_opticalflow.cpp
+@@ -440,9 +440,11 @@ static FfxErrorCode opticalflowCreate(FfxOpticalflowContext_Private* context, co
+     return FFX_OK;
+ }
+ 
++#include "../../../../../FidelityFX-CheckedClosure/CheckedAlgorithmCleanup.h"
+ static FfxErrorCode opticalflowRelease(FfxOpticalflowContext_Private* context)
+ {
+     FFX_ASSERT(context);
++    ffx::nr::AlgorithmCleanup cleanup;
+ 
+     ffxSafeReleasePipeline(&context->contextDescription.backendInterface, &context->pipelinePrepareLuma, context->effectContextId);
+     ffxSafeReleasePipeline(&context->contextDescription.backendInterface, &context->pipelineGenerateOpticalFlowInputPyramid, context->effectContextId);
+@@ -457,9 +459,10 @@ static FfxErrorCode opticalflowRelease(FfxOpticalflowContext_Private* context)
+         ffxSafeReleaseResource(&context->contextDescription.backendInterface, context->resources[currentResourceIndex], context->effectContextId);
+     }
+ 
+-    context->contextDescription.backendInterface.fpDestroyBackendContext(&context->contextDescription.backendInterface, context->effectContextId);
+-
+-    return FFX_OK;
++    if(cleanup.Result()!=FFX_OK)return static_cast<FfxErrorCode>(cleanup.Result());
++    const auto destroyed=context->contextDescription.backendInterface.fpDestroyBackendContext(&context->contextDescription.backendInterface, context->effectContextId);
++    ffx::nr::AlgorithmCleanup::Observe(destroyed);
++    return static_cast<FfxErrorCode>(cleanup.Result());
+ }
+ 
+ static void scheduleDispatch(FfxOpticalflowContext_Private* context, const FfxPipelineState* pipeline, const wchar_t* pipelineName, uint32_t dispatchX, uint32_t dispatchY, uint32_t dispatchZ = 1)
+diff --git a/sdk/src/shared/ffx_object_management.cpp b/sdk/src/shared/ffx_object_management.cpp
+index 03fc3b7..2af4efb 100644
+--- a/sdk/src/shared/ffx_object_management.cpp
++++ b/sdk/src/shared/ffx_object_management.cpp
+@@ -22,27 +22,43 @@
+ 
+ #include <FidelityFX/host/ffx_interface.h>
+ #include "ffx_object_management.h"
++#include "../../../../FidelityFX-CheckedClosure/CheckedAlgorithmCleanup.h"
++#include <cstdio>
++
++static void observeResourceRelease(FfxErrorCode result, FfxResourceInternal resource, FfxUInt32 context)
++{
++    if(result!=FFX_OK)
++        std::fprintf(stderr,"FG_RESOURCE_RELEASE_FAILURE: context=%u index=%d result=%d\n",context,resource.internalIndex,int(result));
++    ffx::nr::AlgorithmCleanup::Observe(result);
++}
+ 
+ void ffxSafeReleasePipeline(FfxInterface* backendInterface, FfxPipelineState* pipeline, FfxUInt32 effectContextId)
+ {
+     FFX_ASSERT(pipeline);
+     FFX_ASSERT(backendInterface->fpDestroyPipeline);
+ 
+-    backendInterface->fpDestroyPipeline(backendInterface, pipeline, effectContextId);
++    ffx::nr::AlgorithmCleanup::Observe(backendInterface->fpDestroyPipeline(backendInterface, pipeline, effectContextId));
+ }
+ 
+ void ffxSafeReleaseCopyResource(FfxInterface* backendInterface, FfxResourceInternal resource, FfxUInt32 effectContextId)
+ {
+     FFX_ASSERT(backendInterface->fpDestroyResource);
+ 
++    // No owned resource means no adjacent initialization upload allocation.
++    if(resource.internalIndex==0)return;
++
+     FfxResourceInternal copyResource;
+     copyResource.internalIndex = resource.internalIndex + 1;
+-    backendInterface->fpDestroyResource(backendInterface, copyResource, effectContextId);
++    observeResourceRelease(backendInterface->fpDestroyResource(backendInterface, copyResource, effectContextId),copyResource,effectContextId);
+ }
+ 
+ void ffxSafeReleaseResource(FfxInterface* backendInterface, FfxResourceInternal resource, FfxUInt32 effectContextId)
+ {
+     FFX_ASSERT(backendInterface->fpDestroyResource);
+ 
+-    backendInterface->fpDestroyResource(backendInterface, resource, effectContextId);
++    // Effects clear borrowed/uncreated entries to the global null sentinel.
++    // It is not a resource in this effect's backend allocation range.
++    if(resource.internalIndex==0)return;
++
++    observeResourceRelease(backendInterface->fpDestroyResource(backendInterface, resource, effectContextId),resource,effectContextId);
+ }

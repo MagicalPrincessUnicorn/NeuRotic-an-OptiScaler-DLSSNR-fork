@@ -72,6 +72,9 @@ class VulkanPresentGuides
     // Raster sizing only; excludes temporal/image binding rights and expires at Present.
     std::optional<VkNrFrameContract> SelectResolutionMetadata(const VkNrFrameContract&,const VkNrGuideSelection* = nullptr);
     uint64_t ContextGeneration(const VkNrFrameContract&,const VkNrGuideSelection* = nullptr) const;
+    // Revalidate an already selected immutable capability. Future publication
+    // may be consumed by Bind; this method never issues a new selection right.
+    bool SelectedLeaseCurrent(const VkNrFrameContract&,const VkNrGuideSelection*,VkImage,const VkNrGuideLease&);
     bool Bind(const VkNrGuideLease&,VkNrUseId,VkQueue);
     void RejectNative(const char*);
     void PresentObserved();
@@ -100,6 +103,7 @@ class VulkanPresentGuides
     std::vector<PresentSource> presentSources_;
     const Slot* AssociatedSource(const VkNrPresentGuideTag&) const;
     std::shared_ptr<VkNrUseId> HoldSelection(VkNrUseId);
+    std::optional<VkNrGuideLease> SelectImpl(const VkNrFrameContract&,const VkNrGuideSelection*,VkImage,bool requirePublication);
     void ClearPending();
     void RevokePublication(Slot&);
 };

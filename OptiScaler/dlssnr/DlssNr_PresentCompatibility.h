@@ -64,8 +64,8 @@ constexpr Admission Admit(const Capabilities& value)
         return {false, PixelPath::None, "FP16 requires an explicit HDR color recipe"};
     if (value.rgb10 && (!value.targetShaderLoad || !value.targetTypedStore))
         return {false, PixelPath::None, "10-bit conversion capabilities are unavailable"};
-    if (value.bgra8 && (value.api != Api::D3D12 || !value.targetShaderLoad))
-        return {false, PixelPath::None, "D3D12 BGRA8 shader-load conversion is unavailable"};
+    if (value.bgra8 && !value.targetShaderLoad)
+        return {false, PixelPath::None, "BGRA8 shader-load conversion is unavailable"};
     if (value.bgra8)
         return {true, PixelPath::Bgra8Conversion, "supported"};
     return {true, value.fp16 ? PixelPath::Fp16Direct : value.rgb10 ? PixelPath::Rgb10Conversion : PixelPath::Rgba8Direct, "supported"};

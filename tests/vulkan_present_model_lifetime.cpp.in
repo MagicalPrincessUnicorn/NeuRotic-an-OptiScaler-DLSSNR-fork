@@ -1,0 +1,98 @@
+// Compiles actual VulkanNrSession/Runtime/Recording/Present .cpp files.
+// Only the model callback, configuration and completion service are CPU fakes.
+#include <dlssnr/VulkanNrRuntime.h>
+#include <dlssnr/VulkanNrCompletion.h>
+#include <dlssnr/VulkanPresent.h>
+#include <dlssnr/VulkanPresentSourcePlan.h>
+#include <dlssnr/FinalFallbackControl.h>
+#include <cassert>
+#include <atomic>
+#include <cstdio>
+#include <mutex>
+#include <thread>
+template<class T> struct Field{T value{};T value_or_default()const{return value;}};
+struct RuntimeConfig{bool enabled=true;uint64_t resumeGeneration=0;};
+class Config{
+public:
+ Field<uint32_t> DlssNrRoute{1};RuntimeConfig runtime;
+ RuntimeConfig GetDlssNrRuntimeSnapshot()const{return runtime;}
+ static Config* Instance(){static Config c;return &c;}
+};
+template<class T>struct NrConfigSnapshot:T{};
+static bool configAvailable=true;
+static std::optional<NrConfigSnapshot<Config>> TryNrConfigSnapshot(const Config& c){
+ if(!configAvailable)return {};NrConfigSnapshot<Config> result;static_cast<Config&>(result)=c;return result;
+}
+namespace DlssNr{
+std::mutex g_nativeRecordMutex,g_vkMutex;
+VulkanNrRuntime g_vkRuntime;
+static VkDevice device=reinterpret_cast<VkDevice>(11);
+uint64_t VkNrCompletionDeviceGeneration(VkDevice d){return d==device?1:0;}
+void PollVkNrCompletions(){}
+bool ReserveVkNrCompletion(VkDevice,VkNrUseId){assert(false&&"CPU request has no command buffer");return false;}
+// PRODUCTION_CURRENT_LIFETIME
+static VkRecordResult Model(const VkFrameRequest& request,bool){
+ auto base=request;const auto& cfg=*Config::Instance();
+ {
+  std::lock_guard lock(g_vkMutex);
+  // PRODUCTION_FRAME_LIFETIME
+ }
+ VkRecordResult result{VkRecordStatus::Complete,"",true,true};
+ // PRODUCTION_RECORDED_LIFETIME
+ result.requestedPasses=result.completedPasses=1;result.chainDeliverable=true;result.outputVersion=1;
+ return result;
+}
+struct Commands:IVkPresentCommands{
+ VkRecordResult model;int copies=0;explicit Commands(VkRecordResult r):model(std::move(r)){}
+ bool Check(const VkPresentImageRequest&)override{return true;}bool Begin()override{return true;}
+ void SourceToTransfer()override{}void Capture()override{}void SourceToPresent()override{}
+ bool ConvertToModel()override{return true;}bool Evaluate(bool)override{return true;}
+ VkRecordResult ModelResult()const override{return model;}bool ConvertFromModel()override{return true;}
+ void TargetToTransfer()override{}void CopyBack()override{++copies;}void TargetToPresent()override{}
+ bool End()override{return true;}void Discard()override{assert(false);}
+};
+}
+int main(){using namespace DlssNr;
+ assert(g_vkRuntime.EnsureDevice(device,[]{return true;}));
+ VulkanNrSession native(VkNrRoute::Native,g_vkRuntime),present(VkNrRoute::Present,g_vkRuntime);
+ VkFrameRequest request;request.device=device;request.route=VkNrRoute::Present;
+ g_vkRuntime.Activate(VkNrRoute::Native);assert(!CurrentVulkanPresentModelLifetimeVk());
+ auto a=present.Record(request,Model);assert(a.modelLifetime&&a.modelLifetime->Qualified());
+ assert(a.modelLifetime->routeEpoch==g_vkRuntime.Epoch());
+ assert(CurrentVulkanPresentModelLifetimeVk()==a.modelLifetime);
+ VkPresentSources::Context c;c.device=11;c.deviceGeneration=1;c.routeEpoch=a.modelLifetime->routeEpoch;c.modelLifetime=a.modelLifetime;
+ assert(VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ // Actual private recording propagation, not a duplicate of the exported result.
+ Commands commands(a);VkPresentImageRequest image;image.image=reinterpret_cast<VkImage>(12);
+ image.commandBuffer=reinterpret_cast<VkCommandBuffer>(13);image.generation=2;image.extent={1,1};
+ auto recorded=RecordVkPresentImage(image,commands,false);
+ assert(recorded.status==VkRecordStatus::Complete&&recorded.modelLifetime==a.modelLifetime&&commands.copies==1);
+ // Actual route/session changes with identical policy/device/carrier identities.
+ native.Record(request,[](const VkFrameRequest&,bool){return VkRecordResult{VkRecordStatus::Complete,"",true,true};});
+ assert(!CurrentVulkanPresentModelLifetimeVk()&&!VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ auto b=present.Record(request,Model);assert(b.modelLifetime&&b.modelLifetime->routeEpoch>a.modelLifetime->routeEpoch);
+ assert(!VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ c.modelLifetime=b.modelLifetime;c.routeEpoch=b.modelLifetime->routeEpoch;
+ assert(VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ // Zero initial resume/input identities were valid; a live change rejects old tails.
+ ++Config::Instance()->runtime.resumeGeneration;
+ assert(!VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ auto resumed=present.Record(request,Model);c.modelLifetime=resumed.modelLifetime;c.routeEpoch=resumed.modelLifetime->routeEpoch;
+ assert(VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ FinalFallback::inputInterruptionEpoch.fetch_add(1);
+ // Simulate an admitted old render tail: CurrentInputEpoch is deliberately old,
+ // but the current-lifetime query must observe the global interruption marker.
+ FinalFallback::renderDepth=1;FinalFallback::admittedInputEpoch=0;
+ assert(FinalFallback::CurrentInputEpoch()==0);
+ assert(!VkPresentSources::CurrentModelMatches(c,CurrentVulkanPresentModelLifetimeVk()));
+ FinalFallback::renderDepth=0;
+ for(auto* mutex:{&g_vkMutex,&g_nativeRecordMutex}){
+  std::atomic<bool> held=false,release=false;
+  std::thread owner([&]{std::lock_guard lock(*mutex);held=true;while(!release.load())std::this_thread::yield();});
+  while(!held.load())std::this_thread::yield();
+  assert(!CurrentVulkanPresentModelLifetimeVk());release=true;owner.join();
+ }
+ configAvailable=false;assert(!CurrentVulkanPresentModelLifetimeVk());configAvailable=true;
+ Config::Instance()->runtime.enabled=false;assert(!CurrentVulkanPresentModelLifetimeVk());
+ std::puts("PASS actual model owner/session epoch, recorded lifetime propagation, resume/input interruption and unknown contention");
+}

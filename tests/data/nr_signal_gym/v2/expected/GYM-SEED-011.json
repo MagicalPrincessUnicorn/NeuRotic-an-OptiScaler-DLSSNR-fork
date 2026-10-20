@@ -1,0 +1,53 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "ExpectedResults",
+  "case_id": "GYM-SEED-011",
+  "case_input_sha256": "f68798416a70362238320103ce8159239cc6c0d50923d6cfe05044fcb142a7d9",
+  "revision": 1,
+  "transport_checks": [],
+  "qualifications": [],
+  "decisions": [
+    {
+      "check_id": "D-PRESENT",
+      "event_id": {
+        "state": "known",
+        "value": "event-0"
+      },
+      "adapter_id": "source-contract-cpu-v2",
+      "subject_ref": "present-policy",
+      "actual_pointer": "/operations/present-device-mismatch-frame:event-0/output",
+      "comparison": "exact",
+      "expected": {
+        "supported": false,
+        "path": "None",
+        "reason": "Present target and NR queue use different devices"
+      },
+      "abs_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "rel_tolerance": {
+        "state": "not_applicable",
+        "reason_id": "GYM.EXACT_COMPARISON"
+      },
+      "required": true,
+      "oracle_basis": "source_contract",
+      "evidence_refs": [
+        "SRC-E-01"
+      ],
+      "domain": "decision",
+      "contract": {
+        "owner": "source_contract",
+        "contract_id": "source-present-compat-v1",
+        "version": "baseline-alpha-0.9.6",
+        "sha256": {
+          "state": "known",
+          "value": "49104dd7e3fb3f6f09878ce34e3c463a5a794c77b8d53363b0b44a688a257cb1"
+        }
+      },
+      "stage": "admission",
+      "scope": "source_policy_only"
+    }
+  ],
+  "approval": "synthetic_reviewed"
+}

@@ -1,5 +1,5 @@
 // Implementation include inside DlssNr. These are producer observations, not admission decisions.
-static void RenderDiagnosticConnections() {
+static void RenderDiagnosticConnections(Config* config) {
     using namespace NrDiagnosticsUi;
     const auto connection=PreparedGuides::QueryStatusV2(GetTickCount64());
     const auto prepared=PreparedGuides::QueryStatus();const auto native=NativeVulkanGuides::Status();
@@ -11,7 +11,25 @@ static void RenderDiagnosticConnections() {
     auto count=[](auto value){return std::to_string(value);};
     auto dim=[&](uint32_t w,uint32_t h){return w&&h?count(w)+" × "+count(h):std::string(unobserved);};
     const auto& c=connection.status;const auto& p=prepared.status;
+    const auto signals=Connections::QueryInputSignals(GetTickCount64());
+    const auto signalDetail=[&](bool motion){
+        const int preferred=motion?config->DlssNrMotionSource.value_or_default():config->DlssNrDepthSource.value_or_default();
+        const auto effective=static_cast<Connections::Source>(motion?signals.status.motion:signals.status.depth);
+        const auto reason=static_cast<Connections::Mixed::Reason>(motion?signals.status.motionReason:signals.status.depthReason);
+        const auto origin=motion?signals.used.motionOrigin:signals.used.depthOrigin;
+        const auto used=static_cast<Connections::Source>(motion?signals.used.motion:signals.used.depth);
+        const char* origins[]={"unobserved","Native","HostObserved","Discovered","Derived","Synthetic","External"};
+        return std::string("requested=")+MixedSourceText(preferred)+"; selected="+
+            (signals.fresh?Connections::SourceName(effective):"unavailable/stale")+"; "+Connections::Mixed::ReasonText(reason)+
+            "; capture="+count(signals.status.capture)+"; generation="+count(signals.status.generation)+
+            "; policy="+count(signals.status.revision)+"; consumed origin="+(signals.usedFresh&&origin<=6?origins[origin]:"unobserved")+
+            "; consumed="+(signals.usedFresh?Connections::SourceName(used):"no current receipt");
+    };
     std::vector<Group> groups={
+        {"input-signals",Neurotic::UiLiteral("ingame.input-sources.title","Input sources (experimental)"),{
+            {Neurotic::UiLiteral("ingame.input-sources.depth","Depth"),signalDetail(false),Kind::Detail},
+            {Neurotic::UiLiteral("ingame.input-sources.motion","Motion vectors"),signalDetail(true),Kind::Detail}
+        }},
         {"connection",Neurotic::UiLiteral("ingame.nr-diagnostics.selected_connection","Selected connection"),{
             {Neurotic::UiLiteral("ingame.nr-diagnostics.source","Source"),connection.available?Neurotic::Translate(ConnectionSourceLabel(c.selectedSource)):unobserved},
             {Neurotic::UiLiteral("ingame.nr-diagnostics.transport","Transport"),connection.available?Neurotic::Translate(ConnectionTransportLabel(c.effectiveTransport)):unobserved,Kind::Detail},

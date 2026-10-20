@@ -1,0 +1,34 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Import after normal project properties for a dedicated test build only.
+       Never reuse the ordinary product PCH/intermediate directory. -->
+  <Target Name="RequireAdaptiveFixtureCache" BeforeTargets="ClCompile">
+    <Error Condition="'$(NRAdaptiveFixtureBuild)' != 'true'" Text="Explicit Adaptive fixture build property required." />
+    <Error Condition="'$(NRAdaptiveFixtureIntDir)' == '' Or '$(NRAdaptiveFixtureOutDir)' == ''" Text="05 must select dedicated stable fixture intermediate/output directories." />
+  </Target>
+  <PropertyGroup>
+    <IntDir>$(NRAdaptiveFixtureIntDir)</IntDir>
+    <OutDir>$(NRAdaptiveFixtureOutDir)</OutDir>
+    <TargetName>nr_adaptive_product</TargetName>
+    <TargetPath>$(NRAdaptiveFixtureOutDir)nr_adaptive_product.dll</TargetPath>
+    <PreBuildEventUseInBuild>false</PreBuildEventUseInBuild>
+    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>NR_ADAPTIVE_PUBLIC_PROVIDER_FIXTURE=1;NR_GPU_SAFETY_TEST;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(NRAdaptiveFixtureOutDir)nr_adaptive_product.dll</OutputFile>
+      <ProgramDatabaseFile>$(NRAdaptiveFixtureOutDir)nr_adaptive_product.pdb</ProgramDatabaseFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <Target Name="ApplyAdaptiveFlagsToEveryTranslationUnit" BeforeTargets="ClCompile">
+    <ItemGroup>
+      <ClCompile>
+        <PreprocessorDefinitions>NR_ADAPTIVE_PUBLIC_PROVIDER_FIXTURE=1;NR_GPU_SAFETY_TEST;%(ClCompile.PreprocessorDefinitions)</PreprocessorDefinitions>
+        <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
+</Project>

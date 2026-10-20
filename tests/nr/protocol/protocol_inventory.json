@@ -1,0 +1,380 @@
+{
+  "work_order": "NR-RENDER-001",
+  "suites": {
+    "protocol-registry": [
+      {
+        "id": "T25.api-not-covered",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.future-profile-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.key-deterministic",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.model-revision-in-key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.placement-in-key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.present-not-covered",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.profile-key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.registry-two-families",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.runtime-revision-in-key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.unknown-abi-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.unknown-profile-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.application-unsupported",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.auto-skin-is-scalar",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.autoskin-purpose-distinct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.bypass-no-bindings",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.control-mask-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.control-purpose-distinct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.generic-history-unsupported",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.motion-not-rejection",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.motion-purpose-distinct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.reactive-purpose-distinct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.reactive-unsupported",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.transparency-purpose-distinct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.transparency-unsupported",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.ui-exclusion-unsupported",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.ui-unbound",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.uialpha-purpose-distinct",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "protocol-requirements": [
+      {
+        "id": "T14.no-inferred-consumer-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.adapter-commands",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.adapter-exact-evaluate-stage",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.all-required-qualified",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.bypass-without-model-backend",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.complete-replay-bytes",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.config-revision-not-profile-key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.content-not-profile-key",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.exact-current-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.feature-exists-binding-missing",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.feature-not-availability",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.mutable-config-not-read",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.nfc-cannot-be-overridden",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.output-mapping-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.planned-receipt-causal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.prepared-body-required",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.profile-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.receipt-owner-enforced",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.recipe-config-snapshot",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.recipe-no-ui",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.recipe-preserve-original",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.recipe-production",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.recipe-roundtrip",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.rejection-certificate",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.rights-not-profile-requirements",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.stale-context",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.unknown-depth-polarity",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.vanished-exposure-cleared",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.wrong-representation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T26.no-reactive-alias",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "protocol-freshness": [
+      {
+        "id": "T25.duplicate-control-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.explicit-clears",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.mv-axis-independent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.nonpositive-preexposure-default",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.previous-call-independent",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.raw-effective-separated",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.raw-jitter-unknown-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.raw-mv-unknown-preserved",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.scalar-build",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.zero-ui-rect",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "protocol-lineage": [
+      {
+        "id": "T14.binding-precondition",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.color-already-applied",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.color-duplicate-request-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.color-no-double-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.exact-consumer-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.exposure-already-applied",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.exposure-duplicate-request-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.exposure-no-double-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.false-applied-flag",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.jitter-already-applied",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.jitter-duplicate-request-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.jitter-no-double-transform",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.motion-already-applied",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.motion-duplicate-request-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.motion-no-double-transform",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "protocol-settings": [
+      {
+        "id": "T25.config-default-raw-unknown",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.config-explicit-provenance",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.config-held-snapshot",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.config-nonfinite-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T25.config-projects-seven",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "protocol-registry": {
+      "emitted_suite": "protocol-registry"
+    },
+    "protocol-requirements": {
+      "emitted_suite": "protocol-requirements"
+    },
+    "protocol-freshness": {
+      "emitted_suite": "protocol-freshness"
+    },
+    "protocol-lineage": {
+      "emitted_suite": "protocol-lineage"
+    },
+    "protocol-settings": {
+      "emitted_suite": "protocol-settings"
+    }
+  }
+}

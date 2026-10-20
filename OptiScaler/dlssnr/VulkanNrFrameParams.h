@@ -8,6 +8,7 @@
 #include <array>
 #include <string>
 #include <type_traits>
+#include "../nr/context/GuideGeometry.h"
 
 namespace DlssNr::VkFrame
 {
@@ -66,8 +67,7 @@ inline bool ValidateRect(const char* key, const NVSDK_NGX_Resource_VK* resource,
     if (!ValidateImage(key, resource, writable, failure)) return false;
     const auto& image = resource->Resource.ImageViewInfo;
     // Subtraction avoids accepting an overflowing base + extent.
-    if (!width || !height || x > image.Width || y > image.Height ||
-        width > image.Width - x || height > image.Height - y)
+    if (!Neurotic::Context::GuideGeometry::Fits({x,y,width,height},{image.Width,image.Height}))
         return Reject(failure, key, "subrect outside image extent");
     return true;
 }
@@ -161,8 +161,52 @@ bool Prepare(Params* params, const Inputs& frame, const VkTuning::Settings& appl
            write("DLSSNR.MVecScaleY", frame.temporal ? frame.temporal->motionScaleY : 1.0f);
 }
 
+// Synchronous CPU observation of the selected SR output. It owns no Vulkan resource.
+// Capture before SR can redirect parameters; validate against the restored view afterward.
+struct PostSrOutputObservation
+{
+    VkNrRect rect;
+    NVSDK_NGX_Resource_VK output{};
+};
+
+template<class Params>
+std::optional<PostSrOutputObservation> ObservePostSrOutput(Params* params, VkExtent2D selectedOutput)
+{
+    if(!params||!selectedOutput.width||!selectedOutput.height)return {};
+    NVSDK_NGX_Resource_VK* output=nullptr;
+    if(params->Get(NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&output))!=NVSDK_NGX_Result_Success)return {};
+    VkNrRect rect{0,0,selectedOutput.width,selectedOutput.height};
+    // Optional NGX evaluation origins default to zero; creation output dimensions do not.
+    unsigned int origin=0;
+    if(params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X,&origin)==NVSDK_NGX_Result_Success)rect.x=origin;
+    origin=0;
+    if(params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y,&origin)==NVSDK_NGX_Result_Success)rect.y=origin;
+    Failure failure;
+    if(!ValidateRect("SR.Output",output,rect.x,rect.y,rect.width,rect.height,true,failure))return {};
+    return PostSrOutputObservation{rect,*output};
+}
+
+inline bool RestoredPostSrOutput(const PostSrOutputObservation& captured,
+                                  const NVSDK_NGX_Resource_VK* output,Failure& failure)
+{
+    const auto& r=captured.rect;
+    if(!ValidateRect("SR.Output",output,r.x,r.y,r.width,r.height,true,failure))return false;
+    const auto& expected=captured.output;
+    const auto& a=expected.Resource.ImageViewInfo;const auto& b=output->Resource.ImageViewInfo;
+    if(expected.Type!=output->Type||expected.ReadWrite!=output->ReadWrite||
+       a.Image!=b.Image||a.ImageView!=b.ImageView||a.Format!=b.Format||a.Width!=b.Width||a.Height!=b.Height||
+       a.SubresourceRange.aspectMask!=b.SubresourceRange.aspectMask||
+       a.SubresourceRange.baseMipLevel!=b.SubresourceRange.baseMipLevel||
+       a.SubresourceRange.levelCount!=b.SubresourceRange.levelCount||
+       a.SubresourceRange.baseArrayLayer!=b.SubresourceRange.baseArrayLayer||
+       a.SubresourceRange.layerCount!=b.SubresourceRange.layerCount)
+        return Reject(failure,"SR.Output","selected output view was not restored after SR");
+    return true;
+}
+
 inline std::optional<VkNrRect> SourceRect(const NVSDK_NGX_Resource_VK* resource,
-    std::optional<VkNrTemporalMetadata> temporal,bool before,Failure& failure)
+    std::optional<VkNrTemporalMetadata> temporal,bool before,Failure& failure,
+    std::optional<VkNrRect> postSrOutput=std::nullopt)
 {
     if(!ValidateImage("NR.Color",resource,false,failure))return {};
     if(before) {
@@ -171,6 +215,12 @@ inline std::optional<VkNrRect> SourceRect(const NVSDK_NGX_Resource_VK* resource,
         if(!ValidateRect("NR.Color",resource,rect.x,rect.y,rect.width,rect.height,false,failure))return {};
         return rect;
     }
+    if(postSrOutput) {
+        const auto& r=*postSrOutput;
+        if(!ValidateRect("NR.Color",resource,r.x,r.y,r.width,r.height,false,failure))return {};
+        return r;
+    }
+    // Present and later private carriers have a complete zero-origin view.
     return VkNrRect{0,0,resource->Resource.ImageViewInfo.Width,resource->Resource.ImageViewInfo.Height};
 }
 
@@ -202,10 +252,11 @@ std::optional<VkNrTemporalMetadata> ObserveTemporal(Params* p, uint32_t flags,
         !required(NVSDK_NGX_Parameter_MV_Scale_Y, v.motionScaleY) ||
         !required(NVSDK_NGX_Parameter_Jitter_Offset_X, v.jitterX) ||
         !required(NVSDK_NGX_Parameter_Jitter_Offset_Y, v.jitterY)) return {};
-    v.depth.width = v.color.width; v.depth.height = v.color.height;
     const bool low = (flags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
-    v.motion.width = low ? v.color.width : output.width;
-    v.motion.height = low ? v.color.height : output.height;
+    const auto guides=Neurotic::Context::GuideGeometry::Project({v.depth.x,v.depth.y},{v.motion.x,v.motion.y},
+        {v.color.width,v.color.height},{output.width,output.height},low);
+    v.depth={guides.depth.x,guides.depth.y,guides.depth.width,guides.depth.height};
+    v.motion={guides.motion.x,guides.motion.y,guides.motion.width,guides.motion.height};
     v.featureFlags = flags; v.featureGeneration = generation; v.frameToken = token;
     v.depthInverted = (flags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
     unsigned int reset = 0;

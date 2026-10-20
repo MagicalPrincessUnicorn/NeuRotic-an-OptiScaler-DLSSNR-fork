@@ -77,6 +77,7 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
 #define NR_CONFIG_SNAPSHOT_FIELDS(X) \
     X(DlssNrEnabled) \
     X(DlssNrVulkanPrepare) \
+    X(DlssNrVulkanPresentSameFrameInit) \
     X(DlssNrAlternateFrame) \
     X(DlssNrMultipassEnabled) \
     X(DlssNrExperimentalMode) \
@@ -85,6 +86,10 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
     X(DlssNrNativeGuides) \
     X(DlssNrInputSource) \
     X(DlssNrInputTransport) \
+    X(DlssNrColorSource) \
+    X(DlssNrDepthSource) \
+    X(DlssNrMotionSource) \
+    X(DlssNrSignalStrict) \
     X(DlssNrAllowCpuFallback) \
     X(DlssNrNativeFrameGeneration) \
     X(DlssNrNativeVulkanRenderer) \
@@ -116,6 +121,7 @@ template<class T> bool NrSnapshotEqual(const T& a, const T& b)
     X(DlssNrPresentInputPolicy) \
     X(DlssNrNativeProtocol) \
     X(DlssNrUiManualResolution) \
+    X(DlssNrNativeResolution) \
     X(DlssNrUiManualScale) \
     X(DlssNrUiPresentManualScale) \
     X(DlssNrUiEnhancedManualScale) \

@@ -191,13 +191,13 @@ class Config
     CustomOptional<float> DlssReactiveMaskBias { 0.45f };
 
     // Logging
-    CustomOptional<bool> LogToFile { false };
+    CustomOptional<bool, SoftDefault> LogToFile { false };
     CustomOptional<bool> LogToConsole { false };
     CustomOptional<bool> LogToDebug { false };
     CustomOptional<bool> LogToNGX { false };
     CustomOptional<bool> OpenConsole { false };
     CustomOptional<bool> DebugWait { false }; // not in ini
-    CustomOptional<int> LogLevel { 0 };
+    CustomOptional<int, SoftDefault> LogLevel { 0 };
     CustomOptional<std::wstring> LogFileName { L"OptiScaler.log" };
     CustomOptional<bool> LogSingleFile { true };
     CustomOptional<bool> LogAsync { false };
@@ -214,6 +214,8 @@ class Config
     NrOptional<bool> DlssNrEnabled { false };
     // Stage supported Vulkan model extensions before activation; false preserves caller requests.
     NrOptional<bool> DlssNrVulkanPrepare { true };
+    // Internal opt-in; applies only to Vulkan Present Match Native.
+    NrOptional<bool> DlssNrVulkanPresentSameFrameInit { false };
     NrOptional<bool> DlssNrAlternateFrame { false };
     // Multipass is a separate opt-in. A count of one is deliberately valid and behaves exactly like
     // the established single-pass route; up to nine later passes own independent sessions/history.
@@ -224,6 +226,10 @@ class Config
     NrOptional<bool> DlssNrNativeGuides { false }; // Built-in Vulkan acquisition; restart to change ownership.
     NrOptional<int> DlssNrInputSource { DlssNr::SetupRequirements::InputSource }; // Automatic, native, built-in, ReShade, external.
     NrOptional<int> DlssNrInputTransport { DlssNr::SetupRequirements::InputTransport }; // Automatic, GPU-only, CPU.
+    NrOptional<int> DlssNrColorSource { 0 };
+    NrOptional<int> DlssNrDepthSource { 0 };
+    NrOptional<int> DlssNrMotionSource { 0 };
+    NrOptional<bool> DlssNrSignalStrict { false };
     NrOptional<bool> DlssNrAllowCpuFallback { DlssNr::SetupRequirements::AllowCpuFallback };
     NrOptional<bool> DlssNrNativeFrameGeneration { false }; // Standalone 2x FSR; restart for Vulkan presentation ownership.
     NrOptional<bool> DlssNrNativeVulkanRenderer { false }; // Captured-guide Vulkan NR; sharing layout selected at startup.
@@ -261,7 +267,7 @@ class Config
     // Capture once per evaluation and reuse for creation, tuning checks, and built-tuning records.
     // Returned option copies require no locks. No NR lock survives this call.
     NrConfigSnapshot<Config> GetDlssNrConfigSnapshot() const;
-    // 0 = Native Temporal; 1 = Present Image Only; 2 = Present Enhanced (default).
+    // 0 = Native Temporal; 1 = Present Image Only; 2 = Present Enhanced. Fresh default: Native Temporal, Match Native Post.
     NrOptional<uint32_t> DlssNrRoute { DlssNr::SetupRequirements::Route };
     NrOptional<uint32_t> DlssNrAnythingScale { 100u };
     // Standalone resolution UI memory; runtime consumes AnythingScale only.
@@ -273,6 +279,8 @@ class Config
     NrOptional<bool> DlssNrNativeProtocol { false };
     // UI memory only; legacy route/placement/working scale remain authoritative.
     NrOptional<bool> DlssNrUiManualResolution { false };
+    // 0 preserves legacy stage/scale keys; 1 requests native-input size after SR.
+    NrOptional<uint32_t> DlssNrNativeResolution { DlssNr::SetupRequirements::NativeResolution };
     NrOptional<float> DlssNrUiManualScale { 0.25f };
     NrOptional<float> DlssNrUiPresentManualScale { 0.25f };
     NrOptional<float> DlssNrUiEnhancedManualScale { 0.25f };
@@ -289,7 +297,7 @@ class Config
     NrOptional<bool> DlssNrRunBeforeSr { false }; // experimental: run NR before DLSS SR
     // 0 = Quality (post-SR), 1 = Performance (pre-SR).
     // Keep the legacy boolean as the routing compatibility surface for existing callers/configurations.
-    NrOptional<int32_t> DlssNrRenderingMode { 1 };
+    NrOptional<int32_t> DlssNrRenderingMode { DlssNr::SetupRequirements::RenderingMode };
     NrOptional<bool> DlssNrPreDlaa { false }; // v10: private native-resolution DLAA resolve before NR, then re-jitter before SR
     // Experimental opt-in: evaluate compatible reset-only Pre-SR frames instead of conservatively
     // withdrawing NR for the complete Reset interval. The master experimental switch must also be active.

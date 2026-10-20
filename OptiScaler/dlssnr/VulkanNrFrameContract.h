@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <nr/context/TemporalConversion.h>
 
 namespace DlssNr
 {
@@ -86,9 +87,11 @@ inline VkNrTemporalMetadata ScaleVkNrTemporal(const VkNrTemporalMetadata& v, VkE
             std::numeric_limits<float>::quiet_NaN();
         return result;
     }
-    const float x = float(work.width) / float(source.width), y = float(work.height) / float(source.height);
-    result.motionScaleX *= x; result.motionScaleY *= y;
-    result.jitterX *= x; result.jitterY *= y;
+    const auto factor = Neurotic::Context::Temporal::RasterRatio(source.width, source.height, work.width, work.height);
+    const Neurotic::Context::Temporal::Values raw{{v.motionScaleX, v.motionScaleY}, {v.jitterX, v.jitterY}};
+    const auto projected = Neurotic::Context::Temporal::Project(raw, factor, factor);
+    result.motionScaleX = projected.motionScale.x; result.motionScaleY = projected.motionScale.y;
+    result.jitterX = projected.jitter.x; result.jitterY = projected.jitter.y;
     return result;
 }
 }

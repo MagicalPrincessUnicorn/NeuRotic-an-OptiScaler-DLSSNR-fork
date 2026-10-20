@@ -8,6 +8,24 @@
   "version": "2-draft",
   "desktop": [
     {
+      "id": "desktop.anything.capture_scrgb",
+      "translation": "最終キャプチャ色: scRGB (FP16)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.anything.capture_sdr",
+      "translation": "最終キャプチャ色: SDR (8-bit)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.anything.capture_unknown",
+      "translation": "最終キャプチャ色: 不明",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.anything.countdown_action",
       "translation": "NR Anything · %d",
       "revision": 0,
@@ -98,6 +116,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.anything.probe_color_unknown",
+      "translation": "測定利用不可: キャプチャされた色が不明です。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.anything.probe_complete",
       "translation": "測定完了。セッションステータスをコピーして4つの結果を共有してください。",
       "revision": 0,
@@ -114,6 +138,12 @@
       "translation": "測定に失敗しました。",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.anything.probe_hdr_unavailable",
+      "translation": "HDRでは測定を利用できません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.anything.probe_invalidated",
@@ -2102,6 +2132,66 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.closing.anything",
+      "translation": "NR Anything を停止しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.artwork",
+      "translation": "画像のクリーンアップを完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.bundle",
+      "translation": "診断データのエクスポートを完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.diagnostics",
+      "translation": "ゲームの診断を完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.discovery",
+      "translation": "ライブラリのスキャンを完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.installer",
+      "translation": "インストール操作を完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.preflight",
+      "translation": "事前チェックを完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.resources",
+      "translation": "デスクトップアプリのリソースを解放しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.title",
+      "translation": "NeuRotic を終了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
+      "id": "desktop.closing.update",
+      "translation": "更新の確認を完了しています",
+      "revision": 0,
+      "note": "Closing-flow draft translation; native-speaker review pending."
+    },
+    {
       "id": "desktop.diagnosticbundle.cannot_create_diagnostic_export_working_director_7afa01fb",
       "translation": "診断エクスポートの作業ディレクトリを作成できません。",
       "revision": 0,
@@ -3212,6 +3302,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.hubshell.clear_search",
+      "translation": "検索をクリア",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.hubshell.clears_saved_game_inspection_and_profile_data_th_b9afdcd0",
       "translation": "保存されたゲームの検査データとプロファイルデータをクリアします。ライブラリ、非表示のゲーム、各ゲームフォルダー内の設定は変更されません。次回ゲームを選択したときに最新の詳細が読み込まれます。再起動は必要ありません。",
       "revision": 0,
@@ -3219,9 +3315,9 @@
     },
     {
       "id": "desktop.hubshell.clears_the_local_library_including_hidden_games__516f3998",
-      "translation": "ローカルライブラリ（非表示のゲームを含む）、環境設定、ゲームプロファイル、アートワーク、操作履歴、および NR モデルや Streamline などのインポートされたランタイムファイルをクリアします。NeuRotic は再起動します。インストールされているゲームファイルには影響しません。",
+      "translation": "ローカルライブラリ（非表示のゲームを含む）、環境設定、ゲームプロファイル、アートワーク、および操作記録を消去します。保存済みのNR DLLプロファイルやその他のインポートされたRuntimeファイルは保持されます。NeuRoticは再起動します。インストール済みのゲームファイルには影響しません。",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.hubshell.close_4bae39a9",
@@ -3828,6 +3924,12 @@
       "translation": "コンポーネントを更新",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.hubshell.refresh_d284aefe",
+      "translation": "更新",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.hubshell.refresh_details_0ab28849",
@@ -5084,16 +5186,136 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installation.architecture_warning",
+      "translation": "32 ビットの実行ファイルです。この 64 ビットパッケージではゲーム内統合を提供できません。互換性のある統合が利用可能になるまで NR Anything を使用してください。",
+      "revision": 0,
+      "note": "Codex draft aligned to NR Anything compatibility fallback; native-speaker review pending."
+    },
+    {
+      "id": "desktop.installation.batch_complete",
+      "translation": "すべてのインストールが完了しました",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.check_failed",
+      "translation": "確認に失敗しました",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.complete",
+      "translation": "インストール完了",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.fresh_help",
+      "translation": "パッケージの既定値を使用します。通常のインストールでは保存済みの設定が保持されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.inspector_help",
+      "translation": "インスペクターは完全に任意であり、未完成です。現在開発中の機能です。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.inspector_only_install",
+      "translation": "インスペクターのインストールは「インストール」でのみ使用できます",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.install_inspector",
+      "translation": "インスペクターをインストール",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.installation.installed",
       "translation": "インストール済み",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installation.installed_saved",
+      "translation": "インストール済み (保存済み)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.not_installed_saved",
+      "translation": "未インストール (保存済み)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.other_architecture_warning",
+      "translation": "実行ファイルのアーキテクチャがこのパッケージと異なります。互換性のあるゲーム内統合が利用できない場合は NR Anything を使用してください。",
+      "revision": 0,
+      "note": "Codex draft aligned to NR Anything compatibility fallback; native-speaker review pending."
+    },
+    {
+      "id": "desktop.installation.package",
+      "translation": "パッケージ",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
       "id": "desktop.installation.partial",
       "translation": "一部",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.installation.partial_saved",
+      "translation": "一部インストール済み (保存済み)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.preferences_invalid",
+      "translation": "保存されたゲームのインストール選択を読み取れませんでした。ライブラリは保持されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.remember_failed",
+      "translation": "選択を保存できませんでした。次回再度確認されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.remember_risk",
+      "translation": "このゲームでの選択を記憶する",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.risk_accepted",
+      "translation": "アンチチート: 選択を受理",
+      "revision": 0,
+      "note": "English final after Desktop46+3visuals; translation draft, native quality/fit pending."
+    },
+    {
+      "id": "desktop.installation.risk_remembered",
+      "translation": "アンチチート: 選択を記憶済み",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.unknown",
+      "translation": "ステータス不明",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installation.unknown_saved",
+      "translation": "ステータス不明 (保存済み)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.installdefaults.confirm_safety",
@@ -5126,6 +5348,18 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installdefaults.logging_new_ini",
+      "translation": "保存された既定値は新しい INI ファイルに適用されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installdefaults.logging_unknown",
+      "translation": "パッケージのログポリシーは利用不可です。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.installdefaults.mfg_help",
       "translation": "MFG アンロックは起動リクエストを保存します。ゲーム、GPU、プロバイダの互換性チェックは引き続き適用されます。",
       "revision": 0,
@@ -5154,6 +5388,12 @@
       "translation": "オフ",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.installdefaults.on",
+      "translation": "オン",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.installdefaults.package_defaults_fallback",
@@ -5222,6 +5462,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.installdefaults.saved_anything",
+      "translation": "NR Anything (保存済み)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.installdefaults.style",
       "translation": "スタイル",
       "revision": 0,
@@ -5232,6 +5478,240 @@
       "translation": "インストールのデフォルト設定",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.installdefaults.test_trace",
+      "translation": "テストパッケージでは Trace ログが有効なまま維持されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.admission_conflict",
+      "translation": "インストールをキューに追加する前に、現在の操作を完了またはキャンセルしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.already_queued",
+      "translation": "既にキューに追加されています。インストールオプションを変更する前に、その項目をキャンセルしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.cancel_item",
+      "translation": "キュー内の項目をキャンセル",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.cancelled",
+      "translation": "キャンセル済み",
+      "revision": 2,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.choose_executable",
+      "translation": "インストールをキューに追加する前に、適切なゲームの実行ファイルを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.clear_history",
+      "translation": "履歴をクリア",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.closed_cancelled",
+      "translation": "アプリ終了時にキャンセルされました。キュー内のインストールが自動的に再開されることはありません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.defaults_changed",
+      "translation": "このクリック後にインストールの既定値が変更されました。元の既定値に戻すか、この項目をキャンセルして新しい既定値でキューに追加し直してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.defaults_unavailable",
+      "translation": "インストールの既定値が利用不可です。このインストールをキューに追加する前に確認してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.empty",
+      "translation": "キューは空です。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.executable_changed",
+      "translation": "キュー待機中に実行ファイルが変更されました。この項目をキャンセルして再度選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.executable_unavailable",
+      "translation": "キュー内の実行ファイルが利用不可です。この項目をキャンセルし、実行ファイルを再度選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.finish_before_restore",
+      "translation": "保存された設定の既定値を復元する前に、キュー内のインストールを完了またはキャンセルしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.finishing_item",
+      "translation": "この項目は完了処理中です。しばらくしてからもう一度お試しください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.folder_changed",
+      "translation": "キュー待機中にインストールフォルダーが変更されました。この項目をキャンセルして再度選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.folder_identity_unavailable",
+      "translation": "インストールフォルダーの識別情報を確認できませんでした。ゲームフォルダーを再度選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.help",
+      "translation": "インストールは順番に実行されます。別のゲームを参照してキューに追加できます。確認が必要なゲームがあるとキューは一時停止します。アプリを閉じると、インストールが開始されていない項目はキャンセルされます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.identity_unavailable",
+      "translation": "キュー内の実行ファイルの識別情報を確認できませんでした。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.installing",
+      "translation": "インストール中",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.item_cancelled",
+      "translation": "キューの項目がキャンセルされました。既存のゲームファイルは保持されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.needs_attention",
+      "translation": "要確認",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.operation_conflict",
+      "translation": "別のゲーム操作を行う前に、キュー内のインストールを完了またはキャンセルしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.options_changed",
+      "translation": "この項目のプロキシ選択が変更されました。キャンセルして新しい選択をキューに追加してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.plan_changed",
+      "translation": "適用する前に、このキュー内のインストールを再度準備してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.preparing",
+      "translation": "インストールの準備中",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.queued",
+      "translation": "キュー待機中",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.receipt_target_changed",
+      "translation": "この応答はキュー内の別の対象に対するものです。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.remove_item",
+      "translation": "項目を削除",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.request_changed",
+      "translation": "キュー内のインストール要求が変更されました。この項目をキャンセルして再度キューに追加してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.resolve_help",
+      "translation": "インストールキュー内のこの項目を再試行するか、キャンセルして新しいオプションを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.retries_cancelled",
+      "translation": "以降の再試行はキャンセルされました。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.retry",
+      "translation": "この項目を再試行",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.review",
+      "translation": "確認",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.review_warning",
+      "translation": "このゲームのアンチチート警告を確認する",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.title",
+      "translation": "インストールキュー",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.unexpected_receipt",
+      "translation": "キュー内の操作から予期しない応答がありました。この項目を再度準備してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.worker_busy",
+      "translation": "現在実行中のキュー操作が完了するまでお待ちください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.installqueue.writer_cannot_cancel",
+      "translation": "この項目を閉じるには、現在のインストールが完了する必要があります。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.keybindcapture.keybind_e08bbdb3",
@@ -5678,6 +6158,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.languages.list-unavailable",
+      "translation": "コミュニティ言語を一覧表示できませんでした。同梱の言語は引き続き利用可能です。フォルダへのアクセスを復元してから、再試行を選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.languages.local_conflict",
       "translation": "このベース エントリは、ローカルでの編集後に変更されました。ローカルの編集内容が優先されます。共有する前に確認してください。",
       "revision": 0,
@@ -5700,6 +6186,12 @@
       "translation": "必須のプレースホルダー: %s",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.languages.retry-list",
+      "translation": "再試行",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.languagestore.community_pack_imported_6caffa6d",
@@ -5876,6 +6368,30 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.library-intake.save-protected",
+      "translation": "既存のライブラリを検証できなかったため、ライブラリの変更は保存されませんでした。有効なライブラリを復元するか、アプリデータのメンテナンスを使用して回復してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.library-intake.unsupported-schema",
+      "translation": "このライブラリはサポートされていない形式です。保護のため更新は無効化されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.library.hide_game",
+      "translation": "非表示",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.library.show_game",
+      "translation": "表示",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.manuallibrary.a_compatible_in_game_integration_is_unavailable__87dd6414",
       "translation": "このアーキテクチャでは、互換性のあるゲーム内統合を利用できません。NR Anything を使用してください。",
       "revision": 0,
@@ -5910,6 +6426,54 @@
       "translation": "既存の 32 ビットまたは 64 ビットのゲーム実行ファイルを選択してください",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.corner",
+      "translation": "メニューの表示位置",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.heading",
+      "translation": "メニュー配置",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.lower-left",
+      "translation": "左下",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.lower-right",
+      "translation": "右下",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.reset",
+      "translation": "配置をリセット",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.restart",
+      "translation": "ゲーム内メニューです。保存してゲームを再起動してください。",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.upper-left",
+      "translation": "左上",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "desktop.menu-layout.upper-right",
+      "translation": "右上",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
     },
     {
       "id": "desktop.native.19701ba31b62",
@@ -8492,6 +9056,468 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.nrdll.add",
+      "translation": "DLL を追加",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.add_update",
+      "translation": "NR DLL を追加/更新",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.add_update_help",
+      "translation": "選択したプロファイルでこのゲームの NR DLL を追加または置換します。その他のインストールファイルは変更されません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.cancel_edit",
+      "translation": "編集をキャンセル",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.cancel_operation",
+      "translation": "現在の操作を停止",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.cancelled",
+      "translation": "操作が停止しました。プロファイル一覧には現在保存されているファイルが表示されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.catalog_issues",
+      "translation": "一部の保存済みプロファイルが利用不可であるか、情報を読み取れません。ファイルは保持されています。別のプロファイルまたは手動インストールを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.catalog_pending",
+      "translation": "NR DLL プロファイルの読み込みが完了するまで待つか、手動インストールを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.changed_asset",
+      "translation": "保存された NR DLL が変更されました。新しいバイトデータを使用するには再度インポートしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.choose_copy_profile",
+      "translation": "ファイルを追加または更新するには、保存済みの NR DLL プロファイルを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.choose_file",
+      "translation": "nvngx_dlssnr.dll を選択してください",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.clear_default",
+      "translation": "デフォルト選択を解除",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.close",
+      "translation": "閉じる",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.closing",
+      "translation": "NR DLL ファイル操作を完了しています",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.confirm_remove",
+      "translation": "削除の確認",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copy_catalog_pending",
+      "translation": "NR DLL プロファイルの読み込みが完了するまでお待ちください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copy_profile_unavailable",
+      "translation": "選択された NR DLL プロファイルは利用不可です。利用可能なプロファイルを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copy_source_unavailable",
+      "translation": "キュー内の NR DLL は利用不可です。この項目をキャンセルし、利用可能なプロファイルをキューに追加してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.copying",
+      "translation": "NR DLL を更新しています",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.corrupt_metadata",
+      "translation": "保存されたプロファイル情報の一部を読み取れませんでした。ファイルは保持されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default",
+      "translation": "デフォルト",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_not_current",
+      "translation": "デフォルトの NR DLL プロファイルを確認できませんでした。マネージャーの完了を待つか、特定のプロファイルまたは手動インストールを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_recovery",
+      "translation": "保存されたデフォルト設定を読み取れませんでした。他のプロファイルは引き続き利用可能です。プロファイルを選択してデフォルトに設定するか、デフォルト選択を明示的に解除するか、手動インストールを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_unavailable",
+      "translation": "デフォルト利用不可",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.default_unreadable",
+      "translation": "デフォルトの NR DLL プロファイルは利用不可です。特定のプロファイルまたは手動インストールを選択するか、マネージャーでデフォルト設定を修復してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.destination_changed",
+      "translation": "選択された保存先が変更されました。NR DLL の操作を再度確認してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.empty",
+      "translation": "保存された NR DLL プロファイルがありません。ファイルを追加するか、手動インストールを使用してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.file_filter",
+      "translation": "NR DLL (nvngx_dlssnr.dll)",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.in_use",
+      "translation": "このプロファイルまたはその設定は使用中です。キュー内のインストールを完了するか、ファイルを使用している他のプログラムを閉じてから再試行してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.inspection_unavailable",
+      "translation": "NR DLL の操作は完了しましたが、ゲーム設定を更新できませんでした。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_copy",
+      "translation": "選択された NR DLL のリクエストが無効です。ファイルを再度選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_name",
+      "translation": "プロファイル名を1行で入力してください。長すぎる場合は短くしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_path",
+      "translation": "NeuRotic が読み取れる nvngx_dlssnr.dll という名前の通常ファイルを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.invalid_preferences",
+      "translation": "保存された NR DLL の選択を読み取れませんでした。ライブラリは保持されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.io_error",
+      "translation": "NR DLL の操作を完了できませんでした。ファイルにアクセスできることを確認して再試行してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.loading",
+      "translation": "プロファイルを読み込み中…",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manage",
+      "translation": "NR DLL を管理",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manage_short",
+      "translation": "管理",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manager_help",
+      "translation": "DLL を追加して保存コピーに名前を付け、デフォルトを選択します。各ゲームでは、デフォルト、特定のプロファイル、または手動インストールを使用できます。保存されたプロファイルは、ゲームにインストール済みのファイルを変更しません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manager_help_short",
+      "translation": "名前付きプロファイルとして DLL を追加します。各ゲームにデフォルトまたは個別のプロファイルを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manager_title",
+      "translation": "NR DLL マネージャー",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.manual",
+      "translation": "手動 — NR DLL をコピーしない",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.missing_profile",
+      "translation": "このプロファイルは利用不可です。別のプロファイルまたは手動インストールを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.needs_attention",
+      "translation": "プロファイルの確認が必要です",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.no_default",
+      "translation": "デフォルト未選択",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.no_profiles",
+      "translation": "保存されたプロファイルなし",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.open_folder",
+      "translation": "選択したプロファイルのフォルダーを開く",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.open_folder_failed",
+      "translation": "保存されたプロファイルのフォルダーを開けませんでした。まだ利用可能か確認して再試行してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.ownership_metadata_invalid",
+      "translation": "NR DLL の所有権メタデータを更新できませんでした。既存のデータは保持されています。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.preparing_copy",
+      "translation": "NR DLL の更新を準備しています",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.presence_help",
+      "translation": "保存されたプロファイルはファイルが利用可能かどうかのみを示します。実行時の互換性は、選択された DLL の使用時に確認されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.profile_editor",
+      "translation": "NR DLL プロファイルを保存",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.profile_name",
+      "translation": "プロファイル名",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.queue_manual",
+      "translation": "NR DLL をコピーせずにこの項目をインストール",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.queued_source_unavailable",
+      "translation": "キュー内の NR DLL が変更されたか利用不可です。この項目に手動インストールを選択するか、キャンセルして新しい選択をキューに追加してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.read_only",
+      "translation": "この App セッションでは、保存された NR DLL プロファイルを変更できません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.refresh_home",
+      "translation": "Microsoft Visual C++、Streamline、および保存された NR DLL プロファイルを更新",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.remove",
+      "translation": "プロファイルを削除",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.remove_confirm",
+      "translation": "この保存されたプロファイルを削除しますか？ゲームにインストール済みの DLL と元のダウンロードファイルは変更されません。このプロファイルが明示的に選択されているゲームでは、利用不可と表示されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.rename",
+      "translation": "名前を変更",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.save_profile",
+      "translation": "プロファイルを保存",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.saved_path",
+      "translation": "NR DLL を保存しました: {path}",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.saved_profiles",
+      "translation": "保存されたプロファイル",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.selection_unavailable",
+      "translation": "選択された NR DLL は利用不可です。インストールする前に別のプロファイルまたは手動オプションを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.selector",
+      "translation": "NR DLL",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.session_unavailable",
+      "translation": "NR DLL を管理するには、書き込み可能な App セッションを開いてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.set_default",
+      "translation": "デフォルトに設定",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.source_changed",
+      "translation": "選択された NR DLL はキューへの追加後に変更されました。再度選択するか、手動インストールを使用してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.source_not_held",
+      "translation": "選択された NR DLL はこのキュー内のインストールでは利用できません。手動オプションを選択するか、再度キューに追加してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.source_unavailable",
+      "translation": "選択された NR DLL は利用不可です。別のプロファイルまたは手動インストールを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.target_uncertain",
+      "translation": "このフォルダーには既に NeuRotic がインストールされている可能性があるため、NR DLL は変更されませんでした。選択した nvngx_dlssnr.dll をゲームの実行ファイルと同じ場所に配置できます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.unavailable",
+      "translation": "利用不可のプロファイル",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.unsafe_path",
+      "translation": "NeuRotic の保存されたプロファイルフォルダーがリンクされているか、アクセスできません。App データへのアクセスを復元して再試行してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.update_help",
+      "translation": "新規インストールではこの選択が使用されます。更新時は、ファイルが存在しない場合も含め、ゲームの NR DLL は変更されずに維持されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.update_preserved",
+      "translation": "既存のインストールは NR DLL を変更せずに更新されました。選択されたプロファイルは新規インストールにのみ適用されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.working",
+      "translation": "NR DLL ファイルを処理中…",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.nrdll.wrong_filename",
+      "translation": "nvngx_dlssnr.dll という名前のファイルを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.nrmodelreminder.neurotic_is_installed_in_this_game_but_nvngx_dls_d93d3bad",
       "translation": "NeuRotic はこのゲームにインストールされていますが、実行可能フォルダーに nvngx_dlssnr.dll がありません。",
       "revision": 0,
@@ -9344,6 +10370,108 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.saved-control.default-unavailable",
+      "translation": "既定値を取得できません。インストール情報を更新するか、ローカルパッケージを修復してください。",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.saved-control.unknown-saved-value",
+      "translation": "保存された値: %s。置き換える値を選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.allow-game-input",
+      "translation": "メニュー表示中のゲーム入力を許可",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.compatibility",
+      "translation": "互換性",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.controller",
+      "translation": "コントローラー",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.escape-closes",
+      "translation": "Escキーでメニューを閉じる",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.fg-hud",
+      "translation": "FG HUDオプション",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.gpu-identity",
+      "translation": "GPU識別情報",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.keyboard",
+      "translation": "キーボード",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.mouse",
+      "translation": "マウス",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.pacing-latency",
+      "translation": "ペーシングとレイテンシ",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.replacement-fg",
+      "translation": "代替FG",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.setup",
+      "translation": "セットアップ",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.startup-hooks",
+      "translation": "起動フック",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.state-restoration",
+      "translation": "状態の復元",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.toggle-menu",
+      "translation": "メニューの切り替え",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.saved-settings.unfinished-rule",
+      "translation": "保存する前に、未完了のオブジェクトルールを適用またはリセットしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.settings.anything_resolution",
       "translation": "NR Anything の解像度",
       "revision": 0,
@@ -9396,6 +10524,12 @@
       "translation": "オフ",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.dlssg/overrideinterpolationcount.ff6d137fab",
+      "translation": "保存されたリクエストのみ。自動はゲーム設定を使用します。0はオフを選択します。生成フレーム1-5は合計2X-6Xを意味します。利用可能かどうかは有効なプロバイダーに依存します。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.settings.dlssnr/compare.e888155d8c",
@@ -9692,6 +10826,48 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.settings.mfg-restart",
+      "translation": "実験的機能。保存してからゲームを再起動し、ゲーム内でFGを有効にしてください。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution",
+      "translation": "ネイティブ解像度",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_full",
+      "translation": "出力全体",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_help",
+      "translation": "どちらもネイティブ入力のサイズを使用します。選択した段階で Neural Rendering を実行します。",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_post",
+      "translation": "ネイティブに合わせる（超解像の後）",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_pre",
+      "translation": "ネイティブに合わせる（超解像の前）",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.settings.native_resolution_unknown",
+      "translation": "保存された解像度が不明です。既知のオプションを選択して置き換えてください。",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
       "id": "desktop.settings.nr_mode",
       "translation": "NR モード",
       "revision": 0,
@@ -9770,6 +10946,24 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "desktop.settings.tristate.auto",
+      "translation": "AUTO",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.settings.tristate.false",
+      "translation": "FALSE",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.settings.tristate.true",
+      "translation": "TRUE",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "desktop.settings.v-sync/forcevsync.784de20752",
       "translation": "V-Sync",
       "revision": 0,
@@ -9780,6 +10974,84 @@
       "translation": "オン",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.anything-missing",
+      "translation": "NR Anything：モデルの設定が必要です",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.available",
+      "translation": "共有ファイルが利用可能",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.available-short",
+      "translation": "利用可能",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.checking",
+      "translation": "共有ファイルを確認中...",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.game-help",
+      "translation": "共有フォルダーはゲーム設定を便利にする任意の機能です。自動コピー用にここへファイルを追加するか、必要なファイルをゲームの実行ファイルと同じ場所に配置してください。",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.game-missing",
+      "translation": "ゲームフォルダー：nvngx_dlssnr.dll がありません",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.model-help",
+      "translation": "ニューラルレンダリングには nvngx_dlssnr.dll が必要です。ゲーム用には自動コピー用にここへ追加するか、ゲームの実行ファイルと同じ場所に配置してください。NR Anything はアプリ内で別途モデルを設定する必要があります。",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.not-supplied",
+      "translation": "未提供",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.not-supplied-copy",
+      "translation": "自動コピー用のファイルが未提供",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.nrdll_optional",
+      "translation": "任意。ゲームへ自動コピーするための NR DLL プロファイルをここに保存します。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.shared-files.streamline-help",
+      "translation": "Streamline を使う機能に必要です。必要なファイルを自動コピー用にここへまとめるか、ゲームの実行ファイルと同じ場所に配置してください。",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
+    },
+    {
+      "id": "desktop.shared-files.streamline_optional",
+      "translation": "任意。ここにStreamlineファイルを追加すると、各ゲームのStreamlineフォルダに自動コピーされます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "desktop.shared-files.unknown",
+      "translation": "共有ファイルの状態を取得できません",
+      "revision": 0,
+      "note": "Codex draft translation for optional shared-copy guidance and setting reset notice; native-speaker review pending."
     },
     {
       "id": "desktop.sleekwidgets.checking_files_93d27895",
@@ -9822,6 +11094,12 @@
       "translation": "ライトテーマに切り替える",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.startup.loading",
+      "translation": "読み込み中...",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "desktop.translationcontrolpreview.button_3f140455",
@@ -10248,6 +11526,66 @@
       "translation": "WorkerはNR解像度スケールをサポートしていません",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "desktop.neurotic-hubsettings.force_dynamic_mfg_game_8ca83550",
+      "revision": 1,
+      "translation": "ダイナミックMFGを強制 (ゲーム)",
+      "note": "Positive Force toggle for the game-native frame-generation path; Game scope must remain distinct from OptiScaler output. Machine draft; native-speaker review and on-screen fit pending."
+    },
+    {
+      "id": "desktop.neurotic-hubsettings.force_dynamic_mfg_optiscaler_d76565d1",
+      "revision": 1,
+      "translation": "ダイナミックMFGを強制 (OptiScaler)",
+      "note": "Positive Force toggle for OptiScaler frame-generation output; OptiScaler scope must remain distinct from game-native output. Machine draft; native-speaker review and on-screen fit pending."
+    },
+    {
+      "id": "desktop.anythingpreferences.partial_recovery",
+      "translation": "一部の設定を読み込めませんでした。変更されていないデータは保持されます。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.operation.inspection_unavailable",
+      "translation": "ゲーム設定を更新できませんでした。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.operation.cleanup_unavailable",
+      "translation": "一時的な操作データを削除できませんでした。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.neurotic-hubprotocol.invalid_reviewed_file_identity_e9c32528",
+      "translation": "確認済みファイルの識別情報が無効です",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "desktop.installqueue.cancel_and_edit",
+      "translation": "キャンセルして編集",
+      "revision": 1,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.resolve_here",
+      "translation": "この項目を再試行するか、インストールオプションを変更してください。",
+      "revision": 1,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.in_queue",
+      "translation": "キュー待機中",
+      "revision": 1,
+      "note": ""
+    },
+    {
+      "id": "desktop.installqueue.failed",
+      "translation": "失敗",
+      "revision": 1,
+      "note": ""
     }
   ],
   "in_game": [
@@ -11110,6 +12448,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.control_32d7e820",
+      "translation": "制御",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.controlled_by_basic_multi_pass_9185ace2",
       "translation": "ベーシックマルチパスによって制御されます",
       "revision": 0,
@@ -11294,6 +12638,12 @@
       "translation": "画像を行いますが、ドラッグするものはありません。サイドの入れ替えで",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.done_11a6767d",
+      "translation": "完了",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.done_f2fca027",
@@ -11704,6 +13054,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.guide_usage_21e129b1",
+      "translation": "ガイド入力の使用",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.hdr_images_use_a_shared_sdr_preview_conversion_t_adc2e1fa",
       "translation": "HDR画像は共有のSDRプレビュー変換を使用します。ディスプレイとは異なる場合があります。",
       "revision": 0,
@@ -11780,6 +13136,12 @@
       "translation": "フレームの保持",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.hover_or_focus_a_signal_for_details_518d3624",
+      "translation": "詳細を表示するには、信号にカーソルを合わせるかフォーカスしてください。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.how_much_of_the_frame_each_half_shows_5fc04bcb",
@@ -12376,6 +13738,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.native_temporal_requires_depth_and_motion_5899e54e",
+      "translation": "ネイティブ テンポラルには深度とモーションが必要です。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.native_vulkan_nr_active_after_the_upscaler_944eeafb",
       "translation": "アップスケーラーの後にネイティブ Vulkan NR がアクティブになります。",
       "revision": 0,
@@ -12821,21 +14189,21 @@
     },
     {
       "id": "ingame.dlssnr-menu.passes_2_n_have_mixed_detail_strengths_adjusting_f777bdb1",
-      "translation": "パス 2〜N には混在したディテール強度が設定されています。このスライダーを調整すると、すべてに同じ値が適用されます。",
+      "translation": "後続のパスでは異なるディテール強度が使用されています。このスライダーを調整すると、すべての後続パスに同一の強度が適用されます。",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.passes_2_n_have_mixed_model_resolutions_adjustin_2723e966",
-      "translation": "パス 2〜N には混在したモデル解像度が設定されています。このスライダーを調整すると、すべてに同じ値が適用されます。",
+      "translation": "後続のパスでは異なる解像度が使用されています。このスライダーを調整すると、すべての後続パスに同一の解像度が適用されます。",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.passes_2_n_have_mixed_model_strengths_adjusting__3a5ad482",
-      "translation": "パス 2〜N には混在したモデル強度が設定されています。このスライダーを調整すると、すべてに同じ値が適用されます。",
+      "translation": "後続のパスでは異なるモデル強度が使用されています。このスライダーを調整すると、すべての後続パスに同一の強度が適用されます。",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.passes_e154f1e3",
@@ -12854,6 +14222,12 @@
       "translation": "保留中のペーシング概要: 利用不可",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.pending_stale_44da3b17",
+      "translation": "保留中 / 未更新",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.performance_pairs_use_fresh_history_and_may_brie_f27ef9bc",
@@ -13192,6 +14566,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.remove_override_6d43eea1",
+      "translation": "オーバーライドを解除",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.render_scopes_llu_depth_copies_recorded_llu_esti_e0840c5d",
       "translation": "レンダースコープ %llu | 記録された深度コピー %llu | 推定される関連付け %llu",
       "revision": 0,
@@ -13340,6 +14720,12 @@
       "translation": "再起動が必要です: キャプチャフックとトランスポートはゲーム起動時に選択されました。",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.restart_the_game_to_apply_standalone_frame_generatio_1af12c21",
+      "translation": "適用するにはゲームを再起動してください。スタンドアロンのフレーム生成は Direct3D 12 を使用します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.restart_the_game_to_apply_the_frame_generation_s_1f97d457",
@@ -13762,6 +15148,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.status_920e413c",
+      "translation": "ステータス",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.stored_setting_and_stays_put_once_the_menu_is_cl_357b06fc",
       "translation": "保存される設定であり、メニューを閉じてもそのまま維持されます。",
       "revision": 0,
@@ -14050,6 +15442,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.dlssnr-menu.this_override_can_restrict_sources_on_the_inputs_boa_147f66af",
+      "translation": "このオーバーライドにより、入力ボード上のソースが制限される場合があります。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.dlssnr-menu.this_was_once_a_multiplier_on_a_measured_white_p_6aa78244",
       "translation": "これはかつて、測定されたホワイトポイントの乗数でした。その測定は",
       "revision": 0,
@@ -14180,6 +15578,12 @@
       "translation": "検証済みの最終画像互換パス",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.dlssnr-menu.vulkan_capture_renderer_6c0f81ce",
+      "translation": "Vulkan キャプチャ レンダラー",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
     },
     {
       "id": "ingame.dlssnr-menu.vulkan_format_and_color_space_observed_f3b97dc3",
@@ -14606,6 +16010,192 @@
       "translation": "RTX 40シリーズ用のネイティブMFGロック解除",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.input-sources.auto",
+      "translation": "自動",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.builtin",
+      "translation": "内蔵キャプチャ",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.depth",
+      "translation": "深度",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.detected",
+      "translation": "検出済み・未使用",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.external",
+      "translation": "外部",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.motion",
+      "translation": "モーションベクトル",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.native",
+      "translation": "ネイティブ",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.none",
+      "translation": "現在の信号なし",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.activation",
+      "translation": "有効化が必要",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.convention",
+      "translation": "データ規約不明",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.device",
+      "translation": "互換性のないデバイス",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.fallback",
+      "translation": "指定ソースを利用できないため、代替ソースを使用中",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.frame",
+      "translation": "フレーム不一致",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.generation",
+      "translation": "ソースが変更されました",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.identity",
+      "translation": "フレーム識別情報なし",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.interval",
+      "translation": "モーションのフレーム区間不一致",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.lease",
+      "translation": "リソースの安全な使用を保証できません",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.provider",
+      "translation": "未対応のプロバイダー",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.raster",
+      "translation": "未対応の画像マッピング",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.ready",
+      "translation": "準備完了",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.stage",
+      "translation": "この処理段階までに利用できません",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.sync",
+      "translation": "同期情報なし",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.target",
+      "translation": "対象不一致",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.unavailable",
+      "translation": "利用不可",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reason.view",
+      "translation": "ビュー不一致",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.reshade",
+      "translation": "ReShade",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.restore",
+      "translation": "自動に戻す",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.scope",
+      "translation": "信号ごとの選択には、準備済みのD3D12入力が必要です。他の経路では現在の入力セットを使用します。",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.strict",
+      "translation": "入力ソースを厳密に固定（試験機能）",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.title",
+      "translation": "入力ソース（試験機能）",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
+    },
+    {
+      "id": "ingame.input-sources.used",
+      "translation": "使用中",
+      "revision": 1,
+      "note": "Contextual experimental input-source translation."
     },
     {
       "id": "ingame.keybind.unbound",
@@ -20866,6 +22456,54 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.menu-layout.corner",
+      "translation": "メニューの表示位置",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.heading",
+      "translation": "メニュー配置",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.lower-left",
+      "translation": "左下",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.lower-right",
+      "translation": "右下",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.reset",
+      "translation": "配置をリセット",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.scale",
+      "translation": "メニュー倍率",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.upper-left",
+      "translation": "左上",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
+      "id": "ingame.menu-layout.upper-right",
+      "translation": "右上",
+      "revision": 0,
+      "note": "Menu recovery enhancement draft; native-speaker review pending."
+    },
+    {
       "id": "ingame.menu-overlay-vk.image_acquisition_unobserved_406bb866",
       "translation": "画像取得が観測されませんでした",
       "revision": 0,
@@ -21048,6 +22686,594 @@
     {
       "id": "ingame.mfgrestartwarning.save_settings_and_restart_the_game_eb6aa130",
       "translation": "設定を保存してゲームを再起動",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.mixed-input.auto_chooses_compatible_inputs_refresh_sources_updat_4ac536d4",
+      "translation": "自動は互換性のある入力を選択します。ソースの更新で利用可能状況が更新されます。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.automatic_d461a493",
+      "translation": "自動",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.availability_reflects_the_last_refresh_in_use_confir_ff2160ab",
+      "translation": "利用可能状況は最新の更新を反映しています。「使用中」は最近の処理を確認したことを示します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.availability_reflects_the_last_refresh_in_use_means__45341090",
+      "translation": "利用可能状況は最新の更新を反映しています。「使用中」は最近の処理でこのソースが使用されたことを意味します。「未確認」はまだ証拠がないことを意味します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.choose_a_compatible_source_cbdf2a1b",
+      "translation": "互換性のあるソースを選択してください。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.choose_sources_for_color_depth_and_motion_a0f729f5",
+      "translation": "色、深度、モーションのソースを選択します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.color_6b73191a",
+      "translation": "色",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.depth_f1dbc339",
+      "translation": "深度",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.effective_source_5d4211c5",
+      "translation": "実効ソース",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.in_use_detected_fallback_waiting_refused_off_unknown_93f6196b",
+      "translation": "使用中 | 検出済み | フォールバック / 待機中 | 拒否 | オフ / 不明",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.input_choices_are_unavailable_for_this_method_22174bd1",
+      "translation": "この方式では入力の選択は利用できません。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.motion_8ca34424",
+      "translation": "モーション",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.native_color_is_from_an_earlier_stage_present_uses_t_95b687ba",
+      "translation": "ネイティブの色は前のステージから取得されます。提示は最終的なゲーム画像を使用します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.no_recent_source_selection_59b2335e",
+      "translation": "最近のソース選択はありません。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.no_recent_use_1890559d",
+      "translation": "最近の使用なし",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.not_in_use_e5c557a8",
+      "translation": "未使用",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.policy_llu_capture_llu_7cd5a6e9",
+      "translation": "ポリシー %llu / キャプチャ %llu",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.prefer_no_input_enable_require_selected_sources_to_p_4962e811",
+      "translation": "入力なしを優先します。フォールバックを防ぐには「選択したソースを必須にする」を有効にしてください。必須の入力が不足している場合、NR は一時停止します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.prefer_no_input_require_selected_sources_prevents_fa_c5be3e82",
+      "translation": "入力なしを優先します。「選択したソースを必須にする」でフォールバックを防止します。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferences_allow_fallback_unless_require_selected_s_e75a0595",
+      "translation": "「選択したソースを必須にする」が有効でない限り、優先設定ではフォールバックが許可されます。これは「なし」にも適用されます。ジッターと露出は自動です。ソースは現在のフレームと一致している必要があります。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferences_saved_not_supported_by_this_method_77946faa",
+      "translation": "優先設定は保存されましたが、この方式ではサポートされていません。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferred_s_c6377036",
+      "translation": "優先: %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.preferred_source_185bfa90",
+      "translation": "優先ソース",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.require_selected_sources_68964ea5",
+      "translation": "選択したソースを必須にする",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.s_preferred_s_selected_s_used_s_s_59b880dd",
+      "translation": "%s: 優先 %s; 選択済み %s; 使用 %s。%s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.selected_s_6f1df5fc",
+      "translation": "選択済み: %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.signal_1e9806e4",
+      "translation": "信号",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.source_preference_44bff705",
+      "translation": "ソースの優先設定",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.this_method_uses_fixed_input_sources_saved_preferenc_c1f66ed7",
+      "translation": "この方式は固定の入力ソースを使用します。保存された優先設定は適用されません。",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.unknown_b764cdc0",
+      "translation": "不明",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.used_by_nr_dadc94fa",
+      "translation": "NR で使用",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mixed-input.used_s_0ce6f0f7",
+      "translation": "使用: %s",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.above_native",
+      "translation": "モデル解像度100%超のみ。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.apply_help",
+      "translation": "オフにするとこのパスの編集結果が非表示になります。処理は継続されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.auto_skin_mask",
+      "translation": "自動スキンマスク",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.below_native",
+      "translation": "モデル解像度100%未満のみ。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.close",
+      "translation": "閉じる",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.colour_strength",
+      "translation": "カラー強度",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.completed",
+      "translation": "%u リクエスト済み | 直前のフレームで %u 完了",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.composition",
+      "translation": "合成",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.configured",
+      "translation": "設定済み",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.configured_contributions",
+      "translation": "設定された寄与度。合計にはパス1が含まれます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.configured_values",
+      "translation": "設定値。モデル編集には保存された適用の設定が表示されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.copy_preceding",
+      "translation": "前のパスをコピー",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.detail",
+      "translation": "ディテール",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.detail_strength",
+      "translation": "ディテール強度",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.downscaler",
+      "translation": "ダウンスケーラー",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.edit",
+      "translation": "編集",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.enable",
+      "translation": "マルチパスを有効化",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.enlargement",
+      "translation": "拡大",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.experimental_composition",
+      "translation": "実験的な合成モード。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.hidden",
+      "translation": "非表示",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.high_count",
+      "translation": "高いパス数は実験的であり、GPUメモリやフレーム時間を枯渇させる可能性があります。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.highlight_guard",
+      "translation": "ハイライト保護",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.local_structure",
+      "translation": "ローカル構造",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.local_tone",
+      "translation": "ローカルトーン",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.local_tuning",
+      "translation": "ローカル調整",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.maximum",
+      "translation": "最大パス数",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.mixed",
+      "translation": "混在した値。調整するとすべての追加パスに単一の値が適用されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model",
+      "translation": "モデル",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_edit",
+      "translation": "モデル編集",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_preset",
+      "translation": "モデルプリセット",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_resolution",
+      "translation": "モデル解像度",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.model_strength",
+      "translation": "モデル強度",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.not_requested",
+      "translation": "未要求",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.off",
+      "translation": "マルチパス オフ。保存された設定は保持されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.open_rendering",
+      "translation": "レンダリング設定 >",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.output_completed",
+      "translation": "%u 要求済み | 出力完了",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass",
+      "translation": "パス",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass_number",
+      "translation": "パス %u",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass_overview",
+      "translation": "パス概要",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.pass_settings",
+      "translation": "パス設定",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.preceding_input",
+      "translation": "入力: パス %u の完了画像。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.proxy_composition",
+      "translation": "プロキシ合成",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.rendering",
+      "translation": "レンダリング",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.rendering_link",
+      "translation": "レンダリング >",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.requested",
+      "translation": "要求済み",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_additional",
+      "translation": "追加パスをリセット",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_additional_question",
+      "translation": "追加の9つのパスプロファイルをすべてリセットし、マルチパスをオフにしますか？パス 1 とパス数は変更されません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_pass",
+      "translation": "パスをリセット",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.reset_pass_question",
+      "translation": "パス %u のすべての設定をリセットしますか？他のパスは変更されません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.resolution",
+      "translation": "解像度",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.settings",
+      "translation": "設定",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.shared_additional",
+      "translation": "共有設定 · 追加パス",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.shared_look",
+      "translation": "プリセット、スタイル、およびその他の画像設定はレンダリングに従います。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.shared_scope",
+      "translation": "パス 2 以降に適用されます。パス 1 は変更されません。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.skin_follow",
+      "translation": "-1 はローカル構造に従います。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.skin_structure",
+      "translation": "肌の構造",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.strength_totals",
+      "translation": "合計強度",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.style",
+      "translation": "スタイル",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.unobserved",
+      "translation": "%u 要求済み | 完了未確認",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.unsupported",
+      "translation": "マルチパスには対応する Native または Present アダプターが必要です。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.visible",
+      "translation": "表示",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.multipass.zero",
+      "translation": "要求パス数 0。エフェクトはバイパスされ、読み込み済みのリソースは保持されます。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.native-resolution.help",
+      "translation": "どちらもネイティブ入力のサイズを使用します。選択した段階で Neural Rendering を実行します。",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.native-resolution.post",
+      "translation": "ネイティブに合わせる（超解像の後）",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.native-resolution.pre",
+      "translation": "ネイティブに合わせる（超解像の前）",
+      "revision": 0,
+      "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.native-resolution.unknown",
+      "translation": "不明なネイティブ解像度設定",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
     },
@@ -21479,9 +23705,9 @@
     },
     {
       "id": "ingame.nr-diagnostics.last_recorded",
-      "translation": "最後に記録された所有者の値 · セッション合計",
+      "translation": "最後に報告された値 - セッション合計",
       "revision": 0,
-      "note": "Draft translation; semantic and native-speaker review pending."
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
     },
     {
       "id": "ingame.nr-diagnostics.matched",
@@ -23452,6 +25678,12 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.pipeline.processing_order",
+      "translation": "処理順序",
+      "revision": 0,
+      "note": "Gemini draft; canonical key/revision join, native review and rendered fit pending."
+    },
+    {
       "id": "ingame.preparedguidestatus.copyback_completed_30487a34",
       "translation": "コピーバック完了",
       "revision": 0,
@@ -24100,10 +26332,172 @@
       "note": "Draft translation; semantic and native-speaker review pending."
     },
     {
+      "id": "ingame.timing.callback_average_ms",
+      "translation": "コールバック: %6.2f ms | 平均: %6.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_detail",
+      "translation": "出力コールバック平均: %.2f ms。FG コールバックはバースト状に到達する場合があります。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_fps",
+      "translation": "コールバック FPS: %6.1f",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_graph",
+      "translation": "コールバック: %7.2f ms / %6.1f FPS",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.callback_graph_compact",
+      "translation": "コールバック: %.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.cpu_not_display",
+      "translation": "CPU タイミング。ディスプレイペーシングは利用不可。",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_callback_ms",
+      "translation": "ゲーム: %6.2f ms | コールバック: %6.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_fps",
+      "translation": "ゲーム FPS: %6.1f",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_graph",
+      "translation": "ゲーム: %7.2f ms / %6.1f FPS",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_graph_compact",
+      "translation": "ゲーム: %.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_graph_waiting",
+      "translation": "ゲーム: 待機中",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.timing.game_waiting",
+      "translation": "ゲーム FPS: 待機中",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
       "id": "ingame.timing.upscaler_ms",
       "translation": "アップスケーラー: %7.2f ms",
       "revision": 0,
       "note": "Draft translation; semantic and native-speaker review pending."
+    },
+    {
+      "id": "ingame.timing.waiting_callback_ms",
+      "translation": "ゲーム: 待機中 | コールバック: %6.2f ms",
+      "revision": 0,
+      "note": "Gemini draft; source-freeze, semantic/native review and rendered fit pending."
+    },
+    {
+      "id": "ingame.mfg-runtime-reason.waiting_for_dlss_g_callback_b0d7f0d4",
+      "translation": "DLSS-G コールバック待機中",
+      "revision": 0,
+      "note": "Machine draft; native/fit review pending. Runtime-reason label, no hardware compatibility claim."
+    },
+    {
+      "id": "ingame.mfg-runtime-reason.dlss_g_callback_targets_differ_481c6cfb",
+      "translation": "DLSS-G コールバック対象が異なります",
+      "revision": 0,
+      "note": "Machine draft; native/fit review pending. Runtime-reason label, no hardware compatibility claim."
+    },
+    {
+      "id": "ingame.mfg-runtime-reason.dlss_g_callback_tracking_unavailable_5cfd729e",
+      "translation": "DLSS-G コールバック追跡が利用不可",
+      "revision": 0,
+      "note": "Machine draft; native/fit review pending. Runtime-reason label, no hardware compatibility claim."
+    },
+    {
+      "id": "ingame.nr-final-color.active",
+      "translation": "FG は画像全体を使用します。UI に残像が生じる場合があります。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.off-restoration-pending",
+      "translation": "NR オフ。UI の復元待ちです。ゲームの新しい UI 入力を待機中、FG が引き続き画像全体を使用する場合があります。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.restoration-pending",
+      "translation": "UI の復元待ちです。ゲームの新しい UI 入力を待機中、FG が引き続き画像全体を使用する場合があります。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.fresh-game-ui-accepted",
+      "translation": "最後に報告されたゲームの UI 入力: 受理済み。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.game-hudless-only",
+      "translation": "最後に報告されたゲームの FG 入力: 個別の UI バッファーなしで受理済み。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.game-optional-cleared",
+      "translation": "最後に報告された任意の FG UI 入力: ゲーム側で解除済み。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.unsafe",
+      "translation": "出力の送信中に FG 入力が変更されました。表示結果は不明です。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.policy-pending",
+      "translation": "FG が画像全体を受理するのを待機しています。NR は一時停止中です。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.policy-changed",
+      "translation": "NR 出力前に FG 入力が変更されました。NR は一時停止中です。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.nr-final-color.provider-requirements",
+      "translation": "Present FG には、検出されたネイティブ プロバイダー、固定の 2x-6x 倍率、およびサポートされているキュー設定が必要です。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
+    },
+    {
+      "id": "ingame.mixed-input.require_sources_help",
+      "translation": "入力ソースの代替を防止します。必須入力が利用できない場合、NR は一時停止します。",
+      "revision": 0,
+      "note": "Translation draft; native review pending."
     }
   ]
 }

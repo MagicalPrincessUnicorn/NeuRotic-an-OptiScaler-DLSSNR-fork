@@ -46,6 +46,19 @@ template <class T, HasDefaultValue defaultState = WithDefault> class CustomOptio
         std::optional<T>::operator=(value);
     }
 
+    // Unelided persisted intent, distinct from the effective volatile overlay.
+    constexpr std::optional<T> config_intent() const
+    {
+        return _volatile ? _configIni : static_cast<const std::optional<T>&>(*this);
+    }
+
+    // Restore preference without replacing an active runtime overlay.
+    constexpr void restore_config_intent(const std::optional<T>& value)
+    {
+        _configIni = value;
+        if (!_volatile) std::optional<T>::operator=(value);
+    }
+
     // Use this when first setting a CustomOptional
     constexpr void set_from_config(const std::optional<T>& opt)
     {

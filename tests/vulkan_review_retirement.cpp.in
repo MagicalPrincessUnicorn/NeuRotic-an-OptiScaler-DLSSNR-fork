@@ -1,0 +1,76 @@
+#include "NrConfigFixture.h"
+#include "dlssnr/VulkanNrNativeObservation.h"
+#include "inputs/VulkanNativeFeatures.h"
+#include "dlssnr/FinalFallbackControl.h"
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+std::mutex nativeFeaturesMutex;
+VulkanNativeFeatures::Registry nativeFeatures;
+// ACTUAL_DEVICE_BRIDGE
+namespace DlssNr {
+std::mutex g_vkMutex,g_nativeRecordMutex;
+VkNrNativeRawStatus g_nativeRawVk;
+struct StateProjection {VkDevice device=VK_NULL_HANDLE;VkNrNativeSelectedStatus<NrConfigSnapshot<TestConfig>> nativeStatus;VkNrResetRevision resetState{1};} g_nativeVk;
+StateProjection& PassStateVk(VkNrRoute,uint32_t){return g_nativeVk;}
+struct Executor {void DeviceDestroyed(VkDevice){}};
+Executor& GetVulkanPresentExecutor(){static Executor e;return e;}
+bool g_vkSessionClosed=false;
+void ShutdownVkSessionsLocked(bool,VkDevice,std::unique_lock<std::mutex>&,std::optional<uint64_t> =std::nullopt){std::abort();}
+// ACTUAL_NATIVE_TERMINAL
+// ACTUAL_DEVICE_DESTROYED
+namespace NativeFg {bool Internal(){return false;}bool DestroyDevice(VkDevice){return true;}}
+enum class VkWsiOperation {DeviceDestroy};
+struct VkWsiForwardScope {VkWsiForwardScope(VkWsiOperation,uintptr_t,void*){}static bool Matches(VkWsiOperation,uintptr_t,void*){return false;}};
+template<class T>struct VkWsiTargetScope {explicit VkWsiTargetScope(T){}static T Get(T p){return p;}};
+namespace VkFlight {enum class Kind{Wsi};struct Writer{template<class...T>void Write(T...){}};Writer& Current(){static Writer w;return w;}}
+struct DeviceOwner {struct Identity{uint64_t generation=1;};Identity Device(VkDevice){return {};}void Destroyed(VkDevice){}void DeviceDestroyed(VkDevice){}};
+DeviceOwner& VulkanLoaderWsiDevices(){static DeviceOwner o;return o;}
+DeviceOwner& VulkanNrImageFacts(){static DeviceOwner o;return o;}
+DeviceOwner& GetVulkanPresentRegistry(){static DeviceOwner o;return o;}
+DeviceOwner& GetVulkanLoaderPresentRegistry(){static DeviceOwner o;return o;}
+DeviceOwner& GetVulkanApplicationPresentRegistry(){static DeviceOwner o;return o;}
+namespace NativeVulkanGuides {void DeviceDestroyed(VkDevice){}}
+void VulkanGuidesDeviceDestroyed(VkDevice){}
+void RetryShutdownVk(VkDevice){}
+template<class F>bool ObserveVkNrDeviceDestroy(VkDevice,F callback){callback();return true;}
+}
+namespace MenuOverlayVk {void ShutdownDevice(VkDevice){}void NotifyDeviceDestroyed(VkDevice){}}
+#define LOG_WARN(...) ((void)0)
+std::function<void()> afterRealDestroy;
+unsigned realDestroyCalls=0;
+void VKAPI_CALL FakeDestroy(VkDevice,const VkAllocationCallbacks*){++realDestroyCalls;if(afterRealDestroy)afterRealDestroy();}
+PFN_vkDestroyDevice nr_DestroyDevice=&FakeDestroy;
+// ACTUAL_DESTROY_HOOK
+unsigned checks=0,failed=0;
+void Check(bool value,const char* label){++checks;failed+=!value;std::printf("%s %s\n",value?"PASS":"FAIL",label);}
+std::optional<DlssNr::VkNrNativeObservation> Observe(uint32_t handleId,uint64_t invocation){
+ TestConfig config;config.SetDlssNrEnabled(true);config.DlssNrRoute=0u;
+ std::optional<NrConfigSnapshot<TestConfig>> nrSettings{config};
+ std::optional<DlssNr::VkNrTemporalMetadata> nrTemporal;
+ const auto nrIdentity=nativeFeatures.Observe(handleId);
+ const DlssNr::VkNrEvaluationIdentity selectedEvaluation{reinterpret_cast<VkCommandBuffer>(3),1,invocation,nrIdentity.generation};
+ NVSDK_NGX_Parameter* InParameters=nullptr;const bool bridged=false,isRrRoute=false;
+// ACTUAL_CAPTURE
+ return nrObservation;
+}
+int main(){using namespace DlssNr;
+ const auto a=reinterpret_cast<VkDevice>(8),b=reinterpret_cast<VkDevice>(9);
+ TestConfig config;config.SetDlssNrEnabled(true);config.DlssNrRoute=0u;const NrConfigSnapshot<TestConfig> cfg(config);
+ nativeFeatures.Register(41,1,reinterpret_cast<uintptr_t>(a));nativeFeatures.Register(42,1,reinterpret_cast<uintptr_t>(a));nativeFeatures.Register(53,1,reinterpret_cast<uintptr_t>(b));
+ auto old=Observe(42,1),late=Observe(42,2),other=Observe(53,3);ObserveNativeResultVk(*old,cfg,{},false,false,false,true);
+ std::optional<VkNrNativeObservation> fresh;
+ afterRealDestroy=[&]{nativeFeatures.Register(42,1,reinterpret_cast<uintptr_t>(a));fresh=Observe(42,4);ObserveNativeResultVk(*fresh,cfg,{},false,false,false,true);};
+ nrDestroyDevice(a,nullptr);afterRealDestroy={};
+ Check(realDestroyCalls==1,"actual destroy hook forwards the genuine target exactly once");
+ Check(!old->Current(0)&&!late->Current(0)&&!nativeFeatures.Current(41).generation,"old device generations are revoked across the real destruction boundary");
+ Check(fresh&&fresh->Current(0)&&nativeFeatures.Current(42).generation==fresh->frame.evaluation.featureGeneration,"registration after real destruction at reused address remains current");
+ Check(g_nativeRawVk.observation&&g_nativeRawVk.observation->frame.evaluation.invocation==4,"delayed old-device cleanup preserves replacement raw diagnostics");
+ Check(g_nativeVk.nativeStatus.observation&&g_nativeVk.nativeStatus.latestInvocation==4,"delayed old-device cleanup preserves replacement selected diagnostics without a model owner");
+ ObserveNativeResultVk(*late,cfg,{},false,false,false,true);
+ Check(g_nativeRawVk.observation&&g_nativeRawVk.observation->frame.evaluation.invocation==4&&g_nativeVk.nativeStatus.latestInvocation==4,"late old-source terminal cannot overwrite the genuine replacement");
+ Check(other->Current(0)&&nativeFeatures.Current(53).generation,"another device is unaffected by either source lifetime");
+ nrDestroyDevice(a,nullptr);
+ Check(realDestroyCalls==2&&!fresh->Current(0)&&!g_nativeRawVk.observation&&!g_nativeVk.nativeStatus.observation,"later actual destruction retires replacement exactly once and clears its own diagnostics");
+ std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}

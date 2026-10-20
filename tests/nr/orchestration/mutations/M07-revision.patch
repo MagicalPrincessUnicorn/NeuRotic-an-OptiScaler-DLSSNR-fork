@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+--- a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
++++ b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+@@ -44,7 +44,7 @@
+         if(std::count(dependencies.structuralPlans.begin(),dependencies.structuralPlans.end(),plan)!=1)return false;
+     if(!s.metadata||!Context::ValidValues(s.product)||s.anchor!=m.anchor||!Context::Established(m.plan.routeGeneration)||
+        s.generation!=m.plan.routeGeneration.KnownPart()->value||recipe.committedPlan.recordType.View()!=C::PlanCommit::WireName||
+-       recipe.committedPlan.record!=m.plan.header.record||recipe.committedPlan.revision!=m.plan.header.revision||
++       recipe.committedPlan.record!=m.plan.header.record||
+        recipe.header.scope!=m.enrollment.scope||profile.header.scope!=m.enrollment.scope||
+        recipe.strategy!=m.anchor.strategy||recipe.profile!=m.anchor.profile||recipe.placement!=m.anchor.placement||
+        profile.header.contract!=C::ContractId::C04||profile.header.owner!=C::OwnerDomain::Strategy||

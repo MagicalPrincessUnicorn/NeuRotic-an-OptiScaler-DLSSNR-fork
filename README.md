@@ -11,7 +11,7 @@ NeuRotic is a Windows application and rendering middleware built on [OptiScaler]
 ## Table of Contents
 
 - [What NeuRotic Does](#what-neurotic-does)
-- [Latest Release: Alpha 0.9.8 Hotfix](#latest-release-alpha-098-hotfix)
+- [Latest Release: Alpha 0.9.9](#latest-release-alpha-099)
 - [An Interface Designed for Easy Access](#an-interface-designed-for-easy-access)
 - [Workflows](#workflows)
 - [Compatibility](#compatibility)
@@ -34,13 +34,75 @@ NeuRotic is a Windows application and rendering middleware built on [OptiScaler]
 - **Desktop processing:** NR Anything applies neural rendering to a selected window, with visual controls, comparison views, and PNG capture.
 - **Comparison and diagnostics:** view Original, processed, Split, and Stripes comparisons where supported, and inspect rendering inputs, timing, connections, and output status.
 
-## Latest Release: Alpha 0.9.8 Hotfix
+## Latest Release: Alpha 0.9.9
 
-Alpha 0.9.8 improves Native stability, rendering-state restoration, compatibility checks, resource handling, and desktop shutdown. Fresh installs leave neural rendering off; updates preserve saved choices. This is a customer full-installer bundle with file logging off by default.
+[Download Alpha 0.9.9](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.9) · [Full patch notes](RELEASE_NOTES.md)
 
-**Native Temporal compatibility remains a work in progress.** The hotfix fixes tested paths; it does not complete support across games, graphics APIs, or rendering modes.
+This update expands rendering compatibility and adds more control over game setup and neural rendering.
 
-Read the [Alpha 0.9.8 hotfix notes and preserved Alpha 0.9.7 patch notes](RELEASE_NOTES.md) for the changes and remaining limitations. Download the [Alpha 0.9.8 full installer](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.8).
+- **Updated interface:** the Installation Library gives the selected game more space, with clearer details and controls. Settings now includes a dedicated Installation Defaults section.
+- **Optional setup helpers:** Home clarifies that Streamline setup and the NR DLL manager are optional. Files can also be supplied manually.
+- **NR DLL profiles:** manage user-supplied DLL versions, select one per game, or supply files manually. Selection uses expected filenames without requiring one exact version.
+- **Faster setup and queueing:** reduced installation overhead. Queue work immediately and continue browsing; each game keeps its own installation choices and results.
+- **Clearer rendering controls:** revised Multipass controls and Native resolution choices before or after upscaling.
+- **Compatibility fixes:** improvements to Native, Present, Vulkan, DirectX 11, and supported frame-generation combinations.
+- **Desktop fixes:** repaired saved-profile selection in NR Anything and improved settings recovery and installation feedback.
+- **Automatic cleanup:** completed-operation files are cleared while active jobs, saved settings, DLL profiles, and diagnostic exports are preserved.
+- **NR Anything HDR:** experimental HDR support for desktop window processing. NR Anything remains a work in progress.
+
+Next priorities are broader MFG support, including more games above 2×, HDR interface fixes, and remaining menu flicker and restoration issues.
+
+## Games used for testing
+
+Grouped by graphics API. Results describe the tested configurations; a working result for a multi-API game does not confirm every backend. FG means frame generation; MFG means multi-frame generation.
+
+### DirectX 12
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Clair Obscur: Expedition 33 | Working | Built-in MFG unlock not working. |
+| Control | Working | DLSS must be enabled; disabling it causes crashes. |
+| Crimson Desert | Working | Ray Reconstruction supported; MFG unlock confirmed on RTX 40 series. |
+| Cyberpunk 2077 | Working | Built-in MFG unlock not working. |
+| Dragon's Dogma 2 | Working | MFG working. |
+| God of War Ragnarök | Unresolved | Could not launch; investigation ongoing. |
+| Grand Theft Auto V Enhanced | Working | — |
+| Horizon Forbidden West | Working | — |
+| Kingdom Come: Deliverance II | Working | — |
+| Marvel's Spider-Man Remastered | Working | — |
+| Monster Hunter Rise: Sunbreak | Working | — |
+| Monster Hunter Wilds | Working | MFG working. |
+| Onimusha (demo) | Working | — |
+| Stellar Blade | Working | — |
+| The Witcher 3: Wild Hunt | Working | MFG working; HUD issues and a persistent restoration notice remain. |
+
+### DirectX 11
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Borderlands 3 | Present only | — |
+| God of War (2018) | Working | — |
+
+### Vulkan
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Detroit: Become Human | Present only | No DLSS required; frame-generation support planned. |
+| Doom Eternal | Working | — |
+| Doom: The Dark Ages | Working | FG working in Native and Present. |
+| No Man's Sky | Working | UI flickers. |
+
+### Multiple API options
+
+| Game | Status | Notes |
+| --- | --- | --- |
+| Baldur's Gate 3 | Working | DirectX 11 / Vulkan. |
+| Satisfactory | Working | DirectX 11 / DirectX 12 / Vulkan. |
+
+### MFG unlocker recommendation
+
+Where NeuRotic's built-in MFG unlocking is unavailable, I recommend the upstream [MFGAmpereUnlock-RenoDX addon](https://github.com/nefh/MFGAmpereUnlock-RenoDx), which my integration builds on. Download it separately and follow the project's ReShade/RenoDX installation instructions. It still might not work... maybe. =(
+
 
 ## An Interface Designed for Easy Access
 
@@ -156,12 +218,12 @@ Comparison modes include original, processed, Split, and Stripes. Captures save 
 
 Rendering support depends on the game, executable architecture, graphics API, GPU, driver, and provider files.
 
-Supported in-game NR routes can work without a native DLSS integration. Reported tests include Vulkan rendering in Detroit: Become Human without DLSS and DirectX 11 Present rendering in Borderlands 3. Compatible capture routes can acquire available depth and motion guides without native DLSS inputs. See the [reported game tests](RELEASE_NOTES.md#reported-game-tests) for the current list and game-specific notes. Frame-generation availability is separate from neural-rendering compatibility.
+Supported in-game NR routes can work without a native DLSS integration. Reported tests include Vulkan rendering in Detroit: Become Human without DLSS and DirectX 11 Present rendering in Borderlands 3. Compatible capture routes can acquire available depth and motion guides without native DLSS inputs. See the [reported game tests](RELEASE_NOTES.md#games-used-for-testing) for the current list and game-specific notes. Frame-generation availability is separate from neural-rendering compatibility.
 
 - Neural rendering requires a supported NVIDIA GPU and compatible user-supplied NR model.
 - DirectX and Vulkan support depend on the selected integration route. Support for one game or route does not guarantee support for another.
 - In-game installation requires matching executable and package architectures. Renaming a DLL does not resolve a 32-bit/64-bit mismatch. Use **NR Anything** when compatible in-game integration is unavailable.
-- NR Anything captures SDR window images. It does not receive native game depth or motion vectors through window capture.
+- NR Anything captures SDR window images and offers experimental HDR window processing. It does not receive native game depth or motion vectors through window capture.
 - Desktop super resolution, frame generation, Multipass, and depth estimation are unavailable in this package. In-game SR and FG controls depend on the active backend.
 - Interface languages include English, Simplified Chinese, Japanese, Korean, German, French, Spanish, Portuguese (Brazil), Polish, and Russian. Translations are complete across the supported languages.
 - Anti-cheat compatibility is not guaranteed. Check the game's rules before using modifications, especially online.
@@ -195,7 +257,7 @@ See the [feature report](RELEASE_NOTES.md#planned-improvements) for more detail.
 
 ## Installation
 
-Download the complete installer bundle from the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.8). GitHub's automatic source archives are not installation packages.
+Download the complete installer bundle from the [NeuRotic releases page](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.9). GitHub's automatic source archives are not installation packages.
 
 ### Desktop App
 
@@ -261,7 +323,7 @@ Contributor, community-supporter, and upstream-project acknowledgments are colle
 
 ## Source, Credits, and Licensing
 
-- [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.8)
+- [NeuRotic releases](https://github.com/MagicalPrincessUnicorn/NeuRotic-an-OptiScaler-DLSSNR-fork/releases/tag/alpha-0.9.9)
 - [Official OptiScaler](https://github.com/optiscaler/OptiScaler)
 - [Parent OptiScaler DLSS-NR fork](https://github.com/Dagherbou/OptiScaler_DLSSNR)
 

@@ -5,7 +5,9 @@
 #include <vulkan/vulkan.h>
 #include <nvsdk_ngx_vk.h>
 #include "VulkanNrFrameContract.h"
+#include "VulkanNrModelLifetime.h"
 #include "VulkanNrRecording.h"
+#include "VulkanNrGeneration.h"
 #include "VulkanNrReservations.h"
 #include "DlssNr_PresentInputDecision.h"
 
@@ -21,6 +23,8 @@ namespace DlssNr
 
 class VulkanNrRuntime;
 class VkNrRecordingOwner;
+class VkNrColorIngress;
+class VkNrQualifiedColor;
 
 enum class VkRecordStatus { NoWork, Complete, Partial };
 
@@ -53,7 +57,14 @@ struct VkFrameRequest
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
     NVSDK_NGX_Resource_VK* color = nullptr;
+    // CPU metadata only; never establishes retention of a borrowed Vulkan image.
+    std::shared_ptr<const VkNrColorIngress> colorIngress;
+    std::shared_ptr<const VkNrQualifiedColor> qualifiedColor;
+    std::shared_ptr<NVSDK_NGX_Resource_VK> colorReadStorage;
     NVSDK_NGX_Resource_VK* targetColor = nullptr;
+    // First Native Post-SR source crop; private child carriers clear this metadata.
+    // Held requests retain their captured source crop independently of the current target.
+    std::optional<VkNrRect> postSrOutput;
     NVSDK_NGX_Resource_VK* depth = nullptr;
     NVSDK_NGX_Resource_VK* motion = nullptr;
     // CPU wrapper lifetime only. GPU storage remains owned by the captured
@@ -99,6 +110,13 @@ struct VkNrRecordedOutput {
     VkImage gameInput=VK_NULL_HANDLE;uint64_t contentRevision=0,commandSerial=0;
     uint32_t requestedPasses=0,completedPasses=0;
 };
+// Actual current recorder request, independent of a reused generation's creation key.
+struct VkNrNativeRecordingReceipt
+{
+    VkNrFrameContract frame;
+    VkNrUseId use;
+    uint64_t appliedGeneration=0;
+};
 struct VkRecordResult
 {
     VkRecordStatus status = VkRecordStatus::NoWork;
@@ -117,6 +135,9 @@ struct VkRecordResult
     const char* inputLayoutBasis = "not-applicable";
     // Creation commands need real submission/completion, but do not deliver an NR image.
     bool preparationOnly = false;
+    std::optional<VkNrPresentModelLifetime> modelLifetime;
+    std::function<bool()> preSrSourceCurrent;
+    std::optional<VkNrNativeRecordingReceipt> nativeRecording;
 };
 
 // Admission describes the latest selected SR result, independently of retained history.
@@ -136,10 +157,15 @@ class VulkanNrSession
     VkRecordResult Record(const VkFrameRequest& request, const Recorder& recorder);
     unsigned long long RecordedCount() const { return recorded_; }
     unsigned long long CompletedCount() const { return completed_; }
-    bool ResetPending() const { return resetPending_; }
-    void RequestReset() { resetPending_ = true; ++resetRevision_; }
+    bool ResetPending() const { return resetState_.Pending(); }
+    void RequestReset() { resetState_.Request(); }
     void ObserveCompleted(unsigned long long count = 1);
     void AbandonLatestRecording(bool currentCounted = true);
+    // Caller serializes Session operations, but does not hold that lock over
+    // pool reset. Pin this exact member/observer before entering that gap.
+    bool BeginAbandonRecording(VkNrUseId,const VkNrRecordingOwner::UseRecordingSnapshot& beforeReset);
+    // Only a reserved exact member whose own recording was actually reset may retire.
+    bool AbandonRecording(VkNrUseId,const VkNrRecordingOwner::UseRecordingSnapshot& beforeReset);
     void PollCompletions();
     VkNrRecordingOwner& Recordings();
 
@@ -147,11 +173,17 @@ class VulkanNrSession
     VkNrRoute route_;
     VulkanNrRuntime& runtime_;
     uint64_t observedEpoch_ = 0;
-    bool resetPending_ = true;
-    uint64_t resetRevision_ = 0;
+    VkNrResetRevision resetState_{0};
     unsigned long long recorded_ = 0;
     unsigned long long completed_ = 0;
-    std::vector<VkNrUseId> pendingCompletion_;
+    struct PendingCompletion {
+        VkNrUseId use;
+        // Stored on the existing pending entry; bounded by actual pending work.
+        // Failed cleanup retains this reservation until authentic completion or
+        // successful exact abandonment. Reusable alone is not retirement proof.
+        std::optional<VkNrRecordingOwner::UseRecordingSnapshot> discard;
+    };
+    std::vector<PendingCompletion> pendingCompletion_;
 };
 
 } // namespace DlssNr

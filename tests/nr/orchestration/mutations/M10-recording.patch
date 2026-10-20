@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+--- a/before/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
++++ b/after/OptiScaler/nr/protocol/NativeRouteAdmission.cpp
+@@ -11,7 +11,7 @@
+ bool SameNativeInvocation(const NativeInvocationSnapshot& a,const NativeInvocationSnapshot& b)noexcept
+ {
+     if(a.metadata!=b.metadata||a.Sample()!=b.Sample()||a.Delivery()!=b.Delivery()||a.product!=b.product||a.anchor!=b.anchor||a.generation!=b.generation||a.frame!=b.frame||a.consumer!=b.consumer||
+-       a.recording!=b.recording||a.reservation!=b.reservation||a.generations!=b.generations||a.handoff!=b.handoff||
++       a.reservation!=b.reservation||a.generations!=b.generations||a.handoff!=b.handoff||
+        a.leases.Size()!=b.leases.Size())return false;
+     for(std::size_t i=0;i<a.leases.Size();++i)if(!SameLease(*a.leases.Get(i),*b.leases.Get(i)))return false;
+     return true;

@@ -7,10 +7,34 @@
 #include <cstring>
 namespace {std::mutex policyMutex;uint32_t claimed=0;uint64_t claimedToken=0;bool unsafe=false,nativeUsable=false;thread_local bool presentHandled=false;
 DlssNr::Connections::InputSelectionSnapshot selection;}
+namespace {DlssNr::Connections::Mixed::PolicyStore signalPolicy;
+DlssNr::Connections::SignalStatusWireV2 signalStatus,signalUsed;uint64_t signalStatusTime=0,signalUsedTime=0;
+DlssNr::Connections::SignalStatusWireV2 completedSignals;uint64_t completedTime=0,completedEpoch=0,completedInputEpoch=0;
+std::atomic<uint64_t> signalEpoch{1};std::atomic<bool> signalReceiptsClosed{false};uint64_t signalAdmissionEpoch=0,signalInputEpoch=0,signalUsedEpoch=0;}
 namespace DlssNr::Connections {
+void InvalidateSignalReceipts() noexcept {
+ if(!signalPolicy.Invalidate())signalReceiptsClosed.store(true);
+ signalEpoch.fetch_add(1,std::memory_order_seq_cst);
+}
+bool RequestSignalPreferences(int depth,int motion,bool strict,int color) noexcept {return signalPolicy.Request(depth,motion,strict,color);}
+bool RequestSavedSignalPreferences(int depth,int motion,bool strict,int color) noexcept {return signalPolicy.RequestPersisted(depth,motion,strict,color);}
+Mixed::Policy SignalPreferences() noexcept {return signalPolicy.Read();}
+SignalStatusSnapshot QueryInputSignals(uint64_t now) noexcept {
+ std::lock_guard lock(policyMutex);const auto revision=signalPolicy.Read().revision;
+ const auto fresh=[&](uint64_t time,uint64_t rev,uint64_t epoch){return !unsafe&&!FinalFallback::inputSwitchPending.load()&&time&&now>=time&&now-time<500&&rev==revision&&epoch==signalEpoch.load()&&signalInputEpoch==FinalFallback::CurrentInputEpoch();};
+ return {signalStatus,fresh(signalStatusTime,signalStatus.revision,signalAdmissionEpoch),signalUsed,fresh(signalUsedTime,signalUsed.revision,signalUsedEpoch)};
+}
+SignalStatusSnapshot QueryCompletedInputSignals(uint64_t now) noexcept {
+ std::lock_guard lock(policyMutex);
+ const bool fresh=!unsafe&&!signalReceiptsClosed.load()&&!FinalFallback::inputSwitchPending.load()&&
+  completedTime&&now>=completedTime&&now-completedTime<500&&completedSignals.revision==signalPolicy.Read().revision&&
+  completedEpoch==signalEpoch.load()&&completedInputEpoch==FinalFallback::CurrentInputEpoch();
+ return {completedSignals,fresh,completedSignals,fresh};
+}
 bool RequestInputSelection(int source,int transport,bool fallback){
  if(source<0||source>4||transport<0||transport>2)return false;
  std::lock_guard lock(policyMutex);if(selection.serial==UINT64_MAX)return false;
+ InvalidateSignalReceipts();
  ++selection.serial;selection.requestedSource=source;selection.requestedTransport=transport;
  selection.allowCpuFallback=fallback;selection.reason.clear();
  selection.phase=(source==NativeGuides::SelectedSource()&&transport==NativeGuides::SelectedTransport())?InputPhase::Applied:InputPhase::Waiting;
@@ -84,6 +108,61 @@ NR_CONNECTION_EXPORT NeuRotic_ClaimPreparedConnectionV1(uint32_t source,uint32_t
 }
 NR_CONNECTION_EXPORT NeuRotic_RetirePreparedConnectionV1(uint32_t source,uint64_t ownerToken,uint32_t clean) {
  std::lock_guard lock(policyMutex);if(!ownerToken||!claimed||claimed!=source||claimedToken!=ownerToken||clean>1)return 0;
+ signalStatusTime=signalUsedTime=0;
  if(!clean){unsafe=true;return 0;}
  if(unsafe)return 0;claimed=0;claimedToken=0;return 1;
+}
+NR_CONNECTION_EXPORT NeuRotic_QuerySignalPolicyV1(void* output,uint32_t bytes) {
+ using namespace DlssNr::Connections;if(!output||bytes!=sizeof(SignalPolicyWire))return 0;
+ const auto p=signalPolicy.Read();SignalPolicyWire wire;wire.depth=uint32_t(p.depth);wire.motion=uint32_t(p.motion);
+ // Soft None is an unmatched preference; only explicit enforcement pins it.
+ wire.strict=p.strict;wire.revision=p.revision;
+ // Older readers cannot honor a color preference. Refuse their packet rather
+ // than silently ignore Native/None/strict intent.
+ if(p.color!=Source::Automatic){wire.depth=7;wire.strict=1;}
+ std::memcpy(output,&wire,sizeof(wire));return 1;
+}
+NR_CONNECTION_EXPORT NeuRotic_QuerySignalPolicyV2(void* output,uint32_t bytes) {
+ using namespace DlssNr::Connections;if(!output||bytes!=sizeof(SignalPolicyWireV2))return 0;
+ const auto p=signalPolicy.Read();SignalPolicyWireV2 wire;
+ wire.color=uint32_t(p.color);wire.depth=uint32_t(p.depth);wire.motion=uint32_t(p.motion);
+ wire.strict=p.strict;wire.revision=p.revision;std::memcpy(output,&wire,sizeof(wire));return 1;
+}
+static unsigned PublishSignals(uint32_t source,uint64_t token,const DlssNr::Connections::SignalStatusWireV2& wire,bool legacy) {
+ using namespace DlssNr::Connections;
+ if(wire.reserved||wire.reserved2||wire.color>4||wire.depth>4||wire.motion>4||wire.consumed>1||
+    wire.colorOrigin>6||wire.depthOrigin>6||wire.motionOrigin>6||
+    (wire.consumed&&(!wire.depth||!wire.motion||(!legacy&&!wire.color)))||
+    wire.colorReason>uint32_t(Mixed::Reason::IntentionallyDisabled)||
+    wire.depthReason>uint32_t(Mixed::Reason::IntentionallyDisabled)||wire.motionReason>uint32_t(Mixed::Reason::IntentionallyDisabled)||!wire.capture||!wire.generation)return 0;
+ std::lock_guard lock(policyMutex);if(unsafe||claimed!=source||claimedToken!=token||!token)return 0;
+ const auto policy=signalPolicy.Read();
+ if(legacy&&policy.color!=Source::Automatic)return 0;
+ const auto epoch=signalEpoch.load();const auto inputEpoch=DlssNr::FinalFallback::CurrentInputEpoch();
+ if(signalReceiptsClosed.load()||wire.revision!=policy.revision||DlssNr::FinalFallback::inputSwitchPending.load())return 0;
+ if(wire.consumed&&(signalAdmissionEpoch!=epoch||signalInputEpoch!=inputEpoch||
+    signalStatus.consumed||wire.capture!=signalStatus.capture||wire.generation!=signalStatus.generation||
+    wire.revision!=signalStatus.revision||wire.color!=signalStatus.color||wire.depth!=signalStatus.depth||wire.motion!=signalStatus.motion||
+    wire.colorOrigin!=signalStatus.colorOrigin||wire.depthOrigin!=signalStatus.depthOrigin||wire.motionOrigin!=signalStatus.motionOrigin))return 0;
+ if(!wire.consumed){signalAdmissionEpoch=epoch;signalInputEpoch=inputEpoch;}
+ signalStatus=wire;signalStatusTime=GetTickCount64();
+ if(wire.consumed){signalUsed=wire;signalUsedTime=signalStatusTime;signalUsedEpoch=epoch;
+  completedSignals=wire;completedTime=signalStatusTime;completedEpoch=epoch;completedInputEpoch=inputEpoch;}
+ return 1;
+}
+NR_CONNECTION_EXPORT NeuRotic_PublishInputSignalsV1(uint32_t source,uint64_t token,const void* input,uint32_t bytes) {
+ using namespace DlssNr::Connections;if(!input||bytes!=sizeof(SignalStatusWire))return 0;
+ SignalStatusWire wire;std::memcpy(&wire,input,sizeof(wire));
+ if(wire.size!=sizeof(wire)||wire.version!=1||wire.reserved||wire.depth>4||wire.motion>4||wire.consumed>1||wire.depthOrigin>6||wire.motionOrigin>6||
+    (wire.consumed&&(!wire.depth||!wire.motion))||
+    wire.depthReason>uint32_t(Mixed::Reason::IntentionallyDisabled)||wire.motionReason>uint32_t(Mixed::Reason::IntentionallyDisabled)||!wire.capture||!wire.generation)return 0;
+ SignalStatusWireV2 extended;static_cast<SignalStatusWire&>(extended)=wire;
+ extended.size=sizeof(extended);extended.version=2;
+ return PublishSignals(source,token,extended,true);
+}
+NR_CONNECTION_EXPORT NeuRotic_PublishInputSignalsV2(uint32_t source,uint64_t token,const void* input,uint32_t bytes) {
+ using namespace DlssNr::Connections;if(!input||bytes!=sizeof(SignalStatusWireV2))return 0;
+ SignalStatusWireV2 wire;std::memcpy(&wire,input,sizeof(wire));
+ if(wire.size!=sizeof(wire)||wire.version!=2)return 0;
+ return PublishSignals(source,token,wire,false);
 }

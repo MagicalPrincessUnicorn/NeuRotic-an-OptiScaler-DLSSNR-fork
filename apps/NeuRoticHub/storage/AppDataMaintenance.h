@@ -1,4 +1,4 @@
-#include <menu/Localization.h>
+﻿#include <menu/Localization.h>
 #pragma once
 #include <windows.h>
 #include <filesystem>
@@ -55,7 +55,10 @@ inline std::vector<Pin> Parents(const fs::path& root,bool create=false,bool* com
   pins.push_back(Open(walk,true));
  }if(complete)*complete=true;return pins;
 }
-inline bool Protected(const fs::path& relative,AppDataClearScope scope){return scope==AppDataClearScope::AppData&&_wcsicmp(relative.begin()->c_str(),L"Dumbfire")==0;}
+// Runtime lives outside HubData-v2 in production. The fixture root (and a
+// consolidated user root) may contain it directly; preserve the entire shared
+// namespace without traversing links or queuing its parent for deletion.
+inline bool Protected(const fs::path& relative,AppDataClearScope scope){return scope==AppDataClearScope::AppData&&(_wcsicmp(relative.begin()->c_str(),L"Dumbfire")==0||_wcsicmp(relative.begin()->c_str(),L"Runtime")==0);}
 inline void Walk(AppDataClearPlan& plan,const fs::path& relative,size_t depth,std::vector<Pin>& pins){
  if(depth>32)throw std::runtime_error(Neurotic::UiMessage("desktop.appdatamaintenance.maintenance_folder_nesting_exceeds_its_limit_5e7a34c6", "Maintenance folder nesting exceeds its limit"));
  auto dir=plan.root/relative;auto pin=Open(dir,true);pins.push_back(pin);if(!relative.empty())plan.entries.push_back(Stamp(pin,relative));

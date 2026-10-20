@@ -1,0 +1,65 @@
+// Exact production scalar-acquisition block, host-only parameter endpoint double.
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
+#include <optional>
+#include <string>
+#include <string_view>
+#if __has_include("@FACTS@")
+#include "@FACTS@"
+#define HAS_TEMPORAL_FACTS 1
+#endif
+constexpr int NVSDK_NGX_Result_Success=1;
+constexpr const char* NVSDK_NGX_Parameter_MV_Scale_X="MV.Scale.X";
+constexpr const char* NVSDK_NGX_Parameter_MV_Scale_Y="MV.Scale.Y";
+constexpr const char* NVSDK_NGX_Parameter_Jitter_Offset_X="Jitter.Offset.X";
+constexpr const char* NVSDK_NGX_Parameter_Jitter_Offset_Y="Jitter.Offset.Y";
+struct Params {
+    std::optional<float> values[4];unsigned reads[4]{};
+    int Get(const char* key,float* output) {
+        const std::string_view name=key;
+        const unsigned index=name==NVSDK_NGX_Parameter_MV_Scale_X?0:name==NVSDK_NGX_Parameter_MV_Scale_Y?1:name==NVSDK_NGX_Parameter_Jitter_Offset_X?2:3;
+        ++reads[index];if(!values[index])return -1;*output=*values[index];return NVSDK_NGX_Result_Success;
+    }
+};
+struct Frame {
+    float MvScaleX=1,MvScaleY=1,JitterX=0,JitterY=0;
+    bool JitterSupplied=false;
+#ifdef HAS_TEMPORAL_FACTS
+    std::optional<DlssNr::NativeTemporalInputFacts::Scalars> NativeScalarFacts;
+#endif
+};
+unsigned continued=0,reports=0,checks=0;
+void ReportSkipOnce(const char*){++reports;}
+void Exercise(Params* params,Frame& frame){
+@SCALARS@
+    (void)haveNrJitter;
+    ++continued;
+}
+void Check(bool pass,const char* name){++checks;if(!pass){std::printf("FAIL %s\n",name);std::exit(1);}}
+int main(){
+    for(float invalid:{std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::infinity(),-std::numeric_limits<float>::infinity()})
+      for(unsigned index=0;index<4;++index){
+        Params p{{1.0f,1.0f,0.0f,0.0f}};p.values[index]=invalid;Frame frame;continued=reports=0;
+        Exercise(&p,frame);Check(continued==0&&reports==1,"nonfinite temporal metadata cannot reach continuation");
+      }
+    {Params p{{std::nullopt,std::nullopt,std::nullopt,std::nullopt}};Frame frame;continued=reports=0;
+     Exercise(&p,frame);Check(continued==1&&reports==0,"optional scalar absence remains accepted");
+     Check(frame.MvScaleX==1&&frame.MvScaleY==1&&frame.JitterX==0&&frame.JitterY==0,"existing scalar defaults preserved");
+     Check(!frame.JitterSupplied,"default jitter must not become supplied evidence");
+     Check(p.reads[2]==1&&p.reads[3]==1,"jitter components observed independently");}
+    {Params p{{0.0f,-2.0f,0.0f,0.0f}};Frame frame;continued=reports=0;
+     Exercise(&p,frame);Check(continued==1&&frame.MvScaleX==0&&frame.MvScaleY==-2,"authentic finite zero/negative scales preserved");
+     Check(frame.JitterSupplied,"authentic zero jitter pair remains supplied evidence");}
+    {Params p{{1.0f,1.0f,std::nullopt,0.25f}};Frame frame;continued=reports=0;
+     Exercise(&p,frame);Check(continued==1&&frame.JitterX==0&&frame.JitterY==0,"partial jitter preserves pair-zero fallback");
+     Check(!frame.JitterSupplied,"partial jitter is not a supplied pair");
+     Check(p.reads[3]==1,"observed Y is retained even when X is absent");
+#ifdef HAS_TEMPORAL_FACTS
+     Check(frame.NativeScalarFacts&& !frame.NativeScalarFacts->jitterX && frame.NativeScalarFacts->jitterY==0.25f,
+           "frame retains observation separately from fallback values");
+#endif
+    }
+    std::printf("PASS %u temporal scalar checks; exact production scalar block; GPU/provider NOT_RUN\n",checks);
+}

@@ -1,0 +1,1092 @@
+{
+  "registry_version": "1.0.0",
+  "ids": [
+    {
+      "id": "nr.cap.fingerprint.field",
+      "assertion_kind": "scalar",
+      "producers": [
+        "identity"
+      ],
+      "required_domains": [
+        "process"
+      ],
+      "meaning": "Lossless named identity field; qualifiers carry original JSON pointer.",
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "file_observation",
+          "basis": "T1_PASSIVE_FILE_OBSERVATION"
+        },
+        {
+          "source_kind": "platform_observation",
+          "basis": "T2_PLATFORM_IDENTITY"
+        },
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        },
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required",
+      "field_prefix_domains": {
+        "/collector/": [
+          "process"
+        ],
+        "/subject/": [
+          "process",
+          "api",
+          "game_session"
+        ],
+        "/adapter/": [
+          "process",
+          "api",
+          "adapter"
+        ],
+        "/driver/": [
+          "process",
+          "api",
+          "adapter",
+          "driver"
+        ],
+        "/modules/": [
+          "process",
+          "api",
+          "provider",
+          "module"
+        ],
+        "/feature_target/": [
+          "process",
+          "api",
+          "provider"
+        ]
+      }
+    },
+    {
+      "id": "nr.cap.module.export",
+      "assertion_kind": "availability",
+      "producers": [
+        "identity"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "provider",
+        "module"
+      ],
+      "meaning": "An export is present or absent in the exact observed module; no ABI/behavior inference.",
+      "required_qualifiers": [
+        "field",
+        "module_role"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "file_observation",
+          "basis": "T1_PASSIVE_FILE_OBSERVATION"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.vendor.feature_support",
+      "assertion_kind": "support",
+      "producers": [
+        "ngx"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "adapter",
+        "driver",
+        "provider"
+      ],
+      "meaning": "Unchanged, module-bound vendor support query for an exact feature ID.",
+      "required_qualifiers": [
+        "feature_namespace",
+        "feature_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "vendor_query",
+          "basis": "T3_UNMUTATED_VENDOR_QUERY"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.ngx.raw_requirements",
+      "assertion_kind": "scalar",
+      "producers": [
+        "ngx"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "adapter",
+        "provider"
+      ],
+      "meaning": "Original-call result/defined output before local policy changes.",
+      "scalar_type": "u64",
+      "fields": [
+        "return_code",
+        "FeatureSupported",
+        "MinHWArchitecture"
+      ],
+      "required_qualifiers": [
+        "field",
+        "feature_namespace",
+        "feature_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "descriptive_stage_only"
+    },
+    {
+      "id": "nr.cap.ngx.effective_requirements",
+      "assertion_kind": "scalar",
+      "producers": [
+        "ngx"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "adapter",
+        "provider",
+        "configuration"
+      ],
+      "meaning": "Effective result after local policy; never a vendor-support predicate.",
+      "scalar_type": "u64",
+      "fields": [
+        "return_code",
+        "FeatureSupported",
+        "MinHWArchitecture"
+      ],
+      "required_qualifiers": [
+        "field",
+        "feature_namespace",
+        "feature_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "effective_policy",
+          "basis": "T0_UNTRUSTED_OR_MUTATED"
+        }
+      ],
+      "mutation_policy": "descriptive_stage_only"
+    },
+    {
+      "id": "nr.cap.parameter.synthetic_defaults",
+      "assertion_kind": "availability",
+      "producers": [
+        "parameters"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "parameter_block"
+      ],
+      "meaning": "Proxy default initialization happened; not support.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "synthetic_default",
+          "basis": "T0_UNTRUSTED_OR_MUTATED"
+        }
+      ],
+      "mutation_policy": "descriptive_stage_only"
+    },
+    {
+      "id": "nr.cap.parameter.storage",
+      "assertion_kind": "result",
+      "producers": [
+        "parameters"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "parameter_block"
+      ],
+      "meaning": "L1 existing typed write/readback, exact spelling/type/phase.",
+      "required_qualifiers": [
+        "parameter_name",
+        "parameter_type",
+        "parameter_phase"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        },
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.parameter.declared",
+      "assertion_kind": "availability",
+      "producers": [
+        "parameters"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "provider"
+      ],
+      "meaning": "L2 exact declaration/publication; not consumption.",
+      "required_qualifiers": [
+        "parameter_name",
+        "parameter_type",
+        "parameter_phase"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "file_observation",
+          "basis": "T1_PASSIVE_FILE_OBSERVATION"
+        },
+        {
+          "source_kind": "vendor_query",
+          "basis": "T3_UNMUTATED_VENDOR_QUERY"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.parameter.create_acceptance",
+      "assertion_kind": "result",
+      "producers": [
+        "native"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "provider",
+        "feature",
+        "configuration",
+        "lifecycle"
+      ],
+      "meaning": "L3 exact create-call acceptance only.",
+      "required_qualifiers": [
+        "parameter_name",
+        "parameter_type",
+        "parameter_phase"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        },
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.parameter.evaluate_acceptance",
+      "assertion_kind": "result",
+      "producers": [
+        "native"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "provider",
+        "feature",
+        "configuration",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "L4 exact evaluate-call acceptance only.",
+      "required_qualifiers": [
+        "parameter_name",
+        "parameter_type",
+        "parameter_phase"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        },
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.parameter.causal_effect",
+      "assertion_kind": "qualification",
+      "producers": [
+        "qualification"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "adapter",
+        "driver",
+        "provider",
+        "configuration",
+        "game_session"
+      ],
+      "meaning": "L5 controlled protocol receipt; no automatic live acceptance.",
+      "required_qualifiers": [
+        "parameter_name",
+        "parameter_type",
+        "parameter_phase"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "qualification_receipt",
+          "basis": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.config.requested_enabled",
+      "assertion_kind": "enablement",
+      "producers": [
+        "config"
+      ],
+      "required_domains": [
+        "process",
+        "configuration"
+      ],
+      "meaning": "Requested master enable; not actual execution.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.config.requested_route",
+      "assertion_kind": "scalar",
+      "producers": [
+        "config"
+      ],
+      "required_domains": [
+        "process",
+        "configuration"
+      ],
+      "meaning": "Requested route value copied from config; no selection action.",
+      "scalar_type": "u64",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.config.effective_enabled",
+      "assertion_kind": "enablement",
+      "producers": [
+        "orchestration"
+      ],
+      "required_domains": [
+        "process",
+        "configuration",
+        "route",
+        "lifecycle"
+      ],
+      "meaning": "Only accepted effective-state owner can publish.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.native.owner_state",
+      "assertion_kind": "scalar",
+      "producers": [
+        "native"
+      ],
+      "required_domains": [
+        "process",
+        "lifecycle",
+        "configuration"
+      ],
+      "meaning": "Exact boolean owner field identified by the closed field qualifier; no invented health reduction, support or admission.",
+      "scalar_type": "bool",
+      "fields": [
+        "running",
+        "transitionPending",
+        "outputQuarantined",
+        "failed",
+        "modelLoaded",
+        "preSrDisplayReady",
+        "resetPending",
+        "nativeRayReconstructionActive"
+      ],
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.native.counter",
+      "assertion_kind": "scalar",
+      "producers": [
+        "native"
+      ],
+      "required_domains": [
+        "process",
+        "lifecycle"
+      ],
+      "meaning": "Owner counter, never a fabricated frame receipt.",
+      "scalar_type": "u64",
+      "fields": [
+        "frames",
+        "gameResets",
+        "featureBuilds",
+        "featureRebuilds",
+        "evaluateFailures",
+        "successfulEvaluations",
+        "completedPipelineEvaluations"
+      ],
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.present.owner_state",
+      "assertion_kind": "scalar",
+      "producers": [
+        "present"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "swapchain",
+        "provider",
+        "configuration",
+        "lifecycle",
+        "hdr_descriptor",
+        "resource_set"
+      ],
+      "meaning": "Exact boolean owner field identified by the closed field qualifier; no invented health reduction, support or admission.",
+      "scalar_type": "bool",
+      "fields": [
+        "requested",
+        "active",
+        "failed",
+        "policyBlocked",
+        "historyResetPending"
+      ],
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.present.counter",
+      "assertion_kind": "scalar",
+      "producers": [
+        "present"
+      ],
+      "required_domains": [
+        "process"
+      ],
+      "meaning": "Unattributed legacy global totals; qualifier scope_category=process_summary.",
+      "scalar_type": "u64",
+      "fields": [
+        "modelEvaluations",
+        "compositeEvaluations",
+        "skippedFrames",
+        "modelSubmissions",
+        "compositeSubmissions",
+        "presentAttempts",
+        "consecutiveFallbacks",
+        "pendingSlots"
+      ],
+      "required_qualifiers": [
+        "field",
+        "scope_category"
+      ],
+      "qualifier_constants": {
+        "scope_category": "process_summary"
+      },
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.provider.owner_support",
+      "assertion_kind": "support",
+      "producers": [
+        "provider"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "provider"
+      ],
+      "meaning": "Existing provider owner judgment; different ID from vendor feature support.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.provider.enabled",
+      "assertion_kind": "enablement",
+      "producers": [
+        "provider"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "provider"
+      ],
+      "meaning": "Actual known provider mode from its owner.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.hdr.color_class",
+      "assertion_kind": "scalar",
+      "producers": [
+        "hdr"
+      ],
+      "required_domains": [
+        "process",
+        "swapchain",
+        "hdr_descriptor"
+      ],
+      "meaning": "Exact HdrObservation classification; not rendering format support.",
+      "scalar_type": "text",
+      "fields": [
+        "colorClass"
+      ],
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.hdr.metadata",
+      "assertion_kind": "scalar",
+      "producers": [
+        "hdr"
+      ],
+      "required_domains": [
+        "process",
+        "swapchain",
+        "hdr_metadata"
+      ],
+      "meaning": "Metadata observation, including bounded hash policy.",
+      "scalar_type": "u64",
+      "fields": [
+        "metadataType",
+        "metadataSize",
+        "metadataHash",
+        "metadataResult",
+        "requestedMetadataType",
+        "requestedMetadataSize",
+        "requestedMetadataHash"
+      ],
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.lifecycle.open",
+      "assertion_kind": "availability",
+      "producers": [
+        "lifecycle"
+      ],
+      "required_domains": [
+        "process",
+        "lifecycle"
+      ],
+      "meaning": "Existing lifecycle state; no GPU lifetime rights.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.signal.owner_receipt",
+      "assertion_kind": "owner_receipt",
+      "producers": [
+        "semantic"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "feature",
+        "route",
+        "configuration",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Opaque Chat D verdict/provenance/lineage reference, not a recreated validator.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.discovery.candidate",
+      "assertion_kind": "availability",
+      "producers": [
+        "discovery"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Candidate observed; no semantic validation or model consumption.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.auxiliary.observed",
+      "assertion_kind": "availability",
+      "producers": [
+        "auxiliary"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Auxiliary input observed by H; not model support.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.route.owner_decision",
+      "assertion_kind": "owner_receipt",
+      "producers": [
+        "orchestration"
+      ],
+      "required_domains": [
+        "process",
+        "route",
+        "configuration",
+        "lifecycle"
+      ],
+      "meaning": "Copied B decision receipt; cannot be executed or recommitted.",
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.create_return",
+      "assertion_kind": "result",
+      "producers": [
+        "native"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "provider",
+        "feature",
+        "configuration",
+        "lifecycle"
+      ],
+      "meaning": "Create returned; possible mutation recorded separately.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        },
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.evaluate_return",
+      "assertion_kind": "result",
+      "producers": [
+        "native"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "provider",
+        "feature",
+        "route",
+        "configuration",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Evaluate returned; not submitted/completed.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        },
+        {
+          "source_kind": "raw_api_boundary",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.submit",
+      "assertion_kind": "result",
+      "producers": [
+        "present",
+        "lifecycle"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "queue",
+        "provider",
+        "feature",
+        "route",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Owner observed this operation submitted.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.complete",
+      "assertion_kind": "result",
+      "producers": [
+        "lifecycle"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "queue",
+        "provider",
+        "feature",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Owner observed exact completion; no resource-reuse grant.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.output",
+      "assertion_kind": "result",
+      "producers": [
+        "native",
+        "present"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "provider",
+        "feature",
+        "route",
+        "configuration",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Owner produced output receipt; not delivery or IQ.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.deliver",
+      "assertion_kind": "result",
+      "producers": [
+        "present"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "queue",
+        "swapchain",
+        "provider",
+        "route",
+        "lifecycle",
+        "frame",
+        "resource_set"
+      ],
+      "meaning": "Exact delivery milestone with existing host-result meaning.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.exec.retire",
+      "assertion_kind": "result",
+      "producers": [
+        "lifecycle"
+      ],
+      "required_domains": [
+        "process",
+        "api",
+        "device",
+        "provider",
+        "feature",
+        "lifecycle"
+      ],
+      "meaning": "Owner retirement observation; no destruction action.",
+      "required_qualifiers": [
+        "operation_id"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.qualification.stability",
+      "assertion_kind": "qualification",
+      "producers": [
+        "qualification"
+      ],
+      "required_domains": [
+        "process",
+        "game_session",
+        "api",
+        "adapter",
+        "driver",
+        "provider",
+        "route",
+        "configuration"
+      ],
+      "meaning": "Exact protocol/title/build/tuple only.",
+      "required_qualifiers": [
+        "protocol",
+        "game_build"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "qualification_receipt",
+          "basis": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.qualification.image_quality",
+      "assertion_kind": "qualification",
+      "producers": [
+        "qualification"
+      ],
+      "required_domains": [
+        "process",
+        "game_session",
+        "api",
+        "adapter",
+        "driver",
+        "provider",
+        "route",
+        "configuration"
+      ],
+      "meaning": "Exact IQ protocol; separate from stability and performance.",
+      "required_qualifiers": [
+        "protocol",
+        "game_build"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "qualification_receipt",
+          "basis": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.qualification.performance",
+      "assertion_kind": "qualification",
+      "producers": [
+        "qualification"
+      ],
+      "required_domains": [
+        "process",
+        "game_session",
+        "api",
+        "adapter",
+        "driver",
+        "provider",
+        "route",
+        "configuration"
+      ],
+      "meaning": "Exact performance protocol; no version-wide claim.",
+      "required_qualifiers": [
+        "protocol",
+        "game_build"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "qualification_receipt",
+          "basis": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    },
+    {
+      "id": "nr.cap.route.owner_health",
+      "assertion_kind": "health",
+      "producers": [
+        "orchestration"
+      ],
+      "required_domains": [
+        "process",
+        "route",
+        "configuration",
+        "lifecycle"
+      ],
+      "meaning": "Health explicitly supplied by B in a versioned owner receipt; I does not synthesize it from telemetry booleans.",
+      "required_qualifiers": [
+        "field"
+      ],
+      "direct_evidence_profiles": [
+        {
+          "source_kind": "owner_observation",
+          "basis": "T5_CURRENT_SESSION_OWNER_EVIDENCE"
+        }
+      ],
+      "mutation_policy": "none_observed_required"
+    }
+  ]
+}

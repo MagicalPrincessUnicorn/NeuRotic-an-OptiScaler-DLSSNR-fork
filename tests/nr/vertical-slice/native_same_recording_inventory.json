@@ -1,0 +1,168 @@
+{
+  "work_order": "W03-SP08-PROVIDER-COMPOSITE",
+  "suites": {
+    "native-same-recording": [
+      {
+        "id": "T16.local-order-without-submission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-order-not-reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-wrong-recording",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-wrong-reservation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-unordered-producer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-reset-recording",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-unproven-barrier",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-reservation-lost",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-conflicting-consumer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.local-cross-queue",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-unexpected-submission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-submission-claim",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-callback-expired",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-content-changed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-provider-held",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-exclusive-write",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-write-not-storage-reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-not-provider-proof",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T16.local-not-cpu-readback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-compatible-held-read",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-compatible-hold-not-reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-compatible-unknown-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-unrelated-compatibility-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-exact-provider-consumption",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-provider-consumer-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T19.local-provider-registration-already-released",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.reserved-not-active",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.wrong-reservation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.wrong-reserved-generation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.missing-reserved-feature",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.revoked-reservation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "SP03.reservation-after-callback",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.local-c03-no-invented-submit",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.local-c03-wrong-recording",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.local-c03-false-submission",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T18.local-later-submission-evidence",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-later-completion-not-reuse",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-later-retirement-evidence",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T17.local-canceled-retirement-evidence",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "native-same-recording": {
+      "emitted_suite": "native-same-recording"
+    }
+  }
+}

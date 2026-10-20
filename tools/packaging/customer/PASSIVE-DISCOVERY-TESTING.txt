@@ -1,0 +1,92 @@
+PASSIVE DISCOVERY - MATCHED GAME REVIEW, QUOTA REFUSAL DIAGNOSTICS
+
+This is an experimental review package. Passive Discovery watches existing
+D3D12 resource-creation hooks for metadata. It never grants buffer readiness or
+enables a rendering feature. The observer is off during ordinary launches.
+
+1. Extract this package to a local folder outside the game folder (for example
+   C:\NeuRotic-Test). Keep it extracted while testing. Close the game.
+2. This package changes the DLL to report the exact quota that refuses an event.
+   Run NeuRotic-Manual-Setup.cmd even if a previous Passive Discovery DLL is installed,
+   and choose the actual executable and your usual proxy.
+   Setup preserves existing settings and creates recovery backups.
+   Keep AFNR and other experimental modes off unless separately testing them.
+3. Enable To File logging in the overlay beforehand, then close the game.
+   Before BOTH runs, set Enabled = true under [DlssNr] in the installed game's
+   OptiScaler.ini. NR must be enabled at startup, before D3D12 device creation;
+   toggling NR after loading does not install the resource-creation hooks.
+   Enabled = auto defaults to off and yields absent creation coverage here.
+   If the game saves settings on first launch, let it do so before the pair.
+4. Fully exit Steam (Steam > Exit), including its tray client. Closing only
+   the Steam window is insufficient. Then run Start-Candidate-Control.cmd.
+   Select the same installed game executable used by Setup. Steam is detected
+   from that installation and started with this run's capture settings.
+   Leave the launcher window open. Play the intended scene for at least
+   45 seconds, then exit the GAME normally. The launcher tracks the game PID.
+5. Fully exit Steam again before running Start-Candidate-Observer.cmd.
+   It reuses the executable, app ID, arguments and proxy. Repeat the same
+   scene/settings/duration, then exit the game normally. Exit Steam afterward.
+6. Send the pair-<identifier>.zip displayed by the launcher. It is inside this
+   package's captures folder. Describe crashes, visual differences and any
+   repeatable frame-rate difference you noticed. No files are uploaded.
+
+If the game requires arguments, use a terminal in this package folder:
+  .\Start-Candidate-Control.cmd -GameExecutable "C:\Game\Game.exe" -GameArguments "your arguments"
+Steam games launch through a fresh local client using the installed app ID.
+The launcher never kills Steam or modifies its launch options. Allow Steam to
+sign in/start the game; the startup wait is up to five minutes. Non-Steam games
+use a direct launch. Missing gameplay session markers, nonzero exits and runs
+under 45 seconds make the control inconclusive and block the observer step.
+Start a fresh control for retries. Do not launch other games in this capture
+Steam client before exiting it.
+Do not leave another game instance running during either capture.
+
+For Crimson Desert, use the same live NR and frame-generation settings in
+both runs. Check that frame generation starts normally in BOTH runs before
+comparing frame rates. A half-rate run or plugin exception makes performance
+comparison inconclusive even when the candidate capture succeeds. This
+launcher correction does not repair the separate Streamline/FG startup issue.
+
+The observer covers up to 30 seconds from its cold startup; menus/loading can
+consume that interval. Hook coverage may be absent. A zero-candidate report is
+not proof that the game lacks useful buffers. Traces with drops or incomplete
+footers do not qualify as complete. Observer on/off shares frame-trace session
+instrumentation; this measures observer overhead relative to that control,
+not the older accepted DLL or a launch without diagnostic instrumentation.
+
+The review archive includes run metadata (local executable path and arguments),
+settings, available OptiScaler logs, and the candidate trace. Logs may contain
+local paths. Provider model contents and game assets are never collected.
+Large logs over 32 MiB are omitted and noted. Logs are retained as context and
+are not wholly attributed to a session just by their filename. The launcher
+requires the capture session plus the actual gameplay PID in the game log and
+attempts to observe the expected DLL in that process. Unobserved module facts
+remain inconclusive. A matching on trace must postdate game startup and have a
+complete footer; malformed/missing/incomplete footers stay inconclusive. This
+is a framing check: all records/counters/coverage still need offline analysis.
+Ordinary Steam LastPlayed changes are allowed; app/install/build/depot and
+client identities, game/settings/provider bytes and relevant diagnostic
+environment values must match. Mutable manifest hashes are recorded as context.
+The model's presence/hash is included in matching; its contents are excluded.
+If inputs change during a run, the pair is invalid. Evidence is retained; warm
+up/save settings and start a fresh control. review-files.json hashes the files
+in the pair archive so returned bytes can be checked before interpretation.
+
+Returned traces are analyzed with support\candidate_observer.py and its frozen
+schema (Python 3.12+). Python is not needed to launch or collect your game runs.
+Transport completeness, family coverage, losses and candidate unknowns are
+checked separately from actual game stability/performance/image quality.
+The launcher does not measure frame times or claim GPU safety automatically.
+
+Recovery: close the game and run NeuRotic-Manual-Uninstall.cmd for managed removal.
+For an exact pre-update rollback, use Restore.cmd in the backup folder that
+Setup prints. Preserve those backups until the game review is accepted.
+
+The packaged DLL is a newly built Release x64 binary with the snapshot storage
+fix. The exact product commit and binary hash are in support\BUILD-MANIFEST.json.
+The snapshot startup fix is included. CPU tests verify the separate quota
+causes and that dropped events still make capture incomplete. Limits remain
+unchanged; this build diagnoses losses rather than assuming their cause.
+If a capture says TRACE_INCOMPLETE, send it: the footer now records precise
+quota-refusal counts, which the packaged analyzer carries into its report.
+Game validation of Passive Discovery remains pending.

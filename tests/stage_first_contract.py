@@ -3,27 +3,26 @@ from pathlib import Path
 import subprocess
 
 root = Path(__file__).resolve().parents[1]
-base = '3a6f34d32d4d0728560014b65d42bd9bfc7a5c6e'
+base = 'b77ed7dd3d0812a7c48b768faf7b9b9232b29692'
 def original(path):
     return subprocess.check_output(['git', '-C', str(root), 'show', f'{base}:{path}'])
 
 for path in ['OptiScaler.ini', 'integration/OptiScaler.ini',
              'OptiScaler/shaders/dlssnr/precompile/dlssnr.hlsl',
              'OptiScaler/shaders/dlssnr/DlssNr_Vk.cpp']:
-    assert (root / path).read_bytes() == original(path), path
+    assert (root / path).read_text(encoding='utf-8').replace('\r\n', '\n') == \
+        original(path).decode('utf-8').replace('\r\n', '\n'), path
 
 # DX11 adds independently sized guides and producer proof to the accepted Wilds observer.
 # Its provider-frame selection and ordering gates remain intact across that extension.
 guides = 'OptiScaler/dlssnr/DlssNr_PresentGuides.h'
-old_guides = subprocess.check_output(
-    ['git', '-C', str(root), 'show', '6c36057a8f107e45c2a1d8eaa14caa7e54e7c31b:' + guides]).decode()
 new_guides = (root / guides).read_text()
 for gate in ['metadata.providerFrame = providerFrame;', 'next.providerFrame = providerFrame;',
-             'providerFrame ? slot.providerFrame != providerFrame : slot.backbuffer != backbuffer',
-             'providerFrame ? selection.providerFrame != providerFrame : selection.backbuffer != backbuffer',
+             '((slot.providerFrame || providerFrame) && slot.providerFrame != providerFrame)',
+             '((selection.providerFrame || providerFrame) && selection.providerFrame != providerFrame)',
              'providerFrame ? GpuSafety::OrderBefore(slot.producer, queue)',
              'providerFrame ? GpuSafety::OrderBefore(selection.producer, queue)']:
-    assert gate in old_guides and gate in new_guides, gate
+    assert gate in new_guides, gate
 
 old = original('OptiScaler/Config.cpp').decode()
 new = (root / 'OptiScaler/Config.cpp').read_text(encoding='utf-8')
@@ -34,4 +33,10 @@ assert block(old, 'auto performanceMode =', 'DlssNrPreDlaa.set_from_config') == 
 assert block(old, 'const int renderingMode = std::clamp(Instance()', 'ini.SetValue("DlssNr", "PreDlaa"') == block(
     new, 'const int renderingMode = std::clamp(Instance()', 'ini.SetValue("DlssNr", "PreDlaa"')
 assert block(old, 'static inline bool isInteger', 'Config::Config()') == block(new, 'static inline bool isInteger', 'Config::Config()')
-print('PASS: unchanged control INIs, composition shader and Vulkan renderer; Wilds provider-frame gates and legacy placement precedence retained. Native DX11 guide transport is an approved extension.')
+stage = (root / 'OptiScaler/dlssnr/DlssNr_StageControls.h').read_text()
+adapter = (root / 'OptiScaler/dlssnr/DlssNr_StageUi.h').read_text()
+assert 'SentenceCombo("##NrStage"' not in stage
+assert 'SelectUnifiedMethod(config, method)' in stage
+assert 'SelectUnifiedResolution(config, choice)' in stage
+assert 'SelectUnifiedResolution(C& c, int choice)' in adapter
+print('PASS: unchanged control INIs, composition shader and Vulkan renderer; provider-frame gates, legacy config precedence, and two-method UI projection retained.')

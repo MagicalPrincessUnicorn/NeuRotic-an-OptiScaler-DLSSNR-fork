@@ -41,6 +41,7 @@ class FSR2FeatureDx11 : public FSR2Feature, public IFeature_Dx11
 
     // Inherited via IFeature_Dx11
     bool InitInternal(ID3D11DeviceContext* InContext, NVSDK_NGX_Parameter* InParameters) override;
+    bool PrepareEvaluation(NVSDK_NGX_Parameter* InParameters) override;
     bool EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Parameter* InParameters) override;
 
     feature_version Version() override { return FSR2Feature::Version(); }

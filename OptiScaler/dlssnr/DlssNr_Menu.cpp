@@ -1,4 +1,7 @@
 #include "pch.h"
+#include "PresentFgStatus.h"
+#include "../resource.h"
+#include <menu/ItemHelp.h>
 #include "NativeFgVulkan.h"
 #include "RenderingOutputStatus.h"
 #include "RenderingOutputStartupTrace.h"
@@ -29,14 +32,20 @@
 #include "NrScreenshotContract.h"
 #include "NrExperimentalPolicy.h"
 #include "NrPreflightCell.h"
+#include "MixedInputUi.h"
+#include "CaptureSettings.h"
+#include "NrAdvancedMenu.h"
 #include "NrDiagnosticsUi.h"
 #include "NrPreflightState.h"
 #include "NrOutputColorState.h"
 #include "NrIntakeCheckState.h"
 #include "NrStatusPanel.h"
 #include "NrJitterDisplay.h"
+#include "NrSignalDetailsUi.h"
+#include "NrOwnerReporting.h"
 #include "NrAdvisorPolicy.h"
 #include "ObservationRefreshButton.h"
+#include "NrDiagnosticSignals.h"
 #include "PreparedGuideStatus.h"
 #include "PreparedGuideStatusV2.h"
 #include <nr/diagnostics/capability/ObservationRefresh.h>
@@ -59,11 +68,41 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <objbase.h>
 #include <chrono>
 #include <bit>
 #include <array>
 #include <optional>
 #include <cfloat>
+
+// Called by the existing manual Copy observation report action only.
+static DlssNr::VkFlight::ExportContext CaptureManualVkFlightContext() noexcept
+{
+    DlssNr::VkFlight::ExportContext context;
+    try {
+        context.provenance="manual_explicit";
+        context.build=VER_BUILD_COMMIT;
+        context.pid=GetCurrentProcessId();
+        FILETIME creation{},exit{},kernel{},user{},now{};
+        if(GetProcessTimes(GetCurrentProcess(),&creation,&exit,&kernel,&user))
+            context.processCreation100ns=(uint64_t(creation.dwHighDateTime)<<32)|creation.dwLowDateTime;
+        GetSystemTimeAsFileTime(&now);
+        context.exportUtc100ns=(uint64_t(now.dwHighDateTime)<<32)|now.dwLowDateTime;
+        const auto guidText=[]() -> std::string {
+            GUID id{};if(CoCreateGuid(&id)!=S_OK)return {};
+            char text[33]{};
+            std::snprintf(text,sizeof(text),"%08x%04x%04x%02x%02x%02x%02x%02x%02x%02x%02x",
+                unsigned(id.Data1),unsigned(id.Data2),unsigned(id.Data3),unsigned(id.Data4[0]),unsigned(id.Data4[1]),
+                unsigned(id.Data4[2]),unsigned(id.Data4[3]),unsigned(id.Data4[4]),unsigned(id.Data4[5]),unsigned(id.Data4[6]),unsigned(id.Data4[7]));
+            return text;
+        };
+        // Session storage is initialized only on the first explicit export.
+        // It describes this recorder/module lifetime, not a rendering-success proof.
+        static const auto session=guidText();context.session=session;
+        context.exportId=guidText();
+    }catch(...){} // A failed identity field remains unavailable; report copying continues.
+    return context;
+}
 
 namespace DlssNr
 {
@@ -99,7 +138,7 @@ static void RenderInputSelectionStatus()
     const auto color=selection.phase==Phase::Applied?ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled):
         ImVec4(1.f,.72f,.25f,1.f);
     ImGui::TextColored(color,"%s",label);
-    if(!selection.reason.empty()&&(ImGui::IsItemHovered()||ImGui::IsItemFocused())){
+    if(!selection.reason.empty()&&(Neurotic::ItemHelpHovered())){
         ImGui::BeginTooltip();ImGui::PushTextWrapPos(ImGui::GetFontSize()*28.f);
         ImGui::TextUnformatted(Neurotic::Translate(selection.reason).c_str());
         ImGui::PopTextWrapPos();ImGui::EndTooltip();
@@ -217,7 +256,9 @@ MenuReadiness MenuPreflightState(Config* config)
     }
     const auto telemetry = SelectedNativeTelemetry();
     const bool fresh = nativeObservation.Fresh(selection,
-        telemetry.nativeInputs.observations + telemetry.frames, now, telemetry.lifecycleGeneration);
+        vulkan?(enabled?telemetry.selectedNativeObservations:telemetry.nativeInputs.observations):
+            telemetry.nativeInputs.observations + telemetry.frames, now,
+        vulkan&&!enabled?telemetry.nativeInputGeneration:telemetry.lifecycleGeneration);
     if (!fresh || !telemetry.lifecycleOpen) return MenuReadiness::Waiting;
     if (enabled && telemetry.enabled && telemetry.failed) return MenuReadiness::Blocked;
     const bool ready = telemetry.nativeInputs.observations && telemetry.frameWidth && telemetry.frameHeight &&
@@ -262,19 +303,25 @@ static void EndNrCard() { Neurotic::Sleek::EndContentCard(); }
 // live under the cursor; only the commit that triggers the rebuild waits for release. Cheap controls
 // that are just shader constants (detail, colour, paper white) do not use this -- they can afford to
 // apply live.
-static std::unordered_map<std::string, NrPendingEdit> pendingNrEdits;
+template<class Optional> static auto& PendingNrEdits()
+{
+    static std::unordered_map<std::string, NrPendingEditFor<Optional>> edits;
+    return edits;
+}
 
 static void CancelNrEdits()
 {
-    for (auto& [id, edit] : pendingNrEdits) edit.Cancel();
+    for (auto& [id, edit] : PendingNrEdits<NrOptional<float>>()) edit.Cancel();
+    for (auto& [id, edit] : PendingNrEdits<CustomOptional<float>>()) edit.Cancel();
 }
 
-static bool DeferredNrSlider(const char* label, const std::vector<NrOptional<float>*>& targets,
+template<class Optional = NrOptional<float>>
+static bool DeferredNrSlider(const char* label, const std::vector<Optional*>& targets,
                              float mn, float mx, float def, const char* fmt, bool percent = false,
                              ImVec2* sliderMin = nullptr, ImVec2* sliderMax = nullptr,
                              const char* tableLabel = nullptr, const char* tableHelp = nullptr)
 {
-    auto& edit = pendingNrEdits[label];
+    auto& edit = PendingNrEdits<Optional>()[label];
     edit.Prepare(targets, ImGui::GetFrameCount());
     float value = edit.Value();
     bool changed = false;
@@ -952,7 +999,8 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
         ImVec4(.12f,.46f,.25f,1.f):ImVec4(.45f,.86f,.61f,1.f);
     const ImVec4 detected=background.x+background.y+background.z>1.5f?
         ImVec4(.16f,.42f,.68f,1.f):ImVec4(.42f,.75f,1.f,1.f);
-    const ImVec4 caution(0.99f, 0.77f, 0.37f, 1.0f);
+    const ImVec4 caution=background.x+background.y+background.z>1.5f?
+        ImVec4(.57f,.36f,.05f,1.f):ImVec4(.99f,.77f,.37f,1.f);
     const ImVec4 bad(0.95f, 0.30f, 0.28f, 1.0f);
     const bool enabled = settings.DlssNrEnabled.value_or_default();
     const bool nativeRoute = settings.DlssNrRoute.value_or_default() == 0;
@@ -967,33 +1015,36 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
         effectiveConnection.status.selectedSource>=Connections::Source::BuiltIn&&
         (NativeGuides::SelectedSource()==0||NativeGuides::SelectedSource()==int(effectiveConnection.status.selectedSource))&&
         (!outputActive||outputSnapshot.producer==RenderingOutput::Producer::BuiltIn);
-    static NrPreflightSignals::FreshObservation nativeProgress[2], presentProgress[2];
+    // Native Vulkan exports its own owner-bound completed-use receipts.
+    const bool nativeVulkanReceipts=observationVulkan&&nativeRoute;
+    const bool receiptPath=nativeRoute||(!observationVulkan&&presentExpected&&!preparedInput&&settings.DlssNrRoute.value_or_default()!=3);
+    using ReceiptSignal=SignalReceipts::Signal;
+    const auto receipt=[&](ReceiptSignal signal)->const SignalReceipts::Reading&{return native.signalReceipts[size_t(signal)];};
+    static NrPreflightSignals::FreshObservation nativeProgress[2], nativeSelectedProgress, presentProgress[2];
     const auto now=GetTickCount64();
     const bool nativeObserved = nativeProgress[observationVulkan?1:0].Update(
-        native.lifecycleGeneration,input.observations,now,native.lifecycleOpen);
+        observationVulkan?native.nativeInputGeneration:native.lifecycleGeneration,input.observations,now,native.lifecycleOpen);
+    const bool selectedNativeObserved=observationVulkan?nativeSelectedProgress.Update(
+        native.lifecycleGeneration,native.selectedNativeObservations,now,native.lifecycleOpen):nativeObserved;
     const bool presentObserved = presentProgress[observationVulkan?1:0].Update(
         present.resourceGeneration,present.presentAttempts,now,present.api!=PresentApi::Unknown);
-    const bool nativeOperational = nativeExpected && native.enabled && native.running && nativeObserved;
+    const bool nativeOperational = nativeExpected && native.enabled && native.running && selectedNativeObserved;
     const bool presentOperational = presentExpected && present.requested && present.active && presentObserved;
     const auto fgProgress=NativeFg::Progress();
     static NrPreflightSignals::FreshObservation fgInputProgress, fgOutputProgress;
     const bool fgOwner=NativeFg::Selected()&&fgProgress.owners&&fgProgress.physicalAvailable;
     const bool fgDetected=fgInputProgress.Update(fgProgress.identity,fgProgress.real,now,fgOwner);
     const bool fgInUse=fgOutputProgress.Update(fgProgress.identity,fgProgress.physical.generatedRetired,now,fgOwner);
-    // Share this display snapshot between the clipped cell and its complete hover value.
-    // Updating it before a collapsed/alternate view returns also clears changed owners.
-    static JitterDisplay::Snapshot jitterDisplay;
-    const JitterDisplay::Context jitterContext {reinterpret_cast<uintptr_t>(host.currentFeature),
-        static_cast<int>(host.currentInputApiName), settings.DlssNrRoute.value_or_default(),
-        NrConfigSynchronization::ProfileGeneration(), native.lifecycleGeneration,
-        present.resourceGeneration, native.gameResets, native.featureBuilds, native.featureRebuilds};
-    const auto& jitterText = jitterDisplay.Update(jitterContext, input,
-        nativeObserved && host.currentFeature != nullptr, ImGui::GetTime());
+    // Limit only the displayed model values, never rendering or live status.
+    static JitterDisplay::ReceiptSnapshot jitterDisplay;
+    const bool jitterEligible=enabled&&receiptPath&&(nativeRoute||
+        present.actualInputClass==PresentInputDecision::InputClass::Guided);
+    const auto& jitterValues=jitterDisplay.Update(receipt(ReceiptSignal::Jitter),jitterEligible,now);
     using NrPreflightState::State;
     using NrPreflightState::Signal;
     using NrPreflightState::Delivery;
     const auto color = [&](State state) -> ImVec4 {
-        return state == State::Ready ? good : state == State::Detected ? detected : state == State::Fault ? bad : muted;
+        return state == State::Ready || state == State::Consumed ? good : state == State::Detected || state == State::Usable ? detected : state == State::Fault ? bad : state == State::Pending || state == State::Stale ? caution : muted;
     };
     auto refreshState=Capability::MakeRefreshState(enabled,settings.DlssNrRoute.value_or_default(),
         NrConfigSynchronization::ProfileGeneration(),native,present,fgProvider,settings.ObservationRevision());
@@ -1055,9 +1106,13 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
         ObservationActivationHeld(),!actions.copyClicked);
     if(actions.copyClicked) {
         // Preserve explicit Vulkan trace export alongside the last completed report.
-        if(!DlssNr::VkFlight::Export(Util::DllPath().remove_filename()/"NeuRotic-Vulkan-trace.csv"))
-            LOG_WARN("Vulkan observation trace export failed");
+        std::string flightIdentity;
+        const auto flightContext=CaptureManualVkFlightContext();
+        if(DlssNr::VkFlight::Export(Util::DllPath().remove_filename()/"NeuRotic-Vulkan-trace.csv",flightContext,&flightIdentity))
+            LOG_INFO("NR_VK_FLIGHT_EXPORT {}",flightIdentity);
+        else LOG_WARN("Vulkan observation trace export failed");
         auto report=completed?completed->utf8:std::string();
+        report+=InputSourcesReport();
         if(settings.DlssNrRoute.value_or_default()==3){
             // On-demand scalar receipt also covers a supervisor that never received Signal.
             // Keep the existing last-recorded capability report, when one exists.
@@ -1081,7 +1136,7 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
     ImGui::Spacing();
     }
     const float width = ImGui::GetContentRegionAvail().x;
-    struct Lamp { const char* label; State state; const char* detail; bool inUse=false; };
+    struct Lamp { const char* label; State state; std::string detail; bool inUse=false; };
     const bool nativeInUse=outputActive&&outputSnapshot.producer==RenderingOutput::Producer::Native&&nativeOperational;
     const bool presentInUse=outputActive&&outputSnapshot.producer==RenderingOutput::Producer::Present&&presentOperational;
     const bool preparedInUse=outputActive&&outputSnapshot.producer==RenderingOutput::Producer::BuiltIn&&preparedInput&&effectiveConnection.status.outputValid;
@@ -1120,7 +1175,7 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
             ? OutputColorState::Api::Dxgi : OutputColorState::Api::Unknown;
     const auto outputColor = OutputColorState::Read(outputColorApi, presentObserved,
         presentInUse || preparedInUse, outputColorDescriptor, present.backbufferFormat, present.vkFormatObserved);
-    const std::array<Lamp, 17> lamps {{
+    std::array<Lamp, 21> lamps {{
         {Neurotic::UiLiteral("ingame.dlssnr-menu.graphics_input_9f20b036", "Graphics input"), nativeObserved&&host.currentFeature ? State::Ready : State::Inactive,
              Neurotic::UiLiteral("ingame.dlssnr-menu.the_game_upscaler_feature_is_observable_this_doe_ad3c4062", "The game upscaler feature is observable; this does not prove that NR inputs are qualified."), gameGuidesInUse},
         {Neurotic::UiLiteral("ingame.dlssnr-menu.source_output_e0fa4b31", "Source output"), preparedInput ?
@@ -1155,8 +1210,267 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
         {Neurotic::UiLiteral("ingame.dlssnr-menu.ray_reconstruction_8e0fdd67", "Ray reconstruction"), nativeObserved&&native.nativeRayReconstructionActive ? State::Ready : State::Inactive,
              Neurotic::UiLiteral("ingame.dlssnr-menu.native_owner_reports_ray_reconstruction_active_25ff1768", "Native owner reports Ray Reconstruction active."), nativeObserved&&native.nativeRayReconstructionActive},
         {Neurotic::UiLiteral("ingame.dlssnr-menu.frame_generation_7e5b7df2", "Frame generation"), fgDetected||fgInUse ? State::Ready : State::Inactive,
-             Neurotic::UiLiteral("ingame.nr-input.fg_progress", "Uses current generated-presentation progress. Display is not independently verified. Other providers without current activity evidence remain unknown."), fgInUse}
+             Neurotic::UiLiteral("ingame.nr-input.fg_progress", "Uses current generated-presentation progress. Display is not independently verified. Other providers without current activity evidence remain unknown."), fgInUse},
+        {"HUD-free model input", enabled?State::Unavailable:State::Off, "UI exclusion is not verified. Processing order and UI tags alone do not confirm a clean image."},
+        {"Protected UI composition", enabled?State::Unavailable:State::Off, "UI protection is not verified. Rendering can continue, but the model may affect the UI."},
+        {"FG UI protection", fg?State::Unavailable:State::NotApplicable, "UI protection in generated frames is not verified."},
+        {"Super resolution", State::Inactive, "No active upscaler."}
     }};
+    static NrPreflightSignals::FreshObservation srObservation;
+    auto* srFeature=host.currentFeature;
+    const bool srInitialized=srFeature&&srFeature->IsInited();
+    const auto srFrames=srFeature?srFeature->FrameCount():0;
+    const bool srCurrent=srObservation.Update(reinterpret_cast<uintptr_t>(srFeature),srFrames>0?uint64_t(srFrames):0,now,srInitialized);
+    lamps[20].state=srInitialized?State::Ready:State::Inactive;lamps[20].inUse=srCurrent;
+    if(srFeature)lamps[20].detail="Upscaler settings are in Upscaling.";
+    // Actual per-signal receipts override route-wide activity guesses. A Native
+    // route is not failed for unrelated Present-owner observations.
+    std::array<std::optional<ReceiptSignal>,21> detailReceipts{};
+    const auto applyReceipt=[&](size_t row,SignalReceipts::Signal signal) {
+        const auto& r=native.signalReceipts[static_cast<size_t>(signal)];
+        lamps[row].state=DiagnosticSignals::State(r);
+        lamps[row].inUse=false;
+        detailReceipts[row]=signal;
+        lamps[row].detail=SignalDetails::Description(int(row));
+        if(nativeVulkanReceipts&&(signal==ReceiptSignal::History||signal==ReceiptSignal::PreExposure)){
+            lamps[row].state=State::NotReported;
+            if(r.fact.reason)lamps[row].detail=r.fact.reason;
+        }
+    };
+    lamps[0].inUse=false; // A visible feature is detection, not consumer evidence.
+    lamps[3].inUse=false; // Present dimensions do not prove NR consumption.
+    if(receiptPath){
+        using S=SignalReceipts::Signal;
+        for(const auto [row,signal]:{std::pair<size_t,S>{1,S::Color},{2,S::Color},{4,S::Output},
+            {5,S::History},{6,S::Depth},{7,S::Motion},{8,S::Jitter},{9,S::Exposure},
+            {10,S::PreExposure},{11,S::Color},{12,S::Evaluation},{13,S::Evaluation}})applyReceipt(row,signal);
+        if(nativeRoute)applyReceipt(14,S::Delivery);
+        const auto& scene=native.signalReceipts[static_cast<size_t>(S::Color)];
+        lamps[0].state=nativeObserved?State::Detected:State::Inactive;
+        lamps[15].state=scene.fact.stage==SignalReceipts::Stage::PostRr?
+            (scene.state==SignalReceipts::State::Consumed?State::Consumed:State::Detected):State::NotApplicable;
+        lamps[15].inUse=false;
+        if(nativeRoute){
+            lamps[14].label="Native composition";
+            lamps[14].detail+=" Later upscaling and display are not verified.";
+            lamps[3].state=State::NotApplicable;
+        }else{
+            lamps[1].label="Present color";lamps[11].label="Model color input";
+            lamps[9].state=lamps[10].state=State::NotApplicable;
+            lamps[9].detail=lamps[10].detail="Native scene exposure is not applied to Present color.";
+            if(present.actualInputClass!=PresentInputDecision::InputClass::Guided){
+                for(size_t row:{size_t(6),size_t(7),size_t(8)}){
+                    lamps[row].state=present.actualInputClass==PresentInputDecision::InputClass::ImageOnly?State::NotApplicable:State::Pending;
+                    lamps[row].detail="This Present mode is not using native guides.";
+                }
+            }
+            lamps[14].state=present.failed?State::Fault:presentObserved&&present.acceptedOutputPresents?State::Detected:State::Pending;
+            lamps[14].inUse=false;
+            lamps[14].detail="The game accepted NR output for presentation. Final copy completion and display are not verified here.";
+            lamps[15].state=nativeObserved&&native.nativeRayReconstructionActive?State::Detected:State::Unavailable;
+        }
+        lamps[3].inUse=false;
+    }else{
+        // Present format is not NR output meaning. Legacy V1 status has no
+        // independently selectable color receipt; retain unknown explicitly.
+        lamps[4].state=enabled?State::Unavailable:State::Off;lamps[4].inUse=false;
+        lamps[4].detail="NR output color format is not confirmed. See Details for the display buffer format.";
+        lamps[11].state=enabled?State::Unavailable:State::Off;
+        lamps[1].inUse=false;
+        lamps[5].state=State::Unavailable;lamps[5].inUse=false;
+        lamps[5].detail="Recent history reuse is not confirmed.";
+        const auto liveSignals=Connections::QueryInputSignals(now);
+        const auto signals=liveSignals.fresh?liveSignals:Connections::QueryCompletedInputSignals(now);
+        const auto preparedView=OwnerReporting::Prepared(effectiveConnection,signals,preparedInput);
+        if(preparedInput){
+            lamps[6].state=preparedView.depth;lamps[7].state=preparedView.motion;
+            for(size_t row:{size_t(6),size_t(7)}){
+                lamps[row].inUse=false;
+                lamps[row].detail=lamps[row].state==State::Consumed?
+                    "This input was used in completed processing.":"This method has not reported recent input use.";
+            }
+        }
+        if(!nativeRoute){
+            lamps[2].state=preparedInput&&effectiveConnection.status.captureWidth&&effectiveConnection.status.captureHeight?State::Detected:State::Unavailable;
+            lamps[2].inUse=false;lamps[2].detail="Prepared source size. Dimensions do not confirm use.";
+            lamps[8].state=lamps[9].state=lamps[10].state=State::NotApplicable;
+            lamps[11].state=preparedInput?preparedView.color:State::NotReported;
+            lamps[11].label="Model color input";lamps[11].inUse=false;
+            lamps[11].detail=lamps[11].state==State::Consumed?"The captured image was used in completed processing.":"This method has not reported recent color use.";
+            lamps[13].state=preparedInput?preparedView.evaluation:
+                outputActive&&outputSnapshot.producer==RenderingOutput::Producer::Present?State::Consumed:State::NotReported;
+            lamps[13].inUse=false;
+            lamps[13].detail=lamps[13].state==State::Consumed?"The active renderer completed model processing.":"No recent processing completion reported.";
+            lamps[14].state=preparedInput?preparedView.delivery:
+                outputActive&&outputSnapshot.producer==RenderingOutput::Producer::Present?State::Consumed:present.failed&&outputSnapshot.producer!=RenderingOutput::Producer::BuiltIn?State::Fault:State::NotReported;
+            lamps[14].inUse=false;
+            lamps[14].detail="Output copy status follows the active renderer. Display is not independently verified.";
+        }
+    }
+    if(!enabled)for(size_t row:{size_t(1),size_t(2),size_t(4),size_t(5),size_t(6),size_t(7),size_t(8),size_t(9),size_t(10),size_t(11),size_t(12),size_t(13),size_t(14),size_t(17),size_t(18)}){lamps[row].state=State::Off;lamps[row].inUse=false;}
+
+    lamps[8].detail=jitterValues?
+        StatusPanel::Format("X %.4f | Y %.4f",jitterValues->x,jitterValues->y):
+        "No current model jitter values.";
+    if(compact){
+        auto* storage=ImGui::GetStateStorage();const auto choiceKey=ImGui::GetID("##NrSignalChoice");
+        int selected=std::clamp(storage->GetInt(choiceKey,11),0,20);
+        const float font=ImGui::GetFontSize();const int columns=ImGui::GetContentRegionAvail().x>=font*38?6:3;
+        const auto group=[&](const char* title,std::initializer_list<int> indices,bool frameInputs=false){
+            const float right=ImGui::GetCursorScreenPos().x+ImGui::GetContentRegionAvail().x;
+            const auto heading=Neurotic::Translate(title);
+            const float headingWidth=ImGui::CalcTextSize(heading.c_str()).x*1.2f;
+            InputSectionTitle(heading.c_str(),headingWidth,1.2f);
+            if(frameInputs){
+                const float spacing=ImGui::GetStyle().ItemSpacing.x;
+                const float requireWidth=ImGui::CalcTextSize("Require selected sources").x+Neurotic::Sleek::ToggleWidth()+ImGui::GetStyle().ItemInnerSpacing.x;
+                const float autoWidth=InputActionWidth("Auto-select all inputs"),refreshWidth=InputActionWidth("Refresh sources");
+                const float total=requireWidth+autoWidth+refreshWidth+spacing*2;
+                const float left=ImGui::GetCursorScreenPos().x;
+                if(ImGui::GetItemRectMax().x+spacing+total<=right)ImGui::SameLine(0,0);
+                const float widths[]={requireWidth,autoWidth,refreshWidth};
+                for(int first=0;first<3;){
+                    int end=first+1;float rowWidth=widths[first];
+                    while(end<3&&rowWidth+spacing+widths[end]<=right-left)rowWidth+=spacing+widths[end++];
+                    ImGui::SetCursorScreenPos({(std::max)(left,right-rowWidth),ImGui::GetCursorScreenPos().y});
+                    for(int control=first;control<end;++control){
+                        if(control>first)ImGui::SameLine();
+                        if(control==0){ImGui::BeginDisabled(observationVulkan);if(RequireSelectedSources(config))CancelNrEdits();ImGui::EndDisabled();}
+                        else if(control==1){ImGui::BeginDisabled(observationVulkan);if(UseAutoInputs(config))CancelNrEdits();ImGui::EndDisabled();}
+                        else RefreshSourceButton();
+                    }
+                    first=end;
+                }
+            }
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,ImVec2(font*.125f,font*.125f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,ImVec2(font*.25f,font*.25f));
+            if(ImGui::BeginTable(title,columns,ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_NoPadOuterX)){
+                for(int index:indices){const auto& lamp=lamps[index];const auto state=NrPreflightState::Usage(lamp.state,lamp.inUse);
+                    ImGui::TableNextColumn();ImGui::PushID(index);
+                    const float width=ImGui::GetContentRegionAvail().x;
+                    const auto fill=PipelineUi::SelectedFill(index==selected);
+                    ImGui::PushStyleColor(ImGuiCol_Button,fill);
+                    if(ImGui::Button("##Signal",{width,font*3.6f})){selected=index;storage->SetInt(choiceKey,index);}
+                    ImGui::PopStyleColor();const auto lo=ImGui::GetItemRectMin(),hi=ImGui::GetItemRectMax();auto* draw=ImGui::GetWindowDrawList();
+                    PipelineUi::Attention(enabled&&index!=20&&state==State::Fault?PipelineView::State::Blocked:PipelineView::State::Unknown,config->MenuReduceMotion.value_or_default());
+                    const auto label=Neurotic::Translate(lamp.label);
+                    ImGui::RenderTextEllipsis(draw,{lo.x+font*.35f,lo.y+font*.35f},{hi.x-font*.3f,lo.y+font*1.5f},hi.x-font*.3f,label.c_str(),nullptr,nullptr);
+                    ImGui::PushStyleColor(ImGuiCol_Text,color(state));const auto caption=state==State::Ready||state==State::Consumed?"In use":state==State::Usable?"Available":NrPreflightState::Name(state);
+                    ImGui::RenderTextEllipsis(draw,{lo.x+font*.35f,lo.y+font*2},{hi.x-font*.3f,hi.y},hi.x-font*.3f,caption,nullptr,nullptr);ImGui::PopStyleColor();
+                    if(Neurotic::ItemHelpHovered()){ImGui::BeginTooltip();ImGui::PushTextWrapPos(font*28);ImGui::TextUnformatted(label.c_str());ImGui::TextUnformatted(caption);ImGui::TextUnformatted(Neurotic::Translate(SignalDetails::Description(index)).c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();}
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            ImGui::PopStyleVar(2);
+            ImGui::Spacing();
+        };
+        group("Frame inputs and rendering activity",{11,6,7,8,9,10,20,15,16,5,13,14},true);
+        const float toolsRight=ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x;
+        const bool more=ImGui::TreeNodeEx("More observations",ImGuiTreeNodeFlags_NoTreePushOnOpen);
+        const float captureWidth=ImGui::CalcTextSize("Capture settings").x+ImGui::GetStyle().FramePadding.x*2+font;
+        if(toolsRight-captureWidth>ImGui::GetCursorPosX()+ImGui::GetItemRectSize().x+font*.4f)ImGui::SameLine(toolsRight-captureWidth);
+        const bool captureOverride=config->DlssNrInputSource.value_or_default()!=0;
+        if(captureOverride)ImGui::PushStyleColor(ImGuiCol_Text,PipelineUi::Color(PipelineView::State::Fallback));
+        if(PipelineUi::NavigationButton("Capture settings","##OpenCaptureSettings"))ImGui::OpenPopup("Capture settings##WorkspaceInputOptions");
+        if(captureOverride)ImGui::PopStyleColor();
+        InputHelp(captureOverride?"A capture override is set. It can restrict sources on this board.":"Frame transfer and capture compatibility. Signal choices stay on this board.");
+        if(more)group("Frame & protection",{0,1,2,3,4,12,17,18,19});
+        ImGui::Spacing();ImGui::Separator();
+        const bool editable=selected==11||selected==6||selected==7;
+        const char* heading=selected==11?"Scene color":selected==6?"Depth guide":selected==7?"Motion vectors":lamps[selected].label;
+        InputSectionTitle(Neurotic::Translate(heading).c_str());
+        const char* description=SignalDetails::Description(selected);
+        ImGui::TextDisabled("%s",description);
+        if(!editable){
+            const auto state=NrPreflightState::Usage(lamps[selected].state,lamps[selected].inUse);
+            const bool columns=ImGui::GetContentRegionAvail().x>=font*32&&ImGui::BeginTable("##SignalDetailPanels",2,ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_NoPadOuterX);
+            if(columns)ImGui::TableNextColumn();
+            if(BeginInputCard("##SignalObservation","Observation",font*13.f)){
+                if(ImGui::BeginTable("##SignalReadout",2,ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_NoPadOuterX)){
+                    ImGui::TableNextColumn();ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.status_920e413c","Status"));ImGui::TableNextColumn();
+                    StatusPanel::Line("##SignalStatus",state==State::Consumed||state==State::Ready?"In use":state==State::Usable?"Available":NrPreflightState::Name(state),color(state));
+                    ImGui::TableNextColumn();ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.control_32d7e820","Control"));ImGui::TableNextColumn();
+                    StatusPanel::Line("##SignalControl",selected==20?"Upscaling":selected==16?"Frame Generation":"Automatic",muted);
+                    ImGui::EndTable();
+                }
+                ImGui::Spacing();ImGui::Separator();ImGui::Spacing();
+                const auto detail=detailReceipts[selected];
+                const bool showReason=enabled&&detail&&state!=State::NotApplicable&&
+                    state!=State::Off&&receipt(*detail).fact.reason&&
+                    receipt(*detail).state==SignalReceipts::State::Blocked;
+                const char* note=showReason?receipt(*detail).fact.reason:lamps[selected].detail.c_str();
+                ImGui::TextWrapped("%s",Neurotic::Translate(note).c_str());
+            }
+            EndInputCard();
+            if(columns)ImGui::TableNextColumn();else ImGui::Spacing();
+            if(BeginInputCard("##SignalEvidence",selected==8?"Jitter values":"Details",font*13.f)){
+                if(selected==8){
+                    if(ImGui::BeginTable("##JitterValues",2,ImGuiTableFlags_SizingStretchSame)){
+                        const auto row=[&](const char* label,const std::string& value){
+                            ImGui::TableNextRow();ImGui::TableNextColumn();ImGui::TextDisabled("%s",label);
+                            ImGui::TableNextColumn();StatusPanel::Line(label,value,muted);
+                        };
+                        row("Horizontal (X)",jitterValues?StatusPanel::Format("%.4f",jitterValues->x):"Not reported");
+                        row("Vertical (Y)",jitterValues?StatusPanel::Format("%.4f",jitterValues->y):"Not reported");
+                        row("Source",jitterValues?"First NR pass":"Not reported");
+                        row("Method",nativeRoute?"Native Temporal":"Present");
+                        ImGui::EndTable();
+                    }
+
+                }else{
+                    SignalDetails::Panel panel;
+                    const auto detail=detailReceipts[selected];
+                    const bool applicable=enabled&&state!=State::NotApplicable&&state!=State::Off;
+                    if(detail&&receiptPath)panel=SignalDetails::Receipt(*detail,receipt(*detail),applicable);
+                    else if(detail){
+                        if(selected==13||selected==14){
+                            panel.values.push_back({"GPU completion",applicable&&state==State::Consumed?"Confirmed":"Not reported"});
+                            panel.values.push_back({"Display","Not independently verified"});
+                        }else panel.values.push_back({"Input use",applicable&&state==State::Consumed?"Confirmed":"Not reported"});
+                        if(preparedInput){
+                            panel.values.push_back({"Source",MixedSourceText(int(effectiveConnection.status.selectedSource))});
+                            panel.values.push_back({"Image size",SignalDetails::Extent(effectiveConnection.status.captureWidth,effectiveConnection.status.captureHeight)});
+                            if(selected==13)panel.values.push_back({"Work size",SignalDetails::Extent(effectiveConnection.status.workWidth,effectiveConnection.status.workHeight)});
+                        }
+                    }
+                    panel.values.insert(panel.values.begin(),{"Method",nativeRoute?"Native Temporal":"Present"});
+                    const auto add=[&](const char* label,std::string value){panel.values.push_back({label,std::move(value)});};
+                    if(!detail)switch(selected){
+                    case 0:add("Graphics input",ApiUpscalerInputName(host.currentInputApiName));break;
+                    case 1:case 2:
+                        add("Image size",preparedInput?SignalDetails::Extent(effectiveConnection.status.captureWidth,effectiveConnection.status.captureHeight):
+                            nativeObserved?SignalDetails::Extent(native.frameWidth,native.frameHeight):"Not reported");break;
+                    case 3:add("Buffer size",presentObserved?SignalDetails::Extent(present.backbufferWidth,present.backbufferHeight):"Not reported");break;
+                    case 4:
+                        add("NR color format","Not reported");
+                        add("Display buffer format",presentObserved&&present.backbufferFormat!=DXGI_FORMAT_UNKNOWN?BackbufferFormatName(present.backbufferFormat):"Not reported");break;
+                    case 5:add("History reuse","Not confirmed");break;
+                    case 9:add("Exposure input",!nativeRoute?"Not used by this method":nativeObserved&&input.exposureTexture?"Detected":"Not reported");break;
+                    case 10:add("Multiplier",nativeRoute&&nativeObserved&&input.preExposure?StatusPanel::Format("%.4g",*input.preExposure):"Not reported");break;
+                    case 12:case 13:add("GPU completion",state==State::Consumed||state==State::Ready?"Confirmed":"Not confirmed");break;
+                    case 14:
+                        add("Output handoff",state==State::Consumed?"Completed":state==State::Detected?"Accepted by game":"Not confirmed");
+                        add("Display","Not independently verified");break;
+                    case 15:add("Ray Reconstruction",nativeObserved&&native.nativeRayReconstructionActive?"Detected":"Not reported");break;
+                    case 16:
+                        add("Generated frames",fgInUse?"Current activity":"Not confirmed");
+                        add("Display","Not independently verified");break;
+                    case 17:add("UI-free input","Not verified");break;
+                    case 18:case 19:add("UI protection","Not verified");break;
+                    case 20:
+                        panel.values.clear();
+                        add("Upscaler",srFeature?srFeature->Name():"Not reported");
+                        add("Input size",srFeature?SignalDetails::Extent(srFeature->RenderWidth(),srFeature->RenderHeight()):"Not reported");
+                        add("Output size",srFeature?SignalDetails::Extent(srFeature->DisplayWidth(),srFeature->DisplayHeight()):"Not reported");break;
+                    default:break;
+                    }
+                    SignalDetails::Draw(panel);
+                }
+            }
+            EndInputCard();if(columns)ImGui::EndTable();
+        }
+    }else{
     const int columns = width >= ImGui::GetFontSize() * 40.0f ? 4 :
                         width >= ImGui::GetFontSize() * 24.0f ? 2 : 1;
     if (ImGui::BeginTable("##PreflightLamps", columns,
@@ -1172,15 +1486,12 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
             const ImVec2 size((std::max)(1.0f, ImGui::GetContentRegionAvail().x),
                               ImGui::GetTextLineHeightWithSpacing());
             ImGui::InvisibleButton("##State", size, ImGuiButtonFlags_EnableNav);
-            if (ImGui::IsItemHovered() || ImGui::IsItemFocused()) {
+            if (Neurotic::ItemHelpHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize()*28.f);
                 ImGui::TextUnformatted(Neurotic::Translate(lamp.label).c_str());
-                ImGui::TextUnformatted(lampState==State::Detected?Neurotic::UiLiteral("ingame.nr-input.detected", "Detected, not in use"):
-                    lampState==State::Ready?Neurotic::UiLiteral("ingame.nr-input.in_use", "In use"):
-                    lampState==State::Fault?Neurotic::UiLiteral("ingame.nr-input.invalid_signal", "Invalid or blocked"):
-                    Neurotic::UiLiteral("ingame.nr-input.no_current_signal", "No current signal"));
-                ImGui::TextUnformatted(Neurotic::Translate(lamp.detail).c_str());
+                ImGui::TextUnformatted(NrPreflightState::Name(lampState));
+                ImGui::TextUnformatted(Neurotic::Translate(SignalDetails::Description(index)).c_str());
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
@@ -1192,9 +1503,9 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
             draw->PopClipRect();
             const ImU32 markColor = ImGui::GetColorU32(color(lampState));
             const float stroke = (std::max)(1.5f, radius * 0.38f);
-            if (lampState == State::Detected)
+            if (lampState == State::Detected || lampState == State::Usable)
                 draw->AddCircle(marker,radius*.75f,markColor,0,stroke);
-            else if (lampState == State::Ready)
+            else if (lampState == State::Ready || lampState == State::Consumed)
             {
                 draw->AddLine({ marker.x - radius, marker.y },
                               { marker.x - radius * 0.2f, marker.y + radius * 0.7f }, markColor, stroke);
@@ -1215,12 +1526,16 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
         }
         ImGui::EndTable();
     }
+    }
+    if (compact) return; // Each selectable tile already names its state.
     const auto detectedLabel=Neurotic::UiLiteral("ingame.nr-input.detected", "Detected, not in use");
     const auto usedLabel=Neurotic::UiLiteral("ingame.nr-input.in_use", "In use");
     const bool legendFits=ImGui::GetContentRegionAvail().x>=ImGui::CalcTextSize(detectedLabel).x+ImGui::CalcTextSize(usedLabel).x+ImGui::GetStyle().ItemSpacing.x;
     ImGui::TextColored(detected,"%s",detectedLabel);
     if(legendFits)ImGui::SameLine();
     ImGui::TextColored(good,"%s",usedLabel);
+    ImGui::TextColored(caution,Neurotic::UiLiteral("ingame.dlssnr-menu.pending_stale_44da3b17","Pending / stale"));
+    ImGui::TextColored(muted,Neurotic::UiLiteral("ingame.dlssnr-menu.hover_or_focus_a_signal_for_details_518d3624","Hover or focus a signal for details."));
     if (compact) return;
     return;
     }
@@ -1262,16 +1577,16 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
     table("##PreflightSource", [&]
     {
         NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.graphics_path_6c2a4a77", "Graphics path"), ApiUpscalerInputName(host.currentInputApiName), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.game_color_input_0c638760", "Game color input"), Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_independently_f0c99511", "Not observed independently"), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.nr_frame_raster_365a57e0", "NR frame raster"), dimensions(native.frameWidth, native.frameHeight), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.model_work_raster_a321ff7d", "Model work raster"), dimensions(native.workWidth, native.workHeight), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.present_backbuffer_49369a97", "Present backbuffer"), dimensions(present.backbufferWidth, present.backbufferHeight), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.backbuffer_format_7ecea65f", "Backbuffer format"), present.backbufferFormat == DXGI_FORMAT_UNKNOWN ?
+        NrDiagnosticsUi::ObservationRow("NR color input", receiptPath?SignalDetails::Status(DiagnosticSignals::EffectiveState(receipt(ReceiptSignal::Color))):"Not reported by this method", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.nr_frame_raster_365a57e0", "NR frame raster"), receiptPath?DiagnosticSignals::Extent(receipt(ReceiptSignal::Color)):preparedInput?dimensions(effectiveConnection.status.captureWidth,effectiveConnection.status.captureHeight):"Unavailable", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.model_work_raster_a321ff7d", "Model work raster"), receiptPath?DiagnosticSignals::Extent(receipt(ReceiptSignal::Evaluation)):preparedInput?dimensions(effectiveConnection.status.workWidth,effectiveConnection.status.workHeight):"Unavailable", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.present_backbuffer_49369a97", "Present backbuffer"), presentObserved?dimensions(present.backbufferWidth, present.backbufferHeight):"No current observation", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.backbuffer_format_7ecea65f", "Backbuffer format"), !presentObserved || present.backbufferFormat == DXGI_FORMAT_UNKNOWN ?
                       Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed") : BackbufferFormatName(present.backbufferFormat), muted);
         NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.nr-diagnostics.format_id", "Format ID"), present.api == PresentApi::Vulkan ?
-            (present.vkFormatObserved ? std::to_string(static_cast<int>(present.vkBackbufferFormat)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")) :
-            (present.backbufferFormat != DXGI_FORMAT_UNKNOWN ? std::to_string(static_cast<int>(present.backbufferFormat)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.nr-diagnostics.samples_swap", "Samples / swap effect"), present.api != PresentApi::Vulkan && present.backbufferWidth ?
+            (presentObserved && present.vkFormatObserved ? std::to_string(static_cast<int>(present.vkBackbufferFormat)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")) :
+            (presentObserved && present.backbufferFormat != DXGI_FORMAT_UNKNOWN ? std::to_string(static_cast<int>(present.backbufferFormat)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")), muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.nr-diagnostics.samples_swap", "Samples / swap effect"), presentObserved && present.api != PresentApi::Vulkan && present.backbufferWidth ?
             std::to_string(present.backbufferSampleCount) + " / " + std::to_string(static_cast<int>(present.swapEffect)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
     });
     ImGui::PopID();
@@ -1283,15 +1598,12 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
     ImGui::Separator();
     table("##PreflightMotion", [&]
     {
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.depth_motion_guides_ee184e26", "Depth / motion guides"), native.guideWidth && native.guideHeight ?
-                      dimensions(native.guideWidth, native.guideHeight) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.present_guide_matching_5f800173", "Present guide matching"), guides.captureAttempts ? guides.status : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
-        NrDiagnosticsUi::ObservationRow("Jitter", jitterText, muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.motion_scale_72610ac1", "Motion scale"), pair(input.motionScale, input.motionScaleSupplied), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.history_reset_49efc73d", "History reset"), !native.frames && !present.presentAttempts ? Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed") :
-                      native.historyResetRequested || present.historyResetPending ?
-                      Neurotic::UiLiteral("ingame.dlssnr-menu.requested_pending_owner_report_271a470a", "Requested / pending (owner report)") : Neurotic::UiLiteral("ingame.dlssnr-menu.no_reset_pending_reported_0f9b2595", "No reset pending reported"), muted);
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.game_reset_events_79d9a531", "Game reset events"), native.frames ? std::to_string(native.gameResets) + Neurotic::UiLiteral("ingame.dlssnr-menu.session_count_c8eb7841", " (session count)") :
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.depth_motion_guides_ee184e26", "Depth / motion guides"), receiptPath?DiagnosticSignals::Extent(receipt(ReceiptSignal::Depth))+" / "+DiagnosticSignals::Extent(receipt(ReceiptSignal::Motion)):preparedInput?"See input details":"Unavailable", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.present_guide_matching_5f800173", "Present guide matching"), presentExpected && presentObserved && guides.captureAttempts ? guides.status : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
+        NrDiagnosticsUi::ObservationRow("Model jitter", jitterValues?StatusPanel::Format("X %.4f | Y %.4f",jitterValues->x,jitterValues->y):"Not reported by the model", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.motion_scale_72610ac1", "Motion scale"), receiptPath?DiagnosticSignals::Pair(receipt(ReceiptSignal::Motion)):"Not reported by the model", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.history_reset_49efc73d", "History reset"), receiptPath?SignalReceipts::Name(receipt(ReceiptSignal::History).state):preparedInput?"History reuse not confirmed":"Unavailable", muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.game_reset_events_79d9a531", "Game reset events"), nativeObserved ? std::to_string(native.gameResets) + Neurotic::UiLiteral("ingame.dlssnr-menu.session_count_c8eb7841", " (session count)") :
                       Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
     });
     ImGui::PopID();
@@ -1303,7 +1615,7 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
     ImGui::Separator();
     table("##PreflightScene", [&]
     {
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.exposure_texture_9cad026a", "Exposure texture"), input.observations ?
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.exposure_texture_9cad026a", "Exposure texture"), !nativeRoute?"Not applied on Present":!nativeObserved?"No current Native observation":input.observations ?
                       (input.exposureTexture ? Neurotic::UiLiteral("ingame.dlssnr-menu.offered_on_last_native_dlss_input_bbbbcf0d", "Offered on last Native DLSS input") : Neurotic::UiLiteral("ingame.dlssnr-menu.absent_on_last_native_dlss_input_34e7c6ae", "Absent on last Native DLSS input")) :
                       Neurotic::UiLiteral("ingame.dlssnr-menu.no_native_dlss_input_observed_cc511282", "No Native DLSS input observed"), muted);
         std::string preExposure = input.preExposureSupplied ? Neurotic::UiMessage("ingame.dlssnr-menu.supplied_but_non_finite_6f328188", "Supplied but non-finite") :
@@ -1314,22 +1626,33 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
             std::snprintf(text, sizeof(text), Neurotic::UiLiteral("ingame.dlssnr-menu.6g_last_native_dlss_input_3463766b", "%.6g (last Native DLSS input)"), *input.preExposure);
             preExposure = text;
         }
-        NrDiagnosticsUi::ObservationRow("Pre-exposure", preExposure, muted);
+        NrDiagnosticsUi::ObservationRow("Pre-exposure", !nativeRoute?"Not applied on Present":!nativeObserved?"No current Native observation":preExposure, muted);
+        if(receiptPath){
+            for(const auto [label,signal]:{std::pair<const char*,SignalReceipts::Signal>{"Scene color status",SignalReceipts::Signal::Color},
+                {"NR output color status",SignalReceipts::Signal::Output},{"Exposure use",SignalReceipts::Signal::Exposure},
+                {"Pre-exposure use",SignalReceipts::Signal::PreExposure},{"NR output composition",SignalReceipts::Signal::Delivery}})
+                {
+                    const auto& reading=receipt(signal);
+                    NrDiagnosticsUi::ObservationRow(label,SignalDetails::Status(DiagnosticSignals::EffectiveState(reading)),muted);
+                    const auto details=SignalDetails::Receipt(signal,reading,enabled);
+                    for(const auto& row:details.values)NrDiagnosticsUi::ObservationRow(row.label,row.value,muted);
+                }
+        }
         std::string exposureValue = Neurotic::UiMessage("ingame.dlssnr-menu.no_valid_texture_readback_recorded_2617a4f1", "No valid texture readback recorded");
-        if (exposure.everOffered && std::isfinite(exposure.exposure) && exposure.exposure > 0.0f)
+        if (nativeRoute && nativeObserved && exposure.everOffered && std::isfinite(exposure.exposure) && exposure.exposure > 0.0f)
         {
             char text[96] {};
             std::snprintf(text, sizeof(text), Neurotic::UiLiteral("ingame.dlssnr-menu.6g_last_readback_may_be_held_f0780712", "%.6g (last readback; may be held)"), exposure.exposure);
             exposureValue = text;
         }
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.exposure_value_b85b546a", "Exposure value"), exposureValue, muted);
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.exposure_value_b85b546a", "Exposure value"), nativeRoute?exposureValue:"Not supported by this method", muted);
         NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.output_color_space_de9a56cd", "Output color space"), present.api == PresentApi::Vulkan ?
-                      (present.vkFormatObserved ? Neurotic::UiLiteral("ingame.dlssnr-menu.vulkan_format_and_color_space_observed_f3b97dc3", "Vulkan format and color space observed") : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")) :
-                      (present.colorSpaceObserved ? Neurotic::UiLiteral("ingame.dlssnr-menu.owner_observed_a_dxgi_color_space_608bc128", "Owner observed a DXGI color space") : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")), muted);
+                      (presentObserved && present.vkFormatObserved ? Neurotic::UiLiteral("ingame.dlssnr-menu.vulkan_format_and_color_space_observed_f3b97dc3", "Vulkan format and color space observed") : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")) :
+                      (presentObserved && present.colorSpaceObserved ? Neurotic::UiLiteral("ingame.dlssnr-menu.owner_observed_a_dxgi_color_space_608bc128", "Owner observed a DXGI color space") : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")), muted);
         NrDiagnosticsUi::ObservationRow("Normals / roughness / albedo", Neurotic::UiLiteral("ingame.dlssnr-menu.no_adapter_on_this_path_0bc263ec", "No adapter on this path"), muted);
         NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.nr-diagnostics.color_space_id", "Color space ID"), present.api == PresentApi::Vulkan ?
-            (present.vkFormatObserved ? std::to_string(static_cast<int>(present.vkColorSpace)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")) :
-            (present.colorSpaceObserved ? std::to_string(static_cast<int>(present.colorSpace)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")), muted);
+            (presentObserved && present.vkFormatObserved ? std::to_string(static_cast<int>(present.vkColorSpace)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")) :
+            (presentObserved && present.colorSpaceObserved ? std::to_string(static_cast<int>(present.colorSpace)) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed")), muted);
         NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.reactive_transparency_masks_3a99b668", "Reactive / transparency masks"), Neurotic::UiLiteral("ingame.dlssnr-menu.no_adapter_on_this_path_0bc263ec", "No adapter on this path"), muted);
     });
     ImGui::PopID();
@@ -1341,7 +1664,7 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
     ImGui::Separator();
     table("##PreflightRoute", [&]
     {
-        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.ray_reconstruction_ab6479c7", "Ray Reconstruction"), native.nativeRayReconstructionActive ? Neurotic::UiLiteral("ingame.dlssnr-menu.native_owner_reports_active_f0d00be8", "Native owner reports active") :
+        NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.ray_reconstruction_ab6479c7", "Ray Reconstruction"), nativeObserved && native.nativeRayReconstructionActive ? Neurotic::UiLiteral("ingame.dlssnr-menu.native_owner_reports_active_f0d00be8", "Native owner reports active") :
                       Neurotic::UiLiteral("ingame.dlssnr-menu.no_active_native_rr_report_222ed1e0", "No active native RR report"), muted);
         NrDiagnosticsUi::ObservationRow(Neurotic::UiLiteral("ingame.dlssnr-menu.frame_generation_c41396f4", "Frame Generation"), fg ? Neurotic::UiLiteral("ingame.dlssnr-menu.native_dlssg_accepted_an_enabled_mode_deba27a5", "Native DLSSG accepted an enabled mode") :
                       Neurotic::UiLiteral("ingame.dlssnr-menu.no_enabled_native_dlssg_observation_other_provid_3a4e2444", "No enabled native DLSSG observation; other providers unverified"), muted);
@@ -1356,11 +1679,11 @@ void RenderPreflight(Config* config, PreflightView view, bool showBody = true, b
 
 } // namespace
 
-enum class NrReadoutGroup { Activity, Output };
+enum class NrReadoutGroup { Activity, Timing, Output };
 
 static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig, bool enabled,
                                bool basicOwnsMain, NrReadoutGroup group,
-                               const std::optional<MenuStatus::RuntimeStatus>& status)
+                               const std::optional<MenuStatus::RuntimeStatus>& status,bool compact=false)
 {
     if (basicOwnsMain) BasicMultipass::Derive(uiConfig);
     const auto nrTelemetry = SelectedNativeTelemetry();
@@ -1389,15 +1712,18 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
 
     if (group == NrReadoutGroup::Activity)
     {
-    StatusPanel::Linef("##NrState", outputActive ? green :
+    StatusPanel::Linef("##NrState", !enabled ? ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled) : outputActive ? green :
         (RenderingOutput::Fresh(outputSnapshot,outputNow) && outputSnapshot.phase==RenderingOutput::Phase::Blocked ? red : yellow),
-        RenderingOutput::StatusLabel(outputSnapshot,outputNow));
-    if (!outputSnapshot.reason.empty() && ImGui::IsItemHovered()) {
+        enabled ? (outputSnapshot.phase==RenderingOutput::Phase::Off?"Waiting for renderer":RenderingOutput::StatusLabel(outputSnapshot,outputNow)) : "Neural Rendering is off.");
+    if (!outputSnapshot.reason.empty() && Neurotic::ItemHelpHovered(ImGui::GetID("##RenderingOutputReasonHelp"))) {
         ImGui::BeginTooltip();ImGui::PushTextWrapPos(ImGui::GetFontSize()*30.0f);
         const auto reason=RenderingOutput::ReasonLabel(outputSnapshot.reason);
         ImGui::TextUnformatted(reason.c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();
     }
 
+    }
+    if (group == NrReadoutGroup::Timing)
+    {
     static std::optional<NrConfigSnapshot<Config>> timingSettings;
     static bool timingVulkan=false;
     static uint64_t timingSelection=0;
@@ -1419,18 +1745,29 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
     const auto retainedTime=nativeTiming.Update(timingSelection,nrTelemetry.lifecycleGeneration,
         timingActive && !vulkan,nrTelemetry.totalGpuMs,ImGui::GetTime());
     const auto nativeTime=vulkan ? nrTelemetry.totalGpuMs : retainedTime;
-    if (timingActive && nativeTime)
-        StatusPanel::Linef("##NrTiming", green, Neurotic::UiLiteral("ingame.dlssnr-menu.nr_processing_2f_ms_per_frame_a5ee5276", "NR processing: %.2f ms per frame"), *nativeTime);
-    else if (enabled && !presentRoute)
+    const auto preparedTime=PreparedGuides::QueryStatusV2(outputNow);
+    const bool preparedTiming=outputActive&&outputSnapshot.producer==RenderingOutput::Producer::BuiltIn&&
+        preparedTime.fresh&&preparedTime.status.outputValid&&preparedTime.status.timingInterval==preparedTime.status.capture&&
+        preparedTime.status.timingDomain==PreparedGuides::ClockDomain::CpuQpc;
+    static MenuStatus::TimingObservation captureTiming;
+    const auto elapsedTime=captureTiming.Update(timingSelection,preparedTime.status.generation,preparedTiming,
+        preparedTiming?std::optional<double>(double(preparedTime.status.modelNs)/1000000.):std::nullopt,ImGui::GetTime());
+    if(preparedTiming&&elapsedTime)
+        StatusPanel::Linef("##NrTiming",green,"Processing: %.2f ms elapsed",*elapsedTime);
+    else if (timingActive && nativeTime)
+        StatusPanel::Linef("##NrTiming", green, compact?"Processing: %.2f ms":Neurotic::UiLiteral("ingame.dlssnr-menu.nr_processing_2f_ms_per_frame_a5ee5276", "NR processing: %.2f ms per frame"), *nativeTime);
+    else if (enabled && !presentRoute&& !outputActive)
         StatusPanel::Linef("##NrTiming", ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
-                           Neurotic::UiLiteral("ingame.dlssnr-menu.nr_processing_waiting_for_gpu_timing_83d6b91f", "NR processing: waiting for GPU timing"));
+                           compact?"Processing: waiting":Neurotic::UiLiteral("ingame.dlssnr-menu.nr_processing_waiting_for_gpu_timing_83d6b91f", "NR processing: waiting for GPU timing"));
     else if (enabled && presentActive && presentTelemetry.presentGpuValid &&
              presentTelemetry.presentGpuRoute == (route == 2
                  ? PresentPacing::Route::PresentEnhanced
                  : PresentPacing::Route::PresentImageOnly))
-        StatusPanel::Linef("##NrTiming", green, Neurotic::UiLiteral("ingame.dlssnr-menu.nr_processing_2f_ms_per_frame_a5ee5276", "NR processing: %.2f ms per frame"), presentTelemetry.presentGpuMs);
+        StatusPanel::Linef("##NrTiming", green, compact?"Processing: %.2f ms":Neurotic::UiLiteral("ingame.dlssnr-menu.nr_processing_2f_ms_per_frame_a5ee5276", "NR processing: %.2f ms per frame"), presentTelemetry.presentGpuMs);
+    else if(outputActive)
+        StatusPanel::Line("##NrTiming","Timing: not reported",ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     else
-        StatusPanel::Line("##NrTiming", {}, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        StatusPanel::Line("##NrTiming", enabled ? (compact?"Processing: waiting":"Processing: waiting for GPU timing") : "Processing: -- ms", ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     }
 
     if (group == NrReadoutGroup::Output)
@@ -1470,6 +1807,101 @@ static void RenderLiveReadouts(Config* config, NrConfigSnapshot<Config> uiConfig
         ImGui::PopStyleColor();
     }
     }
+}
+
+struct FullImageUiNotice { const char* text = nullptr; bool critical = false; };
+static FullImageUiNotice QueryFullImageUiNotice(Config* config)
+{
+    namespace F = PreFg::FinalColor;
+    const auto provider = PreFg::Provider();
+    if (!provider.viewportKey) return {};
+    const auto status = PreFg::State().finalColor.Inspect(provider.viewportKey);
+    const auto runtime = config->GetDlssNrRuntimeSnapshot();
+    const auto route = config->DlssNrRoute.value_or_default();
+    const F::Scope current {provider.generation, PreFg::OutputIdentity::Current(),
+        provider.viewportKey, runtime.resumeGeneration, route};
+    switch (F::PickNotice(status, runtime.enabled, route == 1 || route == 2, status.scope == current))
+    {
+    case F::NoticeKind::Active:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.active", "FG uses the full image. UI may show ghosting."), false};
+    case F::NoticeKind::OffPending:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.off-restoration-pending", "NR off. UI restoration pending. FG may still use the full image while waiting for fresh game UI inputs."), true};
+    case F::NoticeKind::Pending:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.restoration-pending", "UI restoration pending. FG may still use the full image while waiting for fresh game UI inputs."), true};
+    case F::NoticeKind::FreshAccepted:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.fresh-game-ui-accepted", "Last reported game UI inputs: accepted."), false};
+    case F::NoticeKind::HudlessOnly:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.game-hudless-only", "Last reported game FG inputs: accepted without separate UI buffers."), false};
+    case F::NoticeKind::OptionalCleared:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.game-optional-cleared", "Last reported optional FG UI inputs: cleared by the game."), false};
+    case F::NoticeKind::Unsafe:
+        return {Neurotic::UiLiteral("ingame.nr-final-color.unsafe", "FG inputs changed during output submission. The displayed result is unknown."), true};
+    default: return {};
+    }
+}
+
+void RenderWorkspaceStatus(Config* config)
+{
+    bool enabled=config->DlssNrEnabled.value_or_default();
+    const float font=ImGui::GetFontSize();
+    const auto origin=ImGui::GetCursorPos(),screen=ImGui::GetCursorScreenPos();
+    const float available=ImGui::GetContentRegionAvail().x;
+    const auto header=PipelineUi::WorkspaceHeader(available);
+    const float height=header.masterHeight,padding=header.padding;
+    const float readoutOffset=header.stackReadouts?height+padding:0.f;
+    const float toolbarTop=padding*2+height+readoutOffset;
+    const float totalHeight=toolbarTop+header.disclosureHeight+padding;
+    auto* draw=ImGui::GetWindowDrawList();
+    draw->AddRectFilled(screen,{screen.x+available,screen.y+totalHeight},ImGui::GetColorU32(ImGuiCol_ChildBg),ImGui::GetStyle().ChildRounding);
+    draw->AddRect(screen,{screen.x+available,screen.y+totalHeight},ImGui::GetColorU32(ImGuiCol_Border),ImGui::GetStyle().ChildRounding);
+    ImGui::SetCursorPos({origin.x+padding,origin.y+padding});
+    if(PipelineUi::MasterButton(enabled,header)){config->SetDlssNrEnabled(enabled);CancelNrEdits();}
+    if(header.stackReadouts)ImGui::SetCursorPos({origin.x+padding,origin.y+padding+height+padding});
+    else ImGui::SameLine();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(font*.55f,font*.25f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,ImVec2(ImGui::GetStyle().ItemSpacing.x,font*.25f));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,ImVec2(font*.3f,0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4(0,0,0,0));
+    if(ImGui::BeginChild("##NrMasterReadouts",{(std::max)(1.f,ImGui::GetContentRegionAvail().x-padding),height},ImGuiChildFlags_AlwaysUseWindowPadding,
+        ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoScrollWithMouse)){
+        const auto settings=config->GetDlssNrConfigSnapshot();
+        if(ImGui::BeginTable("##NrMasterReadoutColumns",2,ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_NoPadOuterX)){
+            ImGui::TableSetupColumn("Activity",ImGuiTableColumnFlags_WidthStretch,1.f);
+            ImGui::TableSetupColumn("Timing",ImGuiTableColumnFlags_WidthFixed,(std::min)(font*10.f,ImGui::GetContentRegionAvail().x*.45f));
+            ImGui::TableNextColumn();
+            RenderLiveReadouts(config,settings,enabled,BasicMultipass::Active(settings),NrReadoutGroup::Activity,std::nullopt);
+            ImGui::TableNextColumn();
+            const auto timing=ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddLine({timing.x-font*.3f,timing.y},{timing.x-font*.3f,timing.y+font},ImGui::GetColorU32(ImGuiCol_Border));
+            RenderLiveReadouts(config,settings,enabled,BasicMultipass::Active(settings),NrReadoutGroup::Timing,std::nullopt,true);
+            ImGui::EndTable();
+        }
+        const auto output=RenderingOutput::Query();const auto now=GetTickCount64();
+        std::string message=enabled?"":"Settings retained.";
+        if(enabled){
+            if(RenderingOutput::Fresh(output,now))message=RenderingOutput::ReasonLabel(output.reason);
+            else message="Waiting for current output.";
+            if(!config->DlssNrApplyModel.value_or_default())message="Model effect hidden. Enable Apply the model to show it.";
+        }
+        // Reuse the existing fixed notice row. Critical pending/unsafe facts
+        // lead the visible text; the existing hover detail retains other notices.
+        const auto fullImage = QueryFullImageUiNotice(config);
+        if (fullImage.text)
+        {
+            const bool blocked = RenderingOutput::Fresh(output,now) && output.phase == RenderingOutput::Phase::Blocked;
+            if (fullImage.critical || !enabled || message.empty() || !blocked)
+            {
+                const auto detail = message;
+                message = fullImage.text;
+                if (!detail.empty()) { message += "\n"; message += detail; }
+            }
+            else { message += "\n"; message += fullImage.text; }
+        }
+        StatusPanel::Line("##NrReservedMessage",message,PipelineUi::Color(!enabled?PipelineView::State::Off:RenderingOutput::Fresh(output,now)&&output.phase==RenderingOutput::Phase::Blocked?PipelineView::State::Blocked:PipelineView::State::Requested));
+    }
+    ImGui::EndChild();ImGui::PopStyleColor();ImGui::PopStyleVar(3);
+    // The processing toolbar occupies the next row below the timing readouts.
+    ImGui::SetCursorPos({origin.x,origin.y+toolbarTop});
 }
 
 void TickAdvisor(Config* config)
@@ -1659,59 +2091,163 @@ void CancelAdvisorAnalysis(Config* config, const char* reason)
     advisor.reason = Neurotic::UiMessage("ingame.dlssnr-menu.no_recommendation_was_applied_95c6c94d", "No recommendation was applied.");
 }
 
-static void RenderIntakeMenu(Config* config, const char* gpuName,
-                             const std::optional<MenuStatus::RuntimeStatus>& status)
+static void RenderMainNrStyle(Config* config)
 {
-    ScopedNestedTextWrap wrap;
-    // The Diagnostics board remains the single renderer. This compact copy has
-    // an independent persisted disclosure and no diagnostic counters/actions.
-    BeginNrCard("##NrIntakeSignalCard", nullptr);
-    bool signalsExpanded=config->MenuPreflightExpanded.value_or_default();
-    if(ImGui::BeginTable("##NrSignalHeading",2,ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_NoPadOuterX)) {
-        ImGui::TableSetupColumn("##Title",ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("##Disclosure",ImGuiTableColumnFlags_WidthFixed,ImGui::GetFrameHeight());
-        ImGui::TableNextColumn();
-        Neurotic::Sleek::WindowSectionHeader(Neurotic::UiLiteral("ingame.nr-input.signals", "Signals"));
-        ImGui::TableNextColumn();
-        if(ImGui::ArrowButton("##ToggleSignals",signalsExpanded?ImGuiDir_Up:ImGuiDir_Down)) {
-            signalsExpanded=!signalsExpanded;
-            config->MenuPreflightExpanded=signalsExpanded;
-            config->SaveIni();
+    static const char* styles[]={Neurotic::UiLiteral("ingame.option.ef6691545d2c","Standard"),Neurotic::UiLiteral("ingame.option.d6acb6d51cfc","Natural"),Neurotic::UiLiteral("ingame.option.912d0988b065","Cinematic")};
+    int style=std::clamp(int(config->DlssNrStyle.value_or_default()),0,2);
+    Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.provider.7e744141b40e","Style"));
+    if(ImGui::Combo("##NrStyle",&style,styles,IM_ARRAYSIZE(styles)))config->DlssNrStyle=uint32_t(style);
+}
+
+static void RenderDepthDirection(Config* config)
+{
+    const bool present=StageUi::UnifiedMethodSelection(config->GetDlssNrConfigSnapshot())==0;
+    Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.dlssnr-menu.guide_usage_21e129b1","Guide usage"));
+    if(present){
+        const char* names[]={"Image only","Require depth and motion","Auto","Invalid saved choice"};
+        const unsigned saved=config->DlssNrPresentInputPolicy.value_or_default();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if(ImGui::BeginCombo("##GuideUsage",names[(std::min)(saved,3u)])){
+            for(int choice:{2,1,0})if(ImGui::Selectable(names[choice],saved==unsigned(choice))){
+                config->DlssNrPresentInputPolicy=unsigned(choice);config->SaveIni();CancelNrEdits();
+            }
+            ImGui::EndCombo();
         }
-        ImGui::EndTable();
+        InputHelp("Controls both guides. Auto uses compatible guides when available. Image only omits them. Require pauses NR when guides are missing. Explicitly refused sources remain omitted.");
+    }else ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.native_temporal_requires_depth_and_motion_5899e54e","Native Temporal requires depth and motion."));
+    const int direction=config->DlssNrNativeDepthDirection.value_or_default();
+    int selection=direction==0?1:direction==1?2:0;
+    Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.dlssnr-menu.depth_direction_7b0b4349", "Depth direction"));
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if(ImGui::Combo("##Depth direction",&selection,Neurotic::UiOptions("ingame.dlssnr-menu.automatic_33f5300c|ingame.dlssnr-menu.forward_far_1_896a5ee1|ingame.dlssnr-menu.reversed_far_0_0d398930|", "Automatic\0Forward (far = 1)\0Reversed (far = 0)\0"))){
+        config->DlssNrNativeDepthDirection=selection-1;NativeGuides::ConfigureDepthDirection(selection-1);
+        NativeVulkanGuides::Unavailable(Neurotic::UiLiteral("ingame.dlssnr-menu.depth_direction_changed_waiting_for_a_fresh_fram_5718f375", "Depth direction changed; waiting for a fresh frame"));config->SaveIni();CancelNrEdits();
     }
-    {
-        Neurotic::Sleek::AnimatedRegion signals("##NrIntakeSignalBody",signalsExpanded);
-        RenderPreflight(config,PreflightView::Signals,signals.Visible(),true);
+    InputHelp("For captured depth. Auto reads the depth clear value; choose a direction only if the scene depth is inverted.");
+}
+
+PipelineView::Stage RenderAdvancedPipeline(Config* config, bool navigationOnly, bool* activated)
+{
+    namespace V=PipelineView;
+    const auto settings=config->GetDlssNrConfigSnapshot();const auto now=GetTickCount64();
+    const auto output=RenderingOutput::Query();const auto present=PresentTelemetry();
+    const auto native=SelectedNativeTelemetry();const auto connection=PreparedGuides::QueryStatusV2(now);
+    const auto livePreparedSignals=Connections::QueryInputSignals(now);
+    const auto preparedSignals=livePreparedSignals.fresh?livePreparedSignals:Connections::QueryCompletedInputSignals(now);
+    const auto signals=settings.DlssNrRoute.value_or_default()==0?native.inputSignals:present.inputSignals.fresh?present.inputSignals:preparedSignals;auto& host=State::Instance();
+    static NrPreflightSignals::FreshObservation nativeProgress,nativeSelectedProgress,presentProgress,srProgress,fgProgress;
+    const bool nativeFresh=nativeProgress.Update(
+        IsVulkanInput()?native.nativeInputGeneration:native.lifecycleGeneration,
+        native.nativeInputs.observations,now,native.lifecycleOpen);
+    const bool nativeSelectedFresh=IsVulkanInput()?nativeSelectedProgress.Update(
+        native.lifecycleGeneration,native.selectedNativeObservations,now,native.lifecycleOpen):nativeFresh;
+    // NR attempts stop on Native Temporal and when NR is off. Observe the actual
+    // host-return stream instead; activity does not establish successful scanout.
+    const bool vk=host.swapchainApi==API::Vulkan;
+    const bool presentFresh=presentProgress.Update((present.resourceGeneration<<8)|uint64_t(host.swapchainApi),
+        vk?GetVulkanPresentStatus().Snapshot().gamePresents:present.cadence.sequence,now,
+        vk?true:host.swapchainApi==API::DX11||host.swapchainApi==API::DX12);
+    auto* feature=host.currentFeature;const bool srAvailable=feature&&feature->IsInited();
+    const auto frames=feature?feature->FrameCount():0;
+    const bool srUsed=srProgress.Update(reinterpret_cast<uintptr_t>(feature),frames>0?uint64_t(frames):0,now,srAvailable);
+    const auto fg=NativeFg::Progress();
+    const bool standalone=NativeFg::Selected();
+    const bool fgUsed=fgProgress.Update(fg.identity,fg.physical.generatedRetired,now,standalone&&fg.owners&&fg.physicalAvailable);
+    V::Facts facts;facts.enabled=settings.DlssNrEnabled.value_or_default();
+    facts.active=facts.enabled&&!output.comparisonBypass&&RenderingOutput::Active(output,now);
+    facts.blocked=RenderingOutput::Fresh(output,now)&&output.phase==RenderingOutput::Phase::Blocked;
+    const auto sourcePolicy=Connections::SignalPreferences();
+    const bool sourceEvidence=signals.fresh&&signals.status.revision==sourcePolicy.revision;
+    const bool colorRequired=sourcePolicy.color!=Connections::Source::Automatic&&!signals.status.color;
+    const bool nativeGuidesRequired=settings.DlssNrRoute.value_or_default()==0&&
+        ((sourcePolicy.depth!=Connections::Source::Automatic&&!signals.status.depth)||
+         (sourcePolicy.motion!=Connections::Source::Automatic&&!signals.status.motion));
+    const bool requiredInputBlocked=sourcePolicy.strict&&sourceEvidence&&(colorRequired||nativeGuidesRequired);
+    facts.blocked=facts.enabled&&(facts.blocked||requiredInputBlocked);
+    if(requiredInputBlocked)facts.active=false;
+    facts.degraded=facts.active&&sourcePolicy.strict&&sourceEvidence&&
+        ((sourcePolicy.depth!=Connections::Source::Automatic&&!signals.status.depth)||
+         (sourcePolicy.motion!=Connections::Source::Automatic&&!signals.status.motion));
+    const auto route=settings.DlssNrRoute.value_or_default();
+    facts.requested=route==0?(StageUi::Stage(settings)==0?V::Placement::BeforeSr:V::Placement::AfterSr):
+        route==1||route==2?V::Placement::AfterPresent:route==3?V::Placement::CapturedImage:V::Placement::Unknown;
+    if(facts.active)facts.effective=output.producer==RenderingOutput::Producer::Native?
+        (nativeSelectedFresh?(native.runBeforeSr?V::Placement::BeforeSr:V::Placement::AfterSr):V::Placement::Unknown):
+        output.producer==RenderingOutput::Producer::CapturedImage?V::Placement::CapturedImage:V::Placement::AfterPresent;
+    facts.srAvailable=srAvailable;facts.srUsed=srUsed;
+    facts.deliveryObserved=RenderingOutput::Fresh(output,now)&&output.displayObserved;
+    facts.rrIntegrated=srAvailable&&feature->GetUpscalerType()==Upscaler::DLSSD;
+    facts.presentSeen=presentFresh;
+    facts.renderActive=nativeFresh||srUsed||presentFresh;
+    facts.fgRequested=standalone||settings.DlssNrNativeFrameGeneration.value_or_default()||
+        (host.activeFgInput!=FGInput::NoFG&&host.activeFgOutput!=FGOutput::NoFG);
+    // This owner performs generation inside the intercepted Present episode.
+    // Other FG backends do not publish a comparable placement receipt here.
+    facts.fgOrder=standalone&&fg.owners&&fg.physicalAvailable?V::FgOrder::AfterPresent:V::FgOrder::Unknown;
+    facts.fgUsed=fgUsed;
+    InputPanelContext inputs;inputs.enabled=facts.enabled;
+    inputs.supported=(route<=2)&&(present.api==PresentApi::D3D12||host.swapchainApi==API::DX12);
+    inputs.useOwnerSignals=true;inputs.ownerSignals=signals;
+    inputs.observationsSupported=signals.fresh||signals.usedFresh;
+    if(vk&&connection.fresh&&connection.status.selectedSource==Connections::Source::BuiltIn&&!connection.status.outputValid)
+        inputs.ownerSignals.usedFresh=false;
+    inputs.directPresent=route!=0&&(present.inputSignals.fresh||!preparedSignals.fresh);
+    inputs.supported=inputs.supported||(route<=2)&&(present.api==PresentApi::D3D11||host.swapchainApi==API::DX11);
+    SourceAvailability::Context sourceContext;
+    sourceContext.policy=Connections::SignalPreferences().revision;sourceContext.route=route;
+    sourceContext.api=unsigned(host.swapchainApi);sourceContext.placement=StageUi::Stage(settings);
+    sourceContext.nativeGeneration=native.lifecycleGeneration;sourceContext.presentGeneration=present.resourceGeneration;
+    sourceContext.providerGeneration=fg.identity;sourceContext.enabled=facts.enabled;
+    sourceContext.width=present.backbufferWidth;sourceContext.height=present.backbufferHeight;
+    sourceContext.selectedSources=signals.fresh?(signals.status.color|(signals.status.depth<<4)|(signals.status.motion<<8)):0;
+    sourceContext.nativeGuides=present.nativeGuidesAvailable&&present.inputSignals.fresh;
+    sourceContext.nativeLive=nativeFresh;sourceContext.presentLive=presentFresh;sourceContext.ownerLive=signals.fresh;
+    UpdateSourceAvailability(sourceContext,signals,inputs.directPresent,present.nativeGuidesAvailable,now);
+    inputs.jitterDetected=nativeFresh&&native.nativeInputs.jitter.has_value();
+    inputs.exposureDetected=nativeFresh&&(native.nativeInputs.exposureTexture||native.nativeInputs.preExposure.has_value());
+    inputs.colorUsed=facts.active;
+    if(facts.active){
+        if(output.producer==RenderingOutput::Producer::Native)inputs.colorSource=1;
+        else if(output.producer==RenderingOutput::Producer::BuiltIn&&connection.fresh){inputs.colorSource=int(connection.status.selectedSource);inputs.colorName="Captured game image";}
+        else if(output.producer==RenderingOutput::Producer::Present)inputs.colorName="Present image";
+        else if(output.producer==RenderingOutput::Producer::CapturedImage)inputs.colorName="Captured image";
     }
-    EndNrCard();
-    auto settings = config->GetDlssNrConfigSnapshot();
-    const auto present = PresentTelemetry();
-    const bool observationVulkan = Capability::ObservationUsesVulkan(settings.DlssNrRoute.value_or_default(),
-        IsVulkanInput(), present.api != PresentApi::Unknown, present.api == PresentApi::Vulkan);
-    const auto native = observationVulkan ? NativeTelemetryVk() : Telemetry();
-    const auto guides = PresentGuides::Instance().Inspect();
-    ImGui::Spacing();
-    const bool grid = ImGui::GetContentRegionAvail().x >= ImGui::GetFontSize() * 44.0f &&
-        ImGui::BeginTable("##NrIntakeGrid", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX);
-    if (grid) ImGui::TableNextColumn();
-    BeginNrCard("##NrInputSource", Neurotic::UiLiteral("ingame.dlssnr-menu.input_source_1d59f442", "Input source"));
-    const int method = StageUi::UnifiedMethodSelection(settings);
-#ifdef _WIN64
-    int inputSource = config->DlssNrInputSource.value_or_default();
-    Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.dlssnr-menu.input_source_1d59f442", "Input source"));
-    if (ImGui::Combo("##Input source", &inputSource, Neurotic::UiOptions("ingame.dlssnr-menu.automatic_33f5300c|ingame.dlssnr-menu.native_bf0ec6da|ingame.dlssnr-menu.built_in_capture_8d435da4|ingame.dlssnr-menu.reshade_4b3aa516|ingame.dlssnr-menu.external_ab876246|", "Automatic\0Native\0Built-in capture\0ReShade\0External\0"))) {
-        config->DlssNrInputSource = inputSource; config->SaveIni(); CancelNrEdits();
-        Connections::RequestInputSelection(inputSource,config->DlssNrInputTransport.value_or_default(),config->DlssNrAllowCpuFallback.value_or_default());
+    facts.inputsSelected=(inputs.supported||inputs.observationsSupported)&&signals.fresh&&(signals.status.color||signals.status.depth||signals.status.motion);
+    facts.inputsUsed=(inputs.supported||inputs.observationsSupported)&&inputs.ownerSignals.usedFresh&&signals.used.consumed;
+    if(navigationOnly){
+        PipelineUi::Readouts readouts;
+        auto& p=readouts.provider;
+        p[int(V::Stage::Render)]=facts.renderActive?(vk?"Vulkan":ApiUpscalerInputName(host.currentInputApiName)):"Awaiting frame activity";
+        p[int(V::Stage::Sr)]=srUsed?feature->Name():srAvailable?feature->Name()+" (available)":"Provider not reported";
+        p[int(V::Stage::Present)]=presentFresh?(vk?"Vulkan":host.swapchainApi==API::DX12?"Direct3D 12":"Direct3D 11"):"Awaiting Present calls";
+        p[int(V::Stage::Nr)]=!facts.enabled?"Off":!facts.active?"Awaiting renderer":
+            output.producer==RenderingOutput::Producer::Native?"Native Temporal":
+            output.producer==RenderingOutput::Producer::BuiltIn&&connection.fresh?MixedSourceText(int(connection.status.selectedSource)):
+            output.producer==RenderingOutput::Producer::Present?"Present":"Provider not reported";
+        if(facts.active&&signals.usedFresh&&signals.used.consumed){
+            const auto source=[&](uint32_t s){return s?MixedSourceText(int(s)):std::string("None");};
+            p[int(V::Stage::Nr)]+=" | Color: "+source(signals.used.color)+", depth: "+source(signals.used.depth)+", motion: "+source(signals.used.motion);
+        }
+        p[int(V::Stage::Fg)]=fgUsed?"Built-in FSR":facts.fgRequested?"Waiting for source":"Off";
+        p[int(V::Stage::Delivery)]=facts.deliveryObserved?"Accepted by Present":facts.active?"NR complete; display unverified":"Display unverified";
+        return PipelineUi::Draw(facts,config->MenuReduceMotion.value_or_default(),activated,readouts,true);
     }
-    if(ImGui::IsItemHovered()||ImGui::IsItemFocused()) {
-        ImGui::BeginTooltip();ImGui::PushTextWrapPos(ImGui::GetFontSize()*28.f);
-        ImGui::TextUnformatted(Neurotic::UiLiteral("ingame.nr-input.selection_help", "Automatic prefers qualified game inputs, then built-in capture. Manual choices stay selected when unavailable."));
-        ImGui::PopTextWrapPos();ImGui::EndTooltip();
-    }
+    RenderPreflight(config,PreflightView::Signals,true,true);
+    const int signal=ImGui::GetStateStorage()->GetInt(ImGui::GetID("##NrSignalChoice"),11);
+    const int editor=signal==11?0:signal==6?1:signal==7?2:-1;
+    if(editor>=0&&DrawMixedInputPreferences(config,facts.active,inputs,editor,RenderDepthDirection))CancelNrEdits();
+    if(signal==20&&PipelineUi::NavigationButton("Open Upscaling","##OpenInputUpscaling"))return V::Stage::Sr;
+    if(signal==16&&PipelineUi::NavigationButton("Open Frame Generation","##OpenInputFrameGeneration"))return V::Stage::Fg;
+    const auto selected=V::Stage::Inputs;
+    return selected;
+}
+
+void RenderStandaloneFgSettings(Config* config)
+{
+    const int inputSource=config->DlssNrInputSource.value_or_default();
     bool standalone=config->DlssNrNativeFrameGeneration.value_or_default();
     ImGui::BeginDisabled(inputSource!=2);
-    if(ImGui::Checkbox(Neurotic::UiLiteral("ingame.dlssnr-menu.standalone_fsr_frame_generation_2x_1ffa262a", "Standalone FSR frame generation (2x)"),&standalone)){
+    if(Neurotic::WrappedPopupCheckbox(Neurotic::UiLiteral("ingame.dlssnr-menu.standalone_fsr_frame_generation_2x_1ffa262a", "Standalone FSR frame generation (2x)"),&standalone)){
         config->DlssNrNativeFrameGeneration=standalone;config->SaveIni();CancelNrEdits();
     }
     ImGui::EndDisabled();
@@ -1728,120 +2264,63 @@ static void RenderIntakeMenu(Config* config, const char* gpuName,
         ImGui::TextWrapped("%s",Neurotic::Translate(fgState==NativeFg::PresentationState::RestartRequired?
             Neurotic::UiLiteral("ingame.dlssnr-menu.restart_the_game_to_apply_the_frame_generation_s_1f97d457", "Restart the game to apply the frame generation setting."):reason.c_str()).c_str());
     }
-    if(ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.advanced_input_options_acac1b9d", "Advanced input options")))ImGui::OpenPopup(Neurotic::UiLiteral("ingame.dlssnr-menu.advanced_input_options_acac1b9d", "Advanced input options##NrInputOverlay"));
-    Neurotic::SetBoundedPopupSize(34.f,29.f);
-    if(ImGui::BeginPopupModal(Neurotic::UiLiteral("ingame.dlssnr-menu.advanced_input_options_acac1b9d", "Advanced input options##NrInputOverlay"),nullptr,ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoSavedSettings)){
-        ImGui::BeginChild("##NrInputOptionsBody",{0,-ImGui::GetFrameHeightWithSpacing()});
-        ImGui::PushTextWrapPos(0);
-        int inputTransport=config->DlssNrInputTransport.value_or_default();
-        Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.dlssnr-menu.input_transport_eb183b9c", "Input transport"));
-        if(ImGui::Combo("##Input transport",&inputTransport,Neurotic::UiOptions("ingame.dlssnr-menu.automatic_33f5300c|ingame.dlssnr-menu.gpu_only_ac2ce5ad|ingame.dlssnr-menu.cpu_d30a8cca|", "Automatic\0GPU only\0CPU\0"))){
-            config->DlssNrInputTransport=inputTransport;config->SaveIni();CancelNrEdits();
-            Connections::RequestInputSelection(inputSource,inputTransport,config->DlssNrAllowCpuFallback.value_or_default());
-        }
-        bool fallback=config->DlssNrAllowCpuFallback.value_or_default();
-        if(Neurotic::WrappedPopupCheckbox(Neurotic::UiLiteral("ingame.dlssnr-menu.allow_clean_cpu_fallback_00d02e41", "Allow clean CPU fallback"),&fallback)){
-            config->DlssNrAllowCpuFallback=fallback;config->SaveIni();CancelNrEdits();
-            Connections::RequestInputSelection(inputSource,inputTransport,fallback);
-        }
-        if(inputSource==0||inputSource==2){
-            ImGui::SeparatorText(Neurotic::UiLiteral("ingame.dlssnr-menu.built_in_capture_8d435da4", "Built-in capture"));
-            bool vulkanRenderer=config->DlssNrNativeVulkanRenderer.value_or_default();
-            if(Neurotic::WrappedPopupCheckbox(Neurotic::UiLiteral("ingame.dlssnr-menu.vulkan_nr_renderer_be792456", "Vulkan NR renderer"),&vulkanRenderer)){
-                config->DlssNrNativeVulkanRenderer=vulkanRenderer;config->SaveIni();CancelNrEdits();
-            }
-            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.renderer_changes_require_restart_standalone_fg_u_ff15e674", "Renderer changes require restart. Standalone FG uses the D3D12 renderer."));
-            int direction=config->DlssNrNativeDepthDirection.value_or_default();
-            int selection=direction==0?1:direction==1?2:0;
-            Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.dlssnr-menu.depth_direction_7b0b4349", "Depth direction"));
-            if(ImGui::Combo("##Depth direction",&selection,Neurotic::UiOptions("ingame.dlssnr-menu.automatic_33f5300c|ingame.dlssnr-menu.forward_far_1_896a5ee1|ingame.dlssnr-menu.reversed_far_0_0d398930|", "Automatic\0Forward (far = 1)\0Reversed (far = 0)\0"))){
-                config->DlssNrNativeDepthDirection=selection-1;NativeGuides::ConfigureDepthDirection(selection-1);
-                NativeVulkanGuides::Unavailable(Neurotic::UiLiteral("ingame.dlssnr-menu.depth_direction_changed_waiting_for_a_fresh_fram_5718f375", "Depth direction changed; waiting for a fresh frame"));config->SaveIni();CancelNrEdits();
-            }
-            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.automatic_uses_an_observed_clear_manual_depth_di_3c6c3442", "Automatic uses an observed clear. Manual depth direction applies immediately; an incorrect convention can distort rendering."));
-        }
-        RenderInputSelectionStatus();
-        ImGui::PopTextWrapPos();
-        ImGui::EndChild();
-        if(ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.done_f2fca027", "Done"))||ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-    }
-    RenderInputSelectionStatus();
+}
 
-#endif
-    static const char* policies[] = { Neurotic::UiLiteral("ingame.dlssnr-menu.image_only_095e6ab0", "Image only"), Neurotic::UiLiteral("ingame.dlssnr-menu.require_guides_dcdf9e75", "Require guides"), Neurotic::UiLiteral("ingame.dlssnr-menu.automatic_33f5300c", "Automatic"), Neurotic::UiLiteral("ingame.dlssnr-menu.invalid_saved_policy_195d379d", "Invalid saved policy") };
-    int policy = int((std::min)(settings.DlssNrPresentInputPolicy.value_or_default(), 3u));
-    ImGui::TextUnformatted(Neurotic::UiLiteral("ingame.dlssnr-menu.missing_guide_policy_2453b31e", "Missing-guide policy"));
+static void RenderCaptureSettings(Config* config)
+{
+    ScopedNestedTextWrap wrap;
+    Neurotic::SetBoundedPopupSize(34.f,25.f);
+    if(!ImGui::BeginPopupModal("Capture settings##WorkspaceInputOptions",nullptr,ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoSavedSettings))return;
+    ImGui::BeginChild("##CaptureSettingsBody",{0,-ImGui::GetFrameHeightWithSpacing()});
+    InputSectionTitle("Frame transfer");
+    int source=config->DlssNrInputSource.value_or_default();
+    const int transport=config->DlssNrInputTransport.value_or_default();
+    const bool fallback=config->DlssNrAllowCpuFallback.value_or_default();
+    const auto request=[&](int provider,int transfer,bool cpuFallback){
+        if(!Connections::RequestInputSelection(provider,transfer,cpuFallback))return;
+        {NrConfigSynchronization::Transaction transaction;
+            config->DlssNrInputSource=provider;config->DlssNrInputTransport=transfer;config->DlssNrAllowCpuFallback=cpuFallback;}
+        config->SaveIni();CancelNrEdits();
+    };
+    const char* transfers[]={"Auto (GPU, then CPU)","GPU only","CPU"};
+    const int choice=CaptureSettings::TransferChoice(transport,fallback);
     ImGui::SetNextItemWidth(-FLT_MIN);
-    ImGui::BeginDisabled(method != 0);
-    if (ImGui::BeginCombo("##NrIntakePolicy", policies[policy]))
-    {
-        for (int choice : { 2, 1, 0 })
-            if (ImGui::Selectable(policies[choice], choice == policy))
-                config->DlssNrPresentInputPolicy = uint32_t(choice);
+    if(ImGui::BeginCombo("##FrameTransfer",choice<0?"Invalid saved choice":transfers[choice])){
+        for(int i=0;i<3;++i)if(ImGui::Selectable(transfers[i],choice==i)){
+            const auto selected=CaptureSettings::TransferPolicy(i);request(source,selected.transport,selected.fallback);
+        }
         ImGui::EndCombo();
     }
-    ImGui::EndDisabled();
-    Neurotic::Sleek::ControlDivider();
-    if (ImGui::BeginTable("##NrIntakeSource", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH))
-    {
-        const auto muted = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
-        ObservationSignal(Neurotic::UiLiteral("ingame.dlssnr-menu.graphics_api_66585b5d", "Graphics API"), ApiUpscalerInputName(State::Instance().currentInputApiName), muted);
-        ObservationSignal(Neurotic::UiLiteral("ingame.dlssnr-menu.graphics_card_70c0d519", "Graphics card"), gpuName && *gpuName ? gpuName : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
-        ObservationSignal(Neurotic::UiLiteral("ingame.menu-common.output_b5db16a0", "Output"), Neurotic::Translate(StageUi::UnifiedMethods[method]), muted);
-        ImGui::EndTable();
+    InputHelp("Controls how captured frames reach NR. Auto tries GPU transfer first and permits CPU fallback. CPU transfer can cost performance. Direct game inputs use their existing path.");
+    ImGui::Spacing();ImGui::Separator();
+    StatusPanel::Linef("##CapturePolicy",PipelineUi::Color(source==0?PipelineView::State::Unknown:PipelineView::State::Fallback),"Capture selection: %s",MixedSourceText(source).c_str());
+    if(source!=0)ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.this_override_can_restrict_sources_on_the_inputs_boa_147f66af","This override can restrict sources on the inputs board."));
+    auto* captureState=ImGui::GetStateStorage();const auto sourceKey=ImGui::GetID("##CaptureOverrideSeen");
+    if(captureState->GetInt(sourceKey,-1)!=source||ImGui::IsWindowAppearing())ImGui::SetNextItemOpen(source!=0,ImGuiCond_Always);
+    captureState->SetInt(sourceKey,source);
+    if(ImGui::TreeNode("Provider override")){
+        const char* providers[]={"Auto","Native","Built-in","ReShade","External"};
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if(ImGui::BeginCombo("##CaptureOverride",source>=0&&source<5?providers[source]:"Invalid saved choice")){
+            for(int i=0;i<5;++i)if(ImGui::Selectable(providers[i],source==i))request(i,transport,fallback);
+            ImGui::EndCombo();
+        }
+        InputHelp("Limits which provider can supply NR frames. Auto removes the restriction. Depth and motion choices remain on the inputs board.");
+        if(source!=0&&ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.remove_override_6d43eea1","Remove override")))request(0,transport,fallback);
+        ImGui::TreePop();
     }
-    EndNrCard();
-
-    if (grid) ImGui::TableNextColumn();
-    BeginNrCard("##NrIntakeObservation", Neurotic::UiLiteral("ingame.dlssnr-menu.observed_inputs_62aa563e", "Observed inputs"));
-    const auto connection=PreparedGuides::QueryStatusV2(GetTickCount64());
-    const auto output=RenderingOutput::Query();
-    const bool outputActive=RenderingOutput::Active(output,GetTickCount64());
-    const bool preparedActive=outputActive&&output.producer==RenderingOutput::Producer::BuiltIn&&connection.available&&connection.fresh;
-    const char* effectiveLabel=Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed");
-    if(outputActive) {
-        if(preparedActive)effectiveLabel=ConnectionSourceLabel(connection.status.selectedSource);
-        else if(output.producer==RenderingOutput::Producer::Native||
-            (output.producer==RenderingOutput::Producer::Present&&present.actualInputClass==PresentInputDecision::InputClass::Guided))
-            effectiveLabel=ConnectionSourceLabel(Connections::Source::Native);
-        else if(output.producer==RenderingOutput::Producer::Present)effectiveLabel=Neurotic::UiLiteral("ingame.dlssnr-menu.present_image_ca2fa26e", "Present image");
-        else if(output.producer==RenderingOutput::Producer::CapturedImage)effectiveLabel=Neurotic::UiLiteral("ingame.nr-input.captured_image", "Captured image");
+    if(ImGui::TreeNode("Renderer compatibility")){
+        bool vulkan=config->DlssNrNativeVulkanRenderer.value_or_default();
+        if(ImGui::Checkbox(Neurotic::UiLiteral("ingame.dlssnr-menu.vulkan_capture_renderer_6c0f81ce","Vulkan capture renderer"),&vulkan)){
+            config->DlssNrNativeVulkanRenderer=vulkan;config->SaveIni();CancelNrEdits();
+        }
+        ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.restart_the_game_to_apply_standalone_frame_generatio_1af12c21","Restart the game to apply. Standalone frame generation uses Direct3D 12."));
+        ImGui::TreePop();
     }
-    StatusPanel::Linef("##EffectiveInput",outputActive?ImVec4(.30f,.82f,.48f,1):ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
-        Neurotic::UiLiteral("ingame.dlssnr-menu.effective_source_s_s_f3f4296e", "Effective source: %s%s"),Neurotic::Translate(effectiveLabel).c_str(),"");
-    StatusPanel::Linef("##ProcessInput",ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
-        Neurotic::UiLiteral("ingame.nr-input.current_preference", "Current preference: %s"),
-        Neurotic::Translate(ConnectionSourceLabel(static_cast<Connections::Source>(NativeGuides::SelectedSource()))).c_str());
-    if(preparedActive){
-        const auto& effective=connection.status;
-        const bool ready=connection.fresh&&effective.guideReady;
-        StatusPanel::Linef("##EffectiveGuides",ready?ImVec4(.30f,.82f,.48f,1):ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
-            Neurotic::UiLiteral("ingame.provider.e46ec0311ecf", "Guides: %s"),Neurotic::Translate(ready?
-                (effective.motionOrigin==PreparedGuides::Origin::Derived?Neurotic::UiLiteral("ingame.dlssnr-menu.captured_depth_estimated_motion_e41ba66f", "Captured depth / estimated motion"):
-                 Neurotic::UiLiteral("ingame.nr-input.qualified_guides", "Qualified source guides")):
-                Neurotic::UiLiteral("ingame.dlssnr-menu.waiting_for_fresh_inputs_6710d65c", "Waiting for fresh inputs")).c_str());
-    }else StatusPanel::Line("##EffectiveGuides",outputActive&&
-        ((output.producer==RenderingOutput::Producer::Present&&present.actualInputClass==PresentInputDecision::InputClass::Guided)||
-         (output.producer==RenderingOutput::Producer::Native&&native.guideWidth&&native.guideHeight))?
-        Neurotic::UiLiteral("ingame.nr-input.game_guides", "Guides: Game-supplied"):
-        Neurotic::UiLiteral("ingame.nr-input.no_guides", "Guides: Not in use"),ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    RenderLiveReadouts(config,settings,settings.DlssNrEnabled.value_or_default(),BasicMultipass::Active(settings),NrReadoutGroup::Output,status);
-
-    if (ImGui::BeginTable("##NrIntakeSignals", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerH))
-    {
-        ImGui::TableSetupColumn(Neurotic::UiLiteral("ingame.menu-common.input_f238798e", "Input")); ImGui::TableSetupColumn(Neurotic::UiLiteral("ingame.provider.d239e9cf6a51", "Observation")); ImGui::TableHeadersRow();
-        const auto muted = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
-        ObservationSignal(Neurotic::UiLiteral("ingame.dlssnr-menu.native_input_764bf430", "Native input"), native.nativeInputs.observations ? Neurotic::UiLiteral("ingame.dlssnr-menu.recorded_by_the_native_owner_655dd565", "Recorded by the Native owner") : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
-        ObservationSignal(Neurotic::UiLiteral("ingame.dlssnr-menu.present_image_ca2fa26e", "Present image"), present.backbufferWidth && present.backbufferHeight ?
-            StatusPanel::Format(Neurotic::UiLiteral("ingame.dlssnr-menu.u_x_u_last_recorded_e96dceef", "%u x %u (last recorded)"), present.backbufferWidth, present.backbufferHeight) : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
-        ObservationSignal(Neurotic::UiLiteral("ingame.dlssnr-menu.guide_matching_4c4a9f9b", "Guide matching"), guides.captureAttempts ? guides.status : Neurotic::UiLiteral("ingame.dlssnr-menu.not_observed_bc6a9be6", "Not observed"), muted);
-        ObservationSignal("Fallback", present.fallbackReason.empty() ? Neurotic::UiLiteral("ingame.dlssnr-menu.no_reason_published_1f91d783", "No reason published") : present.fallbackReason, muted);
-        ImGui::EndTable();
-    }
-    ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.last_recorded_see_diagnostics_for_details_21509aab", "Last recorded - see Diagnostics for details"));
-    EndNrCard();
-    if (grid) ImGui::EndTable();
+    if(Connections::QueryInputSelection().phase!=Connections::InputPhase::Applied)RenderInputSelectionStatus();
+    ImGui::EndChild();
+    if(ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.done_11a6767d","Done"))||ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
 }
 
 
@@ -1885,12 +2364,12 @@ static void RenderDiagnostics(Config* config,const std::optional<MenuStatus::Run
     const auto connection=PreparedGuides::QueryStatusV2(now);
     const bool restart=connection.available&&connection.status.restartRequired;
     ImGui::PushStyleColor(ImGuiCol_Text,restart?warning:muted);
-    NrDiagnosticsUi::Cell("##NrDiagnosticRestart",restart?Neurotic::UiLiteral("ingame.dlssnr-menu.restart_required_before_another_connection_can_b_32b78efd","Restart required before another connection can begin."):Neurotic::UiLiteral("ingame.nr-diagnostics.last_recorded","Last-recorded owner values · session totals"),2);
+    NrDiagnosticsUi::Cell("##NrDiagnosticRestart",restart?Neurotic::UiLiteral("ingame.dlssnr-menu.restart_required_before_another_connection_can_b_32b78efd","Restart required before another connection can begin."):Neurotic::UiLiteral("ingame.nr-diagnostics.last_recorded","Last reported values - session totals"),2);
     ImGui::PopStyleColor();
     static int selected=0;const auto page=NrDiagnosticsUi::Tabs(selected);
     if(page==NrDiagnosticsUi::Page::Inputs)RenderPreflight(config,PreflightView::Details);
     else {
-        if(page==NrDiagnosticsUi::Page::Connections)RenderDiagnosticConnections();
+        if(page==NrDiagnosticsUi::Page::Connections)RenderDiagnosticConnections(config);
         RenderDiagnosticRuntime(config,page,status);
     }
     ImGui::Separator();RenderPreflight(config,PreflightView::Footer);
@@ -1915,7 +2394,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 {
     Advisor().gpuName = gpuName != nullptr && gpuName[0] != 0 ? gpuName : Neurotic::UiLiteral("ingame.dlssnr-menu.detecting_graphics_card_5066a0c7", "Detecting graphics card...");
     CancelAdvisorAnalysis(config, Neurotic::UiLiteral("ingame.dlssnr-menu.advisor_archived_original_settings_restored_1867d682", "Advisor archived; original settings restored."));
-    if (page == MenuPage::Preflight) { RenderIntakeMenu(config, gpuName, status); return; }
+    if (page == MenuPage::Preflight) { RenderCaptureSettings(config); return; }
     if (page == MenuPage::Diagnostics) { RenderDiagnostics(config,status); return; }
     if(config->DlssNrRoute.value_or_default()==3) {
         const auto output=RenderingOutput::Query();const auto now=GetTickCount64();
@@ -1946,15 +2425,11 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         basicOwnsMain = BasicMultipass::Active(config->GetDlssNrConfigSnapshot());
         // RR preserves After placement; Match Native only resizes NR's private raster.
         const bool nativeAfterOnly = !IsVulkanInput() && SelectedNativeTelemetry().nativeRayReconstructionActive;
-        static const char* nrStyleNames[] = { Neurotic::UiLiteral("ingame.option.ef6691545d2c", "Standard"), Neurotic::UiLiteral("ingame.option.d6acb6d51cfc", "Natural"), Neurotic::UiLiteral("ingame.option.912d0988b065", "Cinematic") };
         static const char* nrPresetNames[] = { Neurotic::UiLiteral("ingame.menu-common.default_92fe477b", "Default"), Neurotic::UiLiteral("ingame.provider.d1ced7405198", "Preset 1"), Neurotic::UiLiteral("ingame.provider.c475c1784510", "Preset 2"), Neurotic::UiLiteral("ingame.provider.e7aebbc38aae", "Preset 3") };
-        int style = std::clamp((int) config->DlssNrStyle.value_or_default(), 0, 2);
         int preset = (int) config->DlssNrPreset.value_or_default();
         const auto renderStyle = [&]()
         {
-            Neurotic::Sleek::ControlLabel(Neurotic::UiLiteral("ingame.provider.7e744141b40e", "Style"));
-            if (ImGui::Combo("##NrStyle", &style, nrStyleNames, IM_ARRAYSIZE(nrStyleNames)))
-                config->DlssNrStyle = (uint32_t) style;
+            RenderMainNrStyle(config);
         };
         const auto renderModelPreset = [&]()
         {
@@ -1962,10 +2437,9 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             if (ImGui::Combo("##NrModelPreset", &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
                 config->DlssNrPreset = (uint32_t) preset;
         };
-        RenderLiveReadouts(config, config->GetDlssNrConfigSnapshot(), enabled, basicOwnsMain,
-                           NrReadoutGroup::Activity, status);
+
         std::optional<Neurotic::Sleek::CardColumns> mainCards;
-        mainCards.emplace("##NrMainCards");
+        if(page!=MenuPage::Color)mainCards.emplace("##NrMainCards");
         const auto renderResampling = [&]
         {
         if (auto resampling = ScopedCollapsingHeader(Neurotic::UiLiteral("ingame.dlssnr-menu.advanced_resampling_27371461", "Advanced resampling##NrResampling")); resampling.IsHeaderOpen())
@@ -2050,10 +2524,15 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
 
         };
 
-        BeginNrCard("##NrRenderingCard", Neurotic::UiLiteral("ingame.provider.e2fe353986e6", "Rendering"));
-        if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.dlssnr-menu.enable_neural_rendering_38e3f189", "Enable Neural Rendering"), &enabled)) config->SetDlssNrEnabled(enabled);
-        bool applyModel = config->DlssNrApplyModel.value_or_default();
-        if (ImGui::Checkbox(Neurotic::UiLiteral("ingame.dlssnr-menu.apply_the_model_8fad708a", "Apply the model"), &applyModel)) config->DlssNrApplyModel = applyModel;
+        if(page!=MenuPage::Color){
+        BeginNrCard("##NrRenderingCard", nullptr);
+        ImGui::AlignTextToFramePadding();ImGui::TextUnformatted(Neurotic::UiLiteral("ingame.provider.e2fe353986e6", "Rendering"));
+        const auto applyLabel=Neurotic::Translate(Neurotic::UiLiteral("ingame.dlssnr-menu.apply_the_model_8fad708a", "Apply the model"));
+        const float applyWidth=Neurotic::Sleek::ToggleWidth()+ImGui::GetStyle().ItemInnerSpacing.x+ImGui::CalcTextSize(applyLabel.c_str()).x;
+        const float right=ImGui::GetCursorPosX()+ImGui::GetContentRegionAvail().x;
+        if(right-applyWidth>ImGui::GetItemRectSize().x+ImGui::GetStyle().ItemSpacing.x)ImGui::SameLine(right-applyWidth);
+        bool applyModel=config->DlssNrApplyModel.value_or_default();
+        if(ImGui::Checkbox(applyLabel.c_str(),&applyModel))config->DlssNrApplyModel=applyModel;
         const auto telemetry = SelectedNativeTelemetry();
         if (enabled && !status && !(basicOwnsMain && BasicMultipass::Count(config->DlssNrBasicMultipass.value_or_default()) == 0) &&
             !IsVulkanInput() && !DlssNr::IsRunningVk() && config->DlssNrRoute.value_or_default() == 0 &&
@@ -2068,7 +2547,8 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
             ImGui::BeginDisabled(basicOwnsMain || StageUi::NativePlacementRefusal(uiConfig, nativeAfterOnly) != nullptr);
             if (auto reveal = Neurotic::Sleek::AnimatedRegion("##ManualResolution", StageUi::ResolutionSelection(uiConfig) == 1); reveal.Visible())
             {
-                static NrOptional<float> scalePreview { 1.0f };
+                // Drawing this UI-only preview must not publish renderer config revisions.
+                static CustomOptional<float> scalePreview { 1.0f };
                 static uint64_t previousSelection = 0;
                 const auto selection = PresentResolution::CaptureKey(uiConfig) * 4 + stage;
                 if (selection != previousSelection) CancelNrEdits();
@@ -2086,7 +2566,7 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
                 const float sliderRoom = ImGui::GetContentRegionAvail().x - resetWidth - ImGui::GetStyle().ItemSpacing.x * 2.0f;
                 ImGui::SetNextItemWidth((std::min)(220.0f * menuResScale,
                     (std::max)(65.0f * menuResScale, sliderRoom)));
-                if (DeferredNrSlider("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
+                if (DeferredNrSlider<CustomOptional<float>>("##NrManualScale", { &scalePreview }, 0.25f, 2.0f, 1.0f, "%d%%", true))
                 {
                     NrConfigSynchronization::Transaction transaction;
                     const auto current = config->GetDlssNrConfigSnapshot();
@@ -2182,12 +2662,14 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         renderProxy();
         EndNrCard();
         mainCards.reset();
+        }
         ImGui::Spacing();
         ImGui::PushItemWidth(std::clamp(ImGui::GetContentRegionAvail().x - 240.0f * menuResScale,
                                       40.0f * menuResScale, 220.0f * menuResScale));
         {
         {
 
+        if(page==MenuPage::Color){
         BeginNrCard(Neurotic::UiLiteral("ingame.menu-common.color_af6f8b8d", "Color##DlssNrColourSection"), Neurotic::UiLiteral("ingame.menu-common.color_af6f8b8d", "Color"));
         {
         ImGui::Spacing();
@@ -2773,8 +3255,9 @@ void RenderMenu(Config* config, float menuResScale, const std::optional<MenuStat
         }
 
 
-        }
         EndNrCard();
+        }
+        }
         }
         ImGui::PopItemWidth();
         ImGui::PopTextWrapPos();
@@ -3014,359 +3497,7 @@ static void ResetButton(const char* id, const std::function<void()>& reset)
     if (ImGui::SmallButton(id)) reset();
 }
 
-static void RenderMultipassMenu(Config* config, float menuResScale)
-{
-    {
-        ScopedNestedTextWrap wrap {};
-        const bool d3d12 = IsVulkanInput() || State::Instance().api == API::DX12;
-        const bool presentRoute = config->DlssNrRoute.value_or_default() != 0;
-        static unsigned int previousPassCount = 0;
-
-        auto basic = BasicMultipass::Normalize(config->DlssNrBasicMultipass.value_or_default());
-        int editor = basic.advanced ? 1 : 0;
-        static const char* editors[] = { Neurotic::UiLiteral("ingame.option.0e35f6e9742e", "Basic"), Neurotic::UiLiteral("ingame.objectruleeditor.advanced_cfbc9ae1", "Advanced") };
-        const float selectorWidth = ImGui::GetContentRegionAvail().x * 0.25f;
-        bool enabled = config->DlssNrMultipassEnabled.value_or_default();
-        if (!d3d12 && !presentRoute) ImGui::BeginDisabled();
-        if (MenuControls::EmphasizedCheckbox(Neurotic::UiLiteral("ingame.dlssnr-menu.enable_nr_multipass_5f89a127", "Enable NR Multipass"), &enabled))
-        {
-            NrConfigSynchronization::Transaction transaction;
-            config->DlssNrMultipassEnabled = enabled;
-            config->DlssNrSecondLayer = enabled && config->DlssNrPasses.value_or_default() > 1;
-            CancelNrEdits();
-        }
-        if (!d3d12 && !presentRoute) ImGui::EndDisabled();
-        HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.enables_a_bounded_chain_of_one_to_ten_neural_ren_625c6687", "Enables a bounded chain of one to ten Neural Rendering passes on D3D12 and Vulkan. Each later pass consumes the fully composed image from the preceding pass and owns an independent model session and temporal history. Cost increases approximately linearly with the selected pass count."));
-
-        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x);
-        const auto divider = ImGui::GetCursorScreenPos();
-        ImGui::Dummy(ImVec2(1.0f, ImGui::GetFrameHeight()));
-        ImGui::GetWindowDrawList()->AddLine(divider,
-            ImVec2(divider.x, divider.y + ImGui::GetFrameHeight()),
-            ImGui::GetColorU32(ImGuiCol_Separator));
-        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x);
-        ImGui::SetNextItemWidth((std::min)(selectorWidth, ImGui::GetContentRegionAvail().x));
-        if (ImGui::Combo("##NrMultipassEditor", &editor, editors, 2))
-        {
-            BasicMultipass::Update(*config, [&](auto& p) { p.advanced = editor == 1; });
-            CancelNrEdits();
-            basic = config->DlssNrBasicMultipass.value_or_default();
-        }
-
-        if (!basic.advanced)
-        {
-            const float basicWidth=MenuControls::HalfWidthSliderGroup({Neurotic::UiLiteral("ingame.dlssnr-menu.model_resolution_cd73e06b", "Model Resolution"), Neurotic::UiLiteral("ingame.dlssnr-menu.model_strength_a6a09f10", "Model Strength"), Neurotic::UiLiteral("ingame.dlssnr-menu.detail_strength_d781fe36", "Detail Strength")});
-            const auto slider = [&](const char* title, const char* id, NrOptional<float>& preview,
-                                    float BasicMultipass::Profile::* member, float minimum, float maximum,
-                                    const char* hint = nullptr,
-                                    unsigned int cumulativePasses = 0)
-            {
-                BasicMultipass::Profile original;
-                uint64_t generation;
-                {
-                    NrConfigSynchronization::Transaction transaction;
-                    original = config->DlssNrBasicMultipass.value_or_default();
-                    generation = NrConfigSynchronization::ProfileGeneration();
-                }
-                preview = original.*member;
-                const std::string sliderLabel=std::string(title)+"###"+id;
-                ImGui::SetNextItemWidth(basicWidth);
-                ImVec2 sliderMin {}, sliderMax {};
-                const bool changed = DeferredNrSlider(sliderLabel.c_str(), { &preview }, minimum, maximum, 1.0f,
-                    "%d%%", true, cumulativePasses > 0 ? &sliderMin : nullptr,
-                    cumulativePasses > 0 ? &sliderMax : nullptr, cumulativePasses > 0 ? title : nullptr);
-                if (hint) HelpMarker(hint);
-                if (cumulativePasses > 0)
-                    DrawCumulativePassSegments(sliderMin, sliderMax, cumulativePasses, menuResScale);
-                if (changed)
-                    if (!BasicMultipass::CommitEdit(*config, original, generation, member, preview.value_or_default()))
-                        CancelNrEdits();
-            };
-            static NrOptional<float> resolution { 1.0f }, model { 1.0f }, detail { 1.0f };
-            static const char* maximums[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
-            int maximum = int(basic.maximum) - 1;
-            ImGui::SetNextItemWidth(selectorWidth);
-            if (ImGui::Combo(Neurotic::UiLiteral("ingame.dlssnr-menu.maximum_passes_7b761b57", "Maximum passes##NrBasicMaximum"), &maximum, maximums, 10))
-            {
-                BasicMultipass::Update(*config, [&](auto& p) { p.maximum = uint32_t(maximum + 1); });
-                CancelNrEdits();
-            }
-            basic = config->DlssNrBasicMultipass.value_or_default();
-            // The lambda adds ###; an ID beginning with ## would also make Reset's
-            // derived label restart ImGui's hash and alias the slider itself.
-            slider(Neurotic::UiLiteral("ingame.dlssnr-menu.model_resolution_cd73e06b", "Model Resolution"), "NrBasicResolution", resolution,
-                   &BasicMultipass::Profile::resolution, 0.25f, 2.0f,
-                   Neurotic::UiLiteral("ingame.dlssnr-menu.sets_one_model_raster_percentage_for_pass_1_and__b644f839", "Sets one model-raster percentage for Pass 1 and every active additional pass "
-                   "in Basic mode. The composed frame remains full resolution. Releasing commits "
-                   "the shared value and rebuilds changed models; disabling Multipass restores the "
-                   "saved main settings."));
-            basic = config->DlssNrBasicMultipass.value_or_default();
-            if (auto reveal = Neurotic::Sleek::AnimatedRegion("##BasicDownscaler", basic.resolution > 1.0f); reveal.Visible())
-            {
-                static const char* downscalers[] = { Neurotic::UiLiteral("ingame.option.b3290cbc23e0", "FSR1"), Neurotic::UiLiteral("ingame.option.d64f696cc3e4", "Bicubic"), Neurotic::UiLiteral("ingame.option.e817551fdce4", "Catmull-Rom"), Neurotic::UiLiteral("ingame.option.4143056699ee", "Lanczos2"), Neurotic::UiLiteral("ingame.option.9feb40edb86b", "Lanczos3"), Neurotic::UiLiteral("ingame.option.6de2fa378185", "Kaiser2"), Neurotic::UiLiteral("ingame.option.592782aa7dcb", "Kaiser3"), Neurotic::UiLiteral("ingame.option.e7b0c0160426", "MAGIC") };
-                int selected = int(basic.downscaler);
-                ImGui::SetNextItemWidth(selectorWidth);
-                if (ImGui::Combo(Neurotic::UiLiteral("ingame.dlssnr-menu.downscaler_b3373b8a", "Downscaler##NrBasicDownscaler"), &selected, downscalers, 8))
-                    BasicMultipass::Update(*config, [&](auto& p) { p.downscaler = uint32_t(selected); });
-            }
-            const char* cumulativeHint =
-                Neurotic::UiLiteral("ingame.dlssnr-menu.each_coloured_segment_represents_one_pass_cumula_e3376b66", "Each coloured segment represents one pass. Cumulative totals fill passes from left to right.");
-            BeginNrCard("##NrBasicStrengths", Neurotic::UiLiteral("ingame.dlssnr-menu.model_detail_strength_50d5a617", "Model / detail strength"));
-            slider(Neurotic::UiLiteral("ingame.dlssnr-menu.model_strength_a6a09f10", "Model Strength"), "NrBasicModel", model, &BasicMultipass::Profile::model,
-                   0.0f, float(basic.maximum), cumulativeHint, basic.maximum);
-            slider(Neurotic::UiLiteral("ingame.dlssnr-menu.detail_strength_d781fe36", "Detail Strength"), "NrBasicDetail", detail, &BasicMultipass::Profile::detail,
-                   0.0f, float(basic.maximum), cumulativeHint, basic.maximum);
-            EndNrCard();
-            basic = config->DlssNrBasicMultipass.value_or_default();
-            const auto requested = BasicMultipass::Count(basic);
-            auto telemetry = SelectedNativeTelemetry();
-            if(IsVulkanInput()){const auto chain=DlssNr::PassChainStatusVk(presentRoute?DlssNr::VkNrRoute::Present:DlssNr::VkNrRoute::Native);telemetry.layerCount=chain.completed;}
-            static MenuStatus::SelectionObservation completedObservation;
-            const uint64_t key = uint64_t(std::lround(basic.model * 100)) |
-                (uint64_t(std::lround(basic.detail * 100)) << 12) |
-                (uint64_t(StageUi::DisplayPercent(basic.resolution)) << 24) |
-                (uint64_t(enabled) << 36) | (uint64_t(config->DlssNrRoute.value_or_default()) << 37);
-            const bool fresh = completedObservation.Fresh(key, telemetry.gpuCompletedOutputEvaluations);
-            if (enabled && requested == 0)
-                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.0_passes_requested_effect_bypassed_loaded_resour_8d0b4a9d", "0 passes requested. Effect bypassed; loaded resources retained."));
-            else if (enabled && fresh && telemetry.running)
-                ImGui::Text(Neurotic::UiLiteral("ingame.dlssnr-menu.u_requested_u_completed_on_the_last_frame_814a7c1a", "%u requested | %u completed on the last frame"), requested, telemetry.layerCount);
-            else
-                ImGui::Text(Neurotic::UiLiteral("ingame.dlssnr-menu.u_requested_completed_unavailable_4464a02c", "%u requested | completed: unavailable"), requested);
-            ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.totals_include_pass_1_230_means_100_100_30_remai_eb91f51a", "Totals include Pass 1. 230%% means 100%% + 100%% + 30%%. Remaining settings inherit NR Settings."));
-            if (!d3d12 && !presentRoute)
-                ImGui::TextWrapped(Neurotic::UiLiteral("ingame.dlssnr-menu.multipass_requires_a_supported_native_or_present_3c133a42", "Multipass requires a supported Native or Present adapter."));
-            return;
-        }
-
-        BeginNrCard("##NrAdvancedChain", Neurotic::UiLiteral("ingame.dlssnr-menu.pass_chain_fcb46cea", "Pass chain"));
-        ImGui::SetNextItemWidth(selectorWidth);
-        const unsigned int passCount = RenderPassCountSelector(config);
-        if (previousPassCount != passCount) CancelNrEdits();
-        previousPassCount = passCount;
-
-        if (ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.reset_all_86640c00", "Reset All"))) ImGui::OpenPopup(Neurotic::UiLiteral("ingame.dlssnr-menu.reset_all_multipass_settings_cf68d30c", "Reset all multipass settings?"));
-        HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.restores_the_multipass_switch_and_every_setting__6737dfc3", "Restores the Multipass switch and every setting in all nine saved additional pass profiles to "
-                   "their shipped defaults. Baseline Pass 1 and the shared pass count above remain unchanged. "
-                   "A confirmation is required."));
-        if (ImGui::BeginPopupModal(Neurotic::UiLiteral("ingame.dlssnr-menu.reset_all_multipass_settings_cf68d30c", "Reset all multipass settings?"), nullptr,
-                                   ImGuiWindowFlags_AlwaysAutoResize))
-        {
-            ImGui::TextUnformatted(Neurotic::UiLiteral("ingame.dlssnr-menu.reset_every_additional_neural_rendering_pass_pro_b37891a7", "Reset every additional Neural Rendering pass profile to default?"));
-            if (ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.confirm_ea44f268", "Confirm")))
-            {
-                {
-                    NrConfigSynchronization::Transaction transaction;
-                    enabled = false;
-                    config->DlssNrMultipassEnabled = false;
-                    config->DlssNrSecondLayer = false;
-                    for (unsigned int pass = 1; pass < 10; ++pass)
-                        ResetPassOptions(PassOptions(config, pass));
-                }
-                CancelNrEdits();
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.cancel_7e4b3f1d", "Cancel"))) ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
-        }
-
-        if (!d3d12 && !presentRoute)
-            ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.neural_rendering_multipass_requires_a_supported__ab85438a", "Neural Rendering Multipass requires a supported adapter."));
-
-        auto telemetry = SelectedNativeTelemetry();
-        if(IsVulkanInput()){const auto chain=DlssNr::PassChainStatusVk(presentRoute?DlssNr::VkNrRoute::Present:DlssNr::VkNrRoute::Native);telemetry.layerCount=chain.completed;telemetry.running=chain.deliverable;}
-        if (enabled && d3d12)
-        {
-            if (telemetry.running)
-                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), Neurotic::UiLiteral("ingame.dlssnr-menu.u_of_u_requested_passes_completed_on_the_last_fr_ffe8f2a1", "%u of %u requested passes completed on the last frame."),
-                                   telemetry.layerCount, passCount);
-            else
-                ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.the_pass_chain_becomes_active_when_dlss_neural_r_5f6c65d3", "The pass chain becomes active when DLSS Neural Rendering is enabled and ready."));
-            if (passCount >= 4)
-                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.25f, 1.0f),
-                                   Neurotic::UiLiteral("ingame.dlssnr-menu.high_pass_counts_are_experimental_and_may_exhaus_e9dde6e5", "High pass counts are experimental and may exhaust GPU memory or frame time."));
-        }
-
-        EndNrCard();
-        if (passCount > 1)
-        {
-            BeginNrCard("##NrAdvancedShared", Neurotic::UiLiteral("ingame.dlssnr-menu.shared_settings_passes_2_n_cb863f8a", "Shared settings - Passes 2-N"));
-            const float globalWidth=MenuControls::HalfWidthSliderGroup({Neurotic::UiLiteral("ingame.dlssnr-menu.model_resolution_cd73e06b", "Model Resolution"), Neurotic::UiLiteral("ingame.dlssnr-menu.model_strength_a6a09f10", "Model Strength"), Neurotic::UiLiteral("ingame.dlssnr-menu.detail_strength_d781fe36", "Detail Strength")});
-            const auto sharedSlider = [&](const char* label, NrOptional<float>* PassOptionRefs::* member,
-                                          float minimum, float maximum, const char* hint, const char* mixedHint)
-            {
-                std::vector<NrOptional<float>*> targets;
-                for (unsigned int index = 1; index < passCount; ++index)
-                    targets.push_back(PassOptions(config, index).*member);
-                ImGui::SetNextItemWidth(globalWidth);
-                DeferredNrSlider(label, targets, minimum, maximum, 1.0f, "%d%%", true);
-                HelpMarker(hint);
-                if (pendingNrEdits[label].Mixed()) ImGui::TextDisabled("%s",Neurotic::Translate(mixedHint).c_str());
-            };
-            sharedSlider(Neurotic::UiLiteral("ingame.dlssnr-menu.model_resolution_cd73e06b", "Model Resolution###Model Resolution##AdditionalPassModelResolution"), &PassOptionRefs::workingScale, 0.25f, 2.0f,
-                Neurotic::UiLiteral("ingame.dlssnr-menu.changes_the_model_resolution_for_every_additiona_18dd4d5f", "Changes the Model resolution for every additional pass at once: Pass 2 through the selected final pass. It never changes Pass 1. Dragging previews the shared percentage; releasing commits that percentage to all additional passes and rebuilds them once."),
-                Neurotic::UiLiteral("ingame.dlssnr-menu.passes_2_n_have_mixed_model_resolutions_adjustin_2723e966", "Passes 2–N have mixed model resolutions; adjusting this slider applies one value to all of them."));
-            sharedSlider(Neurotic::UiLiteral("ingame.dlssnr-menu.model_strength_a6a09f10", "Model Strength###Model Strength##AdditionalPassModelStrength"), &PassOptionRefs::intensity, 0.0f, 2.0f,
-                Neurotic::UiLiteral("ingame.dlssnr-menu.sets_internal_model_intensity_for_pass_2_through_a7906573", "Sets internal model intensity for Pass 2 through the selected final pass. Release to apply and rebuild only changed child models. 100% is default; 0% does not disable model execution. Pass 1 is unchanged."),
-                Neurotic::UiLiteral("ingame.dlssnr-menu.passes_2_n_have_mixed_model_strengths_adjusting__3a5ad482", "Passes 2–N have mixed model strengths; adjusting this slider applies one value to all of them."));
-            sharedSlider(Neurotic::UiLiteral("ingame.dlssnr-menu.detail_strength_d781fe36", "Detail Strength###Detail Strength##AdditionalPassDetailStrength"), &PassOptionRefs::transferStrength, 0.0f, 2.0f,
-                Neurotic::UiLiteral("ingame.dlssnr-menu.sets_detail_blending_for_pass_2_through_the_sele_d933815a", "Sets detail blending for Pass 2 through the selected final pass. Release to apply without rebuilding models. 100% is default; 0% hides the detail edit. Pass 1 and colour strength are unchanged."),
-                Neurotic::UiLiteral("ingame.dlssnr-menu.passes_2_n_have_mixed_detail_strengths_adjusting_f777bdb1", "Passes 2–N have mixed detail strengths; adjusting this slider applies one value to all of them."));
-            EndNrCard();
-        }
-        else
-        {
-            ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.select_two_or_more_passes_to_adjust_shared_model_41f23ef4", "Select two or more passes to adjust shared Model Resolution, Model Strength and Detail Strength."));
-        }
-
-        if (passCount == 1)
-            ImGui::TextDisabled(Neurotic::UiLiteral("ingame.dlssnr-menu.pass_1_is_configured_in_nr_settings_select_two_o_55dc1788", "Pass 1 is configured in NR Settings. Select two or more passes above to configure additional passes here."));
-        else if (ImGui::BeginTabBar("NrMultipassLayers", ImGuiTabBarFlags_FittingPolicyScroll))
-        {
-            static unsigned int selectedPass = 1;
-            if (selectedPass < 1 || selectedPass >= passCount) selectedPass = 1;
-            for (unsigned int index = 1; index < passCount; ++index)
-            {
-                char label[24] {};
-                snprintf(label, sizeof(label), "Pass %u", index + 1);
-                if (!ImGui::BeginTabItem(label)) continue;
-                selectedPass = index;
-                BeginNrCard("##NrSelectedPass", label);
-                const auto pass = PassOptions(config, index);
-                char scaleLabel[96] {};
-                snprintf(scaleLabel, sizeof(scaleLabel), Neurotic::UiLiteral("ingame.dlssnr-menu.model_resolution_8a931f87", "Model resolution##pass%u"), index + 1);
-
-                char resetPopup[64] {};
-                snprintf(resetPopup, sizeof(resetPopup), Neurotic::UiLiteral("ingame.dlssnr-menu.reset_pass_u_profile_76de493d", "Reset Pass %u profile?##pass%u"), index + 1, index + 1);
-                if (ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.reset_this_pass_51d37484", "Reset this pass"))) ImGui::OpenPopup(resetPopup);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.restores_only_this_additional_pass_profile_to_it_1f1b0625", "Restores only this additional pass profile to its shipped defaults. Baseline Pass 1, "
-                           "other additional pass profiles, and the shared pass count remain unchanged."));
-                if (ImGui::BeginPopupModal(resetPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-                {
-                    ImGui::Text(Neurotic::UiLiteral("ingame.dlssnr-menu.reset_every_setting_for_pass_u_to_default_74c671cc", "Reset every setting for Pass %u to default?"), index + 1);
-                    if (ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.confirm_ea44f268", "Confirm")))
-                    {
-                        ResetPassOptions(pass);
-                        CancelNrEdits();
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(Neurotic::UiLiteral("ingame.dlssnr-menu.cancel_7e4b3f1d", "Cancel"))) ImGui::CloseCurrentPopup();
-                    ImGui::EndPopup();
-                }
-
-                if (index > 0)
-                {
-                    ImGui::SameLine();
-                    char copyLabel[48] {};
-                    snprintf(copyLabel, sizeof(copyLabel), Neurotic::UiLiteral("ingame.dlssnr-menu.copy_pass_u_settings_5ff68ff5", "Copy Pass %u settings"), index);
-                    if (ImGui::SmallButton(copyLabel))
-                    {
-                        CopyPassOptions(PassOptions(config, index - 1), pass);
-                        CancelNrEdits();
-                    }
-                    HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.copies_every_saved_setting_from_the_preceding_pa_8608180e", "Copies every saved setting from the preceding pass into this pass. It does not change the shared pass count or enable Multipass."));
-                }
-
-                ImGui::PushItemWidth(220.0f * menuResScale);
-                char id[96] {};
-                DeferredNrSlider(scaleLabel, { pass.workingScale }, 0.25f, 2.0f, 1.0f, "%d%%", true);
-                const int scale = (int) lroundf(pendingNrEdits[scaleLabel].Value() * 100.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.sets_this_pass_s_model_raster_from_25_to_200_per_39a24959", "Sets this pass's model raster from 25 to 200 percent. The composed frame remains full resolution; cost changes roughly with the square of this value."));
-
-                static const char* downscalers[] = { Neurotic::UiLiteral("ingame.option.b3290cbc23e0", "FSR1"), Neurotic::UiLiteral("ingame.option.d64f696cc3e4", "Bicubic"), Neurotic::UiLiteral("ingame.option.e817551fdce4", "Catmull-Rom"), Neurotic::UiLiteral("ingame.option.4143056699ee", "Lanczos2"),
-                                                     Neurotic::UiLiteral("ingame.option.9feb40edb86b", "Lanczos3"), Neurotic::UiLiteral("ingame.option.6de2fa378185", "Kaiser2"), Neurotic::UiLiteral("ingame.option.592782aa7dcb", "Kaiser3"), Neurotic::UiLiteral("ingame.option.e7b0c0160426", "MAGIC") };
-                int downscaler = std::clamp((int) pass.scalingDownscaler->value_or_default(), 0, 7);
-                if (scale <= 100) ImGui::BeginDisabled();
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.downscaler_b3373b8a", "Downscaler##pass%u"), index + 1);
-                if (ImGui::Combo(id, &downscaler, downscalers, IM_ARRAYSIZE(downscalers)))
-                    *pass.scalingDownscaler = (Scaler) downscaler;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-downscaler"), index + 1);
-                ResetButton(id, [&] { *pass.scalingDownscaler = Scaler::Lanczos3; });
-                if (scale <= 100) ImGui::EndDisabled();
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.chooses_the_filter_that_averages_this_pass_s_abo_5580a1dd", "Chooses the filter that averages this pass's above-native model answer back to the full-resolution frame. It applies only above 100 percent."));
-
-                static const char* presets[] = { Neurotic::UiLiteral("ingame.menu-common.default_92fe477b", "Default"), Neurotic::UiLiteral("ingame.provider.d1ced7405198", "Preset 1"), Neurotic::UiLiteral("ingame.provider.c475c1784510", "Preset 2"), Neurotic::UiLiteral("ingame.provider.e7aebbc38aae", "Preset 3") };
-                int preset = std::clamp((int) pass.preset->value_or_default(), 0, 3);
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.model_preset_1be982ca", "Model preset##pass%u"), index + 1);
-                if (ImGui::Combo(id, &preset, presets, IM_ARRAYSIZE(presets))) *pass.preset = (uint32_t) preset;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-preset"), index + 1);
-                ResetButton(id, [&] { *pass.preset = 0u; });
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.selects_the_model_preset_for_this_pass_s_indepen_91cc17ac", "Selects the model preset for this pass's independent Feature 18 session. Changing it rebuilds only this pass."));
-
-                static const char* styles[] = { Neurotic::UiLiteral("ingame.provider.1edcf76142e5", "Default (standard)"), Neurotic::UiLiteral("ingame.option.d6acb6d51cfc", "Natural"), Neurotic::UiLiteral("ingame.option.912d0988b065", "Cinematic") };
-                int style = std::clamp((int) pass.style->value_or_default(), 0, 2);
-                snprintf(id, sizeof(id), "Style##pass%u", index + 1);
-                if (ImGui::Combo(id, &style, styles, IM_ARRAYSIZE(styles))) *pass.style = (uint32_t) style;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-style"), index + 1);
-                ResetButton(id, [&] { *pass.style = 0u; });
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.selects_this_pass_s_model_processing_profile_def_0de8c0f3", "Selects this pass's model processing profile. Default is strongest; Natural and Cinematic are progressively gentler alternatives."));
-
-                static const char* transfers[] = { Neurotic::UiLiteral("ingame.option.ae25d6481fc1", "Classic"), Neurotic::UiLiteral("ingame.dlssnr-menu.matched_residual_fd28d530", "Matched residual") };
-                int transfer = pass.transfer->value_or_default() == 1 ? 1 : 0;
-                if (scale >= 100) ImGui::BeginDisabled();
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.enlargement_8f7cc83f", "Enlargement##pass%u"), index + 1);
-                if (ImGui::Combo(id, &transfer, transfers, IM_ARRAYSIZE(transfers))) *pass.transfer = (uint32_t) transfer;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-enlargement"), index + 1);
-                ResetButton(id, [&] { *pass.transfer = 1u; });
-                if (scale >= 100) ImGui::EndDisabled();
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.chooses_how_a_sub_native_model_edit_returns_to_f_28680eb0", "Chooses how a sub-native model edit returns to full size. Matched residual enlarges only the model's difference and generally preserves colour better."));
-
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.detail_strength_e855f2da", "Detail strength##pass%u"), index + 1);
-                DeferredSlider(id, pass.transferStrength, 0.0f, 2.0f, 1.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.controls_how_much_of_this_pass_s_detail_edit_rea_52d3f731", "Controls how much of this pass's detail edit reaches the composed frame. Zero hides this pass's edit; values above one exaggerate it."));
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.colour_strength_6fdcccd5", "Colour strength##pass%u"), index + 1);
-                DeferredSlider(id, pass.colourStrength, 0.0f, 4.0f, 1.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.controls_how_much_of_this_pass_s_colour_change_a_8b4a62e5", "Controls how much of this pass's colour change accompanies its lighting edit. Zero preserves the preceding pass's hue."));
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.highlight_guard_4dfd1908", "Highlight guard##pass%u"), index + 1);
-                DeferredSlider(id, pass.maxRatio, 1.0f, 8.0f, 2.0f, Neurotic::UiLiteral("ingame.dlssnr-menu.1fx_02b952fe", "%.1fx"));
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.limits_the_brightness_multiplication_or_division_03c66e49", "Limits the brightness multiplication or division this pass may apply. The 2x default protects moving highlights."));
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.model_strength_a6a09f10", "Model Strength##pass%u"), index + 1);
-                DeferredSlider(id, pass.intensity, 0.0f, 2.0f, 1.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.sets_this_pass_s_internal_model_strength_it_comm_3ac50c05", "Sets this pass's internal model strength. It commits when the slider is released and rebuilds only this pass's feature. Zero does not disable model execution."));
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.local_structure_278e0ab8", "Local structure##pass%u"), index + 1);
-                DeferredSlider(id, pass.localStructure, 0.0f, 2.0f, 1.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.sets_the_local_structure_strength_for_this_pass__65e647ab", "Sets the local-structure strength for this pass's independent model session."));
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.local_tone_bfd8370e", "Local tone##pass%u"), index + 1);
-                DeferredSlider(id, pass.localTone, 0.0f, 2.0f, 1.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.sets_the_local_tone_strength_for_this_pass_s_ind_f6d12d1a", "Sets the local-tone strength for this pass's independent model session."));
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.skin_structure_7500cc17", "Skin structure##pass%u"), index + 1);
-                DeferredSlider(id, pass.skinStructure, -1.0f, 2.0f, -1.0f);
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.sets_skin_structure_strength_for_this_pass_minus_8ba2cbd2", "Sets skin-structure strength for this pass. Minus one follows Local structure; zero and above tune it independently."));
-
-                bool autoMask = pass.autoMask->value_or_default();
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.auto_skin_mask_30c7534c", "Auto skin mask##pass%u"), index + 1);
-                if (ImGui::Checkbox(id, &autoMask)) *pass.autoMask = autoMask;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-auto-mask"), index + 1);
-                ResetButton(id, [&] { *pass.autoMask = true; });
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.lets_this_pass_s_model_identify_skin_rather_than_73421b48", "Lets this pass's model identify skin rather than treating every region uniformly."));
-
-                static const char* reversibleModes[] = { Neurotic::UiLiteral("ingame.dlssnr-menu.soft_knee_composition_c250dfcd", "Soft-knee composition"), Neurotic::UiLiteral("ingame.dlssnr-menu.neutwo_composition_d3aa36e9", "Neutwo composition"),
-                                                          Neurotic::UiLiteral("ingame.dlssnr-menu.neutwo_pure_inverse_aad577e4", "Neutwo pure inverse"), Neurotic::UiLiteral("ingame.dlssnr-menu.hybrid_composition_b4f92297", "Hybrid composition"), Neurotic::UiLiteral("ingame.dlssnr-menu.hybrid_pure_inverse_4bbbf18c", "Hybrid pure inverse") };
-                int reversible = std::clamp((int) pass.reversibleMode->value_or_default(), 0, 4);
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.proxy_composition_cf6178ff", "Proxy composition##pass%u"), index + 1);
-                if (ImGui::Combo(id, &reversible, reversibleModes, IM_ARRAYSIZE(reversibleModes)))
-                    *pass.reversibleMode = (uint32_t) reversible;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-proxy"), index + 1);
-                ResetButton(id, [&] { *pass.reversibleMode = 0u; });
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.chooses_this_pass_s_reversible_proxy_composition_cd4462d7", "Chooses this pass's reversible proxy/composition path. Soft-knee is the shipped default; the Neutwo modes remain experimental."));
-
-                bool apply = pass.applyModel->value_or_default();
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.dlssnr-menu.apply_the_model_8fad708a", "Apply the model##pass%u"), index + 1);
-                if (ImGui::Checkbox(id, &apply)) *pass.applyModel = apply;
-                snprintf(id, sizeof(id), Neurotic::UiLiteral("ingame.menu-common.reset_14de5ef1", "Reset##pass%u-apply"), index + 1);
-                ResetButton(id, [&] { *pass.applyModel = true; });
-                HelpMarker(Neurotic::UiLiteral("ingame.dlssnr-menu.off_keeps_this_pass_evaluating_and_preserving_it_683837d0", "Off keeps this pass evaluating and preserving its history but hides only its edit, leaving the preceding completed image visible."));
-
-                ImGui::PopItemWidth();
-                EndNrCard();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-    }
-}
+#include "DlssNr_MultipassMenu.h"
 
 void RenderScreenshotMenu(Config* config)
 {
@@ -3419,6 +3550,3 @@ void RenderScreenshotMenu(Config* config)
 }
 
 } // namespace DlssNr
-
-
-

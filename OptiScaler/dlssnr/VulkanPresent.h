@@ -6,6 +6,7 @@
 #include "VulkanPresentColor.h"
 #include <shaders/format_transfer/PresentColor_Vk.h>
 #include "DlssNr_PresentInputDecision.h"
+#include "VulkanPresentInitialization.h"
 #include <array>
 
 namespace DlssNr
@@ -32,6 +33,7 @@ struct VkPresentImageRequest
     VkExtent2D extent {};
     uint64_t generation = 0;
     bool captureOnly = false;
+    bool initializationCompleted = false;
     VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     uint64_t privateAllocationBudget = 1536ull*1024*1024;
     VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -55,6 +57,7 @@ struct VkPresentRecordResult
     VkNrUseId use;
     bool captureOnly=false;
     bool preparationOnly=false;
+    std::optional<VkNrPresentModelLifetime> modelLifetime;
 };
 
 // Recording commands are deliberately separate from submission. The caller owns the command
@@ -104,6 +107,7 @@ class VkPresentPrivateFrame final : public IVkPresentCommands
     // The executor joins the actual one-time recording before releasing this lease.
     void ReleaseCapturedGuides() { request_.capturedGuides.reset(); }
     bool DiscardCapturedGuides();
+    std::optional<VkPresentInitializationRequest> InitializationRequest(const VkPresentImageRequest&, std::string& reason);
 
     bool Check(const VkPresentImageRequest&) override;
     bool Begin() override;
@@ -131,6 +135,7 @@ class VkPresentPrivateFrame final : public IVkPresentCommands
     };
     enum : size_t { Captured, ModelInput, ModelOutput, OutputCopy, Depth, Motion, Encoded, ImageCount };
     bool Create(Image& image, VkFormat format, VkImageUsageFlags usage, bool writable);
+    bool ModelFrame(VkFrameRequest& frame, bool reset);
     void Move(Image& image, VkImageLayout to, VkAccessFlags dstAccess, VkPipelineStageFlags dstStage);
     void MoveGame(VkImageLayout from, VkImageLayout to, VkAccessFlags srcAccess,
                   VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage);

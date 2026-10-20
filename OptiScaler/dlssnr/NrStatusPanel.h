@@ -1,3 +1,4 @@
+#include <menu/ItemHelp.h>
 #pragma once
 #include <imgui/imgui.h>
 #include <menu/Localization.h>
@@ -57,7 +58,7 @@ inline void Line(const char* id, std::string_view text, const ImVec4& color)
     ImGui::PushID(id);
     ImGui::Dummy(size);
     const bool overflow = ImGui::CalcTextSize(visible.c_str()).x > size.x || full != visible;
-    const bool hovered = ImGui::IsItemHovered();
+    const bool hovered = Neurotic::ItemHelpHovered(ImGui::GetID("##StatusLineHelp"));
     const ImVec2 end(pos.x + size.x, pos.y + size.y);
     auto* draw = ImGui::GetWindowDrawList();
     draw->PushClipRect(pos, end, true);

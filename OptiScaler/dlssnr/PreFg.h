@@ -9,14 +9,60 @@
 #include <cstdint>
 #include <climits>
 #include <mutex>
+#include <map>
 #include "NativeIdentity.h"
+#include "OutputIdentity.h"
 #include "FgLifecycleContract.h"
 #include "StartupReadiness.h"
+#include "PresentFgAdmission.h"
+#include "PresentFgInputs.h"
+#include "PresentFgPolicy.h"
+#include <menu/FrameCadence.h>
 
 namespace DlssNr::PreFg
 {
 // A provider frame is not a DXGI presentation count. Only successful, frame-tagged
 // constants/resources from the game's Streamline instance can populate this ledger.
+// Zero means unknown; viewport zero itself is encoded as one. Application IDs
+// are preserved without a title/device/ID allowlist.
+inline constexpr uint64_t ViewportKey(uint32_t viewport) { return uint64_t(viewport) + 1; }
+struct TaggedOutput
+{
+    bool declared = false, unresolved = false, ambiguous = false;
+    uintptr_t resource = 0; // canonical IUnknown address only, never dereferenced
+    OutputIdentity::Binding identity {};
+    uint64_t outputEpoch = OutputIdentity::Current();
+    bool untilPresentPromise = false; // actual SDK lifecycle1 only, pre-Present use
+    uint32_t left = 0, top = 0, width = 0, height = 0;
+    bool operator==(const TaggedOutput&) const = default;
+    bool Matches(ID3D12Resource* output, uint64_t outputWidth, uint32_t outputHeight) const
+    {
+        if (!OutputIdentity::IsCurrent(outputEpoch)) return false;
+        if (!declared) return true; // Streamline normally intercepts the backbuffer.
+        if (unresolved || ambiguous) return false;
+        if (resource)
+        {
+            const auto native = NativeIdentity::Resolve<ID3D12Resource>(output);
+            if (!native.object) return false;
+            if (identity.HasToken())
+            {
+                if (!OutputIdentity::Matches(identity, native.object.Get())) return false;
+            }
+            else
+            {
+                // The explicit SDK promise ends at this frame's upstream Present.
+                // Only this pre-Present comparison uses it; never a delayed read.
+                uintptr_t canonical = 0;
+                if (!untilPresentPromise || FAILED(OutputIdentity::Canonical(native.object.Get(), canonical)) ||
+                    canonical != resource) return false;
+            }
+        }
+        if (!OutputIdentity::IsCurrent(outputEpoch)) return false;
+        if (!left && !top && !width && !height) return true;
+        return width && height && left <= outputWidth && width <= outputWidth - left &&
+            top <= outputHeight && height <= outputHeight - top;
+    }
+};
 struct Frame
 {
     uint64_t key = 0;
@@ -32,9 +78,15 @@ struct Frame
     uint64_t completionReservation = 0;
     ID3D12Resource* outputResource = nullptr; // borrowed while the swapchain owns its buffers
     bool (*prepareInputs)(const Frame&) = nullptr;
+    FinalColor::Scope finalColorScope {};
+    FinalColor::Controller::OperationPtr finalColor;
+    mutable FinalColor::Controller::PublicationTicket finalColorPublication;
     bool allowOutput = true;
     StartupReadiness* readiness = nullptr; // owner presentation mutex held
     ReadinessIdentity readinessIdentity {};
+    uint64_t viewportKey = 0;
+    TaggedOutput taggedOutput {};
+    UiPlanes::Snapshot uiPlanes {}; // observation only; never admission or a resource lease
 };
 
 // Native DLSSG can evaluate asynchronously on a provider-owned queue after the
@@ -96,6 +148,7 @@ struct CompletionDependency
     uint64_t reservation = 0;
     CompletionKind kind = CompletionKind::Output;
     bool retiring = false; // ordering an already-started group, never new NR admission
+    uint64_t viewportKey = 0;
     std::shared_ptr<GpuSafety::ExternalWaitStatus> status;
 };
 enum class CompletionClaimResult { None, Ready, Refused };
@@ -116,6 +169,7 @@ class CompletionLedger
         uint64_t nativeFgInstance = 0;
         uint64_t token = 0;
         uint64_t sequence = 0;
+        uint64_t viewportKey = 0;
         Microsoft::WRL::ComPtr<ID3D12Fence> fence;
         uint64_t value = 0;
         bool ready = false;
@@ -143,7 +197,7 @@ class CompletionLedger
     uint64_t Reserve(ID3D12Resource* resource, uint64_t providerGeneration,
                      uint64_t nativeFgGeneration, uint64_t nativeFgInstance,
                      uint64_t token, uint64_t sequence, CompletionKind kind = CompletionKind::Output,
-                     std::atomic<uint64_t>* failureEpoch = nullptr, bool allowMfg = false)
+                     std::atomic<uint64_t>* failureEpoch = nullptr, bool allowMfg = false, uint64_t viewportKey = 0)
     {
         if (!resource || !providerGeneration || !nativeFgGeneration || !nativeFgInstance || !token || !sequence)
             return 0;
@@ -168,6 +222,7 @@ class CompletionLedger
                 entry.nativeFgInstance = nativeFgInstance;
                 entry.token = token;
                 entry.sequence = sequence;
+                entry.viewportKey = viewportKey;
                 entry.kind = kind;
                 entry.allowMfg = allowMfg;
                 entry.status = std::make_shared<GpuSafety::ExternalWaitStatus>();
@@ -207,7 +262,7 @@ class CompletionLedger
     CompletionClaim Claim(ID3D12Resource* resource, uint64_t providerGeneration,
                           uint64_t nativeFgGeneration, uint64_t nativeFgInstance,
                           uint64_t exactToken = 0, uint64_t exactSequence = 0,
-                          unsigned int generated = 1, unsigned int index = 1)
+                          unsigned int generated = 1, unsigned int index = 1, uint64_t exactViewport = 0)
     {
         CompletionClaim claim;
         RetireInvalidated();
@@ -225,6 +280,7 @@ class CompletionLedger
                 entry.nativeFgGeneration != nativeFgGeneration ? "native-generation" :
                 entry.nativeFgInstance != nativeFgInstance ? "native-instance" :
                 !entry.ready || !entry.fence || !entry.value ? "producer-not-committed" :
+                exactViewport && entry.viewportKey != exactViewport ? "viewport" :
                 exactToken && entry.token != exactToken ? "frame-token" :
                 exactSequence && entry.sequence != exactSequence ? "frame-sequence" :
                 !generated || generated > (entry.allowMfg ? 5u : 1u) ? "generated-count" :
@@ -244,6 +300,7 @@ class CompletionLedger
             claim.dependency.value = entry.value;
             claim.dependency.token = entry.token;
             claim.dependency.sequence = entry.sequence;
+            claim.dependency.viewportKey = entry.viewportKey;
             claim.dependency.reservation = entry.reservation;
             claim.dependency.kind = entry.kind;
             claim.dependency.retiring = retiringTail;
@@ -293,9 +350,11 @@ class Ledger
 {
     struct Record
     {
-        uint64_t key = 0, providerGeneration = 0;
+        uint64_t key = 0, providerGeneration = 0, observationEpoch = 0, constantsEpoch = 0, tagsEpoch = 0;
         bool constants = false, tags = false, consumed = false;
         bool foreignConstants = false, foreignTags = false, legacy = false;
+        uint64_t constantsViewport = 0, tagsViewport = 0;
+        TaggedOutput output {};
     };
     static constexpr size_t capacity = 16;
     std::array<Record, capacity> records {};
@@ -308,14 +367,16 @@ class Ledger
     }
     const Record* Find(uint64_t key, uint64_t providerGeneration = 0) const
     { return const_cast<Ledger*>(this)->Find(key, providerGeneration); }
-    Record& Ensure(uint64_t key, uint64_t providerGeneration)
+    Record& Ensure(uint64_t key, uint64_t providerGeneration, uint64_t outputEpoch)
     {
         auto& record = records[(key - 1) % capacity];
-        if (record.key != key || record.providerGeneration != providerGeneration)
+        if (record.key != key || record.providerGeneration != providerGeneration ||
+            record.observationEpoch != outputEpoch)
         {
             record = {};
             record.key = key;
             record.providerGeneration = providerGeneration;
+            record.observationEpoch = outputEpoch;
         }
         return record;
     }
@@ -333,38 +394,72 @@ class Ledger
             constants && constants->foreignConstants, tags && tags->foreignTags,
             tags && tags->legacy};
     }
-    void Constants(uint32_t frame, uint32_t viewport, uint64_t providerGeneration = 0)
+    void Constants(uint32_t frame, uint32_t viewport, uint64_t providerGeneration = 0,
+                   uint64_t outputEpoch = OutputIdentity::Current())
     {
+        if (!OutputIdentity::IsCurrent(outputEpoch)) return;
         const uint64_t key = uint64_t(frame) + 1;
-        auto& record = Ensure(key, providerGeneration);
+        auto& record = Ensure(key, providerGeneration, outputEpoch);
+        const auto identity = ViewportKey(viewport);
+        record.foreignConstants |= record.constantsViewport && record.constantsViewport != identity;
+        record.constantsViewport = identity;
         record.constants = true;
-        record.foreignConstants |= viewport != 0;
+        record.constantsEpoch = outputEpoch;
         latestConstants = key;
     }
-    void Tags(uint32_t frame, uint32_t viewport, uint64_t providerGeneration = 0)
+    void Tags(uint32_t frame, uint32_t viewport, uint64_t providerGeneration = 0,
+              const TaggedOutput* output = nullptr, bool inputs = true,
+              uint64_t outputEpoch = OutputIdentity::Current())
     {
+        if (output) outputEpoch = output->outputEpoch;
+        if (!OutputIdentity::IsCurrent(outputEpoch)) return;
         const uint64_t key = uint64_t(frame) + 1;
-        auto& record = Ensure(key, providerGeneration);
-        record.tags = true;
+        auto& record = Ensure(key, providerGeneration, outputEpoch);
+        const auto identity = ViewportKey(viewport);
+        record.foreignTags |= record.tagsViewport && record.tagsViewport != identity;
+        record.tagsViewport = identity;
+        record.tags |= inputs;
+        record.tagsEpoch = outputEpoch;
         record.legacy = false;
-        record.foreignTags |= viewport != 0;
+        if (output) record.output = *output;
+        else if (!record.output.declared) record.output.outputEpoch = outputEpoch;
         latestTags = key;
     }
-    void LegacyTags(uint32_t viewport, uint64_t providerGeneration = 0)
+    void LegacyTags(uint32_t viewport, uint64_t providerGeneration = 0,
+                    const TaggedOutput* output = nullptr, bool inputs = true,
+              uint64_t outputEpoch = OutputIdentity::Current())
     {
+        if (output) outputEpoch = output->outputEpoch;
+        if (!OutputIdentity::IsCurrent(outputEpoch)) return;
         if (!latestConstants) { latestTags = 0; return; }
-        auto& record = Ensure(latestConstants, providerGeneration);
-        record.tags = true;
+        auto& record = Ensure(latestConstants, providerGeneration, outputEpoch);
+        const auto identity = ViewportKey(viewport);
+        record.foreignTags |= record.tagsViewport && record.tagsViewport != identity;
+        record.tagsViewport = identity;
+        record.tags |= inputs;
+        record.tagsEpoch = outputEpoch;
         record.legacy = true;
-        record.foreignTags |= viewport != 0;
+        if (output) record.output = *output;
+        else if (!record.output.declared) record.output.outputEpoch = outputEpoch;
         latestTags = latestConstants;
     }
-    uint64_t Current(uint64_t providerGeneration = 0) const
+    uint64_t Current(uint64_t providerGeneration = 0, uint64_t viewportKey = 0) const
     {
         const auto* record = Find(latestConstants, providerGeneration);
-        return record && record->constants && !record->foreignConstants ? latestConstants : 0;
+        return record && record->constants && !record->foreignConstants &&
+            (!viewportKey || record->constantsViewport == viewportKey) ? latestConstants : 0;
     }
-    Frame Claim(uint64_t selected = 0, bool requireSelected = false, uint64_t providerGeneration = 0)
+    // Observation-only legacy association requires the constants' actual epoch,
+    // not merely a still-discoverable frame number. Existing Current/admission
+    // behavior stays unchanged for all other callers.
+    uint64_t CurrentAtEpoch(uint64_t providerGeneration, uint64_t viewportKey, uint64_t epoch) const
+    {
+        const auto key = Current(providerGeneration, viewportKey);
+        const auto* record = Find(key, providerGeneration);
+        return record && OutputIdentity::IsCurrent(epoch) && record->constantsEpoch == epoch ? key : 0;
+    }
+    Frame Claim(uint64_t selected = 0, bool requireSelected = false, uint64_t providerGeneration = 0,
+                uint64_t expectedViewport = 0)
     {
         const uint64_t key = selected ? selected : requireSelected ? 0 : latestConstants;
         Frame result {key, ++sequence};
@@ -373,11 +468,26 @@ class Ledger
         const bool fresh = key && (!consumed || (advance && advance < 0x80000000u));
         if (requireSelected && !selected) result.refusal = "No successful Streamline PresentStart frame marker";
         else if (!record || !record->constants || !record->tags) {}
+        else if (!OutputIdentity::IsCurrent(record->constantsEpoch) ||
+                 !OutputIdentity::IsCurrent(record->tagsEpoch) || record->constantsEpoch != record->tagsEpoch)
+            result.refusal = "Duplicate/stale Streamline real-frame token";
         else if (record->foreignConstants || record->foreignTags)
-            result.refusal = "Multiple/nonzero Streamline viewports are unsupported";
+            result.refusal = "Ambiguous Streamline viewport contributors for this real frame";
+        else if (record->constantsViewport != record->tagsViewport)
+            result.refusal = "Streamline constants and tags identify different viewports";
+        else if (expectedViewport && record->constantsViewport != expectedViewport)
+            result.refusal = "Streamline frame does not match the selected FG viewport";
         else if (record->consumed || !fresh) result.refusal = "Duplicate/stale Streamline real-frame token";
         else { result.valid = true; result.refusal = nullptr; }
-        if (record) result.legacyTags = record->legacy;
+        if (record)
+        {
+            result.legacyTags = record->legacy;
+            result.viewportKey = record->constantsViewport;
+            // The selected record no longer owns a token after a claim. Other
+            // overlapping producer records are untouched; invalid claims copy none.
+            if (result.valid) result.taggedOutput = std::move(record->output);
+            record->output = {};
+        }
         // Consume only the explicitly selected Present frame. A refused frame cannot
         // later become eligible, while an overlapping future producer remains intact.
         if (fresh)
@@ -387,7 +497,7 @@ class Ledger
         }
         return result;
     }
-    void Reset() { records = {}; latestConstants = latestTags = consumed = 0; }
+    void Reset() { OutputIdentity::Invalidate(); records = {}; latestConstants = latestTags = consumed = 0; }
 };
 
 struct PresentIdentity { uint64_t key = 0; bool ambiguous = false; };
@@ -410,10 +520,13 @@ struct ProviderState
     bool known = false, enabled = false, supported = false;
     uint64_t generation = 0;
     unsigned int requestedGenerated = 0, observedGenerated = 0;
+    uint64_t viewportKey = 0;
+    bool ambiguous = false;
+    Admission::Raw rawOptions; // successful selected provider options; diagnostic values only
 };
 struct ConsumerKey
 {
-    uint64_t provider = 0, generation = 0, instance = 0;
+    uint64_t provider = 0, generation = 0, instance = 0, viewportKey = 0;
     bool operator==(const ConsumerKey&) const = default;
 };
 struct ConsumerPath
@@ -434,7 +547,12 @@ struct Registry
 {
     std::mutex mutex;
     Ledger ledger;
+    UiPlanes::Ledger uiPlanes;
+    FinalColor::Controller finalColor;
     ProviderState provider;
+    std::map<uint32_t, ProviderState> viewportOptions;
+    bool optionsIncomplete = false;
+    bool sharedQueueSupported = true;
     NativeFgState nativeFg;
     CompletionLedger completions;
     std::atomic<unsigned int> swapchains {0};
@@ -454,7 +572,7 @@ inline void StopConsumerObservation()
 inline bool ConsumerReady(const Frame& frame)
 {
     std::lock_guard lock(State().mutex);
-    return State().consumer.Ready({frame.providerGeneration, frame.nativeFgGeneration, frame.nativeFgInstance});
+    return State().consumer.Ready({frame.providerGeneration, frame.nativeFgGeneration, frame.nativeFgInstance, frame.viewportKey});
 }
 inline std::shared_ptr<GpuSafety::ExternalExecutionStatus> ObserveConsumer(uintptr_t handle,
                                                                         ID3D12GraphicsCommandList* list)
@@ -476,7 +594,7 @@ inline std::shared_ptr<GpuSafety::ExternalExecutionStatus> ObserveConsumer(uintp
         const auto native = State().nativeFg.Read();
         if (!State().provider.enabled || native.active != 1 ||
             State().nativeFg.Find(handle) != native.instance || !State().observeConsumer.load()) return {};
-        key = {State().provider.generation, native.generation, native.instance};
+        key = {State().provider.generation, native.generation, native.instance, State().provider.viewportKey};
         auto& path = State().consumer;
         changed = path.key != key || path.type != type || path.implementation != implementation;
         // An unsupported implementation stays bypassed until the provider/type
@@ -489,7 +607,8 @@ inline std::shared_ptr<GpuSafety::ExternalExecutionStatus> ObserveConsumer(uintp
     }
     // Never acquire GPU hook locks while holding the frame ledger lock.
     const char* reason = nullptr;
-    auto observation = GpuSafety::ObserveExternalExecution(nativeList.object.Get(), &reason);
+    // Keep the caller interface: GpuSafety must verify its private cookies against the terminal hooks.
+    auto observation = GpuSafety::ObserveExternalExecution(list, &reason);
     {
         std::lock_guard lock(State().mutex);
         auto& path = State().consumer;
@@ -512,20 +631,80 @@ inline void ObserveLedger(const char* operation, uint32_t frame, uint32_t viewpo
     if (auto observer = ledgerObserver.load(std::memory_order_relaxed))
         observer(operation, frame, viewport, before, State().ledger.Inspect());
 }
-inline void PublishProvider(bool enabled, bool supported, unsigned int requestedGenerated = 1)
+// Caller holds the registry mutex. New epochs revoke admission, while already
+// started MFG tails retain their original completion ownership.
+inline void ResetProviderEpoch()
+{
+    State().ledger.Reset();
+    State().uiPlanes.Reset();
+    ++State().provider.generation;
+    State().provider.observedGenerated = 0;
+    RevokeReadiness();
+    State().completions.CloseAdmission();
+}
+inline void ResetProvider()
 {
     std::lock_guard lock(State().mutex);
-    auto& provider = State().provider;
-    if (!provider.known || provider.enabled != enabled || provider.supported != supported ||
-        provider.requestedGenerated != requestedGenerated)
+    ResetProviderEpoch();
+    const auto generation = State().provider.generation;
+    State().provider = {};
+    State().provider.generation = generation;
+    State().viewportOptions.clear();
+    State().optionsIncomplete = false;
+    State().sharedQueueSupported = true;
+}
+inline void PublishProvider(bool enabled, bool supported, unsigned int requestedGenerated = 1,
+                            uint32_t viewport = 0, bool sharedQueueSupported = true,
+                            const Admission::Raw& rawOptions = {})
+{
+    std::lock_guard lock(State().mutex);
+    auto& state = State();
+    // Streamline requires queueParallelismMode to be consistent across all
+    // viewports. An unrelated OFF request cannot conceal a shared policy change.
+    const bool sharedQueueChanged = state.sharedQueueSupported != sharedQueueSupported;
+    state.sharedQueueSupported = sharedQueueSupported;
+    try
     {
-        ++provider.generation;
-        RevokeReadiness();
-        State().completions.CloseAdmission();
-        provider.observedGenerated = 0;
+        auto& options = state.viewportOptions[viewport];
+        options.known = true; options.enabled = enabled; options.supported = supported;
+        options.requestedGenerated = requestedGenerated;
+        options.rawOptions = rawOptions;
+        options.viewportKey = ViewportKey(viewport);
     }
-    provider.known = true; provider.enabled = enabled; provider.supported = supported;
-    provider.requestedGenerated = requestedGenerated;
+    catch (...)
+    {
+        // The successful foreign API is still successful. Without a complete
+        // options inventory NR cannot select a viewport until provider re-init.
+        state.optionsIncomplete = true;
+    }
+    ProviderState selected;
+    selected.known = true;
+    unsigned int enabledViews = 0;
+    for (const auto& [id, options] : state.viewportOptions)
+        if (options.enabled) { selected = options; ++enabledViews; }
+    selected.enabled = enabledViews != 0 || state.optionsIncomplete;
+    selected.ambiguous = enabledViews > 1 || state.optionsIncomplete;
+    if (selected.ambiguous)
+    { selected.supported = false; selected.viewportKey = 0; selected.requestedGenerated = 0;
+      selected.rawOptions = {}; } // no unique contributor supplies raw diagnostic options
+    selected.supported &= state.sharedQueueSupported;
+    auto& provider = state.provider;
+    if ((sharedQueueChanged && provider.enabled) || !provider.known || provider.enabled != selected.enabled || provider.supported != selected.supported ||
+        provider.requestedGenerated != selected.requestedGenerated ||
+        provider.viewportKey != selected.viewportKey || provider.ambiguous != selected.ambiguous)
+        ResetProviderEpoch();
+    selected.generation = provider.generation;
+    selected.observedGenerated = provider.observedGenerated;
+    provider = selected;
+}
+// A viewport explicitly switched off is unrelated to the selected FG operation.
+// Unknown or still-enabled contributors remain visible to the frame ledger.
+inline bool ObserveViewport(uint32_t viewport)
+{
+    const auto& state = State(); // registry mutex already held
+    const auto it = state.viewportOptions.find(viewport);
+    return !state.provider.viewportKey || state.provider.viewportKey == ViewportKey(viewport) ||
+        it == state.viewportOptions.end() || it->second.enabled;
 }
 // Post-override NGX parameters are observations, not the game request or a
 // capability maximum. A transition revokes readiness without erasing the NR
@@ -553,7 +732,7 @@ inline void PublishNativeFgCreated(uintptr_t handle)
 {
     std::lock_guard lock(State().mutex);
     State().nativeFg.Create(handle);
-    State().provider.observedGenerated = 0;
+    ResetProviderEpoch();
     RevokeReadiness();
     State().completions.Reset();
 }
@@ -566,7 +745,7 @@ inline void PublishNativeFgReleased(uintptr_t handle, uint64_t expected)
 {
     std::lock_guard lock(State().mutex);
     if (State().nativeFg.Release(handle, expected))
-    { RevokeReadiness(); State().completions.Reset(); }
+    { ResetProviderEpoch(); State().completions.Reset(); }
 }
 inline FgLifecycle::Snapshot NativeFg()
 {
@@ -579,12 +758,13 @@ inline uint64_t ReserveCompletion(ID3D12Resource* resource, const Frame& frame)
     const auto& provider = State().provider;
     const auto native = State().nativeFg.Read();
     if (!provider.known || !provider.enabled || !provider.supported ||
-        provider.generation != frame.providerGeneration || native.active != 1 ||
+        provider.generation != frame.providerGeneration || !frame.viewportKey ||
+        provider.viewportKey != frame.viewportKey || native.active != 1 ||
         native.generation != frame.nativeFgGeneration || native.instance != frame.nativeFgInstance)
         return 0;
     return State().completions.Reserve(resource, frame.providerGeneration, frame.nativeFgGeneration,
         frame.nativeFgInstance, frame.key, frame.sequence,
-        frame.allowOutput ? CompletionKind::Output : CompletionKind::Probe, &State().readinessEpoch, true);
+        frame.allowOutput ? CompletionKind::Output : CompletionKind::Probe, &State().readinessEpoch, true, frame.viewportKey);
 }
 inline bool CommitCompletion(uint64_t reservation, ID3D12Resource* resource, ID3D12Fence* fence, uint64_t value,
                              CompletionKind kind = CompletionKind::Output)
@@ -611,7 +791,7 @@ inline CompletionClaim ClaimCompletion(ID3D12Resource* resource, uint64_t provid
     const auto* frame = forwardingFrame;
     auto result = State().completions.Claim(resource, providerGeneration, native.generation,
         native.active == 1 && instance == native.instance ? instance : 0,
-        frame ? frame->key : 0, frame ? frame->sequence : 0, generated, index);
+        frame ? frame->key : 0, frame ? frame->sequence : 0, generated, index, frame ? frame->viewportKey : 0);
     if (result.result == CompletionClaimResult::Refused) RevokeReadiness();
     return result;
 }
@@ -667,21 +847,28 @@ class NativeFrameScope
     NativeFrameScope* previous;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;
     uint64_t key = 0;
-    uint64_t providerGeneration = 0;
+    const uint64_t providerGeneration;
+    uint64_t viewportKey = 0;
   public:
-    NativeFrameScope() : previous(current) { current = this; }
-    void Configure(bool temporal, uint32_t frame, ID3D12GraphicsCommandList* commandList)
+    // Capture once before any token conversion, native QI/GetType or callback.
+    // Even an unqualified invocation belongs to its entry epoch, not a later
+    // ordinary interval. Frame/viewport identity can remain unknown.
+    NativeFrameScope() : previous(current), providerGeneration(Provider().generation) { current = this; }
+    void Configure(bool temporal, uint32_t frame, ID3D12GraphicsCommandList* commandList,
+                   uint64_t observedViewport)
     {
-        if (!temporal || !commandList) return;
+        key = 0; viewportKey = 0; list.Reset();
+        if (!temporal || !observedViewport || !commandList) return;
         list = NativeIdentity::Resolve<ID3D12GraphicsCommandList>(commandList).object;
         if (list && list->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT)
-        { key = uint64_t(frame) + 1; providerGeneration = Provider().generation; }
+        { key = uint64_t(frame) + 1; viewportKey = observedViewport; }
     }
     NativeFrameScope(const NativeFrameScope&) = delete;
     NativeFrameScope& operator=(const NativeFrameScope&) = delete;
     ~NativeFrameScope() { list.Reset(); current = previous; }
     static bool Active() { return current != nullptr; }
     static uint64_t Generation() { return current ? current->providerGeneration : 0; }
+    static uint64_t Viewport() { return current ? current->viewportKey : 0; }
     static uint64_t Frame(ID3D12GraphicsCommandList* commandList)
     {
         if (!current || !current->key || !commandList) return 0;
@@ -700,41 +887,82 @@ inline NativeFrameIdentity CurrentFrameIdentity(ID3D12GraphicsCommandList* comma
     // An in-flight old callback must keep its original producer epoch even if
     // FG turns off before capture. Otherwise key zero relabels it as a fresh
     // ordinary interval, allowing the new provider to admit stale metadata.
-    if (scopedGeneration && scopedGeneration != state.provider.generation)
+    if (scoped && scopedGeneration != state.provider.generation)
         return {0, scopedGeneration};
     // Native capture only carries a provider token while that provider will also
     // select an exact frame at Present. Games such as DD2 disable FG for dialogue
     // and menus while continuing to publish Streamline constants; retaining that
     // unclaimed token would reject the otherwise unique Native/Present interval.
     if (state.swapchains != 1 || !state.provider.enabled) return {0, state.provider.generation};
-    return {scoped ? (scopedGeneration == state.provider.generation ? scopedKey : 0)
-                  : state.ledger.Current(state.provider.generation), state.provider.generation};
+    return {scoped ? (scopedGeneration == state.provider.generation &&
+                      NativeFrameScope::Viewport() == state.provider.viewportKey &&
+                      state.provider.viewportKey ? scopedKey : 0)
+                  : state.ledger.Current(state.provider.generation, state.provider.viewportKey), state.provider.generation};
 }
 inline uint64_t CurrentFrame(ID3D12GraphicsCommandList* commandList = nullptr)
 { return CurrentFrameIdentity(commandList).key; }
-inline void ObserveConstants(uint32_t frame, uint32_t viewport)
+inline bool ObserveConstants(uint32_t frame, uint32_t viewport, uint64_t entryGeneration,
+                             uint64_t outputEpoch = OutputIdentity::Current())
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
+    // The original API may return after a provider transition. Do not relabel it.
+    if (entryGeneration != state.provider.generation || !OutputIdentity::IsCurrent(outputEpoch) ||
+        !ObserveViewport(viewport)) return false;
     const auto before = state.ledger.Inspect();
-    state.ledger.Constants(frame, viewport, state.provider.generation);
+    state.ledger.Constants(frame, viewport, state.provider.generation, outputEpoch);
     ObserveLedger("constants", frame, viewport, before);
+    return true;
 }
-inline void ObserveTags(uint32_t frame, uint32_t viewport)
+// Legacy callbacks have no frame token. Capture the existing constants key
+// before calling foreign code, and refuse attribution if that interval changes.
+inline uint64_t LegacyUiFrameKey(uint32_t viewport, uint64_t generation, uint64_t epoch)
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
+    if (generation != state.provider.generation || !OutputIdentity::IsCurrent(epoch) ||
+        !ObserveViewport(viewport)) return 0;
+    return state.ledger.CurrentAtEpoch(generation, ViewportKey(viewport), epoch);
+}
+inline bool ObserveUiTags(uint64_t frameKey, uint32_t viewport, uint64_t entryGeneration,
+                          uint64_t entryEpoch, const UiPlanes::Batch& batch, bool legacy)
+{
+    if (!frameKey || !batch.Observed()) return false;
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    if (entryGeneration != state.provider.generation || !OutputIdentity::IsCurrent(entryEpoch) ||
+        !ObserveViewport(viewport)) return false;
+    if (legacy && state.ledger.CurrentAtEpoch(entryGeneration, ViewportKey(viewport), entryEpoch) != frameKey) return false;
+    state.uiPlanes.Observe({frameKey, entryGeneration, entryEpoch, ViewportKey(viewport)}, batch, legacy);
+    return true;
+}
+inline bool ObserveTags(uint32_t frame, uint32_t viewport, uint64_t entryGeneration,
+                        const TaggedOutput* output = nullptr, bool inputs = true,
+                        uint64_t outputEpoch = OutputIdentity::Current())
+{
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    // The original API may return after a provider transition. Do not relabel it.
+    if (entryGeneration != state.provider.generation || !OutputIdentity::IsCurrent(outputEpoch) ||
+        !ObserveViewport(viewport)) return false;
     const auto before = state.ledger.Inspect();
-    state.ledger.Tags(frame, viewport, state.provider.generation);
+    state.ledger.Tags(frame, viewport, state.provider.generation, output, inputs, outputEpoch);
     ObserveLedger("tags", frame, viewport, before);
+    return true;
 }
-inline void ObserveLegacyTags(uint32_t viewport)
+inline bool ObserveLegacyTags(uint32_t viewport, uint64_t entryGeneration,
+                              const TaggedOutput* output = nullptr, bool inputs = true,
+                        uint64_t outputEpoch = OutputIdentity::Current())
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
+    // The original API may return after a provider transition. Do not relabel it.
+    if (entryGeneration != state.provider.generation || !OutputIdentity::IsCurrent(outputEpoch) ||
+        !ObserveViewport(viewport)) return false;
     const auto before = state.ledger.Inspect();
-    state.ledger.LegacyTags(viewport, state.provider.generation);
+    state.ledger.LegacyTags(viewport, state.provider.generation, output, inputs, outputEpoch);
     ObserveLedger("legacy-tags", 0, viewport, before);
+    return true;
 }
 inline Frame Claim(bool requirePresentIdentity = false)
 {
@@ -742,9 +970,12 @@ inline Frame Claim(bool requirePresentIdentity = false)
     std::lock_guard lock(state.mutex);
     const auto before = state.ledger.Inspect();
     const auto selected = requirePresentIdentity ? PresentFrame() : 0;
-    auto frame = state.ledger.Claim(selected, requirePresentIdentity, state.provider.generation);
+    auto frame = state.ledger.Claim(selected, requirePresentIdentity, state.provider.generation, state.provider.viewportKey);
     frame.providerGeneration = state.provider.generation;
-    ObserveLedger("claim", selected ? static_cast<uint32_t>(selected - 1) : 0, 0, before);
+    frame.uiPlanes = state.uiPlanes.Read(frame.key, frame.providerGeneration,
+        OutputIdentity::Current(), frame.viewportKey);
+    ObserveLedger("claim", selected ? static_cast<uint32_t>(selected - 1) : 0,
+        frame.viewportKey ? static_cast<uint32_t>(frame.viewportKey - 1) : 0, before);
     if (state.swapchains != 1)
     {
         frame.valid = false;
@@ -778,12 +1009,23 @@ class Owner final : public IUnknown
     uint64_t providerGeneration = 0;
     double previousPresentMs = 0.0;
     StartupReadiness startup;
+    Admission::TraceState admissionTrace; // presentationMutex protects observational comparison only
     unsigned int startupRoute = 0;
     uint64_t startupResume = 0;
     uint64_t probes = 0, readinessTransitions = 0;
     double providerChangedMs = 0.0, probeSubmittedMs = 0.0;
+    // Called under this owner's presentationMutex. Frame records are closed
+    // by PublishProvider; this boundary only revokes startup permission.
+    void ObserveProvider(bool fg, uint64_t generation, double now)
+    {
+        if (lastFg == fg && providerGeneration == generation) return;
+        lastFg = fg;
+        providerGeneration = generation;
+        startup.Reset();
+        providerChangedMs = now;
+    }
     explicit Owner(ID3D12CommandQueue* value) : queue(value) { ++State().swapchains; }
-    ~Owner() { --State().swapchains; }
+    ~Owner() { OutputIdentity::Invalidate(); Neurotic::FrameCadence::GameFrames().Invalidate(reinterpret_cast<uintptr_t>(this)); --State().swapchains; }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override
     {
         if (!out) return E_POINTER;

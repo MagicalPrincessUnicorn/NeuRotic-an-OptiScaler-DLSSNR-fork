@@ -1,5 +1,6 @@
 #pragma once
 #include "NrGpuSafety.h"
+#include "NativeNrResolution.h"
 #include "NativeProviderLifetime.h"
 #include <nr/protocol/NativeEncodeControls.h>
 #include <memory>
@@ -54,7 +55,8 @@ class NativeRendererPreparation
     friend class NativeRendererWriteToken;
     std::unique_ptr<NativeRendererInvocationBorrow> Transfer();
     static std::unique_ptr<NativeRendererPreparation> TryAcquire(ID3D12GraphicsCommandList*,
-        ID3D12Resource*,const NrConfigSnapshot<Config>&,bool preSr,bool declaredLinearHdr);
+        ID3D12Resource*,const NrConfigSnapshot<Config>&,bool preSr,bool declaredLinearHdr,
+        const NativeResolution::RenderObservation* renderObservation=nullptr);
 };
 // Noncopyable callback-local continuation of the preparation's exact recording
 // action. It holds no renderer mutex while the typed Dispatch acquires one.

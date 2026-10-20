@@ -3,7 +3,7 @@
 #include <utility>
 
 namespace DlssNr::AlternateFrame {
-enum class CarryResult {FullRequired,Carried,FailedAfterEffects};
+enum class CarryResult {FullRequired,Carried,FailedAfterEffects,RefusedBeforeEffects};
 // The production dispatch coordinator. It never equates a recorded carry with
 // a model attempt, reset consumption, GPU completion or consumer acceptance.
 class Session {
@@ -54,12 +54,41 @@ class Session {
         previous_=enabled?std::optional(view):std::nullopt;
         return decision_;
     }
-    CarryResult TryCarry(const GpuRequest& request) {
+    CarryResult TryCarry(const GpuRequest& request,const RecordBoundary& boundary={}) {
         if(decision_.kind!=DecisionKind::Carry||!renderer_)return CarryResult::FullRequired;
-        auto prepared=renderer_->PrepareCarry(request);
-        if(!prepared) {reason_=renderer_->LastReason();decision_={DecisionKind::Full,reason_,true};return CarryResult::FullRequired;}
-        const auto result=renderer_->RecordCarry(*prepared);
+        decltype(renderer_->PrepareCarry(request)) prepared;
+        bool retired=false,retirementCurrent=true,preparedAvailable=false;
+        const auto retire=[&]()noexcept{
+            if(retired)return;retired=true;
+            prepared.reset();
+            if(boundary.afterRetirement)retirementCurrent=boundary.afterRetirement(boundary.context);
+        };
+        struct RetirePrepared {
+            const decltype(retire)& finish;
+            ~RetirePrepared()noexcept{finish();}
+        } retireOnUnwind{retire};
+        GpuRecordResult result;
+        try {
+            prepared=renderer_->PrepareCarry(request);
+            preparedAvailable=bool(prepared);
+            if(prepared)result=renderer_->RecordCarry(*prepared,boundary);
+            else reason_=renderer_->LastReason();
+        } catch(...) {
+            retire();output_.reset();reason_=Reason::RecordingFailure;
+            Finish(EventKind::FullFailed,false);throw;
+        }
+        retire();
+        if(!retirementCurrent) {
+            output_.reset();reason_=Reason::RecordingFailure;
+            Finish(result.possibleEffects?EventKind::FailedAfterEffects:EventKind::FullFailed,false);
+            return result.possibleEffects?CarryResult::FailedAfterEffects:CarryResult::RefusedBeforeEffects;
+        }
+        if(!preparedAvailable){decision_={DecisionKind::Full,reason_,true};return CarryResult::FullRequired;}
         output_=result.output;
+        if(result.refusedBeforeEffects) {
+            reason_=Reason::RecordingFailure;Finish(EventKind::FullFailed,false);
+            return CarryResult::RefusedBeforeEffects;
+        }
         if(!result.possibleEffects) {reason_=Reason::RecordingFailure;decision_={DecisionKind::Full,reason_,true};return CarryResult::FullRequired;}
         Finish(result.recorded?EventKind::CarryCommitted:EventKind::FailedAfterEffects,false);
         reason_=result.recorded?Reason::None:Reason::PartialEffects;
@@ -68,23 +97,45 @@ class Session {
     // This is the model-entry branch used by the Native renderer and the owned
     // integration fixture. The full callback is never entered after possible
     // carry effects. Common services are required even when the model is omitted.
-    template<class Common,class Full>CarryResult Dispatch(const GpuRequest& request,Common&& common,Full&& full) {
+    template<class Common,class Full>CarryResult Dispatch(const GpuRequest& request,Common&& common,Full&& full,
+        const RecordBoundary& boundary={}) {
         if(input_.enabled&&decision_.kind==DecisionKind::Carry) {
-            common();const auto result=TryCarry(request);
+            common();const auto result=TryCarry(request,boundary);
             if(result!=CarryResult::FullRequired)return result;
         }
         full();return CarryResult::FullRequired;
     }
     // Called only after the real model call and ordinary resolve both succeeded.
     // Capture is optional; lack of storage never cancels a good dense output.
-    bool CompleteFull(const GpuRequest& request) {
+    bool CompleteFull(const GpuRequest& request,const CaptureBoundary& boundary={}) {
         bool anchor=false,safe=true;
-        if(decision_.capture&&input_.supported&&renderer_) {
-            if(auto prepared=renderer_->PrepareCapture(request)) {
-                const auto recorded=renderer_->RecordCapture(*prepared);
-                safe=recorded.recorded||!recorded.possibleEffects;
-                if(recorded.recorded)anchor=renderer_->AcceptCapture(*input_.source);
-            } else reason_=renderer_->LastReason();
+        if(decision_.capture&&input_.supported&&renderer_&&boundary.available) {
+            auto prepared=renderer_->PrepareCapture(request);
+            std::optional<GpuRecordResult> recorded;
+            bool retired=false,retirementCurrent=true;
+            const auto retire=[&]()noexcept{
+                if(retired)return;retired=true;
+                if(boundary.beforeRetirement)boundary.beforeRetirement(boundary.record.context,
+                    recorded&&recorded->recorded,recorded&&recorded->possibleEffects);
+                // Candidate/GPU snapshot ownership stays with Renderer. Finish
+                // every prepared-owner release before any acceptance claim.
+                prepared.reset();
+                if(boundary.afterRetirement)retirementCurrent=boundary.afterRetirement(boundary.record.context);
+            };
+            struct RetirePrepared {
+                const decltype(retire)& finish;
+                ~RetirePrepared()noexcept{finish();}
+            } retireOnUnwind{retire};
+            // Even null/failed preparation can have run foreign callbacks.
+            if(boundary.afterPreparation)boundary.afterPreparation(boundary.record.context);
+            if(prepared)recorded.emplace(renderer_->RecordCapture(*prepared,boundary.record));
+            else reason_=renderer_->LastReason();
+            retire();
+            if(recorded) {
+                safe=(recorded->recorded||!recorded->possibleEffects)&&
+                    !recorded->refusedBeforeEffects&&retirementCurrent;
+                if(recorded->recorded&&retirementCurrent)anchor=renderer_->AcceptCapture(*input_.source);
+            } else safe=retirementCurrent;
         }
         Finish(safe?EventKind::CleanFull:EventKind::FullFailed,anchor);return safe;
     }

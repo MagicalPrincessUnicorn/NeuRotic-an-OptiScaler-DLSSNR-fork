@@ -1,6 +1,7 @@
 #pragma once
 #include "../NrConfigState.h"
 #include "DlssNr_PresentResolution.h"
+#include "NativeNrResolution.h"
 #include <cmath>
 
 // Semantic UI adapter only. The renderer continues consuming the 0.9.5 keys and math.
@@ -14,8 +15,12 @@ inline constexpr const char* Stages[] = { "Before", "After" };
 inline constexpr const char* Methods[] = { "Native Temporal", "Present", "Present" };
 inline constexpr const char* NativeResolutions[] = { "Automatic", "Manual" };
 inline constexpr const char* Resolutions[] = { "Automatic", "Manual", "Legacy" };
-enum class NrResolutionPreference { AlwaysFullOutput, MatchGameRender, Manual };
-inline constexpr int ManualChoice = 2, LegacyChoice = 3;
+enum class NrResolutionPreference { AlwaysFullOutput=0, MatchGameRender=1, Manual=2, MatchNativePostSr=4 };
+inline constexpr int ManualChoice = 2, LegacyChoice = 3, MatchNativePostChoice = 4;
+inline constexpr const char* NativeResolutionChoices[] = {
+    "Full output", "Match Native (Pre Super Resolution)", "Manual", "Legacy",
+    "Match Native (Post Super Resolution)"
+};
 inline constexpr const char* ResolutionChoices[] = {
     "Full output", "Match Native", "Manual"
 };
@@ -130,11 +135,21 @@ template<class C> void SelectResolutionScale(C& c, float value)
 }
 template<class C> int ResolutionChoiceSelection(const C& c)
 {
+    if(c.DlssNrRoute.value_or_default()==0&&NativeResolution::Selection(c)>NativeResolution::PostNativeSelection)
+        return -1;
+    if(NativeResolution::PostSelected(c))return MatchNativePostChoice;
     const int selection = ResolutionSelection(c);
     if (selection == 1) return ManualChoice;
     if (selection == 2 || (c.DlssNrRoute.value_or_default() == 0 && Stage(c) == 0)) return 1;
     return 0;
 }
+template<class C> const char* ResolutionChoiceLabel(const C& c,int choice)
+{
+    if(c.DlssNrRoute.value_or_default()==0)
+        return choice>=0&&choice<=MatchNativePostChoice?NativeResolutionChoices[choice]:"Unknown Native resolution preference";
+    return choice>=0&&choice<=ManualChoice?ResolutionChoices[choice]:"Unknown NR resolution preference";
+}
+
 template<class C> const char* ResolutionRefusal(const C& c, int choice)
 {
     if (choice < 0 || choice > 2) return "Unknown NR resolution preference";
@@ -197,8 +212,9 @@ template<class C> void SelectUnifiedMethod(C& c, int method)
     c.DlssNrUiAfterMethod = route;
     c.DlssNrPresentInputPolicy = 2u;
 }
-template<class C> const char* UnifiedResolutionRefusal(const C&, int choice, bool)
+template<class C> const char* UnifiedResolutionRefusal(const C& c, int choice, bool)
 {
+    if(choice==MatchNativePostChoice && c.DlssNrRoute.value_or_default()==0)return nullptr;
     if (choice < 0 || choice > 2) return "Unknown NR resolution preference";
     // RR keeps After placement and resolves Match Native into its private raster.
     return nullptr;
@@ -206,13 +222,14 @@ template<class C> const char* UnifiedResolutionRefusal(const C&, int choice, boo
 template<class C> void SelectUnifiedResolution(C& c, int choice)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
-    if (choice < 0 || choice > 2) return;
+    if (UnifiedResolutionRefusal(c,choice,false)) return;
     if (c.DlssNrRoute.value_or_default() != 0)
     {
         c.DlssNrPresentInputPolicy = 2u;
         SelectResolutionChoice(c, choice);
         return;
     }
+    NativeResolution::SelectPost(c,choice==MatchNativePostChoice);
     if (Manual(c) && choice != ManualChoice)
         c.DlssNrUiManualScale = c.DlssNrWorkingScale.value_or_default();
     c.DlssNrUiResolutionPreset = 0u;
@@ -225,6 +242,7 @@ template<class C> void SelectUnifiedResolutionScale(C& c, float scale)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
     SelectResolutionScale(c, scale);
+    if(c.DlssNrRoute.value_or_default()==0)NativeResolution::SelectPost(c,false);
     if (c.DlssNrRoute.value_or_default() == 0)
         NrConfigState::SetRoutingMode(c.DlssNrRenderingMode, c.DlssNrRunBeforeSr, 0);
     else
@@ -261,6 +279,8 @@ template<class C> void LoadHints(C& c, std::optional<bool> manual, std::optional
 template<class Ini, class C> void SaveHints(Ini& ini, const C& c)
 {
     NrConfigSynchronization::Guard lock(NrConfigSynchronization::Mutex());
+    if constexpr(requires {c.DlssNrNativeResolution.value_or_default();})
+        ini.SetLongValue("DlssNr", "NativeResolution", c.DlssNrNativeResolution.value_or_default());
     ini.SetBoolValue("DlssNr", "UiManualResolution", Manual(c));
     ini.SetDoubleValue("DlssNr", "UiManualScale", c.DlssNrUiManualScale.value_or_default());
     ini.SetLongValue("DlssNr", "UiAfterMethod", c.DlssNrUiAfterMethod.value_or_default());

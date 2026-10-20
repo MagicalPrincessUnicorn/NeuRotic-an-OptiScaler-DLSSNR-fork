@@ -1,0 +1,770 @@
+{
+  "artifact_kind": "LIFE001_AUTHORED_MUTATION_RECIPES_NOT_EXECUTED",
+  "schema_version": 1,
+  "scope": "NR-LIFE-001 production primitives only; not the downstream NR-TEST-002 harness",
+  "execution_state": "NOT_RUN",
+  "application": "No mutation is applied by the LIFE runner or during Chat preparation. After authorized baseline CPU execution, use one mutation per disposable copy and restore exact bytes before the next.",
+  "recipes": [
+    {
+      "id": "LIFE-M01",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left==right ? IdentityStatus::Ok : IdentityStatus::Different;",
+      "new": "    if (!ValidIdentity(left) || !ValidIdentity(right)) return IdentityStatus::InvalidScope;\n    return left.value==right.value ? IdentityStatus::Ok : IdentityStatus::Different;",
+      "test_groups": [
+        "nr_identity_t07",
+        "nr_identity_t08"
+      ],
+      "required_failure_case_ids": [
+        "T07.namespace-number-collision",
+        "T08.issuer-collision"
+      ],
+      "intended_invariant": "Full scoped identity, not numerical equality",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "target_anchor_leaf_line": 96,
+      "old_anchor_sha256": "b66d974e3e7fd51fc65a38bd042b3e9a68a0353a85d9d5ddd3230f73d12f370d",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        },
+        {
+          "path": "tests/nr/identity/nr_identity_t08.cpp",
+          "sha256": "a0c32fe19899c6fe16844c21e722a75e4e5977161af5b0141d912dbb304ba33b"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M02",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "        C::ScopedIdentity<K> id{e->nameSpace,e->binding.publisher.issuer,next};",
+      "new": "        C::ScopedIdentity<K> id{e->nameSpace,e->binding.publisher.issuer,K==C::IdentityKind::ResourceIncarnation ? 1u : next};",
+      "test_groups": [
+        "nr_identity_t08"
+      ],
+      "required_failure_case_ids": [
+        "T08.new-resource-incarnation"
+      ],
+      "intended_invariant": "Resource replacement cannot keep the old incarnation",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "target_anchor_leaf_line": 329,
+      "old_anchor_sha256": "6b396046f41f465b75f290fb274f70e58cc52057d32e6abb3066b8895e41deb8",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t08.cpp",
+          "sha256": "a0c32fe19899c6fe16844c21e722a75e4e5977161af5b0141d912dbb304ba33b"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M03",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    case RenderObservation::RepeatedContent:\n        return Refuse<C::BaseRealFrameId>(IdentityStatus::NotNewReal,{evidence.event.subject});",
+      "new": "    case RenderObservation::RepeatedContent:\n        return handle_.host->Issue<C::IdentityKind::BaseRealFrameId>(handle_,Detail::ChannelRole::Render,evidence.event);",
+      "test_groups": [
+        "nr_identity_t07"
+      ],
+      "required_failure_case_ids": [
+        "T07.nonreal-refused"
+      ],
+      "intended_invariant": "Repeated/generated/existing content does not mint new base real identity",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity. Require normal Checks::Finish completion, the T07.nonreal-refused mismatch and a flushed terminal cases/mismatches line. No abort is accepted.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "corrected_failure_path": "T07.nonreal-refused observes the first repeated-content acceptance. nonRealRefused becomes false; T07 returns Checks::Finish before reusing event 4. Finish flushes the named assertions and returns EXIT_FAILURE. The normal baseline continues to guarded r3 and the retained duplicate-evidence assertion.",
+      "target_anchor_leaf_line": 657,
+      "old_anchor_sha256": "795888a3f82693278ab88489131e7739d520b29e07631e07663a0ce9b0072360",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M04",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "        Commit(e->contents,event,next);",
+      "new": "        Commit(e->contents,event,next);\n        for (auto& entry:entries_) if (entry.role==Detail::ChannelRole::Route) ++entry.ids[KindIndex<C::IdentityKind::RouteGeneration>()].value;",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.no-hidden-route-churn"
+      ],
+      "intended_invariant": "Content writes must not automatically advance RouteGeneration",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "target_anchor_leaf_line": 353,
+      "old_anchor_sha256": "2535c4a34bf1d2e12654783d611f8f3256a439978bb253248cfb270ea4e39348",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M05",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "        Commit(e->contents,event,next);",
+      "new": "        Commit(e->contents,event,next);\n        for (auto& entry:entries_) if (entry.role==Detail::ChannelRole::Resource) ++entry.ids[KindIndex<C::IdentityKind::ResourceGeneration>()].value;",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.no-hidden-resource-churn"
+      ],
+      "intended_invariant": "Content writes must not automatically advance ResourceGeneration",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "target_anchor_leaf_line": 353,
+      "old_anchor_sha256": "2535c4a34bf1d2e12654783d611f8f3256a439978bb253248cfb270ea4e39348",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M06",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "        Commit(e->contents,event,next);",
+      "new": "        Commit(e->contents,event,next);\n        for (auto& entry:entries_) if (entry.role==Detail::ChannelRole::Representation) ++entry.ids[KindIndex<C::IdentityKind::RepresentationGeneration>()].value;",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.no-hidden-representation-churn"
+      ],
+      "intended_invariant": "Content writes must not automatically advance RepresentationGeneration",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "target_anchor_leaf_line": 353,
+      "old_anchor_sha256": "2535c4a34bf1d2e12654783d611f8f3256a439978bb253248cfb270ea4e39348",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M07",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "        Commit(e->contents,event,next);",
+      "new": "        Commit(e->contents,event,next);\n        for (auto& entry:entries_) if (entry.role==Detail::ChannelRole::History) ++entry.ids[KindIndex<C::IdentityKind::HistoryGeneration>()].value;",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.no-hidden-history-churn"
+      ],
+      "intended_invariant": "Content writes must not automatically advance HistoryGeneration",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "target_anchor_leaf_line": 353,
+      "old_anchor_sha256": "2535c4a34bf1d2e12654783d611f8f3256a439978bb253248cfb270ea4e39348",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M08",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    return expected.contentRevision.KnownPart()->value==current.contentRevision.KnownPart()->value\n        ? IdentityStatus::Ok : IdentityStatus::Different;",
+      "new": "    return IdentityStatus::Ok; // Intentional mutant: omit exact freshness comparison.",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.exact-content-stale"
+      ],
+      "intended_invariant": "Exact-content requests must compare freshness",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 181,
+      "old_anchor_sha256": "68bdff9713aabb79282e1d0f1f463767fdc8edc2fb1b4c6469649f2976cfda0f",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M09",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    for (const auto& axis:selection.axes)\n        for (const auto& token:available.Entries()) if (SameAxis(axis,token))\n        {\n            if (staged.generationBody->second.Insert(token)!=C::Error::None) return IdentityStatus::InvalidRule;\n            break;\n        }",
+      "new": "    for (const auto& token:available.Entries())\n        if (staged.generationBody->second.Insert(token)!=C::Error::None) return IdentityStatus::InvalidRule;",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.only-three-selected-axes",
+        "T09.unrelated-fg-ignored"
+      ],
+      "intended_invariant": "Only selected relevant structural axes enter a signature",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 130,
+      "old_anchor_sha256": "51c8ba71354af51653e30981927771e8cef808a3587e435070b402634cb91f39",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M10",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    return a.record.schema==b.record.schema && a.record.version==b.record.version &&",
+      "new": "    return a.publication==b.publication && a.record.schema==b.record.schema && a.record.version==b.record.version &&",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.content-and-publication-stable",
+        "T09.history-publication-stable"
+      ],
+      "intended_invariant": "Metadata publication revisions are not semantic dependency identity",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 146,
+      "old_anchor_sha256": "fd73ee146f4f1565985000f2f938105408c39152faebe3869bdadc7fe80bb48c",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M11",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    for (const auto status : {CompareTypedIdentity(expected.session,observed.session),\n                              CompareTypedIdentity(expected.stream,observed.stream),\n                              CompareTypedIdentity(expected.view,observed.view)})\n        if (status!=IdentityStatus::Ok) return status;\n    return requireTopologyIncarnation ? CompareTypedIdentity(expected.topologyIncarnation,observed.topologyIncarnation)\n                                      : IdentityStatus::Ok;",
+      "new": "    (void)expected;(void)observed;(void)requireTopologyIncarnation;\n    return IdentityStatus::Ok;",
+      "test_groups": [
+        "nr_identity_t08"
+      ],
+      "required_failure_case_ids": [
+        "T08.stale-topology-incarnation",
+        "T08.view-scope-loss",
+        "T08.secondary-stream"
+      ],
+      "intended_invariant": "Association scope cannot be erased",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "target_anchor_leaf_line": 178,
+      "old_anchor_sha256": "f80af2fdba53b476de69cfdb074ad377b346154b24f77ba4ac822e8c607f6349",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t08.cpp",
+          "sha256": "a0c32fe19899c6fe16844c21e722a75e4e5977161af5b0141d912dbb304ba33b"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M12",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityAssociations.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (from.kind==C::IdentityKind::GeneratedFrameId || to.kind==C::IdentityKind::GeneratedFrameId)\n    {\n        if (!claim.generatedOwnerFact || !authority.currentGeneratedProvider.IsKnown())\n            return Refuse<AssociationProjection>(IdentityStatus::Unknown,scope);\n        const auto& imported=*claim.generatedOwnerFact;\n        const auto& endpoint=from.kind==C::IdentityKind::GeneratedFrameId ? from : to;\n        if (imported.Identity().Describe()!=endpoint || imported.Provider()!=authority.currentGeneratedProvider.KnownPart()->value)\n            return Refuse<AssociationProjection>(IdentityStatus::Different,scope);\n        status=CheckEstablishedScope(imported.Scope(),authority.requireTopologyIncarnation);\n        if (status!=IdentityStatus::Ok) return Refuse<AssociationProjection>(status,scope);\n        status=CompareScope(authority.currentScope,imported.Scope(),authority.requireTopologyIncarnation);\n        if (status!=IdentityStatus::Ok) return Refuse<AssociationProjection>(status,scope);\n    }\n",
+      "new": "    // Intentional mutant: accept a generated endpoint without the FG-owner import/current-provider check.\n",
+      "test_groups": [
+        "nr_identity_t07"
+      ],
+      "required_failure_case_ids": [
+        "T07.unproven-generated-reference"
+      ],
+      "intended_invariant": "Presentation must not establish a generated ID without FG evidence",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "bc2a04a0b28c4f29ca02944eef50ce84c15d0a47f78f3ab830030aa9a6fdaccc",
+      "target_anchor_leaf_line": 177,
+      "old_anchor_sha256": "9d7555bbc45d9497d8252aa7188553939ecb5fe69fa4cec937788539320232cf",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M13",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityAssociations.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (claim.relation==AssociationRelation::ResourceViewToResource)\n    {\n        if (!authority.currentResource) return Refuse<AssociationProjection>(IdentityStatus::Unknown,scope);\n        const auto& current=*authority.currentResource;\n        if (current.Check()!=C::Error::None) return Refuse<AssociationProjection>(IdentityStatus::WrongKind,scope);\n        status=CompareIdentity(claim.target,current.resourceIncarnation);\n        if (status!=IdentityStatus::Ok) return Refuse<AssociationProjection>(status,scope);\n        status=CompareIdentity(claim.source,current.resourceViewIncarnation);\n        if (status!=IdentityStatus::Ok) return Refuse<AssociationProjection>(status,scope);\n    }\n",
+      "new": "    // Intentional mutant: omit current backing/view comparison.\n",
+      "test_groups": [
+        "nr_identity_t08"
+      ],
+      "required_failure_case_ids": [
+        "T08.stale-resource-association",
+        "T08.stale-view-association"
+      ],
+      "intended_invariant": "Resource/view edges cannot survive incompatible current incarnations",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "bc2a04a0b28c4f29ca02944eef50ce84c15d0a47f78f3ab830030aa9a6fdaccc",
+      "target_anchor_leaf_line": 192,
+      "old_anchor_sha256": "a9980def4408d0d1b0d41eff9bc7232831df75d577caa1ee7e1d050f94125719",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t08.cpp",
+          "sha256": "a0c32fe19899c6fe16844c21e722a75e4e5977161af5b0141d912dbb304ba33b"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M14",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityIssuers.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "        Commit(counter,event,next);\n        e->latestEvidence=event.evidence.record.value;e->hasEvidence=true;",
+      "new": "        Commit(counter,event,next);\n        if constexpr (K==C::IdentityKind::FgPolicyGeneration)\n            for (auto& entry:entries_) if (entry.role==Detail::ChannelRole::Provider) ++entry.ids[KindIndex<C::IdentityKind::ProviderIncarnation>()].value;\n        e->latestEvidence=event.evidence.record.value;e->hasEvidence=true;",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.fg-policy-not-provider-replacement"
+      ],
+      "intended_invariant": "FG policy generation is not provider incarnation",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "a8f392adf71e55df8b3ce1b757128a2ec666af5b6b2146d200fb66685c40a9b2",
+      "target_anchor_leaf_line": 330,
+      "old_anchor_sha256": "c641959fd85342012d4a5de66610410cfe1c50bc7286d161bfd470860666fdfb",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M15",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (a.dependencies!=aBody.publication || b.dependencies!=bBody.publication) return IdentityStatus::InvalidRule;",
+      "new": "    // Intentional mutant: omit HistoryKey-to-exact-body binding.",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.unbound-history-body"
+      ],
+      "intended_invariant": "A resolved dependency body must match the exact referenced publication",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 192,
+      "old_anchor_sha256": "6c4412c6f7562f28b3b3e7916f38cf44e0c3d5f66dcc0cdddf484104a3001f46",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M16",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityTransitions.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (*selected==after) return Established(false,ownerEvidence); // Already reflects this transition.",
+      "new": "    if (*selected==after) return Established(true,ownerEvidence); // Intentional stale-event invalidation.",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.c08-already-current-survives"
+      ],
+      "intended_invariant": "Already-current dependencies do not invalidate again for the same event",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "e4184bc27038a2f9f2094f0edaf73518b25e87272a0866288eea2ce211248f60",
+      "target_anchor_leaf_line": 36,
+      "old_anchor_sha256": "6809fc5113485cb79897d4d56b695b470bd970a6e459dc94b067b6760389b739",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M17",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityAssociations.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    case C::IdentityKind::RenderId: frame.renderId=ProjectIdentity<C::RenderId>(value,evidence);break;",
+      "new": "    case C::IdentityKind::RenderId: break; // Intentional endpoint omission.",
+      "test_groups": [
+        "nr_identity_t07"
+      ],
+      "required_failure_case_ids": [
+        "T07.render-base.renderId",
+        "T07.evaluation-render.renderId"
+      ],
+      "intended_invariant": "Supported render endpoints must survive exact field projection",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "bc2a04a0b28c4f29ca02944eef50ce84c15d0a47f78f3ab830030aa9a6fdaccc",
+      "target_anchor_leaf_line": 144,
+      "old_anchor_sha256": "1347e2835cd5fb85d3942f3e7dd8d9824789c9ed0cef0552b31869c4c8f4953a",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M18",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityAssociations.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    case C::IdentityKind::EvaluationId: frame.evaluationId=ProjectIdentity<C::EvaluationId>(value,evidence);break;",
+      "new": "    case C::IdentityKind::EvaluationId: break; // Intentional endpoint omission.",
+      "test_groups": [
+        "nr_identity_t07"
+      ],
+      "required_failure_case_ids": [
+        "T07.evaluation-render.evaluationId",
+        "T07.evaluation-base-first.evaluationId",
+        "T07.evaluation-base-second.evaluationId"
+      ],
+      "intended_invariant": "Both evaluations remain distinct projected evaluation IDs associated with their declared base",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "bc2a04a0b28c4f29ca02944eef50ce84c15d0a47f78f3ab830030aa9a6fdaccc",
+      "target_anchor_leaf_line": 145,
+      "old_anchor_sha256": "45309c8f0f370d66fc76b0dfbf910d055e3e3846beed3e94042ab369b4460bcd",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M19",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityAssociations.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    case C::IdentityKind::RenderId: frame.renderId=ProjectIdentity<C::RenderId>(value,evidence);break;",
+      "new": "    case C::IdentityKind::RenderId: frame.evaluationId=ProjectIdentity<C::EvaluationId>(value,evidence);break; // Intentional endpoint swap.",
+      "test_groups": [
+        "nr_identity_t07"
+      ],
+      "required_failure_case_ids": [
+        "T07.render-base.renderId",
+        "T07.render-base.evaluationId"
+      ],
+      "intended_invariant": "A render endpoint is not an evaluation endpoint; absent fields remain absent",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "bc2a04a0b28c4f29ca02944eef50ce84c15d0a47f78f3ab830030aa9a6fdaccc",
+      "target_anchor_leaf_line": 144,
+      "old_anchor_sha256": "1347e2835cd5fb85d3942f3e7dd8d9824789c9ed0cef0552b31869c4c8f4953a",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M20",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityPrimitives.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (!ValidEvidence(known.evidence)) return IdentityStatus::InvalidEvidence;",
+      "new": "    // Intentional mutant: allow missing Known-scope evidence.",
+      "test_groups": [
+        "nr_identity_t07",
+        "nr_identity_t08"
+      ],
+      "required_failure_case_ids": [
+        "T08.scope-source-stream-empty-evidence",
+        "T07.import-claimed-stream-empty-evidence"
+      ],
+      "intended_invariant": "Matching scope values do not repair missing scope evidence",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "77d5b040a29ce7553b1df7ea28198b3b9b16e71d3ec3491f78163b74f67f9b94",
+      "target_anchor_leaf_line": 162,
+      "old_anchor_sha256": "e078effa28e46016f73a0ab2788b3051e05cad521f1ae1dace6d608a8d7d4c33",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t07.cpp",
+          "sha256": "3c0cd8857b745a3f125c76c41e71b81389fead82dc311097e8e150e392be9714"
+        },
+        {
+          "path": "tests/nr/identity/nr_identity_t08.cpp",
+          "sha256": "a0c32fe19899c6fe16844c21e722a75e4e5977161af5b0141d912dbb304ba33b"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M21",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    return !C::EnumName(reference.owner).empty() &&",
+      "new": "    return",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.metadata-signature-undefined-owner",
+        "T09.metadata-generations-undefined-owner",
+        "T09.metadata-records-undefined-owner"
+      ],
+      "intended_invariant": "Native metadata descriptors must use the canonical owner enum",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 49,
+      "old_anchor_sha256": "d3082e87cb3dfcfcc258987611e11d4e3f52fcd27ee988a0e44c65af3a7a62ea",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M22",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (s.generationBody->first!=s.record.generations ||\n        s.dependencyBody->first!=s.record.structuralDependencies.backing) return IdentityStatus::InvalidRule;",
+      "new": "    // Intentional mutant: accept a supplied body from a different metadata identity/revision.",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.wrong-generation-body-revision",
+        "T09.wrong-generation-body-identity",
+        "T09.wrong-record-body-revision",
+        "T09.wrong-record-body-identity"
+      ],
+      "intended_invariant": "Body materialization binds the exact referenced identity and revision",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 81,
+      "old_anchor_sha256": "f4bcd0403c35245fb3ad2fd5c93f515a34e1bac8f130664b60a0b7fa80aa6a2f",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M23",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityDependencies.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "            if (staged.generationBody->second.Insert(token)!=C::Error::None) return IdentityStatus::InvalidRule;",
+      "new": "            (void)token; // Intentional mutant: omit the selected generation value.",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.selected-values-exact",
+        "T09.only-three-selected-axes"
+      ],
+      "intended_invariant": "Independent literal selected-value assertions detect equally incomplete builder outputs",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "7a994ab1b831e68ed3c667601b5d9399eb4a8bbd46fabc728fa8f0313a25ceb4",
+      "target_anchor_leaf_line": 133,
+      "old_anchor_sha256": "a55c8ba7cb3ca3c737153631b13d1d658b19455409ac0dc0cd2f69421f28b9dd",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    },
+    {
+      "id": "LIFE-M24",
+      "target_path": "OptiScaler/nr/lifecycle/IdentityTransitions.h",
+      "operation": "REPLACE_EXACTLY_ONCE_IN_DISPOSABLE_REVIEWED_COPY",
+      "old": "    if (dependencyStatus!=IdentityStatus::Ok) return Refuse<bool>(dependencyStatus);",
+      "new": "    if (dependencyStatus!=IdentityStatus::Ok) return dependencyStatus==IdentityStatus::Unknown\n        ? Established(false,ownerEvidence) : Refuse<bool>(dependencyStatus); // Intentional false certainty.",
+      "test_groups": [
+        "nr_identity_t09"
+      ],
+      "required_failure_case_ids": [
+        "T09.c08-unavailable-body",
+        "T09.c08-unavailable-not-known-false"
+      ],
+      "intended_invariant": "Unavailable dependency material cannot become Known(false)",
+      "execution_state": "NOT_RUN",
+      "observed_actual": null,
+      "verdict": null,
+      "acceptance": "Must compile and fail the named semantic assertion for the intended reason, finish normally and retain raw expected/actual evidence; a compiler failure, crash, timeout or unrelated nonzero exit is not mutation sensitivity.",
+      "target_candidate_sha256": "e4184bc27038a2f9f2094f0edaf73518b25e87272a0866288eea2ce211248f60",
+      "target_anchor_leaf_line": 27,
+      "old_anchor_sha256": "efc6fe54ca059f1ed0dfab3796462b516dd6ed546664e176328150db7e87a909",
+      "test_source_bindings": [
+        {
+          "path": "tests/nr/identity/nr_identity_t09.cpp",
+          "sha256": "47c15368ff01cadc93501fd91bb7efdf8cab9581c7207b2bb63208ad659810fe"
+        }
+      ],
+      "fixture_support_sha256": "44ff83b301e8252e87af402d2f8a5d06b2c4dd58cd9c009281ecb711f1e3713f",
+      "text_anchor_occurrences": 1,
+      "text_anchor_check": "SOURCE_TEXT_ONLY_NOT_MUTATION_EXECUTION"
+    }
+  ],
+  "phase": "Pre-Codex 03B",
+  "new_in_03b": [
+    "LIFE-M17",
+    "LIFE-M18",
+    "LIFE-M19",
+    "LIFE-M20",
+    "LIFE-M21",
+    "LIFE-M22",
+    "LIFE-M23",
+    "LIFE-M24"
+  ],
+  "original_16_recipe_intents_preserved": true
+}

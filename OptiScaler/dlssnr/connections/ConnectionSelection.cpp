@@ -24,6 +24,6 @@ Selection Decide(const RequestedPolicy& p,std::span<const RouteCapability> route
  }
  return {p.source,p.transport,p.source==Source::Automatic?SelectionReason::NoUsableSource:SelectionReason::ExplicitUnavailable,false,false};
 }
-const char* SourceName(Source s) noexcept {switch(s){case Source::Native:return "Native";case Source::BuiltIn:return "Built-in capture";case Source::ReShade:return "ReShade";case Source::External:return "External";default:return "Automatic";}}
+const char* SourceName(Source s) noexcept {switch(s){case Source::Native:return "Native";case Source::BuiltIn:return "Built-in capture";case Source::ReShade:return "ReShade";case Source::External:return "External";case Source::None:return "None";case Source::Automatic:return "Automatic";default:return "Unknown provider";}}
 const char* TransportName(Transport t) noexcept {switch(t){case Transport::GPUOnly:return "GPU";case Transport::CPU:return "CPU (readback cost)";default:return "Automatic";}}
 }

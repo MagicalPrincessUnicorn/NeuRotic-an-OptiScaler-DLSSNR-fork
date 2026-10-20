@@ -26,7 +26,24 @@ public:
         ++it->second.evaluations;
         return it->second;
     }
+    Identity Current(uint32_t handle) const
+    {
+        const auto it=entries.find(handle);
+        return it==entries.end()?Identity{}:it->second;
+    }
     void Release(uint32_t handle, bool succeeded) { if (succeeded) entries.erase(handle); }
+    uint64_t ReleaseDevice(uintptr_t device) {
+        uint64_t retired=0;
+        for(auto it=entries.begin();it!=entries.end();) {
+            if(it->second.device==device){
+                if(it->second.generation>retired)retired=it->second.generation;
+                it=entries.erase(it);
+            }else ++it;
+        }
+        return retired;
+    }
     void Clear() { entries.clear(); }
 };
+// Retires CPU source identity only; never establishes or releases GPU ownership.
+uint64_t BeginDeviceRetirement(uintptr_t device);
 }

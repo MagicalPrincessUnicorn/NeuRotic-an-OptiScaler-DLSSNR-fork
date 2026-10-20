@@ -5,6 +5,14 @@
 
 namespace Neurotic::Sleek
 {
+// Advanced's focused stage editor reuses owner controls without nested cards.
+// Other pages retain their existing presentation.
+inline thread_local bool flatContentCards=false;
+struct FlatContentScope {
+    bool previous=flatContentCards;
+    FlatContentScope(){flatContentCards=true;}
+    ~FlatContentScope(){flatContentCards=previous;}
+};
 inline void BeginContentCard(const char* id, const char* heading = nullptr, bool sectionHeading = false)
 {
     ImGui::BeginChild(id, {0, 0}, ImGuiChildFlags_Borders |
@@ -72,12 +80,14 @@ inline bool CardSliderFloat(const char* id, float* value, float minimum, float m
 // headings are optional because navigation already identifies the page.
 class ContentCard
 {
+    bool flat=flatContentCards;
 public:
     explicit ContentCard(const char* id, const char* heading = nullptr, bool sectionHeading = false)
     {
-        BeginContentCard(id, heading, sectionHeading);
+        if(flat){ImGui::PushID(id);if(heading&&*heading){ImGui::SeparatorText(heading);}}
+        else BeginContentCard(id, heading, sectionHeading);
     }
-    ~ContentCard() { EndContentCard(); }
+    ~ContentCard() { if(flat)ImGui::PopID();else EndContentCard(); }
     ContentCard(const ContentCard&) = delete;
     ContentCard& operator=(const ContentCard&) = delete;
 };

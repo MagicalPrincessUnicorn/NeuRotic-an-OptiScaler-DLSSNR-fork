@@ -14,6 +14,7 @@
 #include <dlssnr/NativeTemporalInputFacts.h>
 #include <inputs/universal_feeder/PreparedGuideContract.h>
 #include <dlssnr/NrAlternateFrameInputs.h>
+#include <nr/context/TemporalConversion.h>
 
 // Which of the passes a dispatch is. One shader, because they read and write the same set of
 // resources and differ only in what they compute.
@@ -27,12 +28,11 @@ enum DlssNrMode : uint32_t
     DlssNrMode_Present = 6    // completed frame + untouched original -> comparison display only
 };
 
-struct DlssNrMotionScale { float x; float y; };
+using DlssNrMotionScale = Neurotic::Context::Temporal::Vector;
 inline DlssNrMotionScale DlssNrWorkingMotionScale(uint32_t width, uint32_t height,
                                                 uint32_t workWidth, uint32_t workHeight)
 {
-    return { width != 0 ? static_cast<float>(workWidth) / width : 1.0f,
-             height != 0 ? static_cast<float>(workHeight) / height : 1.0f };
+    return Neurotic::Context::Temporal::RasterRatio(width, height, workWidth, workHeight);
 }
 
 // The meter's grid. 64 x 64 tiles over the whole frame, whatever its size.
@@ -112,6 +112,8 @@ struct DlssNrFrameInfo
     // The scale the game multiplied its buffer by for float precision, which DLSS is told so it can
     // undo it. Usually 1. Divided out before the exposure is applied, exactly as FSR's PrepareRgb does.
     float PreExposure = 1.0f;
+    // Observation metadata: defaults never count as supplied game parameters.
+    bool PreExposureSupplied = false, JitterSupplied = false, ColorDomainKnown = false;
 
     // How much of the guide textures the game actually rendered into. Depth normally follows the
     // render rectangle. Motion may instead follow the output rectangle when the upscaler advertises
@@ -127,12 +129,109 @@ struct DlssNrFrameInfo
     // available and is what gets used.
     unsigned int RenderSubrectWidth = 0;
     unsigned int RenderSubrectHeight = 0;
+    bool NativeRenderDimensionsObserved = false;
     unsigned int DepthSubrectWidth = 0, DepthSubrectHeight = 0;
     unsigned int MotionSubrectWidth = 0, MotionSubrectHeight = 0;
     // Present and native-DLSS adapters retain full guide copies and forward their valid origins.
     unsigned int DepthSubrectX = 0, DepthSubrectY = 0;
     unsigned int MotionSubrectX = 0, MotionSubrectY = 0;
+
+    // Present retains native motion samples, subrects and their original scale.
+    // Jitter alone is projected to output pixels, then to each model work raster.
+    bool PresentNativeGuides = false;
+    bool MotionVectorsJittered = false;
+    unsigned int NativeFeatureHandle = 0;
+    uint64_t NativeFeatureGeneration = 0;
 };
+
+inline DlssNrFrameInfo DlssNrProjectPresentGuides(const DlssNrFrameInfo& native,
+                                                 uint32_t outputWidth, uint32_t outputHeight,
+                                                 bool reset)
+{
+    auto frame = native;
+    frame.PresentNativeGuides = true;
+    frame.Reset = frame.Reset || reset;
+    frame.ColourIsLinearHdr = false;
+    frame.ColorDomainKnown = true;
+    frame.ExposureTexture = nullptr;
+    frame.PreExposure = 1.0f;
+    frame.PreExposureSupplied = false;
+    // The capture owner validates nonzero active rectangles before admission.
+    // The motion texture and its active rectangle are unchanged. The provider
+    // normalizes its scale by that rectangle, not by the Present color raster.
+    const DlssNrMotionScale motion{1.0f, 1.0f};
+    const auto jitter = DlssNrWorkingMotionScale(native.RenderSubrectWidth, native.RenderSubrectHeight,
+                                               outputWidth, outputHeight);
+    const Neurotic::Context::Temporal::Values source{{native.MvScaleX, native.MvScaleY},
+                                                     {native.JitterX, native.JitterY}};
+    const auto projected = Neurotic::Context::Temporal::Project(source, motion, jitter);
+    frame.MvScaleX = projected.motionScale.x; frame.MvScaleY = projected.motionScale.y;
+    frame.JitterX = projected.jitter.x; frame.JitterY = projected.jitter.y;
+    return frame;
+}
+// NR-NATIVE-POST-MOTION-HELPERS BEGIN
+inline bool DlssNrReducedMotionRaster(uint32_t width, uint32_t height,
+                                     uint32_t workWidth, uint32_t workHeight)
+{
+    return width && height && workWidth && workHeight &&
+        workWidth <= width && workHeight <= height && (workWidth < width || workHeight < height);
+}
+inline bool DlssNrPreserveNativePostMotionScale(const DlssNrFrameInfo& frame,
+                                               bool preSr, bool imageOnlyDomain,
+                                               uint32_t width, uint32_t height,
+                                               uint32_t workWidth, uint32_t workHeight)
+{
+    // A controlled reduced Post-SR comparison, using observed game scales.
+    // Missing observations retain the existing conversion; they do not block NR.
+    // Present projection and prepared motion have independent input conventions.
+    // Gate on the primary raster so a full-output invocation keeps every pass unchanged.
+    return !preSr && !imageOnlyDomain && !frame.PresentNativeGuides && !frame.PreparedSource &&
+        frame.NativeScalarFacts && frame.NativeScalarFacts->mvX && frame.NativeScalarFacts->mvY &&
+        DlssNrReducedMotionRaster(width, height, workWidth, workHeight);
+}
+inline DlssNrMotionScale DlssNrModelMotionFactor(bool preserveNativePostScale,
+                                                uint32_t width, uint32_t height,
+                                                uint32_t workWidth, uint32_t workHeight)
+{
+    // The native vector resource/subrect and its game scale are unchanged when
+    // only Post-SR color is reduced. Do not normalize by motion size: that would
+    // also change the working full-output path and high-resolution motion inputs.
+    return preserveNativePostScale && DlssNrReducedMotionRaster(width, height, workWidth, workHeight)
+        ? DlssNrMotionScale{1.0f, 1.0f}
+        : DlssNrWorkingMotionScale(width, height, workWidth, workHeight);
+}
+// NR-NATIVE-POST-MOTION-HELPERS END
+inline DlssNrMotionScale DlssNrModelJitter(const DlssNrFrameInfo& frame,
+                                         uint32_t width, uint32_t height,
+                                         uint32_t workWidth, uint32_t workHeight)
+{
+    const auto scale = frame.PresentNativeGuides ? DlssNrWorkingMotionScale(width,height,workWidth,workHeight)
+                                               : DlssNrMotionScale{1.0f,1.0f};
+    return Neurotic::Context::Temporal::Scale({frame.JitterX, frame.JitterY}, scale);
+}
+inline Neurotic::Context::Temporal::Conversion DlssNrModelTemporal(
+    const Neurotic::Context::Temporal::Values& source, bool presentNativeGuides,
+    DlssNrMotionScale motion, uint32_t width, uint32_t height,
+    uint32_t workWidth, uint32_t workHeight)
+{
+    const auto jitter = presentNativeGuides ? DlssNrWorkingMotionScale(width, height, workWidth, workHeight)
+                                          : DlssNrMotionScale{1.0f, 1.0f};
+    // Reducing color does not resize retained native motion samples/subrects.
+    // Preserve their scale for every Present pass; other ingress keeps its policy.
+    const auto motionFactor = presentNativeGuides ? DlssNrMotionScale{1.0f, 1.0f} : motion;
+    return Neurotic::Context::Temporal::Convert(source, motionFactor, jitter);
+}
+inline bool DlssNrSameNativeGuideHistory(const DlssNrFrameInfo& a,const DlssNrFrameInfo& b)
+{
+    return a.NativeFeatureHandle==b.NativeFeatureHandle && a.NativeFeatureGeneration==b.NativeFeatureGeneration &&
+        a.RenderSubrectWidth==b.RenderSubrectWidth && a.RenderSubrectHeight==b.RenderSubrectHeight &&
+        a.DepthSubrectX==b.DepthSubrectX && a.DepthSubrectY==b.DepthSubrectY &&
+        a.MotionSubrectX==b.MotionSubrectX && a.MotionSubrectY==b.MotionSubrectY &&
+        a.DepthSubrectWidth==b.DepthSubrectWidth && a.DepthSubrectHeight==b.DepthSubrectHeight &&
+        a.MotionSubrectWidth==b.MotionSubrectWidth && a.MotionSubrectHeight==b.MotionSubrectHeight &&
+        a.DepthInverted==b.DepthInverted && a.MotionVectorsJittered==b.MotionVectorsJittered &&
+        a.MvScaleX==b.MvScaleX && a.MvScaleY==b.MvScaleY;
+}
 
 struct alignas(256) DlssNrConstants
 {
@@ -220,6 +319,15 @@ struct alignas(256) DlssNrConstants
     // Vulkan Pre-SR crops the active color rectangle into a private zero-origin carrier.
     // Trailing fields occupy the existing 256-byte constant-slot padding.
     uint32_t SourceX, SourceY;
+    // Enforce the final composed luminance in Post-SR/Present; leave Pre-SR unchanged.
+    // Remains inside the existing 256-byte slot, mirrored at offset104 in HLSL.
+    uint32_t FinalLuminanceGuard;
+    // Exact output-view representation, refreshed per resolve target. Offset108.
+    // This is a storage range fact, not a format admission rule.
+    uint32_t OutputIsUnorm;
+    // Vulkan final stores into the selected output view; private targets use zero.
+    // Offsets112/116 remain inside the existing256-byte constant slot.
+    uint32_t TargetX, TargetY;
 };
 
 class DlssNr_Common

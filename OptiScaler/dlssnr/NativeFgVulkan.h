@@ -1,5 +1,6 @@
 #pragma once
 #include "NativeFgBridge.h"
+#include <nr/diagnostics/VulkanHostCost.h>
 #include <atomic>
 #include <mutex>
 #include <optional>
@@ -15,7 +16,13 @@ void DeviceMaintenance(VkDevice,bool);
 struct InternalScope{InternalScope();~InternalScope();};
 inline std::recursive_mutex queueGate;
 inline std::recursive_mutex& QueueMutex(){return queueGate;}
-template<class Fn,class...Args>decltype(auto) QueueCall(Fn fn,Args&&...args){std::lock_guard lock(QueueMutex());return fn(std::forward<Args>(args)...);}
+template<class Fn,class...Args>decltype(auto) QueueCall(Fn fn,Args&&...args){
+    Neurotic::HostCost::VulkanScope call(Neurotic::HostCost::Kind::VkQueueCall);
+    std::lock_guard lock(QueueMutex());
+    call.Acquired();
+    Neurotic::HostCost::VulkanScope original(Neurotic::HostCost::Kind::VkQueueOriginal);
+    return fn(std::forward<Args>(args)...);
+}
 std::optional<VkResult> Create(VkDevice,VkPhysicalDevice,VkQueue,unsigned,const VkSwapchainCreateInfoKHR*,const VkAllocationCallbacks*,VkSwapchainKHR*,bool qualified,const char* qualificationRefusal=nullptr);
 bool Owns(VkSwapchainKHR);
 bool BindPresentQueue(VkDevice,VkSwapchainKHR,VkQueue,unsigned);

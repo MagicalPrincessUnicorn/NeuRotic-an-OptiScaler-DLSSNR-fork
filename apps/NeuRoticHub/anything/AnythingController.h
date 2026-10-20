@@ -19,7 +19,28 @@ inline bool AnythingReadyForStages(const AnythingSnapshot& state,bool neuralRend
  return state.connected&&!state.status.value("restartRequired",false)&&(neuralRendering?state.ready:
   state.status.value("capabilities",nlohmann::json::object()).value("optionalNeuralRendering",false));
 }
+enum class AnythingCapturedColor { Unknown, Sdr, ScRgb };
+inline AnythingCapturedColor AnythingCurrentCapturedColor(const AnythingSnapshot& state){
+ // Start resets sequence/captured before publishing the new session. The descriptor
+ // may survive Stop, so it is evidence only after a frame in the active session.
+ const auto& status=state.status;
+ if(!state.connected||!state.active||state.stopping||state.phase!="Running"||!status.is_object())return AnythingCapturedColor::Unknown;
+ if(status.value("phase",nlohmann::json{})!="Running"||status.value("sourcePaused",nlohmann::json{})!=false||
+    status.value("restartRequired",nlohmann::json(false))!=false)return AnythingCapturedColor::Unknown;
+ auto positive=[](const nlohmann::json& object,const char* key){
+  const auto it=object.find(key);if(it==object.end())return false;
+  return it->is_number_unsigned()?it->get<uint64_t>()>0:it->is_number_integer()&&it->get<int64_t>()>0;
+ };
+ if(!positive(status,"session")||!positive(status,"sequence")||!positive(status,"captured"))return AnythingCapturedColor::Unknown;
+ const auto it=status.find("color");
+ if(it==status.end()||!it->is_object()||it->value("known",nlohmann::json{})!=true||!positive(*it,"colorEpoch"))return AnythingCapturedColor::Unknown;
+ const auto domain=it->value("domain",nlohmann::json{}),storage=it->value("storage",nlohmann::json{});
+ if(domain=="encoded-srgb709"&&storage=="bgra8-unorm")return AnythingCapturedColor::Sdr;
+ if(domain=="linear709-scrgb"&&storage=="rgba16-float")return AnythingCapturedColor::ScRgb;
+ return AnythingCapturedColor::Unknown;
+}
 inline bool AnythingCanMeasureFrame(const AnythingSnapshot& state){
+ if(AnythingCurrentCapturedColor(state)!=AnythingCapturedColor::Sdr)return false;
  if(!state.connected||!state.active||state.busy||state.stopping||state.phase!="Running"||state.status.value("sourcePaused",true)||state.status.value("restartRequired",false))return false;
  const auto caps=state.status.value("capabilities",nlohmann::json::object());
  const auto result=state.status.value("measurement",nlohmann::json::object());

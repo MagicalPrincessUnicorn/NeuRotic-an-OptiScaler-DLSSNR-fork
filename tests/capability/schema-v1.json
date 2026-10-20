@@ -1,0 +1,3855 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:neurotic:capability-fingerprint:1.0.0",
+  "title": "NeuRotic Capability Fingerprint",
+  "description": "Layered evidence record for GPU/driver/NGX/model/API/route capability. A fingerprint is preparation evidence only; it never grants model execution or image-quality acceptance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fingerprint_id",
+    "generation",
+    "created_at_utc",
+    "collector",
+    "authority_context",
+    "subject",
+    "adapter",
+    "driver",
+    "modules",
+    "feature_target",
+    "layers",
+    "routes",
+    "probes",
+    "parameter_support",
+    "session_readiness",
+    "admission",
+    "runtime_acceptance",
+    "cache",
+    "privacy",
+    "evidence",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "fingerprint_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "collector": {
+      "$ref": "#/$defs/collector"
+    },
+    "authority_context": {
+      "$ref": "#/$defs/authorityContext"
+    },
+    "subject": {
+      "$ref": "#/$defs/subject"
+    },
+    "adapter": {
+      "$ref": "#/$defs/adapter"
+    },
+    "driver": {
+      "$ref": "#/$defs/driver"
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/moduleIdentity"
+      }
+    },
+    "feature_target": {
+      "$ref": "#/$defs/featureTarget"
+    },
+    "layers": {
+      "$ref": "#/$defs/layers"
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/route"
+      },
+      "minItems": 1
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/probeResult"
+      }
+    },
+    "parameter_support": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/parameterSupport"
+      }
+    },
+    "session_readiness": {
+      "$ref": "#/$defs/sessionReadiness"
+    },
+    "admission": {
+      "$ref": "#/$defs/admission"
+    },
+    "runtime_acceptance": {
+      "$ref": "#/$defs/runtimeAcceptance"
+    },
+    "cache": {
+      "$ref": "#/$defs/cache"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      },
+      "minItems": 1
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "cross_chat_reconciliation_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^CAP-XQ-[0-9]{3}$"
+      }
+    }
+  },
+  "$defs": {
+    "state": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "not_observed",
+        "not_applicable",
+        "refused",
+        "observed",
+        "present",
+        "absent",
+        "supported",
+        "unsupported",
+        "recognized",
+        "unrecognized",
+        "partially_supported",
+        "ambiguous",
+        "blocked",
+        "crashed_previously",
+        "changed_since_cache",
+        "stale",
+        "ready",
+        "not_ready",
+        "succeeded",
+        "failed",
+        "accepted",
+        "rejected",
+        "quarantined"
+      ]
+    },
+    "evidenceClass": {
+      "type": "string",
+      "enum": [
+        "PROJECT_AUTHORITY",
+        "BASELINE_SOURCE_FACT",
+        "NEWER_SOURCE_FACT",
+        "USER_RUNTIME_OBSERVATION",
+        "EXTERNAL_PRIMARY_SOURCE",
+        "EXTERNAL_IMPLEMENTATION_EVIDENCE",
+        "INFERENCE",
+        "PROPOSAL",
+        "RUNTIME_ONLY_UNKNOWN",
+        "BLOCKED_BY_MISSING_EVIDENCE"
+      ]
+    },
+    "trustLevel": {
+      "type": "string",
+      "enum": [
+        "T0_UNTRUSTED_OR_MUTATED",
+        "T1_PASSIVE_FILE_OBSERVATION",
+        "T2_PLATFORM_IDENTITY",
+        "T3_UNMUTATED_VENDOR_QUERY",
+        "T4_CONTROLLED_BEHAVIORAL_DIFFERENTIAL",
+        "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+        "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE"
+      ]
+    },
+    "admissibility": {
+      "type": "string",
+      "enum": [
+        "inadmissible",
+        "diagnostic_only",
+        "route_hint_only",
+        "admissible_preparation",
+        "admissible_current_session_gate",
+        "admissible_runtime_receipt"
+      ]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "evidence_class",
+        "trust_level",
+        "collection_method",
+        "mutated",
+        "admissibility",
+        "evidence_ids"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "value": {},
+        "raw_value": {},
+        "evidence_class": {
+          "$ref": "#/$defs/evidenceClass"
+        },
+        "trust_level": {
+          "$ref": "#/$defs/trustLevel"
+        },
+        "collection_method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mutated": {
+          "type": "boolean"
+        },
+        "admissibility": {
+          "$ref": "#/$defs/admissibility"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "observed_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mutated": {
+                "const": true
+              }
+            },
+            "required": [
+              "mutated"
+            ]
+          },
+          "then": {
+            "properties": {
+              "trust_level": {
+                "const": "T0_UNTRUSTED_OR_MUTATED"
+              },
+              "admissibility": {
+                "enum": [
+                  "inadmissible",
+                  "diagnostic_only"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "probe_algorithm_version",
+        "build_identity"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "probe_algorithm_version": {
+          "type": "string"
+        },
+        "build_identity": {
+          "type": "string"
+        },
+        "process_arch": {
+          "type": "string",
+          "enum": [
+            "x64",
+            "x86",
+            "arm64",
+            "arm64ec",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "authorityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_archive_sha256",
+        "expected_baseline_commit",
+        "baseline_commit_proven",
+        "current_source_state"
+      ],
+      "properties": {
+        "baseline_archive_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expected_baseline_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "baseline_commit_proven": {
+          "type": "boolean"
+        },
+        "newer_packet_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "current_source_state": {
+          "type": "string",
+          "enum": [
+            "inspected_exact",
+            "inspected_packet_only",
+            "not_available",
+            "unknown"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api",
+        "process_arch",
+        "app_identity",
+        "route_scope"
+      ],
+      "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "d3d11",
+            "d3d12",
+            "vulkan",
+            "streamline",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "process_arch": {
+          "type": "string",
+          "enum": [
+            "x64",
+            "x86",
+            "arm64",
+            "arm64ec",
+            "unknown"
+          ]
+        },
+        "app_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "route_scope": {
+          "type": "string",
+          "enum": [
+            "process",
+            "session",
+            "adapter",
+            "device_generation",
+            "route",
+            "operation"
+          ]
+        },
+        "os_build": {
+          "$ref": "#/$defs/observation"
+        }
+      }
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vendor_id",
+        "device_id",
+        "subsystem_id",
+        "revision",
+        "local_identity",
+        "cross_api_identity"
+      ],
+      "properties": {
+        "vendor_id": {
+          "$ref": "#/$defs/observation"
+        },
+        "device_id": {
+          "$ref": "#/$defs/observation"
+        },
+        "subsystem_id": {
+          "$ref": "#/$defs/observation"
+        },
+        "revision": {
+          "$ref": "#/$defs/observation"
+        },
+        "description": {
+          "$ref": "#/$defs/observation"
+        },
+        "local_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "cross_api_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "node_mask": {
+          "$ref": "#/$defs/observation"
+        }
+      }
+    },
+    "driver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_version",
+        "umd_version",
+        "branch",
+        "vulkan_driver_uuid",
+        "vulkan_driver_properties"
+      ],
+      "properties": {
+        "package_version": {
+          "$ref": "#/$defs/observation"
+        },
+        "umd_version": {
+          "$ref": "#/$defs/observation"
+        },
+        "branch": {
+          "$ref": "#/$defs/observation"
+        },
+        "vulkan_driver_uuid": {
+          "$ref": "#/$defs/observation"
+        },
+        "vulkan_driver_properties": {
+          "$ref": "#/$defs/observation"
+        },
+        "identity_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "moduleIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module_id",
+        "role",
+        "load_state",
+        "basename",
+        "path_class",
+        "sha256",
+        "export_digest",
+        "file_version",
+        "signature",
+        "loaded_by",
+        "evidence_ids"
+      ],
+      "properties": {
+        "module_id": {
+          "type": "string",
+          "pattern": "^CAP-MOD-[A-Za-z0-9_-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "ngx_core",
+            "ngx_loader",
+            "forwarder",
+            "feature_model",
+            "streamline_core",
+            "streamline_plugin",
+            "nvapi",
+            "other"
+          ]
+        },
+        "load_state": {
+          "$ref": "#/$defs/state"
+        },
+        "basename": {
+          "$ref": "#/$defs/observation"
+        },
+        "path_class": {
+          "$ref": "#/$defs/observation"
+        },
+        "sha256": {
+          "$ref": "#/$defs/observation"
+        },
+        "export_digest": {
+          "$ref": "#/$defs/observation"
+        },
+        "exports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "file_version": {
+          "$ref": "#/$defs/observation"
+        },
+        "signature": {
+          "$ref": "#/$defs/observation"
+        },
+        "loaded_by": {
+          "type": "string",
+          "enum": [
+            "already_loaded_passive",
+            "collector_load",
+            "probe_child_load",
+            "game",
+            "driver",
+            "unknown"
+          ]
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        },
+        "abi_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "featureTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numeric_id",
+        "official_public_label",
+        "project_role",
+        "official_contract_state",
+        "route_claim_authority"
+      ],
+      "properties": {
+        "numeric_id": {
+          "const": 18
+        },
+        "official_public_label": {
+          "const": "NVSDK_NGX_Feature_Reserved18"
+        },
+        "project_role": {
+          "const": "neural_rendering_target"
+        },
+        "official_contract_state": {
+          "type": "string",
+          "enum": [
+            "reserved_undocumented",
+            "documented"
+          ]
+        },
+        "route_claim_authority": {
+          "type": "string",
+          "enum": [
+            "baseline_implementation_evidence",
+            "runtime_observation",
+            "official_vendor_contract",
+            "unknown"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "layers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "static_identity",
+        "exported_surface",
+        "behavioral_classification",
+        "current_session_readiness",
+        "runtime_acceptance"
+      ],
+      "properties": {
+        "static_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "exported_surface": {
+          "$ref": "#/$defs/observation"
+        },
+        "behavioral_classification": {
+          "$ref": "#/$defs/observation"
+        },
+        "current_session_readiness": {
+          "$ref": "#/$defs/observation"
+        },
+        "runtime_acceptance": {
+          "$ref": "#/$defs/observation"
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_id",
+        "kind",
+        "api",
+        "surface_state",
+        "behavior_state",
+        "session_state",
+        "candidate_state",
+        "reason_codes",
+        "evidence_ids"
+      ],
+      "properties": {
+        "route_id": {
+          "type": "string",
+          "pattern": "^CAP-ROUTE-[A-Za-z0-9_-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "native_core",
+            "forwarder_model",
+            "streamline_plugin",
+            "none",
+            "unknown"
+          ]
+        },
+        "api": {
+          "type": "string",
+          "enum": [
+            "d3d11",
+            "d3d12",
+            "vulkan",
+            "streamline",
+            "unknown"
+          ]
+        },
+        "surface_state": {
+          "$ref": "#/$defs/state"
+        },
+        "behavior_state": {
+          "$ref": "#/$defs/state"
+        },
+        "session_state": {
+          "$ref": "#/$defs/state"
+        },
+        "candidate_state": {
+          "type": "string",
+          "enum": [
+            "not_candidate",
+            "candidate",
+            "preferred_candidate",
+            "blocked",
+            "quarantined"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP_(?:INFO|WARN|REFUSE|BLOCK|ADMIT)_[A-Z0-9_]+$"
+          }
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        },
+        "requires_forwarder": {
+          "type": "boolean"
+        },
+        "selected_module_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-MOD-[A-Za-z0-9_-]+$"
+          }
+        }
+      }
+    },
+    "probeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe_id",
+        "probe_version",
+        "risk_class",
+        "execution_context",
+        "state",
+        "raw_result",
+        "controls",
+        "mutated",
+        "side_effects",
+        "evidence_ids"
+      ],
+      "properties": {
+        "probe_id": {
+          "type": "string",
+          "pattern": "^CAP-PROBE-[A-Z][0-9]{2}$"
+        },
+        "probe_version": {
+          "type": "string"
+        },
+        "risk_class": {
+          "type": "string",
+          "enum": [
+            "P0_STATIC",
+            "P1_PASSIVE_PROCESS",
+            "P2_ISOLATED_QUERY",
+            "P3_SESSION_OBSERVATION",
+            "P4_LAB_CREATE",
+            "P5_LAB_EVALUATE",
+            "P6_LIVE_ACCEPTANCE"
+          ]
+        },
+        "execution_context": {
+          "type": "string",
+          "enum": [
+            "no_process_code_execution",
+            "current_process_passive",
+            "isolated_child",
+            "gpu_lab",
+            "live_game"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "raw_result": {},
+        "controls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "positive_control",
+            "negative_control",
+            "same_tuple"
+          ],
+          "properties": {
+            "positive_control": {},
+            "negative_control": {},
+            "same_tuple": {
+              "type": "boolean"
+            },
+            "control_notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mutated": {
+          "type": "boolean"
+        },
+        "side_effects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "crash_signature": {
+          "type": "string"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        }
+      }
+    },
+    "parameterSupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parameter_id",
+        "name",
+        "type",
+        "phase",
+        "storage_state",
+        "publication_state",
+        "create_acceptance",
+        "evaluate_acceptance",
+        "consumption_state",
+        "scope",
+        "evidence_ids"
+      ],
+      "properties": {
+        "parameter_id": {
+          "type": "string",
+          "pattern": "^CAP-PARAM-[A-Za-z0-9_-]+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "uint",
+            "int",
+            "uint64",
+            "float",
+            "double",
+            "pointer",
+            "resource",
+            "callback",
+            "unknown"
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "creation",
+            "evaluation",
+            "both",
+            "discovery",
+            "unknown"
+          ]
+        },
+        "storage_state": {
+          "$ref": "#/$defs/state"
+        },
+        "publication_state": {
+          "$ref": "#/$defs/state"
+        },
+        "create_acceptance": {
+          "$ref": "#/$defs/state"
+        },
+        "evaluate_acceptance": {
+          "$ref": "#/$defs/state"
+        },
+        "consumption_state": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "not_tested",
+            "no_observed_effect_in_scope",
+            "causal_effect_observed",
+            "ambiguous"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sessionReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "process_instance",
+        "device_generation",
+        "device_identity",
+        "queue_identity",
+        "swapchain_identity",
+        "enabled_api_features",
+        "resource_lifetime_contract",
+        "state",
+        "reason_codes",
+        "evidence_ids"
+      ],
+      "properties": {
+        "process_instance": {
+          "$ref": "#/$defs/observation"
+        },
+        "device_generation": {
+          "$ref": "#/$defs/observation"
+        },
+        "device_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "queue_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "swapchain_identity": {
+          "$ref": "#/$defs/observation"
+        },
+        "enabled_api_features": {
+          "$ref": "#/$defs/observation"
+        },
+        "resource_lifetime_contract": {
+          "$ref": "#/$defs/observation"
+        },
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP_(?:INFO|WARN|REFUSE|BLOCK|ADMIT)_[A-Z0-9_]+$"
+          }
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        }
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desired_route_id",
+        "observed_candidate_state",
+        "admitted_state",
+        "operation_scope",
+        "hard_invariants",
+        "reason_codes",
+        "fingerprint_is_execution_permission"
+      ],
+      "properties": {
+        "desired_route_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observed_candidate_state": {
+          "type": "string",
+          "enum": [
+            "none",
+            "candidate",
+            "preferred_candidate",
+            "blocked",
+            "quarantined"
+          ]
+        },
+        "admitted_state": {
+          "type": "string",
+          "enum": [
+            "not_evaluated",
+            "refused",
+            "preparation_only",
+            "trial_admitted",
+            "operation_admitted"
+          ]
+        },
+        "operation_scope": {
+          "type": "string",
+          "enum": [
+            "none",
+            "route_commit",
+            "operation",
+            "feature_create",
+            "feature_evaluate"
+          ]
+        },
+        "hard_invariants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP_(?:INFO|WARN|REFUSE|BLOCK|ADMIT)_[A-Z0-9_]+$"
+          }
+        },
+        "fingerprint_is_execution_permission": {
+          "const": false
+        }
+      }
+    },
+    "runtimeAcceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feature_creation",
+        "evaluation",
+        "gpu_completion",
+        "output_receipt",
+        "live_game_stability",
+        "image_quality",
+        "accepted_state",
+        "evidence_ids"
+      ],
+      "properties": {
+        "feature_creation": {
+          "$ref": "#/$defs/observation"
+        },
+        "evaluation": {
+          "$ref": "#/$defs/observation"
+        },
+        "gpu_completion": {
+          "$ref": "#/$defs/observation"
+        },
+        "output_receipt": {
+          "$ref": "#/$defs/observation"
+        },
+        "live_game_stability": {
+          "$ref": "#/$defs/observation"
+        },
+        "image_quality": {
+          "$ref": "#/$defs/observation"
+        },
+        "accepted_state": {
+          "type": "string",
+          "enum": [
+            "not_observed",
+            "partial",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-EV-[0-9]{3}$"
+          }
+        }
+      }
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cache_schema_version",
+        "key_digest",
+        "key_components",
+        "state",
+        "invalidation_reasons",
+        "clean_shutdown_observed",
+        "persist_session_readiness"
+      ],
+      "properties": {
+        "cache_schema_version": {
+          "const": "1.0.0"
+        },
+        "key_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "key_components": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "miss",
+            "valid",
+            "stale",
+            "changed_since_cache",
+            "quarantined",
+            "refused"
+          ]
+        },
+        "invalidation_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "clean_shutdown_observed": {
+          "type": "boolean"
+        },
+        "persist_session_readiness": {
+          "const": false
+        },
+        "crash_quarantine": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "signature": {
+              "type": "string"
+            },
+            "clears_on": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "export_profile",
+        "raw_paths_included",
+        "raw_local_ids_included",
+        "host_pseudonymization",
+        "network_required"
+      ],
+      "properties": {
+        "export_profile": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "support",
+            "forensic_local_only"
+          ]
+        },
+        "raw_paths_included": {
+          "type": "boolean"
+        },
+        "raw_local_ids_included": {
+          "type": "boolean"
+        },
+        "host_pseudonymization": {
+          "type": "string",
+          "enum": [
+            "none",
+            "session_salt",
+            "support_bundle_salt",
+            "local_hmac"
+          ]
+        },
+        "network_required": {
+          "const": false
+        },
+        "redactions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "classification",
+        "source_kind",
+        "locator",
+        "sha256",
+        "collected_at_utc",
+        "limitations"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "pattern": "^CAP-EV-[0-9]{3}$"
+        },
+        "classification": {
+          "$ref": "#/$defs/evidenceClass"
+        },
+        "source_kind": {
+          "type": "string",
+          "enum": [
+            "project_authority",
+            "baseline_source",
+            "newer_packet",
+            "official_header",
+            "official_spec",
+            "platform_api",
+            "runtime_log",
+            "probe_output",
+            "test_output",
+            "proposal"
+          ]
+        },
+        "locator": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "collected_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "fingerprint_id": "00000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "created_at_utc": "2026-09-22T06:00:00Z",
+      "collector": {
+        "name": "nr_cap_probe",
+        "version": "1.0.0-design",
+        "probe_algorithm_version": "CAP-PROBE-1.0",
+        "build_identity": "example",
+        "process_arch": "x64"
+      },
+      "authority_context": {
+        "baseline_archive_sha256": "21dab2cbcb0d6ebd26d7bbdc31b875f451730e6bdf887bae4d0a4537a7931b2b",
+        "expected_baseline_commit": "fe56e4bcc4289431478b113730acf3771c8f52a6",
+        "baseline_commit_proven": false,
+        "current_source_state": "not_available",
+        "notes": [
+          "Example only; no runtime acceptance."
+        ]
+      },
+      "subject": {
+        "api": "d3d12",
+        "process_arch": "x64",
+        "route_scope": "device_generation",
+        "app_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "support-bundle-salted-app"
+        }
+      },
+      "adapter": {
+        "vendor_id": {
+          "state": "observed",
+          "evidence_class": "EXTERNAL_PRIMARY_SOURCE",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI/Vulkan property",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 4318
+        },
+        "device_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 9984
+        },
+        "subsystem_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 0
+        },
+        "revision": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 161
+        },
+        "local_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI adapter LUID",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-luid"
+        },
+        "cross_api_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "VkPhysicalDeviceIDProperties",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-device-uuid"
+        }
+      },
+      "driver": {
+        "package_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NVAPI/OS",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-package"
+        },
+        "umd_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "IDXGIAdapter::CheckInterfaceSupport",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-umd"
+        },
+        "branch": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NvAPI_SYS_GetDriverAndBranchVersion",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-branch"
+        },
+        "vulkan_driver_uuid": {
+          "state": "not_applicable",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "vulkan_driver_properties": {
+          "state": "not_applicable",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "identity_digest": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "modules": [
+        {
+          "module_id": "CAP-MOD-ngx-core",
+          "role": "ngx_core",
+          "load_state": "present",
+          "basename": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "_nvngx.dll"
+          },
+          "path_class": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "driver_store"
+          },
+          "sha256": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "export_digest": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "exports": [
+            "NVSDK_NGX_D3D12_GetFeatureRequirements",
+            "NVSDK_NGX_D3D12_CreateFeature",
+            "NVSDK_NGX_D3D12_EvaluateFeature"
+          ],
+          "file_version": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "example"
+          },
+          "signature": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": {
+              "status": "valid-cache-only",
+              "publisher": "NVIDIA"
+            }
+          },
+          "loaded_by": "driver",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "abi_notes": []
+        }
+      ],
+      "feature_target": {
+        "numeric_id": 18,
+        "official_public_label": "NVSDK_NGX_Feature_Reserved18",
+        "project_role": "neural_rendering_target",
+        "official_contract_state": "reserved_undocumented",
+        "route_claim_authority": "baseline_implementation_evidence",
+        "notes": [
+          "Official public headers reserve ID 18; the neural-rendering role is project/baseline evidence, not a public vendor contract."
+        ]
+      },
+      "layers": {
+        "static_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "exported_surface": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "behavioral_classification": {
+          "state": "recognized",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T4_CONTROLLED_BEHAVIORAL_DIFFERENTIAL",
+          "collection_method": "isolated controlled query",
+          "mutated": false,
+          "admissibility": "admissible_preparation",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "current_session_readiness": {
+          "state": "ready",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "live owner snapshot",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "runtime_acceptance": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        }
+      },
+      "routes": [
+        {
+          "route_id": "CAP-ROUTE-native-d3d12",
+          "kind": "native_core",
+          "api": "d3d12",
+          "surface_state": "present",
+          "behavior_state": "recognized",
+          "session_state": "ready",
+          "candidate_state": "preferred_candidate",
+          "reason_codes": [
+            "CAP_ADMIT_PREPARATION_EVIDENCE"
+          ],
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "requires_forwarder": false,
+          "selected_module_ids": [
+            "CAP-MOD-ngx-core"
+          ]
+        }
+      ],
+      "probes": [
+        {
+          "probe_id": "CAP-PROBE-Q01",
+          "probe_version": "1.0",
+          "risk_class": "P2_ISOLATED_QUERY",
+          "execution_context": "isolated_child",
+          "state": "recognized",
+          "raw_result": {
+            "target": "distinct-supported",
+            "positive": "recognized",
+            "negative": "unrecognized"
+          },
+          "controls": {
+            "positive_control": {
+              "feature_id": 1
+            },
+            "negative_control": {
+              "feature_id": 2147418113
+            },
+            "same_tuple": true,
+            "control_notes": [
+              "Unmutated requirements path."
+            ]
+          },
+          "mutated": false,
+          "side_effects": [
+            "child loaded vendor module"
+          ],
+          "timeout_ms": 3000,
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        }
+      ],
+      "parameter_support": [],
+      "session_readiness": {
+        "process_instance": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-process"
+        },
+        "device_generation": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "live owner snapshot",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 7
+        },
+        "device_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "IUnknown identity",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "device-cookie-7"
+        },
+        "queue_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "queue owner",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "queue-cookie-2"
+        },
+        "swapchain_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "swapchain owner",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "swapchain-cookie-3"
+        },
+        "enabled_api_features": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": [
+            "d3d12"
+          ]
+        },
+        "resource_lifetime_contract": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "owner-held-through-completion"
+        },
+        "state": "ready",
+        "reason_codes": [
+          "CAP_ADMIT_SESSION_READY"
+        ],
+        "evidence_ids": [
+          "CAP-EV-001"
+        ]
+      },
+      "admission": {
+        "desired_route_id": "CAP-ROUTE-native-d3d12",
+        "observed_candidate_state": "preferred_candidate",
+        "admitted_state": "preparation_only",
+        "operation_scope": "route_commit",
+        "hard_invariants": [
+          "device identity",
+          "queue identity",
+          "resource lifetime",
+          "generation freshness"
+        ],
+        "reason_codes": [
+          "CAP_ADMIT_PREPARATION_EVIDENCE",
+          "CAP_WARN_RUNTIME_NOT_ACCEPTED"
+        ],
+        "fingerprint_is_execution_permission": false
+      },
+      "runtime_acceptance": {
+        "feature_creation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "evaluation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "gpu_completion": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "output_receipt": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "live_game_stability": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "image_quality": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "accepted_state": "not_observed",
+        "evidence_ids": []
+      },
+      "cache": {
+        "cache_schema_version": "1.0.0",
+        "key_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_components": [
+          "schema",
+          "collector",
+          "adapter",
+          "driver",
+          "api",
+          "module hashes",
+          "exports",
+          "app identity",
+          "route",
+          "feature id"
+        ],
+        "state": "miss",
+        "invalidation_reasons": [],
+        "clean_shutdown_observed": true,
+        "persist_session_readiness": false,
+        "crash_quarantine": {
+          "active": false,
+          "signature": "",
+          "clears_on": [
+            "identity tuple change",
+            "probe algorithm change",
+            "explicit lab-only clearance"
+          ]
+        }
+      },
+      "privacy": {
+        "export_profile": "support",
+        "raw_paths_included": false,
+        "raw_local_ids_included": false,
+        "host_pseudonymization": "support_bundle_salt",
+        "network_required": false,
+        "redactions": [
+          "user profile paths",
+          "raw LUID",
+          "raw device UUID"
+        ]
+      },
+      "evidence": [
+        {
+          "evidence_id": "CAP-EV-001",
+          "classification": "PROPOSAL",
+          "source_kind": "proposal",
+          "locator": "I01 example",
+          "sha256": null,
+          "collected_at_utc": "2026-09-22T06:00:00Z",
+          "limitations": [
+            "Synthetic example."
+          ]
+        }
+      ],
+      "limitations": [
+        "Synthetic example; values do not describe a real installation."
+      ]
+    },
+    {
+      "schema_version": "1.0.0",
+      "fingerprint_id": "00000000-0000-4000-8000-000000000002",
+      "generation": 1,
+      "created_at_utc": "2026-09-22T06:00:00Z",
+      "collector": {
+        "name": "nr_cap_probe",
+        "version": "1.0.0-design",
+        "probe_algorithm_version": "CAP-PROBE-1.0",
+        "build_identity": "example",
+        "process_arch": "x64"
+      },
+      "authority_context": {
+        "baseline_archive_sha256": "21dab2cbcb0d6ebd26d7bbdc31b875f451730e6bdf887bae4d0a4537a7931b2b",
+        "expected_baseline_commit": "fe56e4bcc4289431478b113730acf3771c8f52a6",
+        "baseline_commit_proven": false,
+        "current_source_state": "not_available",
+        "notes": [
+          "Example only; no runtime acceptance."
+        ]
+      },
+      "subject": {
+        "api": "d3d12",
+        "process_arch": "x64",
+        "route_scope": "device_generation",
+        "app_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "support-bundle-salted-app"
+        }
+      },
+      "adapter": {
+        "vendor_id": {
+          "state": "observed",
+          "evidence_class": "EXTERNAL_PRIMARY_SOURCE",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI/Vulkan property",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 4318
+        },
+        "device_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 9984
+        },
+        "subsystem_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 0
+        },
+        "revision": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 161
+        },
+        "local_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI adapter LUID",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-luid"
+        },
+        "cross_api_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "VkPhysicalDeviceIDProperties",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-device-uuid"
+        }
+      },
+      "driver": {
+        "package_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NVAPI/OS",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-package"
+        },
+        "umd_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "IDXGIAdapter::CheckInterfaceSupport",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-umd"
+        },
+        "branch": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NvAPI_SYS_GetDriverAndBranchVersion",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-branch"
+        },
+        "vulkan_driver_uuid": {
+          "state": "not_applicable",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "vulkan_driver_properties": {
+          "state": "not_applicable",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "identity_digest": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "modules": [
+        {
+          "module_id": "CAP-MOD-ngx-core",
+          "role": "ngx_core",
+          "load_state": "present",
+          "basename": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "_nvngx.dll"
+          },
+          "path_class": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "driver_store"
+          },
+          "sha256": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "export_digest": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          },
+          "exports": [
+            "NVSDK_NGX_D3D12_GetFeatureRequirements"
+          ],
+          "file_version": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "example"
+          },
+          "signature": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": {
+              "status": "valid-cache-only",
+              "publisher": "NVIDIA"
+            }
+          },
+          "loaded_by": "driver",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "abi_notes": []
+        },
+        {
+          "module_id": "CAP-MOD-forwarder",
+          "role": "forwarder",
+          "load_state": "present",
+          "basename": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "nvngx.dll_dlssnr.dll"
+          },
+          "path_class": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "addon_directory"
+          },
+          "sha256": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "export_digest": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          },
+          "exports": [
+            "dlssnr_call_probe_d3d12",
+            "dlssnr_call_create",
+            "dlssnr_call_evaluate"
+          ],
+          "file_version": {
+            "state": "absent",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ]
+          },
+          "signature": {
+            "state": "absent",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ]
+          },
+          "loaded_by": "probe_child_load",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "abi_notes": [
+            "Project forwarder ABI; not a vendor contract."
+          ]
+        },
+        {
+          "module_id": "CAP-MOD-model",
+          "role": "feature_model",
+          "load_state": "present",
+          "basename": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "nvngx_dlssnr.dll"
+          },
+          "path_class": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "game_or_addon_directory"
+          },
+          "sha256": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "export_digest": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "exports": [
+            "NVSDK_NGX_D3D12_GetFeatureRequirements",
+            "NVSDK_NGX_D3D12_CreateFeature",
+            "NVSDK_NGX_D3D12_EvaluateFeature"
+          ],
+          "file_version": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "example"
+          },
+          "signature": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": {
+              "status": "valid-cache-only",
+              "publisher": "NVIDIA"
+            }
+          },
+          "loaded_by": "probe_child_load",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "abi_notes": []
+        }
+      ],
+      "feature_target": {
+        "numeric_id": 18,
+        "official_public_label": "NVSDK_NGX_Feature_Reserved18",
+        "project_role": "neural_rendering_target",
+        "official_contract_state": "reserved_undocumented",
+        "route_claim_authority": "baseline_implementation_evidence",
+        "notes": [
+          "Official public headers reserve ID 18; the neural-rendering role is project/baseline evidence, not a public vendor contract."
+        ]
+      },
+      "layers": {
+        "static_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "exported_surface": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "behavioral_classification": {
+          "state": "partially_supported",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T4_CONTROLLED_BEHAVIORAL_DIFFERENTIAL",
+          "collection_method": "isolated route matrix",
+          "mutated": false,
+          "admissibility": "admissible_preparation",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "current_session_readiness": {
+          "state": "ready",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "live owner snapshot",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "runtime_acceptance": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        }
+      },
+      "routes": [
+        {
+          "route_id": "CAP-ROUTE-native-d3d12",
+          "kind": "native_core",
+          "api": "d3d12",
+          "surface_state": "present",
+          "behavior_state": "unrecognized",
+          "session_state": "ready",
+          "candidate_state": "not_candidate",
+          "reason_codes": [
+            "CAP_REFUSE_TARGET_EQUALS_NEGATIVE_CONTROL"
+          ],
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "requires_forwarder": false,
+          "selected_module_ids": [
+            "CAP-MOD-ngx-core"
+          ]
+        },
+        {
+          "route_id": "CAP-ROUTE-forwarder-d3d12",
+          "kind": "forwarder_model",
+          "api": "d3d12",
+          "surface_state": "present",
+          "behavior_state": "supported",
+          "session_state": "ready",
+          "candidate_state": "preferred_candidate",
+          "reason_codes": [
+            "CAP_ADMIT_FORWARDER_PREPARATION_EVIDENCE"
+          ],
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "requires_forwarder": true,
+          "selected_module_ids": [
+            "CAP-MOD-forwarder",
+            "CAP-MOD-model"
+          ]
+        }
+      ],
+      "probes": [],
+      "parameter_support": [],
+      "session_readiness": {
+        "process_instance": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-process"
+        },
+        "device_generation": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "live owner snapshot",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 3
+        },
+        "device_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "IUnknown identity",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "device-cookie-3"
+        },
+        "queue_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "queue owner",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "queue-cookie-1"
+        },
+        "swapchain_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "swapchain owner",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "swapchain-cookie-1"
+        },
+        "enabled_api_features": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": [
+            "d3d12"
+          ]
+        },
+        "resource_lifetime_contract": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "forwarder-and-model-retained-through-completion"
+        },
+        "state": "ready",
+        "reason_codes": [
+          "CAP_ADMIT_SESSION_READY"
+        ],
+        "evidence_ids": [
+          "CAP-EV-001"
+        ]
+      },
+      "admission": {
+        "desired_route_id": "CAP-ROUTE-forwarder-d3d12",
+        "observed_candidate_state": "preferred_candidate",
+        "admitted_state": "preparation_only",
+        "operation_scope": "route_commit",
+        "hard_invariants": [
+          "device identity",
+          "queue identity",
+          "resource lifetime",
+          "generation freshness"
+        ],
+        "reason_codes": [
+          "CAP_ADMIT_FORWARDER_PREPARATION_EVIDENCE",
+          "CAP_WARN_RUNTIME_NOT_ACCEPTED"
+        ],
+        "fingerprint_is_execution_permission": false
+      },
+      "runtime_acceptance": {
+        "feature_creation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "evaluation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "gpu_completion": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "output_receipt": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "live_game_stability": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "image_quality": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "accepted_state": "not_observed",
+        "evidence_ids": []
+      },
+      "cache": {
+        "cache_schema_version": "1.0.0",
+        "key_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_components": [
+          "schema",
+          "collector",
+          "adapter",
+          "driver",
+          "api",
+          "module hashes",
+          "exports",
+          "app identity",
+          "route",
+          "feature id"
+        ],
+        "state": "miss",
+        "invalidation_reasons": [],
+        "clean_shutdown_observed": true,
+        "persist_session_readiness": false,
+        "crash_quarantine": {
+          "active": false,
+          "signature": "",
+          "clears_on": [
+            "identity tuple change",
+            "probe algorithm change",
+            "explicit lab-only clearance"
+          ]
+        }
+      },
+      "privacy": {
+        "export_profile": "support",
+        "raw_paths_included": false,
+        "raw_local_ids_included": false,
+        "host_pseudonymization": "support_bundle_salt",
+        "network_required": false,
+        "redactions": [
+          "user profile paths",
+          "raw LUID",
+          "raw device UUID"
+        ]
+      },
+      "evidence": [
+        {
+          "evidence_id": "CAP-EV-001",
+          "classification": "PROPOSAL",
+          "source_kind": "proposal",
+          "locator": "I01 example",
+          "sha256": null,
+          "collected_at_utc": "2026-09-22T06:00:00Z",
+          "limitations": [
+            "Synthetic example."
+          ]
+        }
+      ],
+      "limitations": [
+        "Synthetic example; values do not describe a real installation."
+      ]
+    },
+    {
+      "schema_version": "1.0.0",
+      "fingerprint_id": "00000000-0000-4000-8000-000000000003",
+      "generation": 1,
+      "created_at_utc": "2026-09-22T06:00:00Z",
+      "collector": {
+        "name": "nr_cap_probe",
+        "version": "1.0.0-design",
+        "probe_algorithm_version": "CAP-PROBE-1.0",
+        "build_identity": "example",
+        "process_arch": "x64"
+      },
+      "authority_context": {
+        "baseline_archive_sha256": "21dab2cbcb0d6ebd26d7bbdc31b875f451730e6bdf887bae4d0a4537a7931b2b",
+        "expected_baseline_commit": "fe56e4bcc4289431478b113730acf3771c8f52a6",
+        "baseline_commit_proven": false,
+        "current_source_state": "not_available",
+        "notes": [
+          "Example only; no runtime acceptance."
+        ]
+      },
+      "subject": {
+        "api": "d3d12",
+        "process_arch": "x64",
+        "route_scope": "device_generation",
+        "app_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "support-bundle-salted-app"
+        }
+      },
+      "adapter": {
+        "vendor_id": {
+          "state": "observed",
+          "evidence_class": "EXTERNAL_PRIMARY_SOURCE",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI/Vulkan property",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 4318
+        },
+        "device_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 9984
+        },
+        "subsystem_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 0
+        },
+        "revision": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 161
+        },
+        "local_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI adapter LUID",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-luid"
+        },
+        "cross_api_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "VkPhysicalDeviceIDProperties",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-device-uuid"
+        }
+      },
+      "driver": {
+        "package_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NVAPI/OS",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-package"
+        },
+        "umd_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "IDXGIAdapter::CheckInterfaceSupport",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-umd"
+        },
+        "branch": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NvAPI_SYS_GetDriverAndBranchVersion",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-branch"
+        },
+        "vulkan_driver_uuid": {
+          "state": "not_applicable",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "vulkan_driver_properties": {
+          "state": "not_applicable",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "identity_digest": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "modules": [
+        {
+          "module_id": "CAP-MOD-ngx-core",
+          "role": "ngx_core",
+          "load_state": "present",
+          "basename": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "_nvngx.dll"
+          },
+          "path_class": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "driver_store"
+          },
+          "sha256": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          "export_digest": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "exports": [
+            "NVSDK_NGX_D3D12_GetFeatureRequirements"
+          ],
+          "file_version": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "example"
+          },
+          "signature": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": {
+              "status": "valid-cache-only",
+              "publisher": "NVIDIA"
+            }
+          },
+          "loaded_by": "driver",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "abi_notes": []
+        }
+      ],
+      "feature_target": {
+        "numeric_id": 18,
+        "official_public_label": "NVSDK_NGX_Feature_Reserved18",
+        "project_role": "neural_rendering_target",
+        "official_contract_state": "reserved_undocumented",
+        "route_claim_authority": "baseline_implementation_evidence",
+        "notes": [
+          "Official public headers reserve ID 18; the neural-rendering role is project/baseline evidence, not a public vendor contract."
+        ]
+      },
+      "layers": {
+        "static_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "exported_surface": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "behavioral_classification": {
+          "state": "unsupported",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T4_CONTROLLED_BEHAVIORAL_DIFFERENTIAL",
+          "collection_method": "isolated requirements query",
+          "mutated": false,
+          "admissibility": "admissible_preparation",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "current_session_readiness": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "runtime_acceptance": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        }
+      },
+      "routes": [
+        {
+          "route_id": "CAP-ROUTE-none",
+          "kind": "none",
+          "api": "d3d12",
+          "surface_state": "absent",
+          "behavior_state": "unsupported",
+          "session_state": "not_ready",
+          "candidate_state": "blocked",
+          "reason_codes": [
+            "CAP_REFUSE_REQUIREMENT_UNSUPPORTED",
+            "CAP_REFUSE_MODEL_ABSENT"
+          ],
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "requires_forwarder": false,
+          "selected_module_ids": []
+        }
+      ],
+      "probes": [],
+      "parameter_support": [],
+      "session_readiness": {
+        "process_instance": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-process"
+        },
+        "device_generation": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "device_identity": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "queue_identity": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "swapchain_identity": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "enabled_api_features": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "resource_lifetime_contract": {
+          "state": "not_observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "state": "not_ready",
+        "reason_codes": [
+          "CAP_REFUSE_SESSION_NOT_OBSERVED"
+        ],
+        "evidence_ids": [
+          "CAP-EV-001"
+        ]
+      },
+      "admission": {
+        "desired_route_id": null,
+        "observed_candidate_state": "blocked",
+        "admitted_state": "refused",
+        "operation_scope": "route_commit",
+        "hard_invariants": [
+          "device identity",
+          "queue identity",
+          "resource lifetime",
+          "generation freshness"
+        ],
+        "reason_codes": [
+          "CAP_REFUSE_NO_ADMISSIBLE_ROUTE"
+        ],
+        "fingerprint_is_execution_permission": false
+      },
+      "runtime_acceptance": {
+        "feature_creation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "evaluation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "gpu_completion": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "output_receipt": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "live_game_stability": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "image_quality": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "accepted_state": "not_observed",
+        "evidence_ids": []
+      },
+      "cache": {
+        "cache_schema_version": "1.0.0",
+        "key_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_components": [
+          "schema",
+          "collector",
+          "adapter",
+          "driver",
+          "api",
+          "module hashes",
+          "exports",
+          "app identity",
+          "route",
+          "feature id"
+        ],
+        "state": "miss",
+        "invalidation_reasons": [],
+        "clean_shutdown_observed": true,
+        "persist_session_readiness": false,
+        "crash_quarantine": {
+          "active": false,
+          "signature": "",
+          "clears_on": [
+            "identity tuple change",
+            "probe algorithm change",
+            "explicit lab-only clearance"
+          ]
+        }
+      },
+      "privacy": {
+        "export_profile": "support",
+        "raw_paths_included": false,
+        "raw_local_ids_included": false,
+        "host_pseudonymization": "support_bundle_salt",
+        "network_required": false,
+        "redactions": [
+          "user profile paths",
+          "raw LUID",
+          "raw device UUID"
+        ]
+      },
+      "evidence": [
+        {
+          "evidence_id": "CAP-EV-001",
+          "classification": "PROPOSAL",
+          "source_kind": "proposal",
+          "locator": "I01 example",
+          "sha256": null,
+          "collected_at_utc": "2026-09-22T06:00:00Z",
+          "limitations": [
+            "Synthetic example."
+          ]
+        }
+      ],
+      "limitations": [
+        "Synthetic example; values do not describe a real installation."
+      ]
+    },
+    {
+      "schema_version": "1.0.0",
+      "fingerprint_id": "00000000-0000-4000-8000-000000000004",
+      "generation": 1,
+      "created_at_utc": "2026-09-22T06:00:00Z",
+      "collector": {
+        "name": "nr_cap_probe",
+        "version": "1.0.0-design",
+        "probe_algorithm_version": "CAP-PROBE-1.0",
+        "build_identity": "example",
+        "process_arch": "x64"
+      },
+      "authority_context": {
+        "baseline_archive_sha256": "21dab2cbcb0d6ebd26d7bbdc31b875f451730e6bdf887bae4d0a4537a7931b2b",
+        "expected_baseline_commit": "fe56e4bcc4289431478b113730acf3771c8f52a6",
+        "baseline_commit_proven": false,
+        "current_source_state": "not_available",
+        "notes": [
+          "Example only; no runtime acceptance."
+        ]
+      },
+      "subject": {
+        "api": "vulkan",
+        "process_arch": "x64",
+        "route_scope": "device_generation",
+        "app_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "support-bundle-salted-app"
+        }
+      },
+      "adapter": {
+        "vendor_id": {
+          "state": "observed",
+          "evidence_class": "EXTERNAL_PRIMARY_SOURCE",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI/Vulkan property",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 4318
+        },
+        "device_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 9984
+        },
+        "subsystem_id": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 0
+        },
+        "revision": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 161
+        },
+        "local_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "DXGI adapter LUID",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-luid"
+        },
+        "cross_api_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "VkPhysicalDeviceIDProperties",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-device-uuid"
+        }
+      },
+      "driver": {
+        "package_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NVAPI/OS",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-package"
+        },
+        "umd_version": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "IDXGIAdapter::CheckInterfaceSupport",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-umd"
+        },
+        "branch": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "NvAPI_SYS_GetDriverAndBranchVersion",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-branch"
+        },
+        "vulkan_driver_uuid": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "redacted-driver-uuid"
+        },
+        "vulkan_driver_properties": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T2_PLATFORM_IDENTITY",
+          "collection_method": "Vulkan",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": {
+            "driverID": "example",
+            "driverName": "example"
+          }
+        },
+        "identity_digest": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "modules": [
+        {
+          "module_id": "CAP-MOD-model",
+          "role": "feature_model",
+          "load_state": "present",
+          "basename": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "nvngx_dlssnr.dll"
+          },
+          "path_class": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "game_or_addon_directory"
+          },
+          "sha256": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "5555555555555555555555555555555555555555555555555555555555555555"
+          },
+          "export_digest": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "6666666666666666666666666666666666666666666666666666666666666666"
+          },
+          "exports": [
+            "NVSDK_NGX_VULKAN_Init_Ext",
+            "NVSDK_NGX_VULKAN_CreateFeature",
+            "NVSDK_NGX_VULKAN_EvaluateFeature"
+          ],
+          "file_version": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": "example"
+          },
+          "signature": {
+            "state": "observed",
+            "evidence_class": "PROPOSAL",
+            "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+            "collection_method": "example",
+            "mutated": false,
+            "admissibility": "diagnostic_only",
+            "evidence_ids": [
+              "CAP-EV-001"
+            ],
+            "value": {
+              "status": "valid-cache-only",
+              "publisher": "NVIDIA"
+            }
+          },
+          "loaded_by": "probe_child_load",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "abi_notes": []
+        }
+      ],
+      "feature_target": {
+        "numeric_id": 18,
+        "official_public_label": "NVSDK_NGX_Feature_Reserved18",
+        "project_role": "neural_rendering_target",
+        "official_contract_state": "reserved_undocumented",
+        "route_claim_authority": "baseline_implementation_evidence",
+        "notes": [
+          "Official public headers reserve ID 18; the neural-rendering role is project/baseline evidence, not a public vendor contract."
+        ]
+      },
+      "layers": {
+        "static_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "exported_surface": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T1_PASSIVE_FILE_OBSERVATION",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "behavioral_classification": {
+          "state": "supported",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T4_CONTROLLED_BEHAVIORAL_DIFFERENTIAL",
+          "collection_method": "isolated requirements query",
+          "mutated": false,
+          "admissibility": "admissible_preparation",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "current_session_readiness": {
+          "state": "not_ready",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "VkDevice creation record",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "runtime_acceptance": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        }
+      },
+      "routes": [
+        {
+          "route_id": "CAP-ROUTE-forwarder-vulkan",
+          "kind": "forwarder_model",
+          "api": "vulkan",
+          "surface_state": "present",
+          "behavior_state": "supported",
+          "session_state": "not_ready",
+          "candidate_state": "blocked",
+          "reason_codes": [
+            "CAP_REFUSE_VK_EXTENSION_NOT_ENABLED"
+          ],
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "requires_forwarder": true,
+          "selected_module_ids": [
+            "CAP-MOD-model"
+          ]
+        }
+      ],
+      "probes": [],
+      "parameter_support": [],
+      "session_readiness": {
+        "process_instance": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "example-process"
+        },
+        "device_generation": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": 4
+        },
+        "device_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "vk-device-cookie-4"
+        },
+        "queue_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "vk-queue-cookie-1"
+        },
+        "swapchain_identity": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "vk-swapchain-cookie-1"
+        },
+        "enabled_api_features": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "VkDeviceCreateInfo capture",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": {
+            "available": [
+              "VK_KHR_example_required"
+            ],
+            "enabled": []
+          }
+        },
+        "resource_lifetime_contract": {
+          "state": "observed",
+          "evidence_class": "PROPOSAL",
+          "trust_level": "T5_CURRENT_SESSION_OWNER_EVIDENCE",
+          "collection_method": "session",
+          "mutated": false,
+          "admissibility": "admissible_current_session_gate",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ],
+          "value": "owner-known"
+        },
+        "state": "not_ready",
+        "reason_codes": [
+          "CAP_REFUSE_VK_EXTENSION_NOT_ENABLED"
+        ],
+        "evidence_ids": [
+          "CAP-EV-001"
+        ]
+      },
+      "admission": {
+        "desired_route_id": "CAP-ROUTE-forwarder-vulkan",
+        "observed_candidate_state": "blocked",
+        "admitted_state": "refused",
+        "operation_scope": "route_commit",
+        "hard_invariants": [
+          "device identity",
+          "queue identity",
+          "resource lifetime",
+          "generation freshness"
+        ],
+        "reason_codes": [
+          "CAP_REFUSE_VK_EXTENSION_NOT_ENABLED"
+        ],
+        "fingerprint_is_execution_permission": false
+      },
+      "runtime_acceptance": {
+        "feature_creation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "evaluation": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "gpu_completion": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "output_receipt": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "live_game_stability": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "image_quality": {
+          "state": "not_observed",
+          "evidence_class": "RUNTIME_ONLY_UNKNOWN",
+          "trust_level": "T6_RUNTIME_OR_ACCEPTANCE_EVIDENCE",
+          "collection_method": "example",
+          "mutated": false,
+          "admissibility": "diagnostic_only",
+          "evidence_ids": [
+            "CAP-EV-001"
+          ]
+        },
+        "accepted_state": "not_observed",
+        "evidence_ids": []
+      },
+      "cache": {
+        "cache_schema_version": "1.0.0",
+        "key_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_components": [
+          "schema",
+          "collector",
+          "adapter",
+          "driver",
+          "api",
+          "module hashes",
+          "exports",
+          "app identity",
+          "route",
+          "feature id"
+        ],
+        "state": "miss",
+        "invalidation_reasons": [],
+        "clean_shutdown_observed": true,
+        "persist_session_readiness": false,
+        "crash_quarantine": {
+          "active": false,
+          "signature": "",
+          "clears_on": [
+            "identity tuple change",
+            "probe algorithm change",
+            "explicit lab-only clearance"
+          ]
+        }
+      },
+      "privacy": {
+        "export_profile": "support",
+        "raw_paths_included": false,
+        "raw_local_ids_included": false,
+        "host_pseudonymization": "support_bundle_salt",
+        "network_required": false,
+        "redactions": [
+          "user profile paths",
+          "raw LUID",
+          "raw device UUID"
+        ]
+      },
+      "evidence": [
+        {
+          "evidence_id": "CAP-EV-001",
+          "classification": "PROPOSAL",
+          "source_kind": "proposal",
+          "locator": "I01 example",
+          "sha256": null,
+          "collected_at_utc": "2026-09-22T06:00:00Z",
+          "limitations": [
+            "Synthetic example."
+          ]
+        }
+      ],
+      "limitations": [
+        "Synthetic example; values do not describe a real installation."
+      ]
+    }
+  ]
+}

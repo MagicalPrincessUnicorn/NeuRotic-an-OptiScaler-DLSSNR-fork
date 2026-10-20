@@ -1,5 +1,6 @@
 #pragma once
 #include "VulkanNrFrameContract.h"
+#include <nr/context/ColorOperation.h>
 namespace DlssNr {
 struct VkPresentColorRecipe
 {
@@ -10,6 +11,13 @@ struct VkPresentColorRecipe
     bool hdr=false,signedOriginal=false;
     float whitePoint=1.0f;
     uint64_t revision=1;
+    Neurotic::Context::PresentColorOperation Operation() const noexcept
+    {
+        using Conversion=Neurotic::Context::PresentColorConversion;
+        const auto conversion=revision==2 ? Conversion::Pq2020Linear709 :
+            bgra ? Conversion::ChannelOrder : Conversion::Copy;
+        return {conversion,srgb,hdr,whitePoint,signedOriginal,hdr?80.0f:0.0f};
+    }
 };
 
 inline bool VkPresentNeedsView(VkImageUsageFlags usage) noexcept

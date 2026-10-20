@@ -1,0 +1,73 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "MutationOverlay",
+  "overlay_id": "GYM-OVERLAY-WRONG-FRAME-001",
+  "parent_case_id": "GYM-SEED-001",
+  "parent_input_sha256": "3489fbaaae27f9bbb38738754df48bf76c5d3c7ae06f602e3ea52cb7986b6000",
+  "operator_id": "GYM-MUT-016",
+  "operator_version": "legacy-1",
+  "taxonomy_owner": "legacy_ChatE",
+  "taxonomy_refs": [],
+  "seed": "1",
+  "preconditions": [
+    {
+      "pointer": "/frames/0/signals/0/producer_frame_id",
+      "equals": {
+        "state": "known",
+        "value": "frame-100"
+      }
+    }
+  ],
+  "edits": [
+    {
+      "op": "set",
+      "target": "/frames/0/signals/0/producer_frame_id",
+      "before_sha256": {
+        "state": "known",
+        "value": "7c41eba0cc8d72f5efeb0ecaf3043a32286308e1e120d45a8c9e5ad6430962de"
+      },
+      "value": {
+        "state": "known",
+        "value": "frame-101"
+      }
+    }
+  ],
+  "expectations_policy": "explicit_sidecar_required",
+  "expected_sidecar_ref": {
+    "state": "known",
+    "value": "expected/GYM-OVERLAY-WRONG-FRAME-001.json"
+  },
+  "layer": "record",
+  "provenance": {
+    "origin": "synthetic_specification",
+    "game_label": {
+      "state": "not_applicable",
+      "reason_id": "GYM.NO_GAME_CAPTURE"
+    },
+    "game_version": {
+      "state": "not_applicable",
+      "reason_id": "GYM.NO_GAME_CAPTURE"
+    },
+    "source_build": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "source_hashes": [],
+    "contains_game_assets": false,
+    "contains_model_binary": false,
+    "contains_personal_data": false,
+    "distribution": "synthetic_specification",
+    "license_labels": [
+      "NeuRotic-project-design-artifact"
+    ],
+    "attribution": [
+      "EspiOwnage"
+    ],
+    "redactions": [],
+    "evidence_refs": [
+      "User:Chat-E-Implementation-Closure",
+      "Prior:GYM-PROMO-001",
+      "Prior:GYM-PROMO-002"
+    ]
+  }
+}

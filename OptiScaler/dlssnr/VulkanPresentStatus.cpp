@@ -3,6 +3,11 @@
 
 namespace DlssNr
 {
+void VulkanPresentStatus::ObserveGamePresent(bool called,VkResult result)
+{
+    if(!called||(result!=VK_SUCCESS&&result!=VK_SUBOPTIMAL_KHR))return;
+    std::lock_guard lock(mutex_);++state_.gamePresents;
+}
 void VulkanPresentStatus::ObserveFgOwnership(uint64_t primary,uint64_t consumers)
 { std::lock_guard lock(mutex_);state_.realFrameContributions=primary;state_.retainedFgConsumers=consumers; }
 PresentPacing::CallToken VulkanPresentStatus::BeginCall(uint32_t route,double startMs)
@@ -56,6 +61,18 @@ void VulkanPresentStatus::Observe(const VkObservedPresent* observed, const VkPre
     s.reason = reason != nullptr ? reason : "";
     if (observed)
     {
+        const bool selected=observed->applicationFacing||!sourceContext_||!sourceContext_->applicationFacing||
+            (observed->request.fgStateKnown&&!observed->request.fgKnownActive);
+        if(selected&&sourceContext_){const auto& c=*sourceContext_;
+            if(c.device!=reinterpret_cast<uintptr_t>(observed->device)||c.queue!=reinterpret_cast<uintptr_t>(observed->queue)||
+               c.swapchain!=reinterpret_cast<uintptr_t>(observed->swapchain)||
+               c.deviceGeneration!=observed->request.deviceGeneration||c.swapchainGeneration!=observed->request.swapchainGeneration||
+               c.route!=observed->request.route||c.applicationFacing!=observed->applicationFacing){
+                s.sources={};sourceContext_.reset();
+            }
+        }
+        s.timingDevice=observed->device;s.timingQueue=observed->queue;s.timingSwapchain=observed->swapchain;
+        s.timingDeviceGeneration=observed->request.deviceGeneration;
         s.route = observed->request.route;
         s.requestedPolicy = observed->request.policy;
         s.format = observed->request.format;
@@ -69,6 +86,12 @@ void VulkanPresentStatus::Observe(const VkObservedPresent* observed, const VkPre
         s.failed = true;
         ++s.consecutiveFallbacks;
         return;
+    }
+    const auto& source=execution->sources;
+    if(sourceContext_&&source.context==*sourceContext_&&source.signals.capture&&
+       source.signals.capture>=firstSourceCapture_&&
+       source.signals.revision==s.requestedSources.revision&&source.signals.capture>=s.sources.status.capture){
+        s.sources.status=source.signals;s.sources.fresh=true;
     }
     s.actualInputClass = execution->admission.actualInputClass;
     s.requestedPasses=execution->record.requestedPasses;
@@ -102,6 +125,38 @@ void VulkanPresentStatus::Observe(const VkObservedPresent* observed, const VkPre
     }
 }
 
+void VulkanPresentStatus::ObserveSourcePolicy(const Connections::Mixed::Policy& policy,
+    const VkPresentSources::Context& context,uint64_t firstCapture)
+{
+    std::lock_guard lock(mutex_);
+    if(!sourceContext_||*sourceContext_!=context||state_.requestedSources.revision!=policy.revision){
+        state_.sources={};
+        firstSourceCapture_=firstCapture;
+    }
+    sourceContext_=context;state_.requestedSources=policy;
+}
+void VulkanPresentStatus::InvalidateSources()
+{
+    std::lock_guard lock(mutex_);state_.sources={};sourceContext_.reset();
+}
+bool VulkanPresentStatus::SourceCompleted(const VkPresentSources::Receipt& receipt,uint64_t currentRevision)
+{
+    const auto lifetime=CurrentVulkanPresentModelLifetimeVk();
+    std::lock_guard lock(mutex_);
+    if(!sourceContext_||receipt.context!=*sourceContext_||!receipt.completeTarget||
+       !VkPresentSources::CurrentModelMatches(receipt.context,lifetime)||
+       !receipt.context.device||!receipt.context.queue||!receipt.context.swapchain||
+       !receipt.context.deviceGeneration||!receipt.context.swapchainGeneration||
+       !receipt.ticket||!receipt.acquisition||!receipt.image||receipt.imageIndex==UINT32_MAX||
+       !receipt.signals.capture||receipt.signals.capture<firstSourceCapture_||
+       receipt.signals.generation!=receipt.context.swapchainGeneration||
+       receipt.signals.revision!=currentRevision||
+       receipt.signals.revision!=state_.requestedSources.revision||
+       receipt.signals.capture<=state_.sources.used.capture)return false;
+    state_.sources.used=receipt.signals;state_.sources.used.consumed=1;
+    state_.sources.usedFresh=true;return true;
+}
+
 void VulkanPresentStatus::GpuCompleted()
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -112,10 +167,31 @@ void VulkanPresentStatus::ObserveWorkload(const VkNrWorkloadStatus& workload)
     std::lock_guard<std::mutex> lock(mutex_);state_.workload=workload;
 }
 
+std::array<VkNrGpuStageSample,10> VulkanPresentStatus::NativeGpuStages() const
+{
+    // The model's timing query already holds its owner lock. This accessor never
+    // calls back into that owner or uses source freshness as GPU timing proof.
+    std::lock_guard lock(mutex_);return state_.nativeGpuStages;
+}
+
+VkPresentStatusSnapshot VulkanPresentStatus::TimingSnapshot() const
+{ std::lock_guard lock(mutex_);return state_; }
+
 VkPresentStatusSnapshot VulkanPresentStatus::Snapshot() const
 {
+    // Atomic policy read precedes the status lock; no policy/owner callback is
+    // invoked under that lock. A changed preference immediately stales receipts.
+    const auto policy=Connections::SignalPreferences();
+    const auto lifetime=CurrentVulkanPresentModelLifetimeVk();
     std::lock_guard<std::mutex> lock(mutex_);
-    return state_;
+    auto result=state_;
+    result.requestedSources=policy;
+    const bool current=sourceContext_&&VkPresentSources::CurrentModelMatches(*sourceContext_,lifetime);
+    result.sources.fresh=result.sources.fresh&&current;
+    result.sources.usedFresh=result.sources.usedFresh&&current;
+    result.sources.fresh=result.sources.fresh&&result.sources.status.revision==policy.revision;
+    result.sources.usedFresh=result.sources.usedFresh&&result.sources.used.revision==policy.revision;
+    return result;
 }
 
 VulkanPresentStatus& GetVulkanPresentStatus()

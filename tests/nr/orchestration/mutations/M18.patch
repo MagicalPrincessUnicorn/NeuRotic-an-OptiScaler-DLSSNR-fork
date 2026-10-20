@@ -1,0 +1,12 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -171,7 +171,7 @@
+     // No global finalizer stop until claim tails AND every owner are retired.
+     // This deliberately conservative ordering never strands an unsealed claim.
+     bool closed=false,stopped=false;
+-    if(external.AllRetired())
++    if(external.AllRetired()||p.closingPass)
+     {
+         auto* finalizer=p.root.owners_->Finalizer();
+         stopped=finalizer&&finalizer->StopAdmissions();

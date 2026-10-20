@@ -1,6 +1,8 @@
 #include "ui/HubViewModel.h"
 #include "ui/NumericSettings.h"
+#include "ui/GameSettingsView.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include <iostream>
 #include <cstring>
 int RunNumericUiTests(){
@@ -12,5 +14,21 @@ int RunNumericUiTests(){
  strcpy_s(field.draft.data(),field.draft.size(),"auto");for(int i=0;i<3;i++)frame();check(std::string(field.draft.data())=="auto","NH-NUMERIC-UI: untouched Automatic value remains automatic after rendering");
  io.AddMousePosEvent(slider.x+sliderWidth*.75f,slider.y+10);io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);frame();auto parsed=nh::ParseNumericDraft(field.draft.data());check(parsed.valid&&!parsed.automatic&&parsed.value>1&&parsed.value<=2&&field.original=="0.913245678901","NH-NUMERIC-UI: actual slider input updates only the bounded draft");
  strcpy_s(field.draft.data(),field.draft.size(),"9.0000000001");for(int i=0;i<3;i++)frame();check(std::string(field.draft.data())=="9.0000000001","NH-NUMERIC-UI: legacy out-of-range explicit value is preserved for exact editing");
+ nh::HubModel model;nh::KeybindCaptureState capture;nh::SettingsField boolean;
+ boolean.section="Menu";boolean.key="ReduceMotion";boolean.label="Turn animations off";
+ boolean.available=true;boolean.choices={"auto","true","false"};boolean.original="auto";
+ ImGuiID comboId=0;bool comboAlive=false;
+ auto booleanFrame=[&](bool compatibility){
+  ImGui::NewFrame();ImGui::SetNextWindowPos({20,20});ImGui::SetNextWindowSize({700,500});ImGui::Begin("Three-state functional test");
+  ImGui::PushID("Menu/ReduceMotion");comboId=ImGui::GetID("##Value");ImGui::PopID();
+  GImGui->NavWindow=ImGui::GetCurrentWindow();GImGui->NavId=comboId;
+  nh::RenderSavedSetting(boolean,model,capture,{},compatibility);comboAlive=GImGui->NavIdIsAlive&&GImGui->NavId==comboId;
+  ImGui::End();ImGui::Render();
+ };
+ for(bool compatibility:{false,true})for(const char* value:{"auto","true","false","future-value"}){
+  strcpy_s(boolean.draft.data(),boolean.draft.size(),value);for(int i=0;i<3;++i)booleanFrame(compatibility);
+  check(comboAlive,"NH-TRISTATE: actual three-state schema renders a native dropdown on either saved-settings surface");
+  check(std::string(boolean.draft.data())==value&&boolean.original=="auto","NH-TRISTATE: visiting dropdown preserves exact known or unknown draft and saved token");
+ }
  ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);return failed;
 }

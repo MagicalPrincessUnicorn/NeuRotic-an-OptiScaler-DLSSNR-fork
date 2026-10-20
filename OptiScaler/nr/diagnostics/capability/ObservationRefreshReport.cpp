@@ -17,6 +17,17 @@ bool PrepareObservationReport(ObservationReportBundle& bundle) noexcept {
             {"capability_report",Json::parse(exported.utf8)},
             {"owner_validated_inputs",{{"depth",bundle.owner.depth},{"motion",bundle.owner.motion},
                 {"jitter",bundle.owner.jitter},{"pre_exposure",bundle.owner.preExposure}}}};
+        document["selected_renderer_signals"]={{"route",bundle.signalRoute},{"supported",bundle.signalOwnerSupported},
+            {"scope","NR target composition; final presentation and physical display are separate"},{"signals",Json::array()}};
+        const char* names[]={"Color","Output","Depth","Motion","Jitter","Exposure","PreExposure","History","Evaluation","Composition"};
+        for(size_t i=0;i<bundle.signals.size();++i){const auto& r=bundle.signals[i];
+            document["selected_renderer_signals"]["signals"].push_back({{"name",names[i]},
+                {"state",SignalReceipts::Name(r.state)},{"sequence",std::to_string(r.sequence)},
+                {"age_ms",r.age},{"route",r.epoch.route},{"revision",r.epoch.revision},
+                {"description",SignalReceipts::Describe(r)},{"width",r.fact.width},{"height",r.fact.height},
+                {"origin_x",r.fact.originX},{"origin_y",r.fact.originY},
+                {"first_pass_values_known",r.fact.valuesKnown},{"x",r.fact.x},{"y",r.fact.y}});
+        }
         const auto& output=bundle.renderingOutput;
         const auto producer=[](RenderingOutput::Producer value){switch(value){
             case RenderingOutput::Producer::Native:return "Native";

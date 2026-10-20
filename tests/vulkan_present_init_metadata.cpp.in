@@ -1,0 +1,117 @@
+// Source-extracted real metadata, Check and Evaluate methods. The frame storage,
+// driver barrier and provider entry are explicit CPU services; no GPU execution.
+#include "dlssnr/VulkanPresentInitialization.h"
+#include "dlssnr/VulkanPresentGuides.h"
+#include "dlssnr/CapturedGuideContract.h"
+#include "dlssnr/VulkanPresentColor.h"
+#include "dlssnr/VulkanNrPassPlan.h"
+#include "fixtures/vulkan_nr_pass_settings.h"
+#include <cassert>
+#include <cstdio>
+namespace DlssNr {
+template<class T> static T Handle(uintptr_t n){return reinterpret_cast<T>(n);}
+// ACTUAL_TEMPORAL
+// ACTUAL_CAPTURED_REQUEST
+static unsigned binds=0,evaluations=0,barriers=0;
+static VkFrameRequest evaluated;
+static bool BindVulkanPresentGuides(const VkNrGuideLease&,VkNrUseId,VkQueue){++binds;return true;}
+static uint64_t VkNrCompletionDeviceGeneration(VkDevice){return 1;}
+static VkRecordResult EvaluatePresentImageVk(const VkFrameRequest& frame){
+ ++evaluations;evaluated=frame;if(frame.bindGuides)assert(frame.bindGuides({1}));
+ VkRecordResult result;result.status=VkRecordStatus::Complete;result.chainDeliverable=true;return result;
+}
+static void Barrier(VkCommandBuffer,VkPipelineStageFlags src,VkPipelineStageFlags dst,VkDependencyFlags,
+ uint32_t count,const VkMemoryBarrier* memory,uint32_t,const VkBufferMemoryBarrier*,uint32_t,const VkImageMemoryBarrier*){
+ ++barriers;assert(src==VK_PIPELINE_STAGE_ALL_COMMANDS_BIT&&dst==VK_PIPELINE_STAGE_ALL_COMMANDS_BIT&&count==1);
+ assert(memory->srcAccessMask==VK_ACCESS_MEMORY_WRITE_BIT&&memory->dstAccessMask==(VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT));
+}
+#define vkCmdPipelineBarrier Barrier
+struct VkPresentPrivateFrame {
+ VkPresentImageRequest request_;
+ VkDevice device_=Handle<VkDevice>(1);VkPhysicalDevice physical_=Handle<VkPhysicalDevice>(2);VkInstance instance_=Handle<VkInstance>(3);
+ VkCommandBuffer commandBuffer_=Handle<VkCommandBuffer>(4);
+ enum {ModelInput,ModelOutput,Depth,Motion};
+ struct Image {NVSDK_NGX_Resource_VK ngx{};};std::array<Image,4> images_;
+ VkRecordResult modelResult_;bool modelTouched_=false;
+ bool Ready()const{return true;}
+ bool Check(const VkPresentImageRequest&);
+ bool ModelFrame(VkFrameRequest&,bool);
+ std::optional<VkPresentInitializationRequest> InitializationRequest(const VkPresentImageRequest&,std::string&);
+ bool Evaluate(bool);
+};
+// ACTUAL_CHECK
+// ACTUAL_MODEL_FRAME
+// ACTUAL_INITIALIZATION_REQUEST
+// ACTUAL_EVALUATE
+#undef vkCmdPipelineBarrier
+struct Runtime {bool IsActive(VkNrRoute)const{return true;}uint64_t Epoch()const{return 5;}} g_vkRuntime;
+static VkNrGenerationKey NormalPresentKey(const VkPassTestSettings& cfg,const VkNrFrameContract& workloadFrame,
+ uint32_t passIndex,VkFormat color,VkFormat target,VkFormat depthFormat,VkFormat motionFormat,bool gameSaysHdr){
+ struct Request {VkNrRoute route;uint32_t passIndex;} request{VkNrRoute::Present,passIndex};
+ NVSDK_NGX_Resource_VK c{},t{},d{},m{};
+ c.Resource.ImageViewInfo.Format=color;t.Resource.ImageViewInfo.Format=target;d.Resource.ImageViewInfo.Format=depthFormat;m.Resource.ImageViewInfo.Format=motionFormat;
+ auto* colour=&c;auto* targetColour=&t;auto* depth=&d;auto* motion=&m;
+ const auto device=Handle<VkDevice>(1);
+ const auto width=workloadFrame.output.width,height=workloadFrame.output.height,workWidth=workloadFrame.work.width,workHeight=workloadFrame.work.height;
+ const bool beforeSr=false;const uint32_t createFlags=0;
+ // ACTUAL_REQUESTED_TUNING
+ // ACTUAL_PRESENT_KEY_PREFIX
+ // Native-only BeforeSR key fields deliberately excluded; this fixture's route is Present.
+ // ACTUAL_PRESENT_KEY_SUFFIX
+ return key;
+}
+}
+int main(){using namespace DlssNr;
+ for(unsigned guideMode:{0u,1u,2u})for(bool hdr:{false,true})for(uint32_t raster:{720u,1080u}){
+  binds=evaluations=barriers=0;VkPresentPrivateFrame owner;
+  auto& r=owner.request_;r.image=Handle<VkImage>(5);r.extent={1920,1080};r.generation=2;r.commandBuffer=owner.commandBuffer_;
+  r.format=hdr?VK_FORMAT_R16G16B16A16_SFLOAT:VK_FORMAT_R8G8B8A8_UNORM;
+  r.colorSpace=hdr?VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+  r.frame.queue=Handle<VkQueue>(6);r.frame.queueFamily=0;r.frame.swapchain=Handle<VkSwapchainKHR>(7);
+  r.frame.swapchainImageIndex=0;r.frame.acquireGeneration=9;
+  r.frame.temporal=VkNrTemporalMetadata{};auto& temporal=*r.frame.temporal;
+  temporal.color=temporal.depth=temporal.motion={0,0,raster*16/9,raster};temporal.featureGeneration=13;
+  temporal.featureFlags=NVSDK_NGX_DLSS_Feature_Flags_DepthInverted|NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
+  temporal.motionScaleX=2;temporal.jitterX=0.25f;
+  r.inputDecision.resolution={PresentResolution::FollowNative,100};
+  r.inputDecision.input=PresentInputDecision::InputClass::ImageOnly;
+  for(auto i:{0,1})owner.images_[i].ngx.Resource.ImageViewInfo.Format=VK_FORMAT_R16G16B16A16_SFLOAT;
+  owner.images_[2].ngx.Resource.ImageViewInfo.Format=VK_FORMAT_R32_SFLOAT;
+  owner.images_[3].ngx.Resource.ImageViewInfo.Format=VK_FORMAT_R16G16_SFLOAT;
+  if(guideMode==1){
+   r.inputDecision.input=PresentInputDecision::InputClass::Guided;
+   VkNrGuideLease guide;guide.contract=r.frame;guide.images=std::make_shared<VkNrGuideImages>();
+   guide.images->depth=owner.images_[2].ngx;guide.images->motion=owner.images_[3].ngx;r.guides=guide;
+  }else if(guideMode==2){
+   auto capture=std::make_shared<VkCapturedGuideInput>();capture->identity.swapchainGeneration=2;
+   capture->depth=owner.images_[2].ngx;capture->motion=owner.images_[3].ngx;
+   capture->bind=[](VkNrUseId){++binds;return true;};r.capturedGuides=capture;
+  }
+  std::string reason;const auto input=r;const auto prepared=owner.InitializationRequest(input,reason);
+  assert(prepared&&binds==0&&evaluations==0&&barriers==0);
+  VkFrameRequest ordinary;assert(owner.ModelFrame(ordinary,false));assert(binds==0);
+  assert(prepared->frame.acquireGeneration==ordinary.contract.acquireGeneration&&prepared->frame.guideGeneration==ordinary.contract.guideGeneration);
+  assert(prepared->depthFormat==ordinary.depth->Resource.ImageViewInfo.Format&&prepared->motionFormat==ordinary.motion->Resource.ImageViewInfo.Format);
+  assert(prepared->gameHdr==ordinary.gameHdr&&prepared->gameHdr==hdr);
+  assert(prepared->resolutionMetadata->color==ordinary.resolutionMetadata->color);
+  if(prepared->frame.temporal)assert(prepared->frame.temporal->motionScaleX==ordinary.contract.temporal->motionScaleX&&prepared->frame.temporal->jitterX==ordinary.contract.temporal->jitterX);
+  auto initializedFrame=prepared->frame;initializedFrame.routeEpoch=5;initializedFrame.work={raster*16/9,raster};
+  for(bool basic:{false,true})for(uint32_t count:{1u,2u,10u}){
+   VkPassTestSettings cfg;cfg.DlssNrMultipassEnabled=true;cfg.DlssNrPasses=count;cfg.DlssNrBasicMultipass.value.advanced=true;
+   cfg.DlssNrSecondLayerWorkingScale=0.5f;cfg.DlssNrSecondLayerIntensity=0.2f;
+   if(basic){cfg.DlssNrBasicMultipass.value={false,10,0.5f,4,float(count),float(count)};BasicMultipass::Derive(cfg);}
+   const auto plan=BuildVkNrPassPlan(cfg,initializedFrame);assert(!plan.passes.empty());
+   for(auto key:plan.passes){const auto pass=VkNrPassSettingsFor(cfg,key.passIndex);
+    CompleteVkPresentGenerationKey(key,prepared->colorFormat,prepared->targetFormat,prepared->depthFormat,prepared->motionFormat,prepared->gameHdr);
+    const auto normal=NormalPresentKey(pass,key.frame,key.passIndex,ordinary.color->Resource.ImageViewInfo.Format,ordinary.targetColor->Resource.ImageViewInfo.Format,
+       ordinary.depth->Resource.ImageViewInfo.Format,ordinary.motion->Resource.ImageViewInfo.Format,ordinary.gameHdr);
+    assert(key==normal);assert(bool(key.creationFlags&NVSDK_NGX_DLSS_Feature_Flags_IsHDR)==hdr);
+   }
+  }
+  auto completed=input;completed.initializationCompleted=true;assert(owner.Check(completed)&&owner.Evaluate(true));
+  assert(barriers==1&&evaluations==1&&binds==int(guideMode!=0)&&evaluated.creationReset);
+  assert(owner.Check(input)&&owner.Evaluate(false));assert(barriers==1&&evaluations==2&&!evaluated.creationReset); // actual true -> false reset
+  if(guideMode==1){auto invalid=input;invalid.guides.reset();assert(!owner.InitializationRequest(invalid,reason));}
+ }
+ std::puts("PASS extracted metadata and normal key equivalence: native/captured/neutral, HDR/raster, Basic/Advanced1/2/10; actual barrier true-to-false and no early bind");
+}

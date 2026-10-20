@@ -1,4 +1,5 @@
 #include <map>
+#include "../nr/context/PreparedRasterBounds.h"
 #include "NativeVulkanGuides.h"
 #include "NativeGuideTiming.h"
 #include "NativeGuideCapture.h"
@@ -67,6 +68,7 @@ struct Device {
  bool previousEstimated=false,processorBlocked=false;
  NativeGuides::Outcome lastOutcome=NativeGuides::Outcome::Unavailable;
  PreparedGuides::StatusV2 effective;
+ Connections::SignalStatusWireV2 inputSignals;
  uint64_t overrideConflictSerial=UINT64_MAX;
  std::vector<SuppressedDepth> suppressedDepths;bool suppressionOverflow=false;
  std::vector<Direction> directions;
@@ -188,7 +190,7 @@ bool Allocate(Device& d,VkDeviceSize bytes,Buffer& out,bool gpu=false) {
 // Match the upper bounds of the packed CPU mainline before allocating any
 // staging. Small recorder fixtures need not satisfy the flow SDK minimum size.
 constexpr VkDeviceSize MaxColorBytes=160ull*1024*1024/20*4;
-bool CaptureExtent(VkExtent2D extent){return extent.width&&extent.height&&extent.width<=4096&&extent.height<=2160&&uint64_t(extent.width)*extent.height*4<=MaxColorBytes;}
+bool CaptureExtent(VkExtent2D extent){return Neurotic::PreparedRaster::Admit(extent.width,extent.height)&&uint64_t(extent.width)*extent.height<=MaxColorBytes/4;}
 bool CompatibleDepthExtent(VkExtent2D depth,VkExtent2D color){
  return CaptureExtent(depth)&&CaptureExtent(color)&&uint64_t(depth.width)*color.height==uint64_t(color.width)*depth.height;
 }
@@ -361,6 +363,16 @@ VkResult RecordGenerated(void* context,VkCommandBuffer command,VkImage image,uns
  if(!d.shared->Release(command,3)){d.processorBlocked=true;return VK_ERROR_INITIALIZATION_FAILED;}
  d.generatedReady=false;++d.generatedCopies;return VK_SUCCESS;
 }
+// The fixed capture pipeline consumes these three resources. Publish before
+// processing, then only mark consumed after the exact output copy completes.
+// This is observation, not support for independently choosing these sources.
+void ObserveCaptureInputs(Device& d,const VkObservedPresent& observed){
+ auto& s=d.inputSignals;s={};s.capture=d.captures;s.generation=observed.request.swapchainGeneration;
+ s.revision=Connections::SignalPreferences().revision;
+ s.color=s.depth=s.motion=uint32_t(Connections::Source::BuiltIn);
+ s.colorReason=s.depthReason=s.motionReason=uint32_t(Connections::Mixed::Reason::Ready);
+ NeuRotic_PublishInputSignalsV2(2,reinterpret_cast<uintptr_t>(&d),&s,sizeof(s));
+}
 VkResult SharedFrame(Device& d,const VkObservedPresent& observed,VkPresentInfoKHR& present,Depth& depth,uint64_t newest,bool estimated,bool bgra,const CapturedConsumer& consume){
  const auto frameStart=NativeGuides::NowMs();
  status.transportTimings.clear();
@@ -392,6 +404,7 @@ VkResult SharedFrame(Device& d,const VkObservedPresent& observed,VkPresentInfoKH
  const bool reset=d.resetPending||!d.captures||d.lastCaptureFrame+1!=d.frame||d.previousEstimated!=estimated;
  d.resetPending=false;d.previousEstimated=estimated;d.lastCaptureFrame=d.frame;if(estimated)++status.estimatedAssociations;++status.captured;
  NativeGuides::Capture capture{d.luid,reinterpret_cast<uintptr_t>(observed.swapchain),r.swapchainGeneration,++d.captures,r.extent.width,r.extent.height,reset,depth.inverted,{},{}};
+ ObserveCaptureInputs(d,observed);
  const auto captureMs=NativeGuides::NowMs();capture.deltaMs=d.lastCaptureMs?captureMs-d.lastCaptureMs:16.667;d.lastCaptureMs=captureMs;
  const unsigned bits=DepthBytes(depth.format)==2?16u:(depth.format==VK_FORMAT_D32_SFLOAT||depth.format==VK_FORMAT_D32_SFLOAT_S8_UINT)?32u:24u;
  NativeGuides::SharedCapture packet{shared.Image(0).resource,shared.Image(1).resource,shared.Image(d.vulkanRenderer?0:2).resource,shared.InputFence(),shared.OutputFence(),serial,bits,bgra};
@@ -849,7 +862,12 @@ VkResult BeforePresent(const VkObservedPresent& observed,VkPresentInfoKHR& prese
    s.capture=device.captures;s.inputFrames=status.captured;s.modelCompletions=s.copybackCompletions=status.delivered;
    s.creationReady=!device.unsafe&&!device.processorBlocked;s.restartRequired=device.unsafe||device.processorBlocked;
    const bool frameCaptured=status.captured>captured;
-   s.outputValid=status.delivered>delivered;s.modelPreparing=frameCaptured&&device.lastOutcome==NativeGuides::Outcome::Preparing;
+   s.outputValid=status.delivered>delivered;
+   if(s.outputValid&&std::isfinite(status.processorMs)&&status.processorMs>=0&&status.processorMs<60000){
+    s.timingDomain=PreparedGuides::ClockDomain::CpuQpc;s.timingInterval=s.capture;
+    s.modelNs=uint64_t(status.processorMs*1000000.0);
+   }
+   s.modelPreparing=frameCaptured&&device.lastOutcome==NativeGuides::Outcome::Preparing;
    s.guideReady=frameCaptured&&(s.outputValid||s.modelPreparing);
    s.selectedSource=frameCaptured||s.restartRequired?Connections::Source::BuiltIn:Connections::Source::Automatic;
    if(frameCaptured){
@@ -873,7 +891,7 @@ VkResult BeforePresent(const VkObservedPresent& observed,VkPresentInfoKHR& prese
  if(d.processorBlocked){status.reason="Native processing stopped after processor refusal; restart required";return VK_SUCCESS;}
  const bool bgra=r.format==VK_FORMAT_B8G8R8A8_UNORM||r.format==VK_FORMAT_B8G8R8A8_SRGB;
  const bool rgba=r.format==VK_FORMAT_R8G8B8A8_UNORM||r.format==VK_FORMAT_R8G8B8A8_SRGB;
- if(!IsVkPresentWaitReplacementChainKnown(present.pNext)||present.swapchainCount!=1||!r.acquiredObserved||r.arrayLayers!=1||r.flags||r.fgKnownActive||!r.fgStateKnown||
+ if(!IsVkPresentWaitReplacementChainKnown(present)||present.swapchainCount!=1||!r.acquiredObserved||r.arrayLayers!=1||r.flags||r.fgKnownActive||!r.fgStateKnown||
   !c.queueObserved||!c.presentQueueAccessQualified||!(c.queueFlags&VK_QUEUE_GRAPHICS_BIT)||!c.swapchainPNextKnown||
   r.colorSpace!=VK_COLOR_SPACE_SRGB_NONLINEAR_KHR||(!bgra&&!rgba)||
   (r.imageUsage&(VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT))!=(VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
@@ -956,11 +974,17 @@ VkResult BeforePresent(const VkObservedPresent& observed,VkPresentInfoKHR& prese
  // This frame's depth, acquisition and queue have qualified. Discovery alone
  // never takes the renderer from native inputs or another prepared producer.
  struct FrameClaim {
-  Device& device;bool claimed=false;
+  Device& device;uint64_t delivered=status.delivered;bool claimed=false;
   uint64_t Token() const {return reinterpret_cast<uintptr_t>(&device);}
   bool Claim(uint32_t selected){const bool accepted=NeuRotic_ClaimPreparedConnectionV1(2,selected,Token())!=0;claimed=claimed||accepted;return accepted;}
-  ~FrameClaim(){if(claimed)NeuRotic_RetirePreparedConnectionV1(2,Token(),
-   !device.unsafe&&!device.pending&&!device.processorBlocked&&device.sharedIdle?1:0);}
+  ~FrameClaim(){if(claimed){
+   const bool clean=!device.unsafe&&!device.pending&&!device.processorBlocked&&device.sharedIdle;
+   if(clean&&status.delivered>delivered){
+    device.inputSignals.consumed=1;
+    NeuRotic_PublishInputSignalsV2(2,Token(),&device.inputSignals,sizeof(device.inputSignals));
+   }
+   NeuRotic_RetirePreparedConnectionV1(2,Token(),clean?1:0);
+  }}
  } claim{d};
  if(transport!=2){
   if(!claim.Claim(1)){status.reason="Built-in Vulkan capture deferred: another input owner or transport policy";return VK_SUCCESS;}
@@ -1002,6 +1026,7 @@ VkResult BeforePresent(const VkObservedPresent& observed,VkPresentInfoKHR& prese
  d.lastCaptureFrame=d.frame;++status.captured;
  NativeGuides::Capture capture{d.luid,reinterpret_cast<uintptr_t>(observed.swapchain),r.swapchainGeneration,++d.captures,
   r.extent.width,r.extent.height,reset,chosen->inverted,color,depth};
+ ObserveCaptureInputs(d,observed);
  std::vector<uint8_t> output;std::string reason;
  const auto processorStart=NativeGuides::NowMs();
  const auto outcome=NativeGuides::Process(capture,output,reason);status.processorMs=NativeGuides::NowMs()-processorStart;

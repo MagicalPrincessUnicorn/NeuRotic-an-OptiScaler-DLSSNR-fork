@@ -1,4 +1,5 @@
-// Bounded file I/O: parent/leaf handle identity, no hashes, preimages or rollback.
+// Bounded file I/O with parent/leaf handle identity. Ordinary payload operations
+// retain their existing contract; explicit NR DLL copies observe byte mutation.
 using System;
 using System.IO;
 using System.Text;
@@ -36,9 +37,22 @@ public static class NeuRoticSimpleFileIo {
  public static string DirectoryIdentity(string directory){using(var p=Parents(Path.Combine(directory,"identity-placeholder"),false)){var i=Check(p.Handles[p.Handles.Count-1],directory,true);return i.Volume.ToString("X8")+i.IndexHigh.ToString("X8")+i.IndexLow.ToString("X8");}}
  // Explicit INI editing retains its revision guard. Payload copy/removal never
  // calls this bounded configuration-only content check.
- public static bool WriteSettings(byte[] bytes,string destination,string revision){
+ public sealed class SettingsSnapshot {public byte[] Bytes;public string Identity,Revision;}
+ public static SettingsSnapshot ReadSettings(string source,string expectedIdentity){
+  using(var p=Parents(source,false))using(var h=Open(source,0x80000000,3,p,1))using(var stream=new FileStream(h,FileAccess.Read)){
+   var identity=Identity(Check(h,source,false));
+   if(!String.IsNullOrEmpty(expectedIdentity)&&identity!=expectedIdentity)throw new IOException("Configuration changed; reload before installing: "+source);
+   if(stream.Length>1048576)throw new IOException("Configuration exceeds 1 MiB");
+   byte[] bytes=new byte[(int)stream.Length];int offset=0;
+   while(offset<bytes.Length){int read=stream.Read(bytes,offset,bytes.Length-offset);if(read==0)throw new IOException("Configuration changed while reading: "+source);offset+=read;}
+   using(var sha=System.Security.Cryptography.SHA256.Create())return new SettingsSnapshot{Bytes=bytes,Identity=identity,Revision=BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","").ToLowerInvariant()};
+  }
+ }
+ public static bool WriteSettings(byte[] bytes,string destination,string revision){return WriteSettings(bytes,destination,revision,null);}
+ public static bool WriteSettings(byte[] bytes,string destination,string revision,string expectedIdentity){
   if(bytes.Length>6291456)throw new IOException("Configuration is too large");
   using(var p=Parents(destination,false))using(var h=Open(destination,0xC0010100,3,p,0))using(var stream=new FileStream(h,FileAccess.ReadWrite)){
+   if(!String.IsNullOrEmpty(expectedIdentity)&&Identity(Check(h,destination,false))!=expectedIdentity)return false;
    if(stream.Length>6291456)throw new IOException("Configuration is too large");
    using(var sha=System.Security.Cryptography.SHA256.Create()){string actual=BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","");if(!actual.Equals(revision,StringComparison.OrdinalIgnoreCase))return false;}
    ClearReadOnly(h,destination);stream.Position=0;stream.Write(bytes,0,bytes.Length);stream.SetLength(bytes.Length);stream.Flush(true);return true;
@@ -57,6 +71,87 @@ public static class NeuRoticSimpleFileIo {
     destinationOwned=true;ClearReadOnly(h,destination);using(var output=new FileStream(h,FileAccess.ReadWrite)){output.Position=0;input.CopyTo(output);output.SetLength(output.Position);output.Flush(true);}
    }
   }}catch(Exception e){e.Data["NeuRoticDestinationOwned"]=destinationOwned;throw;}
+ }
+ // Explicit NR DLL replacement alone observes content changes. Ordinary Copy
+ // retains its existing behavior. User-chosen hashes bind a queued source only;
+ // no developer build, size, version or hash is an admission requirement.
+ public sealed class NrDllCopyEvidence {
+  public bool Succeeded,OwnershipEstablished,CreatedNew,BeforeKnown,AfterKnown,MetadataChanged,OutcomeUnknown;
+  public string ObjectIdentity="",Identity="",BeforeSha256="",AfterSha256="",Error="";
+ }
+ static string ObjectIdentity(Info i){return i.Volume.ToString("X8")+i.IndexHigh.ToString("X8")+i.IndexLow.ToString("X8");}
+ static string StreamSha256(Stream stream){
+  long position=stream.Position;try{stream.Position=0;using(var sha=System.Security.Cryptography.SHA256.Create())return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();}
+  finally{stream.Position=position;}
+ }
+ public static NrDllCopyEvidence CopyNrDllObserved(string source,string destination,string expected,string sourceExpected,string selectedSha256,Action<string> boundary){
+  var evidence=new NrDllCopyEvidence();bool openingNew=false;
+  try{
+   if(String.IsNullOrEmpty(expected)||String.IsNullOrEmpty(sourceExpected)||String.IsNullOrEmpty(selectedSha256))throw new IOException("Choose the NR DLL and destination again");
+   using(var s=Parents(source,false))using(var sh=Open(source,0x80000000,3,s,1))using(var input=new FileStream(sh,FileAccess.Read)){
+    if(Identity(Check(sh,source,false))!=sourceExpected||!StreamSha256(input).Equals(selectedSha256,StringComparison.OrdinalIgnoreCase))throw new IOException("The chosen NR DLL changed; choose it again");
+    using(var p=Parents(destination,true)){
+     openingNew=expected=="Absent";
+     using(var h=Open(destination,0xC0010100,openingNew?1u:3u,p,0)){
+      var initial=Check(h,destination,false);
+      // Failure to establish this exact pre-write identity is never ownership.
+      if(!openingNew&&Identity(initial)!=expected)throw new IOException("The destination changed; review the NR DLL action again");
+      evidence.ObjectIdentity=ObjectIdentity(initial);evidence.CreatedNew=openingNew;openingNew=false;
+      using(var output=new FileStream(h,FileAccess.ReadWrite)){
+       try{
+        evidence.BeforeSha256=StreamSha256(output);evidence.BeforeKnown=true;
+        if(boundary!=null)boundary("AfterOpen");
+        ClearReadOnly(h,destination);
+        if(boundary!=null)boundary("AfterAttributes");
+        input.Position=0;output.Position=0;byte[] buffer=new byte[65536];int read;bool first=true;
+        while((read=input.Read(buffer,0,buffer.Length))>0){output.Write(buffer,0,read);if(first){first=false;if(boundary!=null)boundary("AfterFirstWrite");}}
+        output.SetLength(output.Position);
+        if(boundary!=null)boundary("AfterSetLength");
+        output.Flush(true);
+        if(boundary!=null)boundary("AfterFlush");
+        evidence.AfterSha256=StreamSha256(output);evidence.AfterKnown=true;
+        if(!evidence.AfterSha256.Equals(selectedSha256,StringComparison.OrdinalIgnoreCase))throw new IOException("The destination does not contain the selected NR DLL");
+        evidence.Succeeded=true;
+       }catch(Exception error){evidence.Succeeded=false;evidence.Error=error.Message;}
+       finally{
+        // Read the same still-exclusive object even after a partial Write,
+        // truncate, attribute or flush failure. An attribute-only change is
+        // distinct from evidence that foreign file contents were replaced.
+        try{evidence.AfterSha256=StreamSha256(output);evidence.AfterKnown=true;}
+        catch{evidence.AfterKnown=false;evidence.OutcomeUnknown=true;}
+        try{var final=Check(h,destination,false);evidence.Identity=Identity(final);evidence.MetadataChanged=initial.Attributes!=final.Attributes;}
+        catch{evidence.OutcomeUnknown=true;}
+       }
+      }
+     }
+    }
+   }
+  }catch(Exception error){evidence.Succeeded=false;evidence.Error=error.Message;if(openingNew)evidence.OutcomeUnknown=true;}
+  evidence.OwnershipEstablished=!String.IsNullOrEmpty(evidence.ObjectIdentity)&&
+   (evidence.Succeeded||evidence.CreatedNew||(evidence.BeforeKnown&&evidence.AfterKnown&&evidence.BeforeSha256!=evidence.AfterSha256));
+  return evidence;
+ }
+ // Rebind the recorded file object while holding it against replacement for
+ // ownership publication. A matching pathname or content hash is insufficient.
+ public static void WithNrDllObject(string path,string objectIdentity,Action publish){WithNrDllObject(path,objectIdentity,null,publish);}
+ public static void WithNrDllObject(string path,string objectIdentity,string observedSha256,Action publish){
+  if(String.IsNullOrEmpty(objectIdentity)||publish==null)throw new IOException("NR DLL ownership identity is missing");
+  using(var p=Parents(path,false))using(var h=Open(path,String.IsNullOrEmpty(observedSha256)?0u:0x80000000u,3,p,0)){
+   if(!ObjectIdentity(Check(h,path,false)).Equals(objectIdentity,StringComparison.Ordinal))throw new IOException("The NR DLL destination was replaced; ownership was not transferred");
+   if(String.IsNullOrEmpty(observedSha256))publish();
+   else using(var stream=new FileStream(h,FileAccess.Read)){
+    if(!StreamSha256(stream).Equals(observedSha256,StringComparison.OrdinalIgnoreCase))throw new IOException("The NR DLL contents changed before ownership could be saved");
+    publish();
+   }
+  }
+ }
+ public static void RemoveNrDllObject(string path,string objectIdentity){
+  if(String.IsNullOrEmpty(objectIdentity))throw new IOException("NR DLL ownership identity is missing");
+  if(!File.Exists(path)){if(Directory.Exists(path))throw new IOException("Directory occupies owned NR DLL: "+path);return;}
+  using(var p=Parents(path,false))using(var h=Open(path,0x00010100,3,p,0)){
+   if(!ObjectIdentity(Check(h,path,false)).Equals(objectIdentity,StringComparison.Ordinal))throw new IOException("A replacement NR DLL was preserved: "+path);
+   ClearReadOnly(h,path);byte remove=1;if(!SetFileInformationByHandle(h,4,ref remove,1))throw Error(path);
+  }
  }
  public static void Write(byte[] bytes,string destination){using(var p=Parents(destination,true))using(var h=Open(destination,0xC0010100,4,p,0)){ClearReadOnly(h,destination);using(var output=new FileStream(h,FileAccess.ReadWrite)){output.Write(bytes,0,bytes.Length);output.SetLength(bytes.Length);output.Flush(true);}}}
  public static void Remove(string path){if(!File.Exists(path)){if(Directory.Exists(path))throw new IOException("Directory occupies owned file: "+path);return;}using(var p=Parents(path,false))using(var h=Open(path,0x00010100,3,p,0)){ClearReadOnly(h,path);byte remove=1;if(!SetFileInformationByHandle(h,4,ref remove,1))throw Error(path);}}

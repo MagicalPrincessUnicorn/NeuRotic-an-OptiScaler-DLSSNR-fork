@@ -1,0 +1,112 @@
+{
+  "schema": "NativeAdversarialSemanticMutants/1",
+  "profile": "native-adversarial-authority",
+  "scope": "isolated source substitutions; production untouched; named runtime detector required",
+  "mutations": {
+    "copied_commit_reopens_revoked_phase": {
+      "case": "N03",
+      "changes": [
+        [
+          "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+          "p.budgetConsumed=true;p.state.phase=RoutePhase::Closing;",
+          "p.budgetConsumed=true;p.state.phase=p.record?RoutePhase::Active:RoutePhase::Closing;"
+        ]
+      ],
+      "detectors": [
+        "copied_plan_post_revoke_no_authority"
+      ],
+      "before_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+      "after_sha256": "74573f17bd8860bfbbd6676727afe727fe0eedb1d26b26cc8579ba3d4886d035"
+    },
+    "retirement_erases_source_exclusion": {
+      "case": "N06",
+      "changes": [
+        [
+          "OptiScaler/nr/lifecycle/NativeExecutionLedger.h",
+          "const auto revision=slot->revision;*slot={};slot->revision=revision;",
+          "const auto revision=slot->revision;*slot={};slot->revision=revision;highestOrdinal_=0;"
+        ]
+      ],
+      "detectors": [
+        "rekeyed_evaluation_no_opportunity"
+      ],
+      "before_sha256": "021c228368065c58618815bac4be2f32a798e8a4e7f7508f0aa09e23090f4eae",
+      "after_sha256": "7ea45b094f1abdaa63f57e68a51daa2385e842629ae3842efa1ba9feb84072cd"
+    },
+    "numeric_ordinal_substitutes_full_base": {
+      "case": "N09",
+      "changes": [
+        [
+          "OptiScaler/nr/lifecycle/FinalRealFrameTypes.h",
+          "f.baseRealFrameId.KnownPart()->value==s.base",
+          "f.baseRealFrameId.KnownPart()->value.value==s.base.value"
+        ]
+      ],
+      "detectors": [
+        "native_ordinal_cannot_match_real_association"
+      ],
+      "before_sha256": "37bf66bdaa99b28f7cd81c5a982452ad588c037cf6563f52ef66746f6e178fb9",
+      "after_sha256": "c3b30f6813a052d2d30d23ec170b4af905a373a4d5090ac472d79eba0124d3d6"
+    },
+    "representation_sample_guard_removed": {
+      "case": "N11",
+      "changes": [
+        [
+          "OptiScaler/nr/protocol/ProfileQualification.h",
+          "if(use.nativeSample!=frame->nativeSample)return reject(\"RENDER.Profile.RepresentationSampleMismatch\");",
+          "if(use.nativeSample!=frame->nativeSample&&use.consumerContract.Empty())return reject(\"RENDER.Profile.RepresentationSampleMismatch\");"
+        ]
+      ],
+      "detectors": [
+        "cross_sample_recipe_refused"
+      ],
+      "before_sha256": "cf83256149ef57faec8b71505a9b4022a5fe304b414bcd73e1cc557f2852c30e",
+      "after_sha256": "c728a01cf619ed9ec1f9bd85bc4a025495cf26a7d834f5986906a05c61d96353"
+    },
+    "reset_debt_does_not_gate_next_attempt": {
+      "case": "O09",
+      "changes": [
+        [
+          "OptiScaler/nr/lifecycle/NativeHistoryState.h",
+          "(RequiresReset()&&!resetRequested)",
+          "(RequiresReset()&&!resetRequested&&owner_.value==0)"
+        ]
+      ],
+      "detectors": [
+        "failed_history_requires_next_reset"
+      ],
+      "before_sha256": "2168de5cda49e4985bcd82160b3cceab5a12cc0d6b4648673131312f435eb196",
+      "after_sha256": "435b47f3cb5c01668fb5a65d83aa7ca850216a551407f5bd7808182dbf17e03d"
+    },
+    "live_operation_slot_overwritten": {
+      "case": "O11",
+      "changes": [
+        [
+          "OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp",
+          "if(op.used||op.serial==(std::numeric_limits<std::uint64_t>::max)())continue;",
+          "if(op.serial==(std::numeric_limits<std::uint64_t>::max)())continue;"
+        ]
+      ],
+      "detectors": [
+        "full_table_no_preparation_or_effect"
+      ],
+      "before_sha256": "44b0a3373584e51e42ceac7e2b5b6638af6fda5b161c7297b2254b027d39d486",
+      "after_sha256": "c1e829f9f3804790c0a926e63e88f5d932aebef79af6127cdc3ee6c86fd5704f"
+    },
+    "late_ticket_revision_ignored": {
+      "case": "L13",
+      "changes": [
+        [
+          "OptiScaler/nr/lifecycle/NativeExecutionLedger.h",
+          "    Slot* Find(Ticket t)noexcept\r\n    {return t.slot<slots_.size()&&slots_[t.slot].used&&slots_[t.slot].revision==t.revision?&slots_[t.slot]:nullptr;}\r\n",
+          "    Slot* Find(Ticket t)noexcept\r\n    {return t.slot<slots_.size()&&slots_[t.slot].used?&slots_[t.slot]:nullptr;}\r\n"
+        ]
+      ],
+      "detectors": [
+        "late_ticket_after_reuse_refused"
+      ],
+      "before_sha256": "021c228368065c58618815bac4be2f32a798e8a4e7f7508f0aa09e23090f4eae",
+      "after_sha256": "3976874e13a8fb2027f4077538bab018404bf8f2e32ca05f9e0ad30c1118e168"
+    }
+  }
+}

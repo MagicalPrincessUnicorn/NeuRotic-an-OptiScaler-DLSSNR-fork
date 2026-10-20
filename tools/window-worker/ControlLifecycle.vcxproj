@@ -1,0 +1,11 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<ItemGroup Label="ProjectConfigurations"><ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration></ItemGroup>
+<PropertyGroup Label="Globals"><WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion></PropertyGroup>
+<Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
+<PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><PlatformToolset>v145</PlatformToolset><CharacterSet>Unicode</CharacterSet></PropertyGroup>
+<Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
+<PropertyGroup><RepoRoot>$(MSBuildThisFileDirectory)..\..\</RepoRoot><OutDir>$(RepoRoot)builds\window-worker\lifecycle\bin\</OutDir><IntDir>$(RepoRoot)builds\window-worker\lifecycle\obj\</IntDir><TargetName>ControlLifecycleFixture</TargetName></PropertyGroup>
+<ItemDefinitionGroup><ClCompile><LanguageStandard>stdcpp20</LanguageStandard><ExceptionHandling>Sync</ExceptionHandling><RuntimeLibrary>MultiThreaded</RuntimeLibrary><AdditionalIncludeDirectories>$(RepoRoot)external\nlohmann;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;NRW_CONTROL_FIXTURE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile><Link><SubSystem>Console</SubSystem><AdditionalDependencies>d3d11.lib;dxgi.lib;bcrypt.lib;shell32.lib;ole32.lib;runtimeobject.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup>
+<ItemGroup><ClCompile Include="$(RepoRoot)apps\NeuRoticWindowWorker\WorkerMain.cpp"/><ClCompile Include="$(RepoRoot)apps\NeuRoticWindowWorker\control\ControlCore.cpp"/><ClCompile Include="$(RepoRoot)tests\window-worker\ControlTests.cpp"/><ClCompile Include="$(RepoRoot)tests\window-worker\ControlLifecycleHosts.cpp"/></ItemGroup>
+<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
+</Project>

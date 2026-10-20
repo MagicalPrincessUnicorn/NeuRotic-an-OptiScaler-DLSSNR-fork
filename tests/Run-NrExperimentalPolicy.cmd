@@ -1,9 +1,9 @@
 @echo off
 setlocal
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
+call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 >nul
 if errorlevel 1 exit /b 1
 set "ROOT=%~dp0.."
-set "OUT=C:\OptiScaler-NR-Dev\artifacts\0.9.6-menu-experimental-controls\experimental-policy"
+set "OUT=%ROOT%\builds\moonshot-w03-reconciliation\experimental-policy"
 if not exist "%OUT%" mkdir "%OUT%"
 pushd "%ROOT%"
 cl /nologo /std:c++20 /EHsc /W4 /WX /I"%ROOT%\OptiScaler" tests\nr_experimental_policy.cpp /Fe:"%OUT%\test.exe" /Fo:"%OUT%\test.obj" >"%OUT%\build.txt" 2>&1

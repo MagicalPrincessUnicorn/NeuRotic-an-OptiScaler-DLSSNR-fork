@@ -44,6 +44,10 @@ class IFeature
     bool _isInited = false;
     int _featureFlags = 0;
     InitFlags _initFlags = {};
+    // Facts from this initialization attempt, never inferred from format or
+    // read back from a later global configuration.
+    bool _featureFlagsObserved = false;
+    bool _hdrOverrideApplied = false;
 
     NVSDK_NGX_PerfQuality_Value _perfQualityValue;
 
@@ -111,6 +115,8 @@ class IFeature
     NVSDK_NGX_Handle* Handle() const { return _handle; };
     static unsigned int GetNextHandleId() { return handleCounter++; }
     int GetFeatureFlags() const { return _featureFlags; }
+    bool FeatureFlagsObserved() const { return _featureFlagsObserved; }
+    bool HdrOverrideApplied() const { return _hdrOverrideApplied; }
 
     virtual bool IsWithDx12() = 0;
     virtual feature_version Version() = 0;

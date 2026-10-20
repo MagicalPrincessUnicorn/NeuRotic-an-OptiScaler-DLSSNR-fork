@@ -257,8 +257,19 @@ bool Sl1_Inputs_Dx12::reportCachedResource(const CachedTag& tag, ID3D12GraphicsC
     Dx12Resource res {};
     res.resource = d3dRes;
     res.cmdList = cmdBuffer;
+    res.left = tag.hasExtent ? tag.extent.left : 0;
+    res.top = tag.hasExtent ? tag.extent.top : 0;
     res.width = tag.hasExtent ? tag.extent.width : desc.Width;
     res.height = tag.hasExtent ? tag.extent.height : desc.Height;
+    // Preserve the tagged region. Subtraction after the origin checks avoids
+    // overflowing an extent sum or underflowing the available allocation size.
+    if (res.width == 0 || res.height == 0 || res.left > desc.Width || res.top > desc.Height ||
+        res.width > desc.Width - res.left || res.height > desc.Height - res.top)
+    {
+        LOG_WARN("SL1 ignoring invalid tag extent: {},{} {}x{} in {}x{}", res.left, res.top,
+                 res.width, res.height, desc.Width, desc.Height);
+        return false;
+    }
     res.state = static_cast<D3D12_RESOURCE_STATES>(tag.resource.state);
     res.validity = FG_ResourceValidity::UntilPresent;
 

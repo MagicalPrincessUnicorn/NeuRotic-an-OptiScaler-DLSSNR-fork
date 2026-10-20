@@ -1,0 +1,538 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NeuRotic Anything performance frame record v1 (repository extension)",
+  "description": "Research v1 plus host-stage measurements and nullable unestablished NR extents on failed frames; no pixels.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "frame_result"
+    },
+    "synthetic": {
+      "type": "boolean"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "capture_sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "history_epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "settings_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "capture_timestamp_100ns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "media_pts_100ns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "content_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "equality_evidence": {
+      "enum": [
+        "unknown",
+        "same_capture_identity",
+        "exact_gpu_compare",
+        "qualified_content_repeat"
+      ]
+    },
+    "provider_sha256": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      ]
+    },
+    "adapter_luid": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "capture_extent": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "nr_input_extent": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "nr_output_extent": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "output_extent": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "outcome": {
+      "enum": [
+        "enhanced_published",
+        "enhanced_completed_not_published",
+        "bypass_published",
+        "reused_output",
+        "discarded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "nr_submitted": {
+      "type": "boolean"
+    },
+    "nr_gpu_completed": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reset_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "callback_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "prepare_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "evaluate_call_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "submit_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "fence_wait_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "present_call_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "callback_ms",
+        "prepare_ms",
+        "evaluate_call_ms",
+        "submit_ms",
+        "fence_wait_ms",
+        "present_call_ms"
+      ]
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capture_copy_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "conversion_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "depth_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "motion_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "nr_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "compose_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "capture_copy_ms",
+        "conversion_ms",
+        "depth_ms",
+        "motion_ms",
+        "nr_ms",
+        "compose_ms"
+      ]
+    },
+    "capture_to_publication_ms": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "observed_display_latency_ms": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "pending_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nr_in_flight_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "owned_resource_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "clock_note": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capture_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "guidance_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "nr_process_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "present_stage_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "d11_publication_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "gpu_guide_upload_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "guide_upload_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gpu_timestamp_frequency": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completion_fence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shape_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "ingress_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "guide_prepare_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "identity_check_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "gpu_guide_prepare_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "guide_preparation": {
+          "enum": [
+            "unknown",
+            "cpu-upload",
+            "gpu-clear"
+          ]
+        }
+      },
+      "required": [
+        "capture_ms",
+        "guidance_ms",
+        "nr_process_ms",
+        "present_stage_ms",
+        "d11_publication_ms",
+        "gpu_guide_upload_ms",
+        "guide_upload_bytes",
+        "gpu_timestamp_frequency",
+        "completion_fence",
+        "shape_ms",
+        "ingress_ms",
+        "guide_prepare_ms",
+        "identity_check_ms"
+      ]
+    },
+    "scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wait_since_previous_frame_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "completion_interval_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "wait_since_previous_frame_ms",
+        "completion_interval_ms"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "synthetic",
+    "session_id",
+    "epoch",
+    "capture_sequence",
+    "history_epoch",
+    "settings_revision",
+    "capture_timestamp_100ns",
+    "media_pts_100ns",
+    "content_id",
+    "equality_evidence",
+    "provider_sha256",
+    "adapter_luid",
+    "capture_extent",
+    "nr_input_extent",
+    "nr_output_extent",
+    "output_extent",
+    "outcome",
+    "nr_submitted",
+    "nr_gpu_completed",
+    "reason",
+    "reset_reason",
+    "cpu",
+    "gpu",
+    "capture_to_publication_ms",
+    "observed_display_latency_ms",
+    "pending_count",
+    "nr_in_flight_count",
+    "owned_resource_bytes",
+    "clock_note",
+    "note",
+    "host"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "nr_gpu_completed": {
+            "const": true
+          }
+        },
+        "required": [
+          "nr_gpu_completed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "nr_submitted": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "enhanced_published"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "properties": {
+          "nr_gpu_completed": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "enum": [
+              "discarded",
+              "failed",
+              "cancelled",
+              "enhanced_completed_not_published"
+            ]
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "properties": {
+          "capture_to_publication_ms": {
+            "type": "null"
+          },
+          "observed_display_latency_ms": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

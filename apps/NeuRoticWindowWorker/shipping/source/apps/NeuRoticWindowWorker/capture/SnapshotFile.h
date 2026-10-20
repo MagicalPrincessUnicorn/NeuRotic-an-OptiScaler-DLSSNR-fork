@@ -30,9 +30,10 @@ template<class Write> void WriteSnapshotPng(const void* pixels,uint32_t width,ui
 // On-demand lossless BGRA snapshot. Exclusive file creation and pinned ordinary
 // parents refuse link traversal; no caller-supplied output path or overwrite.
 // Internal publication step; caller keeps the validated folder lease alive.
-template<class Encode> std::wstring PublishSnapshot(const std::filesystem::path& folder,Encode encode) {
+template<class Encode> std::wstring PublishSnapshot(const std::filesystem::path& folder,Encode encode,const wchar_t* extension=L".png") {
+ if(!extension||(std::wstring(extension)!=L".png"&&std::wstring(extension)!=L".jxr"))throw std::runtime_error("Snapshot encoding extension is unsupported");
  GUID id{};if(FAILED(CoCreateGuid(&id)))throw std::runtime_error("Snapshot identifier unavailable");wchar_t suffix[40]{};StringFromGUID2(id,suffix,40);
- auto path=folder/(std::wstring(L"NeuRotic-")+suffix+L".png");
+ auto path=folder/(std::wstring(L"NeuRotic-")+suffix+extension);
  auto temporary=folder/(std::wstring(L".neurotic-snapshot-")+suffix+L".pending");
  HANDLE file=CreateFileW(temporary.c_str(),GENERIC_WRITE|DELETE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
  if(file==INVALID_HANDLE_VALUE)throw std::runtime_error("Snapshot file could not be created");

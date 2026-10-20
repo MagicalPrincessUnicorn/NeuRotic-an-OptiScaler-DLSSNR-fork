@@ -1,0 +1,387 @@
+{
+  "work_order": "NR-CTX-002",
+  "suites": {
+    "representation-lineage": [
+      {
+        "id": "T14.affine-fusion-relation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.duplicate-request-refused",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.exposure-once",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.fused-preserves-steps",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.fusion-order",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.fusion-parameters",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.fusion-precision",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.fusion-raster",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.fusion-unknown-parameter",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.once-0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.once-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.once-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.once-3",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.order-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.parameter-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.stale-parameters",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.unknown-applied",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.unknown-units",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.version-mismatch",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "representation-cache": [
+      {
+        "id": "T13.allocation-device",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.allocation-samples",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.complete-keys",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.content-allocation-stable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.content-plan-stable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.content-reject",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.content-semantic-stable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.frame-not-structural",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.frame-pair",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.object-plan-stable",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.object-reject",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.raster-allocation-consistency",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.representation-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.representation-plan",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.required-pair-missing",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.resource-generation-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.resource-generation-plan",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.resource-incarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.session-structural",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.target-recycled",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.unknown-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.unknown-format",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.unknown-incarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.view-incarnation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.view-structural",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "representation-prepared": [
+      {
+        "id": "T13.exact-prepared",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.prepared-old-content",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.prepared-output-changed",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.prepared-plan-publication",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.prepared-receipt-revision",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.prepared-unknown-owner-source",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.restored-exact",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.rights-independent-0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.rights-independent-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.rights-independent-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.rights-owner-0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.rights-owner-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.rights-owner-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.prepared-unexecuted",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ],
+    "representation-planner": [
+      {
+        "id": "C12.canonical-publication",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.consumer-publication",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.context-bound",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.direct-publication",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.metadata-publication",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.source-facts-bound",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.source-revision-bound",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "C12.success-no-refusal",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.consumer-not-semantic",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.existing-before-conversion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.plan-rights-independent-0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.plan-rights-independent-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.plan-rights-independent-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T13.qualified-generation-replans",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.lineage-rights-independent-0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.lineage-rights-independent-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.lineage-rights-independent-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T14.missing-conversion-recipe",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.consumer-defer",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.consumer-output-not-declared",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.direct-zero-preparation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.metadata-only",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.no-alternative-preparation",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.one-conversion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.one-of-two-motion",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.optional-unknown-zero-work",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.required-depth-direct",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.rights-no-alternative-0",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.rights-no-alternative-1",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.rights-no-alternative-2",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.unrequested-motion-zero-work",
+        "binding": "CURRENT_CALLABLE"
+      },
+      {
+        "id": "T15.unrequested-zero-work",
+        "binding": "CURRENT_CALLABLE"
+      }
+    ]
+  },
+  "suite_metadata": {
+    "representation-lineage": {
+      "emitted_suite": "representation-lineage"
+    },
+    "representation-cache": {
+      "emitted_suite": "representation-cache"
+    },
+    "representation-prepared": {
+      "emitted_suite": "representation-prepared"
+    },
+    "representation-planner": {
+      "emitted_suite": "representation-planner"
+    }
+  }
+}

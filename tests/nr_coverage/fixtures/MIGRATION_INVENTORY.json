@@ -1,0 +1,1534 @@
+{
+  "scope": "Proposed migration inventory only; no production migration executed.",
+  "source_archive_sha256": "98f506aba82b3d17d7a2c3736b3a88dc7a8ac80d4b33d52f729dee5f74750835",
+  "source_member": "J03_Current_Evidence_Map.json",
+  "source_member_sha256": "c7555743edb9ada102926f2e5c7801d8d10ab06529f1b2e1109133c95c786ff3",
+  "original_claim_count": 69,
+  "original_current_exact_binary_runtime_receipts": [],
+  "original_runtime_acceptance_granted": false,
+  "claims": [
+    {
+      "claim_id": "COV-CL-001",
+      "source_id": "SRC-01",
+      "source_lines": [
+        94,
+        115
+      ],
+      "source_pack_lines": [
+        1832,
+        1853
+      ],
+      "claim": "Release feature-status table is an Alpha support claim, not a per-cohort test ledger.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/0",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-002",
+      "source_id": "SRC-01",
+      "source_lines": [
+        145,
+        148
+      ],
+      "source_pack_lines": [
+        1883,
+        1886
+      ],
+      "claim": "Experimental settings do not waive missing-resource or unsupported-contract checks.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/1",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-003",
+      "source_id": "SRC-01",
+      "source_lines": [
+        160,
+        180
+      ],
+      "source_pack_lines": [
+        1898,
+        1918
+      ],
+      "claim": "Present Compatibility is the image-only final-image route; it must not be represented as native-guide availability.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/2",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-004",
+      "source_id": "SRC-01",
+      "source_lines": [
+        181,
+        203
+      ],
+      "source_pack_lines": [
+        1919,
+        1941
+      ],
+      "claim": "Present Enhanced is a distinct late route using matched native guides; a shared UI label cannot collapse it into Native.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/3",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-005",
+      "source_id": "SRC-01",
+      "source_lines": [
+        193,
+        198
+      ],
+      "source_pack_lines": [
+        1931,
+        1936
+      ],
+      "claim": "Guide presence alone is insufficient: staleness, ambiguity, queue association, bounds and contract shape matter.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/4",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-006",
+      "source_id": "SRC-01",
+      "source_lines": [
+        225,
+        249
+      ],
+      "source_pack_lines": [
+        1963,
+        1987
+      ],
+      "claim": "Native Temporal has its own placement, input and history domain; transfer of results from Present is not justified.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/5",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-007",
+      "source_id": "SRC-01",
+      "source_lines": [
+        250,
+        263
+      ],
+      "source_pack_lines": [
+        1988,
+        2001
+      ],
+      "claim": "Camera-cut continuity is an explicitly limited experiment, not universal reset suppression.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/6",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-008",
+      "source_id": "SRC-01",
+      "source_lines": [
+        264,
+        287
+      ],
+      "source_pack_lines": [
+        2002,
+        2025
+      ],
+      "claim": "D3D11-to-D3D12 transport is a separate route and interoperability condition, not native D3D12 equivalence.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/7",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-009",
+      "source_id": "SRC-01",
+      "source_lines": [
+        288,
+        319
+      ],
+      "source_pack_lines": [
+        2026,
+        2057
+      ],
+      "claim": "HDR observation, experimental admission and color accuracy are separate claims.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/8",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-010",
+      "source_id": "SRC-01",
+      "source_lines": [
+        320,
+        340
+      ],
+      "source_pack_lines": [
+        2058,
+        2078
+      ],
+      "claim": "FG/RR integration claims need provider, evaluated feature, boundary and delivered-output evidence.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/9",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-011",
+      "source_id": "SRC-01",
+      "source_lines": [
+        341,
+        366
+      ],
+      "source_pack_lines": [
+        2079,
+        2104
+      ],
+      "claim": "Route-specific sizing and working resolution are compatibility dimensions; shared percentages do not imply identical work.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/10",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-012",
+      "source_id": "SRC-01",
+      "source_lines": [
+        367,
+        398
+      ],
+      "source_pack_lines": [
+        2105,
+        2136
+      ],
+      "claim": "Multipass feature availability does not establish stability or performance at every pass count.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/11",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-013",
+      "source_id": "SRC-01",
+      "source_lines": [
+        399,
+        419
+      ],
+      "source_pack_lines": [
+        2137,
+        2157
+      ],
+      "claim": "Comparison output is route-specific diagnostic evidence, not automatically a faithful baseline or temporal test.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/12",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-014",
+      "source_id": "SRC-01",
+      "source_lines": [
+        447,
+        447
+      ],
+      "source_pack_lines": [
+        2185,
+        2185
+      ],
+      "claim": "Advisor initial-feedback timeout does not replace warm-up, fresh-cadence or measurement requirements.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/13",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-015",
+      "source_id": "SRC-01",
+      "source_lines": [
+        451,
+        451
+      ],
+      "source_pack_lines": [
+        2189,
+        2189
+      ],
+      "claim": "Advisor guidance must retain route-specific FG requirements and restricted 10-bit PQ guidance.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/14",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-016",
+      "source_id": "SRC-01",
+      "source_lines": [
+        558,
+        573
+      ],
+      "source_pack_lines": [
+        2296,
+        2311
+      ],
+      "claim": "Input blocking/overlay transport is independently testable from NR output; unsupported controller transports must stay disclosed.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/15",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-017",
+      "source_id": "SRC-01",
+      "source_lines": [
+        658,
+        669
+      ],
+      "source_pack_lines": [
+        2396,
+        2407
+      ],
+      "claim": "Wrapper presence does not establish actual model binary availability, ABI, behavior or redistribution rights.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/16",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-018",
+      "source_id": "SRC-01",
+      "source_lines": [
+        751,
+        760
+      ],
+      "source_pack_lines": [
+        2489,
+        2498
+      ],
+      "claim": "Vulkan Present is documented as not ready in this release snapshot.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/17",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-019",
+      "source_id": "SRC-01",
+      "source_lines": [
+        752,
+        760
+      ],
+      "source_pack_lines": [
+        2490,
+        2498
+      ],
+      "claim": "The Native comparison reference has a documented display-conversion defect; it is not a calibrated golden image.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/18",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-020",
+      "source_id": "SRC-01",
+      "source_lines": [
+        221,
+        221
+      ],
+      "source_pack_lines": [
+        1959,
+        1959
+      ],
+      "claim": "DD2 component was reported to continue instead of freeze; a brief original-image flash remained.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_COMPONENT_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Component observation only; exact source note does not supply full current binary/configuration, duration or all-route evidence.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/19",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-021",
+      "source_id": "SRC-01",
+      "source_lines": [
+        284,
+        284
+      ],
+      "source_pack_lines": [
+        2022,
+        2022
+      ],
+      "claim": "BG3 and Satisfactory native DX11 transport have documented positive configuration-specific evidence.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_COMPONENT_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Detailed game/build/provider/guide-grid identities and raw receipts are absent from this note.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/20",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-022",
+      "source_id": "SRC-01",
+      "source_lines": [
+        316,
+        316
+      ],
+      "source_pack_lines": [
+        2054,
+        2054
+      ],
+      "claim": "Release inherits positive Wilds/BG3 HDR-component reports, including Wilds FG.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_COMPONENT_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Duplicate summary of the phase-one report; do not count it as another independent runtime run.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/21",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-023",
+      "source_id": "SRC-01",
+      "source_lines": [
+        758,
+        760
+      ],
+      "source_pack_lines": [
+        2496,
+        2498
+      ],
+      "claim": "Unspecified users reported Linux/Proton runtime operation; bundled installer/uninstaller are Windows tools.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "UNSCOPED_USER_REPORT",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "No title, translation stack, model, driver, route, exact build or raw log identified. Zero qualified Linux coverage.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/22",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-024",
+      "source_id": "SRC-01",
+      "source_lines": [
+        810,
+        810
+      ],
+      "source_pack_lines": [
+        2548,
+        2548
+      ],
+      "claim": "Release note treats a failure with NR off as proof NeuRotic did not cause it.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENT_RECORD_ONLY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "contested_inference",
+      "limitations": "Rejected as a causal inference in COV-011. Loaded-DLL NR-off is not an unloaded pristine-game control; hooks, overlays and persistent state can differ.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/23",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-025",
+      "source_id": "SRC-03",
+      "source_lines": [
+        18,
+        20
+      ],
+      "source_pack_lines": [
+        12613,
+        12615
+      ],
+      "claim": "Historical experiment classifies DX12 RGBA8/R10 SDR and DX11 shared SDR targets; its table is an intended path matrix.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_DESIGN",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/24",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-026",
+      "source_id": "SRC-03",
+      "source_lines": [
+        26,
+        26
+      ],
+      "source_pack_lines": [
+        12621,
+        12621
+      ],
+      "claim": "Compatibility experiment records runtime as inconclusive/uninstalled; a command itinerary is not a run.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "EXPLICIT_RUNTIME_INCONCLUSIVE",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/25",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-027",
+      "source_id": "SRC-04",
+      "source_lines": [
+        7,
+        14
+      ],
+      "source_pack_lines": [
+        12713,
+        12720
+      ],
+      "claim": "Reset-every-frame flicker explanation is a hypothesis, not proven proprietary model causality.",
+      "evidence_class": "PROPOSAL",
+      "reported_maturity": "HYPOTHESIS",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/26",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-028",
+      "source_id": "SRC-04",
+      "source_lines": [
+        42,
+        43
+      ],
+      "source_pack_lines": [
+        12748,
+        12749
+      ],
+      "claim": "History-stability successor retains an explicit runtime-inconclusive boundary.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "EXPLICIT_RUNTIME_INCONCLUSIVE",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/27",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-029",
+      "source_id": "SRC-02",
+      "source_lines": [
+        3,
+        7
+      ],
+      "source_pack_lines": [
+        5198,
+        5202
+      ],
+      "claim": "Feature inventory is pinned by its own text to an older alpha-0.9.5 checkpoint, despite being bundled in alpha-0.9.6.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_HISTORICAL_SCOPE",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Do not overwrite later guarded-PQ source behavior with an older SDR-only claim. Full paragraph/table inventory is retained.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/28",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-030",
+      "source_id": "SRC-05",
+      "source_lines": [
+        13,
+        16
+      ],
+      "source_pack_lines": [
+        4275,
+        4278
+      ],
+      "claim": "2026-09-13 user-reported Wilds/BG3 success belongs to the phase-one experiment.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_EXACT_BINARY_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Raw logs and binary artifacts are referenced, not supplied. Claim preserves the recorded pass, without independently revalidating it.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/29",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-031",
+      "source_id": "SRC-05",
+      "source_lines": [
+        69,
+        81
+      ],
+      "source_pack_lines": [
+        4331,
+        4343
+      ],
+      "claim": "HDR report names experiment commit 849ed5a9 and exact DLL/forwarder hashes.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "REPORTED_BINARY_IDENTITY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Identity statements are document evidence; the binaries themselves were not hashed in Chat J.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/30",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-032",
+      "source_id": "SRC-05",
+      "source_lines": [
+        73,
+        81
+      ],
+      "source_pack_lines": [
+        4335,
+        4343
+      ],
+      "claim": "BG3 report describes successful PQ/Present, metadata and completed resize observations.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_RUNTIME_TELEMETRY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Original diagnostic reports absent; does not certify the color transform or later merged binary.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/31",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-033",
+      "source_id": "SRC-05",
+      "source_lines": [
+        76,
+        81
+      ],
+      "source_pack_lines": [
+        4338,
+        4343
+      ],
+      "claim": "Wilds selected log predates HDR installation; telemetry is explicitly Incomplete despite user Pass.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_RUNTIME_WITH_TELEMETRY_GAP",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Preserve both axes. Do not attach the older log to the newer binary or cancel the user’s observation.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/32",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-034",
+      "source_id": "SRC-05",
+      "source_lines": [
+        32,
+        34
+      ],
+      "source_pack_lines": [
+        4294,
+        4296
+      ],
+      "claim": "HDR observation phase adds no PQ decoder, gamut transform, tonemapper or brightness correction.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_SCOPE_LIMIT",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/33",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-035",
+      "source_id": "SRC-05",
+      "source_lines": [
+        88,
+        90
+      ],
+      "source_pack_lines": [
+        4350,
+        4352
+      ],
+      "claim": "Experimental output submission/completion is not calibrated HDR acceptance.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_ACCEPTANCE_LIMIT",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/34",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-036",
+      "source_id": "SRC-06",
+      "source_lines": [
+        22,
+        24
+      ],
+      "source_pack_lines": [
+        214,
+        216
+      ],
+      "claim": "Earlier overlay component retained a brief flash but avoided the freeze.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_COMPONENT_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/35",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-037",
+      "source_id": "SRC-06",
+      "source_lines": [
+        46,
+        49
+      ],
+      "source_pack_lines": [
+        238,
+        241
+      ],
+      "claim": "New integrated HDR mainline binary is explicitly not game-tested.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "EXPLICIT_RUNTIME_INCONCLUSIVE",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/36",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-038",
+      "source_id": "SRC-06",
+      "source_lines": [
+        30,
+        32
+      ],
+      "source_pack_lines": [
+        222,
+        224
+      ],
+      "claim": "Descriptor changes revoke readiness; metadata-only or failed color calls do not imply a new color encoding.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_SOURCE_BEHAVIOR",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/37",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-039",
+      "source_id": "SRC-07",
+      "source_lines": [
+        15,
+        15
+      ],
+      "source_pack_lines": [
+        4380,
+        4380
+      ],
+      "claim": "FG-off avoided the reported freeze, without proving tuning or IQ.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_DIAGNOSTIC_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/38",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-040",
+      "source_id": "SRC-07",
+      "source_lines": [
+        23,
+        35
+      ],
+      "source_pack_lines": [
+        4388,
+        4400
+      ],
+      "claim": "Eight retained configurations include failed creation attempts; no ninth configuration is silently applied.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_SOURCE_BEHAVIOR",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/39",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-041",
+      "source_id": "SRC-07",
+      "source_lines": [
+        35,
+        35
+      ],
+      "source_pack_lines": [
+        4400,
+        4400
+      ],
+      "claim": "Native Vulkan Frame Hold is explicitly unsupported in this experiment; FG is not forcibly disabled.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_SCOPE_LIMIT",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/40",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-042",
+      "source_id": "SRC-07",
+      "source_lines": [
+        43,
+        45
+      ],
+      "source_pack_lines": [
+        4408,
+        4410
+      ],
+      "claim": "successfulNR means model API success plus composition recording, not GPU completion, presentation or visible enhancement.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_COUNTER_SEMANTICS",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/41",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-043",
+      "source_id": "SRC-09",
+      "source_lines": [
+        12,
+        16
+      ],
+      "source_pack_lines": [
+        4540,
+        4544
+      ],
+      "claim": "Failed-control log reports primary viewport 1 / 3440x1440, auxiliary viewport 2 / 1146x480, and duplicate suppression.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_RUNTIME_TELEMETRY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "The raw log hash is recorded but raw bytes are absent; preserve these as reported observations, not current inspected inputs.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/42",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-044",
+      "source_id": "SRC-09",
+      "source_lines": [
+        15,
+        16
+      ],
+      "source_pack_lines": [
+        4543,
+        4544
+      ],
+      "claim": "Typed create succeeded but first evaluation returned NGX InvalidParameter; no successful composition was recorded.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_NEGATIVE_RUNTIME",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/43",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-045",
+      "source_id": "SRC-09",
+      "source_lines": [
+        22,
+        23
+      ],
+      "source_pack_lines": [
+        4550,
+        4551
+      ],
+      "claim": "Public Vulkan helpers motivate pointer-wrapper representation but do not prove the complete private-NR contract.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_CONTRACT_LIMIT",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/44",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-046",
+      "source_id": "SRC-09",
+      "source_lines": [
+        36,
+        44
+      ],
+      "source_pack_lines": [
+        4564,
+        4572
+      ],
+      "claim": "Private encode work can precede parameter rejection; zero model callback does not prove zero GPU work.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_SOURCE_BEHAVIOR",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/45",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-047",
+      "source_id": "SRC-09",
+      "source_lines": [
+        63,
+        68
+      ],
+      "source_pack_lines": [
+        4591,
+        4596
+      ],
+      "claim": "The tester’s active proxy filename is winmm.dll; hashing an unused OptiScaler.dll is inadequate load identity.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "REPORTED_INSTALLATION_IDENTITY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/46",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-048",
+      "source_id": "SRC-08",
+      "source_lines": [
+        34,
+        38
+      ],
+      "source_pack_lines": [
+        4496,
+        4500
+      ],
+      "claim": "Tested parent reportedly reached 3,000 API-success/composition recordings without recorded failure or device loss.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_RUNTIME_TELEMETRY",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not 3,000 proven GPU-completed, displayed or accepted images. Raw log SHA exists in the note, not raw log bytes.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/47",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-049",
+      "source_id": "SRC-08",
+      "source_lines": [
+        37,
+        38
+      ],
+      "source_pack_lines": [
+        4499,
+        4500
+      ],
+      "claim": "Manual paper white 40 appearance report is not timestamp-correlated with that log and does not authorize a default.",
+      "evidence_class": "USER_RUNTIME_OBSERVATION",
+      "reported_maturity": "REPORTED_UNCORRELATED_USER_OBSERVATION",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/48",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-050",
+      "source_id": "SRC-08",
+      "source_lines": [
+        40,
+        43
+      ],
+      "source_pack_lines": [
+        4502,
+        4505
+      ],
+      "claim": "IQ, cached reselection, sustained FG-on and transitions remain inconclusive; cleanup successor was not separately game tested.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "EXPLICIT_RUNTIME_INCONCLUSIVE",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/49",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-051",
+      "source_id": "SRC-10",
+      "source_lines": [
+        67,
+        70
+      ],
+      "source_pack_lines": [
+        14577,
+        14580
+      ],
+      "claim": "UI/Present/Vulkan combined successor has build-only authorization and inconclusive runtime status.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "EXPLICIT_RUNTIME_INCONCLUSIVE",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Not an exact current-build runtime receipt; no automatic propagation to another route, binary, environment or game.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/50",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-052",
+      "source_id": "SRC-10",
+      "source_lines": [
+        13,
+        19
+      ],
+      "source_pack_lines": [
+        14523,
+        14529
+      ],
+      "claim": "Document records an ancestry correction: the UI and converter components had diverged.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "DOCUMENTED_PROVENANCE_CORRECTION",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "historical_or_unqualified",
+      "limitations": "Chat J cannot authenticate Git ancestry from a document or archive without .git; retained as a warning against merge-equals-acceptance.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/51",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-053",
+      "source_id": "SRC-11",
+      "source_lines": [
+        37,
+        58
+      ],
+      "source_pack_lines": [
+        1805,
+        1826
+      ],
+      "claim": "Admit checks target shape, SDR-policy input, device/queue, format capabilities and DX11 sharing/synchronization, in a deterministic refusal order.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/52",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-054",
+      "source_id": "SRC-12",
+      "source_lines": [
+        129,
+        149
+      ],
+      "source_pack_lines": [
+        10551,
+        10571
+      ],
+      "claim": "Successful SetColorSpace updates interpretation; failed calls retain previous interpretation while recording the requested result.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/53",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-055",
+      "source_id": "SRC-12",
+      "source_lines": [
+        166,
+        183
+      ],
+      "source_pack_lines": [
+        10588,
+        10605
+      ],
+      "claim": "Resize completion advances structural identity even on failure; successful-resize generation advances only on success.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/54",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-056",
+      "source_id": "SRC-12",
+      "source_lines": [
+        185,
+        205
+      ],
+      "source_pack_lines": [
+        10607,
+        10627
+      ],
+      "claim": "Metadata generation changes without replacing the successful color-space interpretation; bounded metadata hash is not a full payload hash.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/55",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-057",
+      "source_id": "SRC-12",
+      "source_lines": [
+        100,
+        115
+      ],
+      "source_pack_lines": [
+        10522,
+        10537
+      ],
+      "claim": "Registration begins with unobserved color state; raw default SDR value is not a successful color observation.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/56",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-058",
+      "source_id": "SRC-13",
+      "source_lines": [
+        129,
+        195
+      ],
+      "source_pack_lines": [
+        45304,
+        45370
+      ],
+      "claim": "Registry Select is eligibility/correlation selection, including ambiguity, auxiliary, duplicate and contract-change refusal; its execution count is not model execution.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/57",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-059",
+      "source_id": "SRC-18",
+      "source_lines": [
+        899,
+        910
+      ],
+      "source_pack_lines": [
+        923,
+        934
+      ],
+      "claim": "Outer Present caller admits only the guarded R10/PQ exception to its ordinary SDR path.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/58",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-060",
+      "source_id": "SRC-18",
+      "source_lines": [
+        1033,
+        1059
+      ],
+      "source_pack_lines": [
+        1057,
+        1083
+      ],
+      "claim": "Legacy Capabilities.sdr is supplied true for guarded PQ too; do not export it as actual SDR color evidence.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/59",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-061",
+      "source_id": "SRC-19",
+      "source_lines": [
+        89,
+        107
+      ],
+      "source_pack_lines": [
+        1710,
+        1728
+      ],
+      "claim": "PresentCallIdentity distinguishes model preparation, submitted copyback and output; it retains a completion fence separately.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/60",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-062",
+      "source_id": "SRC-21",
+      "source_lines": [
+        16,
+        23
+      ],
+      "source_pack_lines": [
+        446,
+        453
+      ],
+      "claim": "Trace observation identifiers are not real-frame tokens or admission decisions.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/61",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-063",
+      "source_id": "SRC-22",
+      "source_lines": [
+        68,
+        90
+      ],
+      "source_pack_lines": [
+        376,
+        398
+      ],
+      "claim": "Missing/filtered diagnostic records are not execution evidence; observation must not control rendering.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/62",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-064",
+      "source_id": "SRC-23",
+      "source_lines": [
+        27,
+        38
+      ],
+      "source_pack_lines": [
+        51,
+        62
+      ],
+      "claim": "Bridge telemetry has model, composition and copyback stage counters, not a single universal success.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/63",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-065",
+      "source_id": "SRC-24",
+      "source_lines": [
+        61,
+        64
+      ],
+      "source_pack_lines": [
+        152,
+        155
+      ],
+      "claim": "Matching adapter/LUID does not establish device ownership.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/64",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-066",
+      "source_id": "SRC-14",
+      "source_lines": [
+        40,
+        44
+      ],
+      "source_pack_lines": [
+        6750,
+        6754
+      ],
+      "claim": "Present compatibility tests use simulated model-work and output-write counters; source tests do not prove real GPU non-writing.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/65",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-067",
+      "source_id": "SRC-15",
+      "source_lines": [
+        26,
+        26
+      ],
+      "source_pack_lines": [
+        3908,
+        3908
+      ],
+      "claim": "HDR test covers R10 with unobserved SDR default; format alone must not be converted to PQ evidence.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/66",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-068",
+      "source_id": "SRC-16",
+      "source_lines": [
+        17,
+        30
+      ],
+      "source_pack_lines": [
+        11601,
+        11614
+      ],
+      "claim": "Vulkan registry fixture tests primary/auxiliary selection, ambiguity, duplicate suppression and contract-change latching.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "original_selector": "/claims/67",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    },
+    {
+      "claim_id": "COV-CL-069",
+      "source_id": "SRC-17",
+      "source_lines": [
+        5,
+        71
+      ],
+      "source_pack_lines": [
+        9771,
+        9837
+      ],
+      "claim": "The inspected robustness runner aggregates existing tests and uses concrete toolchain/output paths.",
+      "evidence_class": "BASELINE_SOURCE_FACT",
+      "reported_maturity": "INSPECTED_SOURCE_OR_TEST",
+      "independently_inspected_level": "document_or_source_only",
+      "status": "source_fact",
+      "limitations": "Static inspection of the supplied baseline only. No compilation, fixture, GPU or runtime execution was performed for this production source.",
+      "runtime_acceptance_granted": false,
+      "derived_recommendation": {
+        "classification": "PROPOSAL",
+        "text": "Integrate or wrap the current equivalent rather than duplicate the existing harness.",
+        "recommendation_id": "COV-008"
+      },
+      "original_selector": "/claims/68",
+      "proposed_intake": "REFERENCE_OR_REPORTED_ONLY",
+      "new_runtime_qualification": false
+    }
+  ]
+}

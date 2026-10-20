@@ -244,7 +244,8 @@ void VkPresentPrivateFrame::SourceToPresent()
 bool VkPresentPrivateFrame::ConvertToModel()
 {
     const auto recipe=SelectVkPresentColorRecipe(request_.format,request_.colorSpace);
-    if(recipe.revision==2) {
+    const auto colorOperation=recipe.Operation();
+    if(colorOperation.conversion==Neurotic::Context::PresentColorConversion::Pq2020Linear709) {
         if(!color_||!colorReservation_)return false;
         Move(images_[Captured],VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VK_ACCESS_SHADER_READ_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         Move(images_[ModelInput],VK_IMAGE_LAYOUT_GENERAL,VK_ACCESS_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
@@ -284,9 +285,8 @@ bool VkPresentPrivateFrame::ConvertToModel()
     return true;
 }
 
-bool VkPresentPrivateFrame::Evaluate(bool reset)
+bool VkPresentPrivateFrame::ModelFrame(VkFrameRequest& frame, bool reset)
 {
-    VkFrameRequest frame {};
     frame.waitBudget=request_.waitBudget;
     frame.observedRenderSize=request_.observedRenderSize;
     frame.route = VkNrRoute::Present;
@@ -296,7 +296,7 @@ bool VkPresentPrivateFrame::Evaluate(bool reset)
     frame.contract.representation.colorSpace = request_.colorSpace;
     const auto recipe=SelectVkPresentColorRecipe(request_.format,request_.colorSpace);
     frame.contract.representation.recipeRevision = recipe.revision;
-    frame.gameHdr = recipe.hdr;
+    frame.gameHdr = recipe.Operation().hdr;
     frame.contract.queue = request_.frame.queue;
     frame.contract.acquireGeneration = request_.frame.acquireGeneration;
     frame.contract.swapchain = request_.frame.swapchain;
@@ -349,6 +349,42 @@ bool VkPresentPrivateFrame::Evaluate(bool reset)
     frame.height = frame.guideHeight = request_.extent.height;
     frame.creationReset = reset;
     frame.colorLayout = VK_IMAGE_LAYOUT_GENERAL;
+    return true;
+}
+
+std::optional<VkPresentInitializationRequest> VkPresentPrivateFrame::InitializationRequest(
+    const VkPresentImageRequest& image, std::string& reason)
+{
+    if (!Check(image)) { reason="Private Vulkan frame does not match initialization metadata"; return {}; }
+    VkFrameRequest frame;
+    if (!ModelFrame(frame,false)) { reason="Vulkan initialization guide metadata unavailable"; return {}; }
+    VkPresentInitializationRequest result;
+    result.instance=instance_; result.physicalDevice=physical_; result.device=device_;
+    result.frame=frame.contract; result.frame.output=request_.extent;
+    result.frame.deviceGeneration=VkNrCompletionDeviceGeneration(device_);
+    result.frame.queueFamily=request_.frame.queueFamily;
+    result.settings=frame.settings; result.waitBudget=frame.waitBudget;
+    result.observedRenderSize=frame.observedRenderSize; result.resolutionMetadata=frame.resolutionMetadata;
+    result.input=request_.inputDecision; result.privateAllocationBudget=frame.privateAllocationBudget;
+    result.colorFormat=frame.color->Resource.ImageViewInfo.Format;
+    result.targetFormat=frame.targetColor->Resource.ImageViewInfo.Format;
+    result.depthFormat=frame.depth->Resource.ImageViewInfo.Format;
+    result.motionFormat=frame.motion->Resource.ImageViewInfo.Format;
+    result.gameHdr=frame.gameHdr;
+    return result;
+}
+
+bool VkPresentPrivateFrame::Evaluate(bool reset)
+{
+    VkFrameRequest frame;
+    if (!ModelFrame(frame,reset)) return false;
+    if (request_.initializationCompleted) {
+        VkMemoryBarrier memory{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        memory.srcAccessMask=VK_ACCESS_MEMORY_WRITE_BIT;
+        memory.dstAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+        vkCmdPipelineBarrier(commandBuffer_,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,1,&memory,0,nullptr,0,nullptr);
+    }
     modelResult_ = EvaluatePresentImageVk(frame);
     modelTouched_ = modelResult_.status == VkRecordStatus::Complete && modelResult_.chainDeliverable;
     return modelTouched_;
@@ -357,7 +393,8 @@ bool VkPresentPrivateFrame::Evaluate(bool reset)
 bool VkPresentPrivateFrame::ConvertFromModel()
 {
     const auto recipe=SelectVkPresentColorRecipe(request_.format,request_.colorSpace);
-    if(recipe.revision==2) {
+    const auto colorOperation=recipe.Operation();
+    if(colorOperation.conversion==Neurotic::Context::PresentColorConversion::Pq2020Linear709) {
         if(!color_||!colorReservation_)return false;
         Move(images_[ModelOutput],VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VK_ACCESS_SHADER_READ_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         Move(images_[Captured],VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VK_ACCESS_SHADER_READ_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
@@ -415,14 +452,37 @@ void VkPresentPrivateFrame::Discard()
 }
 bool VkPresentPrivateFrame::DiscardCapturedGuides()
 {
-    AbandonPresentRecordingVk(modelTouched_);
-    modelTouched_ = false;
-    if (vkResetCommandPool(device_, commandPool_, 0) == VK_SUCCESS) {
-        // Discard predicted layouts; future full writes may start with undefined contents.
-        for (auto& image : images_) image.layout = VK_IMAGE_LAYOUT_UNDEFINED;
-        ReleaseCapturedGuides();return true;
+    // This pool is private to the serialized producer. No owner mutex spans
+    // reset: its real Vulkan observation reenters the recording owner.
+    std::optional<VkNrRecordingOwner::UseRecordingSnapshot> before;
+    if(modelTouched_){
+        before=VulkanNrRecordings().InspectUseRecording(modelResult_.use);
+        const auto& lifetime=modelResult_.modelLifetime;
+        if(!before||!before->UnsubmittedRecording()||before->device!=device_||
+           before->buffer!=commandBuffer_||before->pool!=commandPool_||
+           !lifetime||!lifetime->Qualified()||lifetime->device!=reinterpret_cast<uintptr_t>(device_)||
+           lifetime->deviceGeneration!=before->generation){
+            MarkPresentRuntimeUncertainVk("Vulkan Present discard recording identity or unsubmitted state unavailable");return false;
+        }
     }
-    MarkPresentRuntimeUncertainVk("Vulkan Present command-pool discard failed");return false;
+    // Reserve under Session authority before reset releases the recording.
+    // The existing observer then survives unrelated Poll/Record during reset;
+    // no model/session/recording mutex is held across the Vulkan callback.
+    if(before&&!BeginAbandonPresentRecordingVk(modelResult_.use,*before)){
+        MarkPresentRuntimeUncertainVk("Vulkan Present exact discard reservation unavailable");return false;
+    }
+    if(vkResetCommandPool(device_,commandPool_,0)!=VK_SUCCESS){
+        MarkPresentRuntimeUncertainVk("Vulkan Present command-pool discard failed");return false;
+    }
+    if(before){
+        if(!AbandonPresentRecordingVk(modelResult_.use,*before)){
+            MarkPresentRuntimeUncertainVk("Vulkan Present exact discarded recording retirement unavailable");return false;
+        }
+    }else AbandonPresentRecordingVk(false); // no counted model entry to retire
+    modelTouched_=false;modelResult_={};
+    // Discard predicted layouts only after actual reset and exact retirement.
+    for(auto& image:images_)image.layout=VK_IMAGE_LAYOUT_UNDEFINED;
+    ReleaseCapturedGuides();return true;
 }
 
 } // namespace DlssNr

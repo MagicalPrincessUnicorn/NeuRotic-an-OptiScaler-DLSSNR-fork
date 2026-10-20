@@ -1,0 +1,19 @@
+diff --git a/before/OptiScaler/nr/lifecycle/NativeExecutionLedger.h b/after/OptiScaler/nr/lifecycle/NativeExecutionLedger.h
+--- a/before/OptiScaler/nr/lifecycle/NativeExecutionLedger.h
++++ b/after/OptiScaler/nr/lifecycle/NativeExecutionLedger.h
+@@ -53,13 +53,13 @@
+     bool Authorized(Ticket ticket)const noexcept
+     {const auto* slot=Find(ticket);return slot&&slot->authorized;}
+     bool StartModel(Ticket ticket)noexcept
+-    {auto* slot=Find(ticket);if(!slot||!slot->authorized||slot->modelStarted)return false;slot->modelStarted=true;return true;}
++    {auto* slot=Find(ticket);if(!slot||!slot->authorized)return false;slot->modelStarted=true;return true;}
+     bool ModelStarted(Ticket ticket)const noexcept
+     {const auto* slot=Find(ticket);return slot&&slot->modelStarted;}
+     bool ModelCalled(Ticket ticket)const noexcept
+     {const auto* slot=Find(ticket);return slot&&slot->modelCalled;}
+     bool MarkModelCalled(Ticket ticket)noexcept
+-    {auto* slot=Find(ticket);if(!slot||!slot->modelStarted||slot->modelCalled)return false;slot->modelCalled=true;return true;}
++    {auto* slot=Find(ticket);if(!slot||!slot->modelStarted)return false;slot->modelCalled=true;return true;}
+     void MarkModelReturned(Ticket ticket)noexcept
+     {auto* slot=Find(ticket);if(slot&&slot->modelCalled)slot->modelReturned=true;}
+     bool Retire(Ticket ticket)noexcept

@@ -1,0 +1,42 @@
+#include "dlssnr/VulkanNrPreSr.h"
+#include <unordered_map>
+#include <string>
+#include <type_traits>
+#include <cstdio>
+using namespace DlssNr;
+struct Params {
+ std::unordered_map<std::string,void*> pointers;std::unordered_map<std::string,float> floats;std::unordered_map<std::string,unsigned> integers;
+ void* original=nullptr;bool rejectBaseX=false,rejectOriginal=false;unsigned writes=0;
+ template<class T> auto& Values(){if constexpr(std::is_same_v<T,void*>)return pointers;else if constexpr(std::is_same_v<T,float>)return floats;else return integers;}
+ template<class T> unsigned Get(const char* key,T* out){auto& m=Values<T>();auto i=m.find(key);if(i==m.end())return 0;*out=i->second;return 1;}
+ template<class T> void Set(const char* key,T value){++writes;
+  if constexpr(std::is_same_v<T,void*>){if(rejectOriginal&&std::string(key)==NVSDK_NGX_Parameter_Color&&value==original)return;}
+  if constexpr(std::is_same_v<T,unsigned>){if(rejectBaseX&&std::string(key)==NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X)return;}
+  Values<T>()[key]=value;
+ }
+};
+unsigned checks=0,failed=0;
+void Check(bool value,const char* label){++checks;failed+=!value;std::printf("%s %s\n",value?"PASS":"FAIL",label);}
+int main(){
+ VkNrRecordingOwner owner;const auto device=reinterpret_cast<VkDevice>(1);const auto pool=reinterpret_cast<VkCommandPool>(2);const auto cb=reinterpret_cast<VkCommandBuffer>(3);
+ owner.OnAllocate(device,pool,cb,0);owner.OnBegin(cb,0,VK_SUCCESS);auto use=owner.Reserve(cb,1);
+ if(!use)return 2;
+ int color=1,output=2,privateColor=3;Params p;p.original=&color;
+ p.Set(NVSDK_NGX_Parameter_Color,static_cast<void*>(&color));p.Set(NVSDK_NGX_Parameter_Output,static_cast<void*>(&output));
+ VkNrFrameContract frame;frame.evaluation={cb,owner.Incarnation(cb),1,1};frame.deviceGeneration=1;frame.queueFamily=0;frame.routeEpoch=1;frame.output={1280,720};frame.placement=VkNrPlacement::BeforeSR;
+ VkNrPreSrCarrier carrier{&privateColor,frame,*use,true,true};
+ {VkNrPreSrScope scope(&p,owner,frame);const auto before=p.writes;
+  Check(!scope.Ready()&&!scope.Bind(carrier,frame),"missing optional jitter for AfterSR does not manufacture pre-SR binding eligibility");
+  Check(scope.Restore(),"untouched no-jitter scope reports successful no-op restoration");
+  Check(scope.Restore()&&p.writes==before&&p.pointers[NVSDK_NGX_Parameter_Color]==&color,"unused carrier restores idempotently without parameter writes");}
+ p.Set(NVSDK_NGX_Parameter_Jitter_Offset_X,0.25f);p.Set(NVSDK_NGX_Parameter_Jitter_Offset_Y,-0.5f);
+ p.Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X,8u);p.Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y,12u);
+ {VkNrPreSrScope scope(&p,owner,frame);p.rejectBaseX=true;p.rejectOriginal=true;
+  Check(scope.Ready()&&!scope.Bind(carrier,frame)&&p.pointers[NVSDK_NGX_Parameter_Color]==&privateColor,"partial color mutation and rejected subrect write cause actual Bind failure");
+  Check(!scope.Restore()&&!scope.Restore(),"failed partial-mutation rollback stays failed despite bound=false");}
+ p.rejectBaseX=false;p.rejectOriginal=false;p.Set(NVSDK_NGX_Parameter_Color,static_cast<void*>(&color));
+ {VkNrPreSrScope scope(&p,owner,frame);
+  Check(scope.Bind(carrier,frame)&&p.pointers[NVSDK_NGX_Parameter_Color]==&privateColor,"eligible actual pre-SR carrier still binds");
+  Check(scope.Restore()&&p.pointers[NVSDK_NGX_Parameter_Color]==&color&&p.integers[NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X]==8u,"real mutation restores authentic original color and subrect");}
+ std::printf("RESULT checks=%u failed=%u CPU_ONLY=true NO_DEVICE=true\n",checks,failed);return failed?1:0;
+}

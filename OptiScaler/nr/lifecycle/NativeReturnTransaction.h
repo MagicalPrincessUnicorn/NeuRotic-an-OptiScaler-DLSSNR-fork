@@ -222,10 +222,20 @@ class NativeReturnTransaction final
         value.stageOutcome=state_==State::Committed||failurePublished_?static_cast<std::uint32_t>(stage_.outcome):0u;
         value.evaluation=stage_.evaluation.value;value.lastRecordedOrdinal=stage_.lastRecordedOrdinal;
         value.hostResult=stage_.hostResult;
-        value.restorationFlags=(value.restorationFlags&~3u)|(restored_?3u:0u);
-        std::memset(value.reason,0,sizeof(value.reason));
-        const auto reason=stage_.reason.View();
-        std::memcpy(value.reason,reason.data(),(std::min)(reason.size(),sizeof(value.reason)-1));
+        // Drop already projected the actual per-scope CPU/command facts.
+        // An incomplete transaction must not erase one successfully restored
+        // scope. Its rejected status still grants no delivery authority.
+        const bool keepRestoreReason=stage_.reason.View()=="Native.ReturnOuterFailure"&&
+            !(value.restorationFlags&2u)&&std::strncmp(value.reason,"Native.Restore.",15)==0;
+        value.restorationFlags|=restored_?3u:0u;
+        // Preserve an observed precise restore cause at this generic downstream
+        // boundary. Earlier concrete transaction failures retain precedence.
+        if(!keepRestoreReason)
+        {
+            std::memset(value.reason,0,sizeof(value.reason));
+            const auto reason=stage_.reason.View();
+            std::memcpy(value.reason,reason.data(),(std::min)(reason.size(),sizeof(value.reason)-1));
+        }
     }
     template<class Reader>bool ObserveOutputForHost(const Reader& reader,const C::ResourceView& current,
         std::uint64_t recordingIncarnation,DlssNr::NativeHostReturnObservationV1& value)const noexcept

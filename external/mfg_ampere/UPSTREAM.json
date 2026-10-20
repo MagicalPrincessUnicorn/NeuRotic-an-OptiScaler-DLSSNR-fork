@@ -1,0 +1,168 @@
+{
+  "files": [
+    {
+      "license": "MIT",
+      "modifications": "Integrated default false",
+      "sha256": "d3d252c91e92593e89f209a61ae361481a69bfc37e8f16baa8f340a347bf1188",
+      "git_blob_sha1": "2958d543a14d47d50bfd8e744f5b948354b6d6c5",
+      "path": "src/addons/mfgunlock/architecture.hpp",
+      "local_sha256": "e105cb3bb17be2abe555afe2e44868b1b3537129eee35237c70ce6966947b751"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "17ccd97cdf38ec7519cb33a5205d6540795373799ce346a09228695c66a8692a",
+      "git_blob_sha1": "3a0e0f55880396eb78360bdfab2934d01f0972bd",
+      "path": "src/addons/mfgunlock/capability_policy.hpp",
+      "local_sha256": "17ccd97cdf38ec7519cb33a5205d6540795373799ce346a09228695c66a8692a"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "e2f0d8ff70a18c4d5e91016282b4f733835712d62871579d4e8824e55abb8079",
+      "git_blob_sha1": "98b54318f42018b186a0e2421e80317f9d693b7e",
+      "path": "src/addons/mfgunlock/provider_profile.hpp",
+      "local_sha256": "e2f0d8ff70a18c4d5e91016282b4f733835712d62871579d4e8824e55abb8079"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "5f873954c8506898e469daeba7628296102f260373261f0d439be3dc1ac6e4ef",
+      "git_blob_sha1": "565b7dee93945225098c09e2a6cb033e0e28c98b",
+      "path": "src/addons/mfgunlock/endpoint_backend.hpp",
+      "local_sha256": "5f873954c8506898e469daeba7628296102f260373261f0d439be3dc1ac6e4ef"
+    },
+    {
+      "license": "MIT",
+      "modifications": "Audit: atomic byte compare-exchange after VirtualProtect; preserve foreign changes on commit/rollback.",
+      "sha256": "b259272314e94fe15df18b0d7076ea81f1b5ba30b741a83f564ad7b872bfbedc",
+      "git_blob_sha1": "c2ecbb1ade15a1e713cc446a4553ee9c9b0118d1",
+      "path": "src/addons/mfgunlock/provider.hpp",
+      "local_sha256": "04f3dc89d0e2916b922bb1cc28c38a1b0088163c70cc18e77d465af207300389"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "0bd9d6aa610f2de668b55edd269416cdb4a55c96adff5020f4eb0cd607b0c09b",
+      "git_blob_sha1": "94ec669946450619297e6f6c1a0caafc37afa72d",
+      "path": "src/addons/mfgunlock/fatbin.hpp",
+      "local_sha256": "0bd9d6aa610f2de668b55edd269416cdb4a55c96adff5020f4eb0cd607b0c09b"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "ecb6446583b9e2a453a98acd923ada4a61f61d8efaf5ed25a13b981b3d138be6",
+      "git_blob_sha1": "03af72a4aca143d677297752542c957918d50f4c",
+      "path": "src/addons/mfgunlock/ptx_compat.hpp",
+      "local_sha256": "ecb6446583b9e2a453a98acd923ada4a61f61d8efaf5ed25a13b981b3d138be6"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "4db0ce0f3650546a893e4608610e49df18cd0a94a50f5a9928dc01e25ca50eee",
+      "git_blob_sha1": "1aacc4c7e8c510640070f378be2344d6a7d0ab01",
+      "path": "src/addons/mfgunlock/ptx_retarget.hpp",
+      "local_sha256": "4db0ce0f3650546a893e4608610e49df18cd0a94a50f5a9928dc01e25ca50eee"
+    },
+    {
+      "license": "MIT",
+      "modifications": "Audit: atomic descriptor publication and ownership-aware rollback; retain allocation on conflict or failed free.",
+      "sha256": "b26a60d23a382940b644181afd22da28e9461c5802cd69d0e37a5a957cebb683",
+      "git_blob_sha1": "390a15c821ed7cc24732219ae4b1aec065d915a5",
+      "path": "src/addons/mfgunlock/validated_warp.hpp",
+      "local_sha256": "0361f39c79d3334acd30981672a9276133ec37944ec4f17cd21a23152eac9300"
+    },
+    {
+      "license": "MIT",
+      "modifications": "none",
+      "sha256": "b704d1ef2ff0bf896882d00d98c448a7eea8d16592e7fe1c51fd87f98443a2bc",
+      "git_blob_sha1": "ca359cf5bfaeb61f640577bc440dcbf02f2fced8",
+      "path": "src/addons/mfgunlock/blackwell_temporal.hpp",
+      "local_sha256": "b704d1ef2ff0bf896882d00d98c448a7eea8d16592e7fe1c51fd87f98443a2bc"
+    },
+    {
+      "path": "contrib/validation/tests/architecture_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "730281e52d0867030147024e4ee96368383df910",
+      "sha256": "5d9928eedc40dc8d4c48eb95b6c5d4df3d5923ced9e3d3288fc54daf856d573e",
+      "modifications": "none",
+      "local_sha256": "5d9928eedc40dc8d4c48eb95b6c5d4df3d5923ced9e3d3288fc54daf856d573e"
+    },
+    {
+      "path": "contrib/validation/tests/blackwell_temporal_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "ab16ddeb863a9d801ec12c078e4ab23653d7bf7a",
+      "sha256": "1d4ffb49777d0c2561616203da72eb9de389ceb40800e956cf2cf9f0ba66267c",
+      "modifications": "none",
+      "local_sha256": "1d4ffb49777d0c2561616203da72eb9de389ceb40800e956cf2cf9f0ba66267c"
+    },
+    {
+      "path": "contrib/validation/tests/capability_policy_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "54c69b56bff91283787d9d1ed74e6b4fb7a2ca43",
+      "sha256": "67401270a315d8faa34245f0134693b092b82e6d3b90d42e5266186e6edb43da",
+      "modifications": "none",
+      "local_sha256": "67401270a315d8faa34245f0134693b092b82e6d3b90d42e5266186e6edb43da"
+    },
+    {
+      "path": "contrib/validation/tests/endpoint_backend_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "e7be335e077e4cf4812a7d4f4415ecc667f7c10c",
+      "sha256": "521e3de0826c1ad48922a55e4a3832a67196134a2fae64d8e65f957d91ccc3a2",
+      "modifications": "none",
+      "local_sha256": "521e3de0826c1ad48922a55e4a3832a67196134a2fae64d8e65f957d91ccc3a2"
+    },
+    {
+      "path": "contrib/validation/tests/provider_mocks/windows.h",
+      "license": "MIT",
+      "git_blob_sha1": "f7939aa3e388bd815322efcfb1ebb9072f451343",
+      "sha256": "b518053c60c6d550cbee18ce0fcaaceb2c5b991f6df1d31bd1c4b0747a639d34",
+      "modifications": "Audit: optional VirtualProtect callback for deterministic competing-owner injection.",
+      "local_sha256": "8d2f326142997c1881cc959b9941dfcc7071b7f957005a950fde584c51a51d48"
+    },
+    {
+      "path": "contrib/validation/tests/provider_profile_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "d8a4afeec6a9118e9534e064c8e56a885444ec42",
+      "sha256": "9df73fbec45e08f2b76a7655f659cf9cc23e1e04ceea97a3efffe745820a4cf1",
+      "modifications": "none",
+      "local_sha256": "9df73fbec45e08f2b76a7655f659cf9cc23e1e04ceea97a3efffe745820a4cf1"
+    },
+    {
+      "path": "contrib/validation/tests/provider_state_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "a2797872d95cb58a5b53a49815b4e82e1c881228",
+      "sha256": "484f5dba27584789bf64f6ebb6fa41c5c506e38bca6ec619289fa7ffc50c4d06",
+      "modifications": "none",
+      "local_sha256": "484f5dba27584789bf64f6ebb6fa41c5c506e38bca6ec619289fa7ffc50c4d06"
+    },
+    {
+      "path": "contrib/validation/tests/ptx_retarget_test.cpp",
+      "license": "MIT",
+      "git_blob_sha1": "2b5b0bdeaff7ae1c6933e54bb10682a42e52a694",
+      "sha256": "a86761376c7764cbdad3dc5aa4d689e22337160300b11af391e3a3efb4470105",
+      "modifications": "none",
+      "local_sha256": "a86761376c7764cbdad3dc5aa4d689e22337160300b11af391e3a3efb4470105"
+    },
+    {
+      "path": "LICENSE",
+      "license": "MIT",
+      "git_blob_sha1": "972eeb84bb4187f882b13f3ff61181bb56320fa7",
+      "sha256": "8b77740c6c91157c6946d9ad092fc5d6ce86d09c653abf110bb6be08072002fe",
+      "modifications": "none",
+      "local_sha256": "8b77740c6c91157c6946d9ad092fc5d6ce86d09c653abf110bb6be08072002fe"
+    },
+    {
+      "path": "src/addons/mfgunlock/reshade_compat.hpp",
+      "license": "MIT",
+      "git_blob_sha1": "a3006148ba6a44dddb90d8952a46f06db3c4e88f",
+      "sha256": "48732d99a5b6666ad7dff9c5f961ce8dfac5d1d529967c73ceab37523adaf925",
+      "modifications": "Replaced with NeuRotic logging-only shim and test log capture; no ReShade runtime, hooks or UI.",
+      "local_sha256": "95a0279fe9a0cfd279af7761bd166ff98e6e878809e98c1af902d9b05299419a"
+    }
+  ],
+  "commit": "93c5725a534840dc0fa7b1986b216e6b9da3877d",
+  "host_adapter": "reshade_compat.hpp is NeuRotic logging-only glue; no ReShade runtime, hooks or UI",
+  "excluded": "addon, loader, NVAPI/NGX hook owners, optional Warp/scatter/boundary controls, proprietary payloads",
+  "repository": "nefh/MFGAmpereUnlock-RenoDx"
+}

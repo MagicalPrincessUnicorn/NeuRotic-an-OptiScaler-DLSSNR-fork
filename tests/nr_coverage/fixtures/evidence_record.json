@@ -1,0 +1,271 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "evidence_record",
+  "evidence_id": "ncov:evidence:2:596fc6a9b1ef7c887df96f4c198d682e09bbe54f93a533620fd6b62aec7b4f8f",
+  "compatibility_cell_id": "ncov:compat:2:3f5a31efc5bff1ec486648a1e7be5f072df013707abe93fae7a30766bc186e14",
+  "source": {
+    "kind": "manual_report",
+    "raw_sha256": "0e71dad5c312adb4b298262fea96933885da1dcbc0091fb825c11e951ae61a7b",
+    "raw_bytes": 72,
+    "selector": "whole document",
+    "reported_at": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "origin_run_ref": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "lineage_group_ref": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "author_attribution": "EspiOwnage / Chat J design fixture",
+    "upstream_reference": "Generated solely for schema tests; not a source runtime claim.",
+    "license_or_rights": "Synthetic text; no proprietary assets."
+  },
+  "lineage": {
+    "adapter_id": "j.manual",
+    "adapter_revision": "2.0.0",
+    "adapter_source_sha256": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "source_record_ref": {
+      "state": "known",
+      "value": "J-DESIGN-ONLY-001",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "parent_evidence_ids": []
+  },
+  "lane": "unknown",
+  "intent": "discovery",
+  "basis": "design_example",
+  "observed_result": "not_run",
+  "started_utc": {
+    "state": "unknown",
+    "reason": "Not observed; design-only fixture, no runtime run."
+  },
+  "ended_utc": {
+    "state": "unknown",
+    "reason": "Not observed; design-only fixture, no runtime run."
+  },
+  "scope": {
+    "scope_id": "fixture:output",
+    "scope_revision": "1",
+    "scope_sha256": {
+      "state": "known",
+      "value": "f53741f9b027a9e8697346baad1f21e089dea5db7f640d8e69bf1a95101bd95a",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_id": {
+      "state": "known",
+      "value": "fixture:static",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_revision": {
+      "state": "known",
+      "value": "1",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_sha256": {
+      "state": "known",
+      "value": "60e7784763f9c9b0cc58f04cab0f63a87726592c3c4d31fef1eec572064c1db3",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "observation_scope_sha256": {
+      "state": "known",
+      "value": "da96132aba805b53db65caabeda288bde2106cddfed83d7d90ba2908728a64ba",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "required_conditions": [
+      "app_api",
+      "execution_api",
+      "route",
+      "placement"
+    ],
+    "required_cohort": [
+      "game_id",
+      "game_version",
+      "game_executable_sha256",
+      "neurotic_module_sha256",
+      "provider_manifest_sha256",
+      "effective_settings_sha256",
+      "driver_version",
+      "os_version",
+      "gpu_device_id",
+      "contract_manifest_sha256"
+    ],
+    "required_extensions": [
+      "implementation_version",
+      "game_build_manifest_sha256",
+      "control_mode"
+    ],
+    "required_bindings": [],
+    "axes": [
+      "output_delivery"
+    ],
+    "condition_coverage": "exact_segment",
+    "limitation": "Design-only requested scope; no real execution or accepted qualifying policy."
+  },
+  "stages": {
+    "desired_route": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "observed_route": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "admitted_route": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "model_attempts": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "model_api_successes": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "composition_recordings": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "submissions": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "gpu_completed_outputs": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "successful_original_presents": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "delivered_generated_frames": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "display_observations": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    }
+  },
+  "outcomes": {
+    "protocol": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "gpu_resource": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "model_execution": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "output_delivery": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "presentation": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "spatial_iq": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "temporal_iq": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    },
+    "performance": {
+      "status": "NOT_RUN",
+      "reason": "Unexecuted receipt template; no test result exists.",
+      "evidence_ids": []
+    }
+  },
+  "trace_integrity": {
+    "status": "not_observed",
+    "dropped_records": {
+      "state": "not_observed",
+      "reason": "No observation attempted."
+    },
+    "reason": "No trace exists."
+  },
+  "termination": "not_run",
+  "required_obligations": [
+    "fixture:delivery"
+  ],
+  "fulfilled_obligations": [],
+  "missing_obligations": [
+    "fixture:delivery"
+  ],
+  "artifacts": [],
+  "external_references": [],
+  "controls": {
+    "mode": {
+      "state": "known",
+      "value": "loaded_nr_on",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "cold_start": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "loaded_module_manifest_sha256": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "reference_validity": "not_evaluated",
+    "reference_review_sha256": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "limitation": "No real control run; design fixture only."
+  },
+  "qualification_claim": {
+    "claimed_level": "reference",
+    "review_artifact_sha256": {
+      "state": "unknown",
+      "reason": "Not observed; design-only fixture, no runtime run."
+    },
+    "limitation": "No qualification claimed."
+  },
+  "limitations": [
+    "DESIGN_ONLY: all run/provider/build labels are synthetic; no actual compatibility result."
+  ],
+  "runtime_authority": false
+}

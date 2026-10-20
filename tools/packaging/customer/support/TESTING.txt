@@ -3,3 +3,7 @@ NEUROTIC — TROUBLESHOOTING
 Record the game, GPU, driver, graphics API, rendering route and settings when reporting a problem. Include the diagnostic ZIP exported from Installation Library's Diagnostics tab. Preserve installation recovery records and personal files.
 
 For image comparisons, keep game settings and scene conditions consistent. Check visible NR output, motion, menus, loading and transitions. Requested settings and running status do not by themselves establish successful processing. Enable file logging only when collecting a troubleshooting log.
+
+Packages marked for internal testing set file logging to Trace during installation and updates, including when an existing configuration is reused. Other saved preferences are preserved. Public packages and packages without this policy retain existing logging choices; later deliberate logging edits remain available.
+
+If diagnostic configuration fails, the installer reports an incomplete installation rather than claiming that Trace is ready. Reload after an outside settings change, resolve duplicate Log entries if reported, or release a file held by another application before retrying. The installation record describes the saved configuration; the next game log confirms whether logging actually started.

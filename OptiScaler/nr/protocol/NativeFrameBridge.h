@@ -23,6 +23,22 @@ template<class Reader>std::optional<DlssNrFrameInfo> BuildNativeFrameInfo(const 
     const auto* raster=context?S::ResolveMetadata(context->renderRaster,reader):nullptr;
     if(!color||!S::Established(color->domain)||color->domain.KnownPart()->value==C::ColorDomain::Control||
        !raster||!S::Established(raster->active))return {};
+    const C::BoundedList<C::SemanticClaim,16>* fields=nullptr;
+    if(!S::ResolveList(context->fields,reader,fields))return {};
+    if(fields)for(std::size_t i=0;i<fields->Size();++i)for(std::size_t j=0;j<i;++j)
+        if(fields->Get(i)->field==fields->Get(j)->field)return {};
+    // Supply is an original observation, not a finite default or C12 consumer value.
+    const auto originalNumber=[&](std::string_view key)->const double*{
+        if(fields)for(const auto& claim:*fields)if(claim.field.View()==key)
+        {
+            const auto* raw=Number(claim.raw);const auto* effective=Number(claim.effective);
+            const auto limit=static_cast<double>((std::numeric_limits<float>::max)());
+            if(!raw||!effective||!std::isfinite(*raw)||!std::isfinite(*effective)||
+               *raw < -limit||*raw > limit||*effective < -limit||*effective > limit)return nullptr;
+            return raw;
+        }
+        return nullptr;
+    };
     DlssNrFrameInfo frame{};
     frame.ColourIsLinearHdr=color->domain.KnownPart()->value!=C::ColorDomain::EncodedDisplay;
     // The same qualified domain must select the C12 shader branch.
@@ -47,6 +63,10 @@ template<class Reader>std::optional<DlssNrFrameInfo> BuildNativeFrameInfo(const 
        !frame.DepthSubrectWidth||!frame.DepthSubrectHeight||!frame.MotionSubrectWidth||!frame.MotionSubrectHeight||
        !std::isfinite(map.preExposure)||map.preExposure<=0)return {};
     frame.Reset=reset!=0;frame.DepthInverted=inverted!=0;frame.PreExposure=map.preExposure;
+    frame.ColorDomainKnown=true; // Qualified C02 domain and existing transfer/raster checks passed.
+    frame.JitterSupplied=originalNumber("Jitter.Offset.X")&&originalNumber("Jitter.Offset.Y");
+    const auto* preExposure=originalNumber("DLSS.Pre.Exposure");
+    frame.PreExposureSupplied=preExposure&&static_cast<float>(*preExposure)>1e-6f;
     return frame;
 }
 }

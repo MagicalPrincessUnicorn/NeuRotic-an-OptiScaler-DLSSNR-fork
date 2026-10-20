@@ -12,8 +12,18 @@ struct ModelInfo {
     std::string sha256, reason;
     uint64_t bytes = 0, fileId = 0, modified = 0;
 };
-ModelInfo VerifyModel(const std::wstring& path);
-ModelInfo ImportModel(const std::wstring& source, const std::wstring& modelsRoot);
+ModelInfo VerifyModel(const std::wstring& path,bool source=false);
+// Only explicit App selection supplies its persisted preference and managed root.
+// Empty context never authorizes replacement; this is action authority, not history.
+struct ExplicitModelUpdate {std::wstring persistedModelPath,managedModelsRoot;};
+ModelInfo ImportModel(const std::wstring& source, const std::wstring& modelsRoot,const ExplicitModelUpdate& update={});
+namespace detail {
+enum class ImportCheckpoint { Staged, BeforeTargetAcquire, BeforeOldMove, BeforeNewPublish,
+    ModelPublished, OwnershipPublished, BeforeRollbackRemoveNew, BeforeRestoreOld, BeforeRetirePrevious };
+#ifdef NRW_IMPORT_TEST_HOOKS
+void SetImportCheckpointHook(void (*hook)(ImportCheckpoint));
+#endif
+}
 std::string HashFile(const std::wstring& path, std::string& reason);
 std::wstring DefaultModelsRoot();
 std::string Utf8(const std::wstring&);

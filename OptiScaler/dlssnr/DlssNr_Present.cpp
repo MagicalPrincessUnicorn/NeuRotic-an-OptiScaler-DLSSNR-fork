@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <menu/Localization.h>
 #include "../nr/diagnostics/capability/CapabilityOwnerAdapters.h"
 #include "FrameTrace.h"
 #include "DredDiagnostics.h"
@@ -9,6 +10,7 @@
 #include "DlssNr_PresentEffects.h"
 #include "DlssNr_Multipass.h"
 #include "DlssNrFeature_Dx12.h"
+#include "DlssNrFeature_Vk.h"
 #include "DlssNr_PresentGuides.h"
 #include "HdrObservation.h"
 #include "NrExperimentalPolicy.h"
@@ -16,6 +18,7 @@
 #include "VulkanPresentStatus.h"
 #include "PresentCopybackRecording.h"
 #include "PresentDx11CopyCompletion.h"
+#include "PresentSourcePolicy.h"
 
 #include <shaders/format_transfer/FT_Dx12.h>
 #include <with_dx12/dx11_with_dx12.h>
@@ -51,6 +54,8 @@ struct PresentSlot
     PresentPacing::CallToken pacing;
     UINT64 presentAttempt = 0;
     double firstSubmissionMs = 0.0;
+    Connections::SignalStatusWireV2 inputReceipt{};
+    bool inputRecorded = false;
     bool completionObserved = true;
     bool timingStarted = false;
     bool timingResolved = false;
@@ -61,6 +66,7 @@ struct PresentSlot
 struct PresentState
 {
     std::mutex mutex;
+    UINT64 inputPolicyRevision = 0, inputSelectionTime = 0, inputUsedTime = 0, inputUsedHistory = 0;
     UINT64 guideGeneration = 0;
     UINT64 historyGeneration = 0;
     UINT64 resourceGeneration = 0;
@@ -176,6 +182,15 @@ void ReadCompletedPacingSample(PresentSlot& slot, unsigned int slotIndex, UINT64
         return;
 
     slot.completionObserved = true;
+    if (slot.inputRecorded && PresentSources::AcceptCompletion(slot.inputReceipt,
+        Connections::SignalPreferences().revision,slot.historyGeneration,g_present.historyGeneration,
+        g_present.telemetry.inputSignals.used.capture))
+    {
+        g_present.telemetry.inputSignals.used = slot.inputReceipt;
+        g_present.telemetry.inputSignals.used.consumed = 1;
+        g_present.inputUsedTime = GetTickCount64();
+        g_present.inputUsedHistory = slot.historyGeneration;
+    }
     if (!slot.pacingExpected || !slot.timingResolved || g_present.pacingReadback == nullptr ||
         g_present.timestampFrequency == 0)
         return;
@@ -472,7 +487,8 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
 
     if (format == DXGI_FORMAT_R10G10B10A2_UNORM || format == DXGI_FORMAT_B8G8R8A8_UNORM)
     {
-        const bool bgra = format == DXGI_FORMAT_B8G8R8A8_UNORM;
+        const auto colorOperation=color.Operation(format);
+        const bool bgra=colorOperation.conversion==Neurotic::Context::PresentColorConversion::ChannelOrder;
         const auto flags = bgra ? D3D12_RESOURCE_FLAG_NONE : D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         if (!CreateTexture(device, format, width, height, D3D12_RESOURCE_STATE_COPY_DEST,
                            g_present.conversionSource, flags) ||
@@ -483,7 +499,7 @@ bool BuildResources(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned in
             ReleaseResources();
             return false;
         }
-        const bool pq = color.profile == PresentColor::Profile::Hdr10Pq2020;
+        const bool pq=colorOperation.conversion==Neurotic::Context::PresentColorConversion::Pq2020Linear709;
         g_present.inputTransfer = std::make_unique<FT_Dx12>(bgra ? "Present BGRA8 to RGBA8" :
             pq ? "Present PQ2020 to scRGB" : "Present R10 to RGBA8", device,
             color.workingFormat, bgra ? FT_Dx12::Transfer::Bgra8ToRgba8 :
@@ -628,13 +644,15 @@ PresentTelemetrySnapshot PresentTelemetry()
 
 PresentTelemetrySnapshot PresentTelemetryForApi(bool vulkan)
 {
-    if (vulkan &&
-        Config::Instance()->DlssNrRoute.value_or_default() != 0)
+    const auto vkSettings=vulkan?TryNrConfigSnapshot(*Config::Instance()):std::nullopt;
+    if (vulkan && vkSettings && vkSettings->DlssNrRoute.value_or_default() != 0)
     {
-        const auto vk = GetVulkanPresentStatus().Snapshot();
-        const auto runtime = Config::Instance()->GetDlssNrRuntimeSnapshot();
+        const auto vk = PresentTelemetryVk(*vkSettings);
+        const auto runtime = vkSettings->GetDlssNrRuntimeSnapshot();
         PresentTelemetrySnapshot out {};
         out.api = PresentApi::Vulkan;
+        out.presentGpuValid=vk.gpuTimeValid;out.presentGpuMs=vk.gpuTimeMs;
+        out.presentGpuSamples=vk.gpuTimeSamples;out.presentGpuRoute=static_cast<PresentPacing::Route>(vk.route);
         out.requested = runtime.enabled && vk.requested;
         out.active = runtime.enabled && vk.active;
         out.failed = vk.failed;
@@ -674,7 +692,14 @@ PresentTelemetrySnapshot PresentTelemetryForApi(bool vulkan)
         return out;
     }
     std::lock_guard<std::mutex> lock(g_present.mutex);
-    return g_present.telemetry;
+    auto out = g_present.telemetry;
+    const auto revision = Connections::SignalPreferences().revision;
+    const auto now = GetTickCount64();
+    const auto fresh = [&](UINT64 time, UINT64 policy) { return time && now >= time && now-time < 500 && policy==revision; };
+    out.inputSignals.fresh = fresh(g_present.inputSelectionTime,out.inputSignals.status.revision);
+    out.inputSignals.usedFresh = fresh(g_present.inputUsedTime,out.inputSignals.used.revision) &&
+        g_present.inputUsedHistory==g_present.historyGeneration;
+    return out;
 }
 
 Capability::PresentObservation CopyPresentCapabilityObservation(const Capability::WriterPort& port) noexcept
@@ -741,7 +766,8 @@ void ReportPresentCallTiming(const PresentCallTimingSample& sample)
     cadence.resourceGeneration = g_present.telemetry.resourceGeneration;
     cadence.intervalMs = sample.frameIntervalMs;
     const auto& host = State::Instance();
-    const bool fgMayBeActive = host.dlssgLastSetMode.load() != sl::DLSSGMode::eOff ||
+    const bool fgMayBeActive = PreFg::Provider().enabled ||
+        host.dlssgLastSetMode.load() != sl::DLSSGMode::eOff ||
         host.activeFgInput != FGInput::NoFG || host.activeFgOutput != FGOutput::NoFG;
     cadence.native = SUCCEEDED(sample.result) && (sample.verifiedNative || !fgMayBeActive);
     cadence.configurationGeneration = sample.identity.advisorConfigurationGeneration;
@@ -845,6 +871,16 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     const auto runtime = settings.GetDlssNrRuntimeSnapshot();
     const auto resolution = PresentResolution::Selected(settings);
     const auto inputPolicy = PresentInput::Selected(settings);
+    const auto sourcePolicy = Connections::SignalPreferences();
+    g_present.inputSelectionTime = 0;
+    if (g_present.inputPolicyRevision != sourcePolicy.revision)
+    {
+        g_present.inputPolicyRevision = sourcePolicy.revision;
+        g_present.inputUsedTime = 0;
+        InvalidateHistory("Input source preference changed");
+        LOG_INFO("NR Present source preference: revision={} color={} depth={} motion={} required={}",
+            sourcePolicy.revision,uint32_t(sourcePolicy.color),uint32_t(sourcePolicy.depth),uint32_t(sourcePolicy.motion),sourcePolicy.strict);
+    }
     const bool wantsGuides = inputPolicy == PresentInput::Policy::RequireGuides ||
         inputPolicy == PresentInput::Policy::AutoGuides;
     const bool observeNative = wantsGuides || resolution.mode == PresentResolution::FollowNative;
@@ -853,6 +889,45 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     PresentGuides::Instance().Enable(runtime.enabled && observeNative, routeKey);
     const auto guideSelection = PresentGuides::Instance().BeginPresent(preFgFrame ? preFgFrame->key : 0,
         preFgFrame ? preFgFrame->providerGeneration : PreFg::Provider().generation);
+    if(guideSelection.captureOccupancy.known){
+        const auto& o=guideSelection.captureOccupancy;
+        static std::atomic<unsigned> refusalReceipts{0},growthReceipts{0};
+        auto& receipts=o.constraint?refusalReceipts:growthReceipts;
+        auto used=receipts.load(std::memory_order_relaxed);
+        while(used<64&&!receipts.compare_exchange_weak(used,used+1,std::memory_order_relaxed)){}
+        if(used<64)try{
+            LOG_INFO("NR Present guide capacity {}: selectionEpoch={} captureEpoch={} generation={} requestedFrame={} capturedFrame={} providerGeneration={} "
+                "constraint={} slots={} available={} firstAvailable={} committedGuideBytes={} depthBytes={} motionBytes={} budgetBytes={} "
+                "budgetKnown={} budgetFresh={} budgetQueried={} processUsageBytes={} requestedPairBytes={} reservedGuideBytes={} queryResult={:X} adapterLuid={:X}:{:X} node={} heapCreationMask={} "
+                "firstBlockedSameEpoch={} pendingFrame={} reservation={} producer={} consumer={} depthLease={} motionLease={}",
+                o.constraint?"refused":"growth",guideSelection.epoch,o.epoch,o.generation,preFgFrame?preFgFrame->key:0,o.providerFrame,o.providerGeneration,
+                o.constraint,o.slots,o.availableSlots,o.firstAvailableSlot,o.residentBytes,o.depthBytes,o.motionBytes,o.budgetBytes,
+                o.budgetKnown,o.budgetFresh,o.budgetQueried,o.processUsageBytes,o.requestedPairBytes,o.reservedGuideBytes,static_cast<unsigned>(o.budgetQueryResult),
+                static_cast<unsigned>(o.budgetAdapter.HighPart),o.budgetAdapter.LowPart,o.budgetNode,o.heapCreationMask,
+                o.firstBlocked[0],o.firstBlocked[1],o.firstBlocked[2],o.firstBlocked[3],o.firstBlocked[4],o.firstBlocked[5],o.firstBlocked[6]);
+        }catch(...){/* Diagnostic failure cannot change guide selection or GPU ownership. */}
+    }
+    if(guideSelection.captureOccupancy.producerProofKnown){
+        const auto& o=guideSelection.captureOccupancy;
+        static std::atomic<unsigned> lastProducerProof{0};
+        auto last=lastProducerProof.load(std::memory_order_relaxed);
+        while(last<o.producerProofSequence&&!lastProducerProof.compare_exchange_weak(last,o.producerProofSequence,std::memory_order_relaxed)){}
+        if(last<o.producerProofSequence)try{
+            const auto& p=o.producerProof;
+            LOG_INFO("NR Present blocked producer proof: sample={} captureEpoch={} generation={} capturedFrame={} providerGeneration={} "
+                "slotMask={} firstBlocked={} reusableNow={} gpuPending={} completedUnsealed={} unsubmittedUnsealed={} failed={} registryFailed={} "
+                "maskBits={} maskComplete={} identityRows={} identityRowsOmitted={} "
+                "observationMayChange=true ticketIdentities=bounded-recording-incarnations admissionUnchanged=true",
+                o.producerProofSequence,o.epoch,o.generation,o.providerFrame,o.providerGeneration,
+                o.producerProofMask,o.firstBlocked[3],p.reusable,p.gpuPending,p.completedUnsealed,p.unsubmittedUnsealed,p.failed,p.registryFailed,
+                std::numeric_limits<unsigned>::digits,o.producerProofMaskComplete,o.producerIdentityCount,o.producerIdentityOmitted);
+            for(unsigned i=0;i<o.producerIdentityCount;++i) {
+                const auto& identity=o.producerIdentities[i];
+                LOG_INFO("NR Present blocked producer identity: sample={} captureEpoch={} generation={} slot={} producerIncarnation={} consumerIncarnation={} admissionUnchanged=true",
+                    o.producerProofSequence,o.epoch,o.generation,identity.slot,identity.producer,identity.consumer);
+            }
+        }catch(...){/* Diagnostic failure cannot change selected guide inputs or GPU ownership. */}
+    }
     NR_FRAME_TRACE("guide-selection",
         "epoch={} generation={} count={} producer={:p} identity={:p} backbuffer={} width={} height={} route={}",
         guideSelection.epoch, guideSelection.generation, guideSelection.count,
@@ -939,7 +1014,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     const auto experimental = ExperimentalPolicy::Capture(settings);
-    const bool frameGeneration = config->FGEnabled.value_or_default() ||
+    const bool frameGeneration = preFgFrame != nullptr || config->FGEnabled.value_or_default() ||
         State::Instance().dlssgLastSetMode != sl::DLSSGMode::eOff || State::Instance().fsrfgInputActive;
     // Combination changes invalidate history; guide/resource admission below still applies.
     const unsigned int experimentalFlags = wantsGuides ?
@@ -1254,12 +1329,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             InvalidateHistory("Native render subrect changed");
         const auto& next = guideSelection.frame;
         const auto& old = g_present.nativeFrame;
-        if (metadataQualified && wantsGuides && (next.DepthSubrectX != old.DepthSubrectX || next.DepthSubrectY != old.DepthSubrectY ||
-            next.MotionSubrectX != old.MotionSubrectX || next.MotionSubrectY != old.MotionSubrectY ||
-            next.DepthSubrectWidth != old.DepthSubrectWidth || next.DepthSubrectHeight != old.DepthSubrectHeight ||
-            next.MotionSubrectWidth != old.MotionSubrectWidth || next.MotionSubrectHeight != old.MotionSubrectHeight ||
-            next.DepthInverted != old.DepthInverted || next.MvScaleX != old.MvScaleX || next.MvScaleY != old.MvScaleY))
-            InvalidateHistory("Native guide convention or subrect origin changed");
+        if (metadataQualified && wantsGuides && !DlssNrSameNativeGuideHistory(next,old))
+            InvalidateHistory("Native feature or guide convention changed");
         if (metadataQualified && wantsGuides && next.Reset) InvalidateHistory("Native reset requested");
         if (metadataQualified)
         {
@@ -1268,20 +1339,34 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             g_present.nativeHeight = next.RenderSubrectHeight;
         }
     }
-    const auto decision = PresentInputDecision::Choose(inputPolicy, metadataQualified,
+    const bool guidesAvailable=metadataQualified&&inputPolicy!=PresentInput::Policy::ImageOnly;
+    const auto sourceDecision=PresentSources::Choose(sourcePolicy,guidesAvailable);
+    // Guide usage applies to the pair actually admitted by source policy.
+    // Render dimensions remain independently qualified metadata.
+    auto decision = PresentInputDecision::Choose(inputPolicy,
+        metadataQualified && !sourceDecision.guidesOmitted,
         metadataQualified && guideSelection.frame.RenderSubrectWidth != 0 &&
             guideSelection.frame.RenderSubrectHeight != 0, resolution);
-    if (decision.input == PresentInputDecision::InputClass::Refused)
+    if(sourceDecision.guidesOmitted&&decision.input==PresentInputDecision::InputClass::ImageOnly)
+        decision.reason=sourceDecision.reason;
+    g_present.telemetry.nativeGuidesAvailable=guidesAvailable;
+    auto& sourceReceipt = g_present.telemetry.inputSignals.status;
+    sourceReceipt = sourceDecision.receipt;
+    sourceReceipt.capture = g_present.telemetry.presentAttempts;
+    sourceReceipt.generation = g_present.historyGeneration;
+    g_present.inputSelectionTime = GetTickCount64();
+    if (!sourceDecision.allowed || decision.input == PresentInputDecision::InputClass::Refused)
     {
-        SetFallback(api, guideRefusal.empty() ? decision.reason : guideRefusal.c_str());
+        SetFallback(api, !sourceDecision.allowed?sourceDecision.reason:
+            guideRefusal.empty()?decision.reason:guideRefusal.c_str());
         return identity;
     }
-    const bool guided = decision.input == PresentInputDecision::InputClass::Guided;
+    const bool guided=decision.input==PresentInputDecision::InputClass::Guided;
     identity.inputClass = decision.input;
     identity.workloadFallback = decision.workloadFallback;
     g_present.telemetry.actualInputClass = decision.input;
     g_present.telemetry.workloadFallback = decision.workloadFallback;
-    g_present.telemetry.signalFallbackReason = !guideRefusal.empty() ? guideRefusal :
+    g_present.telemetry.signalFallbackReason = sourceDecision.guidesOmitted ? sourceDecision.reason : !guideRefusal.empty() ? guideRefusal :
         decision.reason ? decision.reason : "";
     if (observeNative && lastObservedGuideClass != static_cast<int>(decision.input))
     {
@@ -1388,6 +1473,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         key.device = reinterpret_cast<uintptr_t>(nativeDevice.object.Get());
         key.queue = reinterpret_cast<uintptr_t>(queue.Get());
         key.provider = preFgFrame->providerGeneration;
+        key.viewportKey = preFgFrame->viewportKey;
         key.nativeGeneration = preFgFrame->nativeFgGeneration;
         key.nativeInstance = preFgFrame->nativeFgInstance;
         key.configuration = g_present.readinessConfiguration;
@@ -1486,11 +1572,16 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         {
             g_present.list->Close();
             const auto guideStatus = PresentGuides::Instance().Inspect();
+            g_present.telemetry.nativeGuidesAvailable = false;
+            sourceReceipt.depth = sourceReceipt.motion = 0;
+            sourceReceipt.depthReason = sourceReceipt.motionReason = uint32_t(Connections::Mixed::Reason::MissingLease);
             SetFallback(api, guideStatus.status.c_str());
             return identity;
         }
     }
 
+    slot.inputRecorded = false;
+    slot.inputReceipt = sourceReceipt;
     slot.pacing = identity.pacing;
     slot.historyGeneration = g_present.historyGeneration;
     slot.presentAttempt = identity.presentAttempt;
@@ -1548,10 +1639,11 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
     }
 
     const auto modelColor = colorDecision.Model();
+    auto modelSettings=settings;
     const bool modelSucceeded = EvaluateImageOnlyCommandList(g_present.list.Get(), queue.Get(),
         g_present.frame.Get(), guided ? nativeGuides.depth.Get() : g_present.depth.Get(),
         guided ? nativeGuides.motion.Get() : g_present.motion.Get(), workWidth, workHeight,
-        g_present.history.ResetForNextEvaluation(), guided ? &nativeGuides.frame : nullptr, &settings, &modelColor,
+        g_present.history.ResetForNextEvaluation(), guided ? &nativeGuides.frame : nullptr, &modelSettings, &modelColor,
         preFgFrame != nullptr);
     if (FAILED(g_present.list->Close()))
     {
@@ -1593,6 +1685,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         return identity;
     }
 
+    slot.inputRecorded = true;
     if (preFgFrame && preFgFrame->readiness)
     {
         // Model creation/replacement can occur inside evaluation. Such work is a
@@ -1624,7 +1717,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             preFgFrame->readinessIdentity.invalidation = 0;
         }
     }
-    if (preFgFrame && !preFgFrame->allowOutput)
+    const bool sourcePolicyChanged = Connections::SignalPreferences().revision != sourcePolicy.revision;
+    if (sourcePolicyChanged || (preFgFrame && !preFgFrame->allowOutput))
     {
         const UINT64 signal = g_present.nextFence++;
         if (SUCCEEDED(queue->Signal(g_present.fence.Get(), signal)))
@@ -1633,7 +1727,7 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             slot.completionObserved = false;
             RecordSubmission(signal);
             identity.modelPrepared = true;
-            identity.probeSubmitted = preFgFrame->readinessIdentity.invalidation != 0;
+            identity.probeSubmitted = !sourcePolicyChanged && preFgFrame && preFgFrame->readinessIdentity.invalidation != 0;
             identity.completionFence = g_present.fence.Get();
             identity.completionValue = signal;
             identity.outputResource = presentOutput;
@@ -1643,8 +1737,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         // No full-frame tag change, copyback, or output-history advancement.
         // Reuse stays gated by the normal completion fence and recording lifetime.
         NR_FRAME_TRACE("nr-startup-private-model", "token={} prepared={} fence={}",
-            preFgFrame->key, identity.modelPrepared, signal);
-        SetFallback(api, "Waiting for the selected route. Image unchanged.");
+            preFgFrame ? preFgFrame->key : 0, identity.modelPrepared, signal);
+        SetFallback(api, sourcePolicyChanged ? "Input preference changed. Image unchanged." : "Waiting for the selected route. Image unchanged.");
         return identity;
     }
     if (guided) PresentGuides::Instance().Evaluated();
@@ -1774,8 +1868,9 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
         SetFallback(api, "copyback command list could not close", true);
         return identity;
     }
-    // Do not alter the game's FG tags until copyback recording and Close succeed.
-    // Earlier failures must leave both its image and its original HUD policy intact.
+    // Policy was accepted before model work. Reserve this actual publication
+    // only after copyback recording closes; all earlier NR misses preserve
+    // original F under the accepted full-image FG policy.
     if (preFgFrame && preFgFrame->prepareInputs && !preFgFrame->prepareInputs(*preFgFrame))
     {
         const UINT64 modelSignal = g_present.nextFence++;
@@ -1786,7 +1881,8 @@ PresentCallIdentity EvaluatePresentImageOnly(IDXGISwapChain* swapChain, IUnknown
             RecordSubmission(modelSignal);
         }
         else g_present.completionUntrackable = true;
-        SetFallback(api, "Could not establish full-frame FG input policy for this token", true);
+        SetFallback(api, Neurotic::UiLiteral("ingame.nr-final-color.policy-changed",
+            "FG inputs changed before NR output. NR is paused."), true);
         return identity;
     }
     ID3D12CommandList* compositeLists[] = { g_present.list.Get() };

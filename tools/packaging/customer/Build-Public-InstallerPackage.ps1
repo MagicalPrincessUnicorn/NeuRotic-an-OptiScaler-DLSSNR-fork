@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$BuildManifest,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
@@ -10,6 +10,22 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
 function HashFile([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
+function Assert-PublicLoggingDefaults([string]$IniText) {
+    # Public packaging is a separate policy from testing packages, which may
+    # deliberately enable trace collection. Existing game INIs remain preserved
+    # by Setup; this gate applies only to newly installed public defaults.
+    $sections=@([regex]::Matches($IniText,'(?ims)^\s*\[Log\][^\r\n]*\r?\n(.*?)(?=^\s*\[|\z)'))
+    if($sections.Count -ne 1){throw 'Public defaults require one unambiguous Log section.'}
+    foreach($key in @('LogToFile','LogToConsole','LogToNGX','LogToDebug','OpenConsole')){
+        $values=@([regex]::Matches($sections[0].Groups[1].Value,('(?im)^\s*'+$key+'\s*=\s*([^;#\r\n]+)')))
+        # All five compiled automatic defaults are false (Config.h), covered by
+        # PublicLoggingDefaults.Tests.ps1. File output is explicitly off.
+        if($values.Count -ne 1 -or $values[0].Groups[1].Value.Trim() -notin @('false','auto') -or
+           ($key -eq 'LogToFile' -and $values[0].Groups[1].Value.Trim() -ne 'false')){
+            throw "Public release diagnostic logging must be disabled: $key"
+        }
+    }
+}
 function CopyRequired([string]$Source,[string]$Destination) {
     if (-not (Test-Path -LiteralPath $Source)) { throw "Required package source is missing: $Source" }
     $parent = Split-Path -Parent $Destination
@@ -40,6 +56,7 @@ foreach ($name in @('OptiScaler.dll','nvngx.dll_dlssnr.dll')) {
 if ((HashFile (Join-Path $worktree 'integration\OptiScaler.ini')) -ne $build.configuration.sha256) {
     throw 'The package INI no longer matches the recorded configuration.'
 }
+if(-not $ExperimentalReview){Assert-PublicLoggingDefaults ([IO.File]::ReadAllText((Join-Path $worktree 'integration\OptiScaler.ini')))}
 
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\')
 if (Test-Path -LiteralPath $OutputDirectory) { throw "Package destination already exists and was preserved: $OutputDirectory" }
@@ -64,11 +81,13 @@ foreach ($name in $licenseSources.Keys) {
     CopyRequired (Join-Path $worktree $licenseSources[$name]) (Join-Path $payload ('Licenses\' + $name))
 }
 
-CopyRequired (Join-Path $templateRoot 'NeuRotic-Setup.cmd') (Join-Path $OutputDirectory 'NeuRotic-Setup.cmd')
-CopyRequired (Join-Path $templateRoot 'NeuRotic-Uninstall.cmd') (Join-Path $OutputDirectory 'NeuRotic-Uninstall.cmd')
+CopyRequired (Join-Path $templateRoot 'NeuRotic-Manual-Setup.cmd') (Join-Path $OutputDirectory 'NeuRotic-Manual-Setup.cmd')
+CopyRequired (Join-Path $templateRoot 'NeuRotic-Manual-Uninstall.cmd') (Join-Path $OutputDirectory 'NeuRotic-Manual-Uninstall.cmd')
 $readmeName = if ($ExperimentalReview) { 'EXPERIMENTAL-READ-ME.txt' } else { 'READ ME.txt' }
 CopyRequired (Join-Path $templateRoot $readmeName) (Join-Path $OutputDirectory 'READ ME.txt')
 CopyRequired (Join-Path $templateRoot 'support\NeuRotic-Setup-Engine.ps1') (Join-Path $support 'NeuRotic-Setup-Engine.ps1')
+CopyRequired (Join-Path $templateRoot 'support\NeuRotic-Prerequisites.ps1') (Join-Path $support 'NeuRotic-Prerequisites.ps1')
+CopyRequired (Join-Path $templateRoot 'support\NeuRotic-RuntimeFiles.ps1') (Join-Path $support 'NeuRotic-RuntimeFiles.ps1')
 CopyRequired (Join-Path $templateRoot 'support\TESTING.txt') (Join-Path $support 'TESTING.txt')
 CopyRequired $BuildManifest (Join-Path $support 'BUILD-MANIFEST.json')
 

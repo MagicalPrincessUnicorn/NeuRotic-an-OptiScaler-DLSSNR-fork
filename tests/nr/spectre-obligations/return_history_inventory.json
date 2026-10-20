@@ -1,0 +1,30 @@
+{
+  "work_order": "W03-finite-58-construction",
+  "suites": {
+    "spectre-return-history": [
+      {"id":"O07.early-before-call","binding":"CURRENT_CALLABLE"},
+      {"id":"O07.early-after-call","binding":"CURRENT_CALLABLE"},
+      {"id":"O07.throwing-call","binding":"CURRENT_CALLABLE"},
+      {"id":"O07.normal-explicit-restore","binding":"CURRENT_CALLABLE"},
+      {"id":"O07.failed-restore-blocks-continuation","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.exact-content-control","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.wrong-allocation","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.wrong-generation","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.stale-content","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.wrong-subresource","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.wrong-region","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.overflow-region","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.wrong-recording","binding":"CURRENT_CALLABLE"},
+      {"id":"O06.substituted-owner","binding":"CURRENT_CALLABLE"},
+      {"id":"L02.ordered-local-history-without-final-consumption","binding":"CURRENT_CALLABLE"},
+      {"id":"L02.model-result-not-local-consumption","binding":"CURRENT_CALLABLE"},
+      {"id":"L11.next-after-local-return-no-present","binding":"CURRENT_CALLABLE"},
+      {"id":"L03.abandoned-predecessor-requires-reset","binding":"CURRENT_CALLABLE"},
+      {"id":"L03.no-reset-successor-refused","binding":"CURRENT_CALLABLE"},
+      {"id":"L03.reset-request-not-ack","binding":"CURRENT_CALLABLE"}
+    ]
+  },
+  "suite_metadata": {
+    "spectre-return-history": {"emitted_suite":"spectre-return-history"}
+  }
+}

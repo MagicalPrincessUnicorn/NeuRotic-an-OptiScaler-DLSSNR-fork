@@ -1,11 +1,12 @@
 #include <menu/Localization.h>
 #pragma once
 #include <imgui/imgui.h>
+#include "BoundedPopup.h"
 
 namespace Neurotic::Sleek
 {
 // UI intent only: callers retain ownership of route changes, persistence and admission.
-inline unsigned ExperimentalMfgControls(bool& rtx40, bool& rtx30, bool& rtx20, float scale)
+inline unsigned ExperimentalMfgControls(bool& rtx40, bool& rtx30, bool& rtx20, float scale, bool compact=false)
 {
     bool* choices[] = {&rtx40, &rtx30, &rtx20};
     const char* labels[] = {
@@ -18,7 +19,7 @@ inline unsigned ExperimentalMfgControls(bool& rtx40, bool& rtx30, bool& rtx20, f
     for (int i = 0; i < 3; ++i)
     {
         bool selected = *choices[i];
-        if (!ImGui::Checkbox(labels[i], &selected)) continue;
+        if (!(compact?Neurotic::WrappedPopupCheckbox(labels[i],&selected):ImGui::Checkbox(labels[i], &selected))) continue;
         if (selected && i != 0)
         {
             storage->SetInt(pendingKey, i);

@@ -1,0 +1,3329 @@
+{
+  "scope": "DESIGN_ONLY; golden serialization vectors, not runtime evidence.",
+  "scope_definition": {
+    "scope_id": "fixture:output",
+    "scope_revision": "1",
+    "scope_sha256": {
+      "state": "known",
+      "value": "f53741f9b027a9e8697346baad1f21e089dea5db7f640d8e69bf1a95101bd95a",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_id": {
+      "state": "known",
+      "value": "fixture:static",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_revision": {
+      "state": "known",
+      "value": "1",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "scenario_sha256": {
+      "state": "known",
+      "value": "60e7784763f9c9b0cc58f04cab0f63a87726592c3c4d31fef1eec572064c1db3",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "observation_scope_sha256": {
+      "state": "known",
+      "value": "da96132aba805b53db65caabeda288bde2106cddfed83d7d90ba2908728a64ba",
+      "provenance": "fixture_design",
+      "evidence_ids": [
+        "DESIGN-ONLY"
+      ]
+    },
+    "required_conditions": [
+      "app_api",
+      "execution_api",
+      "route",
+      "placement"
+    ],
+    "required_cohort": [
+      "game_id",
+      "game_version",
+      "game_executable_sha256",
+      "neurotic_module_sha256",
+      "provider_manifest_sha256",
+      "effective_settings_sha256",
+      "driver_version",
+      "os_version",
+      "gpu_device_id",
+      "contract_manifest_sha256"
+    ],
+    "required_extensions": [
+      "implementation_version",
+      "game_build_manifest_sha256",
+      "control_mode"
+    ],
+    "required_bindings": [],
+    "axes": [
+      "output_delivery"
+    ],
+    "condition_coverage": "exact_segment",
+    "limitation": "Design-only requested scope; no real execution or accepted qualifying policy."
+  },
+  "vectors": [
+    {
+      "id": "same",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:3f5a31efc5bff1ec486648a1e7be5f072df013707abe93fae7a30766bc186e14",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "3372fed11af3b63de396258542ff32f22d92019da15ca3d2ecb2478da33d7a01",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "known",
+            "value": "adb0f419bc00de6ab4af5b45a09aa9996885aa6923b8f50c5d0a96a0c28e23a7",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:23e56163f76479e2024282cfdb70ef4782e25644376bb927dfc8e7773cb30e32",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "j-design-fixture-implementation-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:3f5a31efc5bff1ec486648a1e7be5f072df013707abe93fae7a30766bc186e14",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:23e56163f76479e2024282cfdb70ef4782e25644376bb927dfc8e7773cb30e32\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"j-design-fixture-implementation-A\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": false,
+      "expected_match": "EXACT"
+    },
+    {
+      "id": "changed_implementation",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:807dba280826abfa86fc6c6f820f16c6ef866d05dcfcef6db21bde82c5c09588",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "3372fed11af3b63de396258542ff32f22d92019da15ca3d2ecb2478da33d7a01",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "known",
+            "value": "adb0f419bc00de6ab4af5b45a09aa9996885aa6923b8f50c5d0a96a0c28e23a7",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:23e56163f76479e2024282cfdb70ef4782e25644376bb927dfc8e7773cb30e32",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "fixture-impl-B",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:807dba280826abfa86fc6c6f820f16c6ef866d05dcfcef6db21bde82c5c09588",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:23e56163f76479e2024282cfdb70ef4782e25644376bb927dfc8e7773cb30e32\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"fixture-impl-B\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": false,
+      "expected_match": "DIFFERENT"
+    },
+    {
+      "id": "changed_game_build",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:113fcdb86c38696b53727a894ae1bff013a4777489201dcf8e516c7c33141e15",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "3372fed11af3b63de396258542ff32f22d92019da15ca3d2ecb2478da33d7a01",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "known",
+            "value": "adb0f419bc00de6ab4af5b45a09aa9996885aa6923b8f50c5d0a96a0c28e23a7",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:23e56163f76479e2024282cfdb70ef4782e25644376bb927dfc8e7773cb30e32",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "j-design-fixture-implementation-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "8d35f1b856014d021572d02358826fc15535bc68f9138fce75471efc80b7f926",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:113fcdb86c38696b53727a894ae1bff013a4777489201dcf8e516c7c33141e15",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:23e56163f76479e2024282cfdb70ef4782e25644376bb927dfc8e7773cb30e32\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"8d35f1b856014d021572d02358826fc15535bc68f9138fce75471efc80b7f926\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"j-design-fixture-implementation-A\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": false,
+      "expected_match": "DIFFERENT"
+    },
+    {
+      "id": "changed_game_version",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:68db0f7ed9906dd07f8547178aa31a50d332e2f183aefd11e60ccc63df68c3b0",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-B",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "3372fed11af3b63de396258542ff32f22d92019da15ca3d2ecb2478da33d7a01",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "known",
+            "value": "adb0f419bc00de6ab4af5b45a09aa9996885aa6923b8f50c5d0a96a0c28e23a7",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:693b1aa6f5748efd9d097cb790b90054baec834278006dcada14bd04b80aa559",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "j-design-fixture-implementation-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:68db0f7ed9906dd07f8547178aa31a50d332e2f183aefd11e60ccc63df68c3b0",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:693b1aa6f5748efd9d097cb790b90054baec834278006dcada14bd04b80aa559\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"j-design-fixture-implementation-A\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": false,
+      "expected_match": "DIFFERENT"
+    },
+    {
+      "id": "changed_module",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:cbd6a5be7b2667b2e2f27fdf13380e92e5ba6af5e9cf555f4d0234e484075a2d",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "f60f2710204caca0e346ca39574aa99b833b8e5a94a90079eda0dd693e9a64ad",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "known",
+            "value": "adb0f419bc00de6ab4af5b45a09aa9996885aa6923b8f50c5d0a96a0c28e23a7",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:abc8d99e88e2305b0a76ec0e44f7ac92b4d2033a58721a09daac5a76a1afce7d",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "j-design-fixture-implementation-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:cbd6a5be7b2667b2e2f27fdf13380e92e5ba6af5e9cf555f4d0234e484075a2d",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:abc8d99e88e2305b0a76ec0e44f7ac92b4d2033a58721a09daac5a76a1afce7d\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"j-design-fixture-implementation-A\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": false,
+      "expected_match": "DIFFERENT"
+    },
+    {
+      "id": "unknown_provider",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:4305a8b61d5708a40826a07b7dbb03daf4ff45e62cdc2c67f91ce207c7bb3c6f",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "3372fed11af3b63de396258542ff32f22d92019da15ca3d2ecb2478da33d7a01",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:aa786a8e9b2903d59adad32428db9556dc4834aa89c03473a06878bf108a116d",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "j-design-fixture-implementation-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:4305a8b61d5708a40826a07b7dbb03daf4ff45e62cdc2c67f91ce207c7bb3c6f",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:aa786a8e9b2903d59adad32428db9556dc4834aa89c03473a06878bf108a116d\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"j-design-fixture-implementation-A\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": true,
+      "expected_match": "INSUFFICIENT"
+    },
+    {
+      "id": "changed_provider",
+      "cell": {
+        "schema_version": "2.0.0",
+        "kind": "compatibility_cell",
+        "compatibility_cell_id": "ncov:compat:2:cf206ebc4a209cb661ccbcacabc0543ea88863ece2d526a06a08a065ba80e937",
+        "condition": {
+          "schema_version": "1.0.0",
+          "taxonomy_version": "1.0.0",
+          "example_id": "J-DESIGN-BASE",
+          "record_kind": "design_example",
+          "parent_cell_keys": [],
+          "purpose": "Synthetic compatibility contract fixture; not a game run.",
+          "conditions": {
+            "app_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "execution_api": {
+              "state": "known",
+              "value": "D3D12",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "translation_path": {
+              "state": "known",
+              "value": "none",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "upscaler_contract": {
+              "state": "known",
+              "value": "ngx_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "contract_revision": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "feeder_source": {
+              "state": "known",
+              "value": "native_contract",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "semantic_recipe_id": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "route": {
+              "state": "known",
+              "value": "native_temporal",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "placement": {
+              "state": "known",
+              "value": "post_sr",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "model_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "render_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "output_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "working_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_extent": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_representation": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "depth_range": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_units": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_direction": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_jitter": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "motion_coverage": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rect_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "drs": {
+              "state": "known",
+              "value": "fixed",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "color_domain": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "color_primaries": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_color": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_format": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "exposure_source": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "pre_exposure": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "rr_state": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_provider": {
+              "state": "known",
+              "value": "off",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_requested_ratio": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "fg_boundary": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "frame_kind": {
+              "state": "known",
+              "value": "real",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sample_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "swapchain_model": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "swapchain_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "present_update": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "device_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_topology": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "queue_family_sharing": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "fence_kind": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "ui_composition": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "overlays": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "multipass_count": {
+              "state": "known",
+              "value": 1,
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "sparse_cadence": {
+              "state": "known",
+              "value": "every_real_frame",
+              "provenance": "fixture_design",
+              "evidence_ids": []
+            },
+            "policy_profile": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            },
+            "lifecycle_phase": {
+              "state": "unknown",
+              "reason": "Not measured for this case."
+            }
+          },
+          "evidence_ids": [],
+          "unresolved": [
+            "Qualify actual source/API/provider contract and capture exact environment before any runtime claim."
+          ],
+          "runtime_acceptance": "not_granted",
+          "cell_key": "ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe"
+        },
+        "cohort": {
+          "game_id": {
+            "state": "known",
+            "value": "fixture:game",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_version": {
+            "state": "known",
+            "value": "fixture-build-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_executable_sha256": {
+            "state": "known",
+            "value": "6d3621e5326d9e2302343b4d3f51d97ca952e22c0de018be6d42d02902c23edc",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "engine_family": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "engine_version": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_source_commit": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "source_snapshot_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "dirty_diff_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "neurotic_module_sha256": {
+            "state": "known",
+            "value": "3372fed11af3b63de396258542ff32f22d92019da15ca3d2ecb2478da33d7a01",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "loaded_module_basename": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "forwarder_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "model_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "shader_bundle_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "provider_manifest_sha256": {
+            "state": "known",
+            "value": "188324ae2864777943e83832d3d0a8f0679bbb2aca04177d7ef6f0bddab34c21",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "effective_settings_sha256": {
+            "state": "known",
+            "value": "7b84b2c19185e0ad31269d2ac6dffab9518d5e8156ae10c5cd8e0cf3e45a8ae8",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_model": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "gpu_device_id": {
+            "state": "known",
+            "value": "fixture-gpu",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "gpu_architecture": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "driver_version": {
+            "state": "known",
+            "value": "fixture-driver-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "os_version": {
+            "state": "known",
+            "value": "fixture-os-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "translation_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "overlay_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "display_profile_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "toolchain_manifest_sha256": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "contract_manifest_sha256": {
+            "state": "known",
+            "value": "577647ba821c49b2b8f8004f416aae758e9c31958c2262a99766a1c633404ec3",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          }
+        },
+        "cohort_key": "ncov:cohort:1:46cf83b975a27c9112c7c2f22965916785bda6cb82fc26e27589f7d14e6c2b14",
+        "identity_extensions": {
+          "implementation_version": {
+            "state": "known",
+            "value": "j-design-fixture-implementation-A",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "game_build_manifest_sha256": {
+            "state": "known",
+            "value": "42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "capability_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "effective_fg_state": {
+            "state": "known",
+            "value": "disabled",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "control_mode": {
+            "state": "known",
+            "value": "loaded_nr_on",
+            "provenance": "fixture_design",
+            "evidence_ids": [
+              "DESIGN-ONLY"
+            ]
+          },
+          "route_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "signal_contract_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          },
+          "auxiliary_profile_fingerprint": {
+            "state": "unknown",
+            "reason": "Not observed; design-only fixture, no runtime run."
+          }
+        },
+        "binding_profiles": {
+          "A": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "D": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "G": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "H": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          },
+          "I": {
+            "state": "unknown",
+            "reason": "External owner contract not supplied to this fixture."
+          }
+        }
+      },
+      "expected_composite_key": "ncov:compat:2:cf206ebc4a209cb661ccbcacabc0543ea88863ece2d526a06a08a065ba80e937",
+      "canonical_ascii_preimage": "{\"binding_profiles\":{\"A\":{\"state\":\"unknown\"},\"D\":{\"state\":\"unknown\"},\"G\":{\"state\":\"unknown\"},\"H\":{\"state\":\"unknown\"},\"I\":{\"state\":\"unknown\"}},\"cohort_key\":\"ncov:cohort:1:46cf83b975a27c9112c7c2f22965916785bda6cb82fc26e27589f7d14e6c2b14\",\"condition_cell_key\":\"ncov:cell:1:16ba388287072c406fddb76ee55fdd6bb234a7d91d078f020d6cacaf3296bfbe\",\"identity_extensions\":{\"auxiliary_profile_fingerprint\":{\"state\":\"unknown\"},\"capability_fingerprint\":{\"state\":\"unknown\"},\"control_mode\":{\"state\":\"known\",\"value\":\"loaded_nr_on\"},\"effective_fg_state\":{\"state\":\"known\",\"value\":\"disabled\"},\"game_build_manifest_sha256\":{\"state\":\"known\",\"value\":\"42b68f51cdd7f3deeffcef9bc59004a98d39f4fb2042a4b7d4233e7fd9d4350e\"},\"implementation_version\":{\"state\":\"known\",\"value\":\"j-design-fixture-implementation-A\"},\"route_profile_fingerprint\":{\"state\":\"unknown\"},\"signal_contract_fingerprint\":{\"state\":\"unknown\"}},\"identity_version\":\"2.0.0\"}",
+      "compare_to_self": false,
+      "expected_match": "DIFFERENT"
+    }
+  ]
+}

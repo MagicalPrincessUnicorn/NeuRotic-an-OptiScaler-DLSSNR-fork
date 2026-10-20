@@ -1,4 +1,5 @@
 #pragma once
+#include "NativeSelectedUse.h"
 #include "PresentColor.h"
 
 #include <d3d12.h>
@@ -8,9 +9,15 @@
 #include <nvsdk_ngx.h>
 #include "DlssNr_MenuStatus.h"
 #include "NativeTemporalInputs.h"
+#include "NativeNrResolution.h"
 #include "NrPreflightSignals.h"
+#include "NrSignalReceipts.h"
+#include "connections/ConnectionPolicy.h"
 #include "NrBridgeOutcome.h"
 #include <mutex>
+#include <memory>
+#include <vector>
+#include <string>
 
 // DLSS 5 Neural Rendering, run over the upscaler's output.
 //
@@ -25,18 +32,21 @@
 class Config;
 template<class Source> struct NrConfigSnapshot;
 namespace Neurotic::Protocol { struct NativeTypedEvaluation; class NativeInvocationAdmission; }
+namespace Neurotic::D3D12::NativeQueryInsertion {struct Boundary;enum class Outcome;}
 
 namespace DlssNr
 {
 // Existing lifecycle owner borrow held through the bridge publication seam.
 std::unique_lock<std::recursive_mutex> LockBridgeLifecycle();
 std::uint64_t BridgeLifecycleGeneration();
+bool BridgeSessionUnavailable();
 // Direct milestones from this exact synchronous invocation. No counters grant
 // publication; the bridge's own outcome gates output and owns retirement.
 Bridge::NrWork EvaluateBridgeBeforeUpscale(ID3D12GraphicsCommandList*,NVSDK_NGX_Parameter*,
     ID3D12CommandQueue*,const NrConfigSnapshot<Config>*);
+NativeResolution::RenderObservation ObserveRenderBeforeUpscale(NVSDK_NGX_Parameter*);
 Bridge::NrWork EvaluateBridgeAfterUpscale(ID3D12GraphicsCommandList*,NVSDK_NGX_Parameter*,
-    ID3D12CommandQueue*,const NrConfigSnapshot<Config>*);
+    ID3D12CommandQueue*,const NrConfigSnapshot<Config>*,const NativeResolution::RenderObservation* = nullptr);
 // Native protocol bridge: typed qualified values and fresh owner checks at every
 // operation. The caller retains the invocation/owner synchronization throughout.
 // beforeSr uses the existing scratch/restore/copy-back core at its original seam.
@@ -73,7 +83,23 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                           ID3D12CommandQueue* timingQueue = nullptr,
                           bool forceAfterUpscale = false,
                           const NrConfigSnapshot<Config>* settings = nullptr,
-                          const NativeTemporalInputs::Metadata* nativeInputs = nullptr);
+                          const NativeTemporalInputs::Metadata* nativeInputs = nullptr,
+                          const NativeResolution::RenderObservation* renderObservation = nullptr);
+
+// Owned legacy Post request prepared while the authentic NGX parameters live.
+// This is a CPU resource/value owner, not resource-content or GPU use authority.
+// The query-boundary operation acquires actual recording/state/retirement rights
+// separately before dispatch. No borrowed parameter object is retained.
+struct LegacyPostRequest;
+std::optional<NativeSelectedUse::Witness> BeginLegacyNativeSelectedUse() noexcept;
+std::shared_ptr<LegacyPostRequest> PrepareLegacyPostRequest(
+    ID3D12GraphicsCommandList*,NVSDK_NGX_Parameter*,const NrConfigSnapshot<Config>&,
+    bool forcedAfter,const NativeTemporalInputs::Metadata*,const NativeResolution::RenderObservation*,
+    const NativeSelectedUse::Witness&);
+std::vector<ID3D12Resource*> LegacyPostRequestResources(const LegacyPostRequest&);
+Neurotic::D3D12::NativeQueryInsertion::Outcome RecordLegacyPostRequest(
+    const std::shared_ptr<LegacyPostRequest>&,const Neurotic::D3D12::NativeQueryInsertion::Boundary&,
+    bool (*sourceCurrent)(void*) noexcept,void* sourceContext);
 
 // Narrow surface used by the DX12 Present adapter. It accepts only OptiScaler-owned resources and a
 // private command list. Optional test metadata accompanies owned copies of Native guides, never
@@ -121,7 +147,7 @@ bool EvaluateNativeDx11PreSrCommandList(ID3D12GraphicsCommandList* cmdList,
 bool MenuIsActive(::Config* config);
 enum class MenuReadiness { Waiting, Ready, Blocked };
 MenuReadiness MenuPreflightState(::Config* config);
-enum class MenuPage { Overview, Multipass, Diagnostics, Preflight };
+enum class MenuPage { Overview, Multipass, Diagnostics, Preflight, Color };
 std::optional<MenuPage> ConsumeMenuPageRequest();
 void RenderCompareMenu(::Config* config, float menuResScale);
 void RenderMenu(::Config* config, float menuResScale,
@@ -211,6 +237,10 @@ ExposureStatus GameExposureStatus();
 struct TelemetrySnapshot
 {
     NrPreflightSignals::NativeInputs nativeInputs;
+    // Vulkan raw input and selected terminal progress; neither is GPU completion.
+    uint64_t nativeInputGeneration=0,selectedNativeObservations=0;
+    Connections::SignalStatusSnapshot inputSignals{};
+    std::array<SignalReceipts::Reading,static_cast<size_t>(SignalReceipts::Signal::Count)> signalReceipts{};
     unsigned long long frames = 0;
     unsigned long long gameResets = 0;
     unsigned long long featureBuilds = 0;
@@ -247,6 +277,9 @@ struct TelemetrySnapshot
     bool layer2Failed = false;
     const char* layer2FailureReason = "";
     const char* failureReason = "";
+    // Owned diagnostic text from the same locked lifecycle sample. Off-thread
+    // readers must not retain a pointer into a mutable producer reason buffer.
+    std::string failureText;
     bool retryAllowed = false;
     bool nativeRayReconstructionActive = false;
     // Pre-SR is only active after its private seed evaluation has succeeded and the first

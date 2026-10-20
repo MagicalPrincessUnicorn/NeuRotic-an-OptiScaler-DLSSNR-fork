@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "ContextBuilder.h"
 #include "NativeNgxSchemaQualification.h"
 #include "../contracts/C04_Capability.h"
@@ -179,7 +180,8 @@ bool FieldBound(std::string_view field,const C::CanonicalFrameContext& context,
     {
         const auto* frame=ResolveMetadata(context.frame,store);
         const auto* raster=ResolveMetadata(context.renderRaster,store);if (!frame || !raster) return false;
-        std::array<FactCandidate<C::Vec2>,64> values{};std::size_t count=0;
+        auto valuesStorage=std::make_unique<std::array<FactCandidate<C::Vec2>,64>>();
+        auto& values=*valuesStorage;std::size_t count=0;
         for (const auto& item:admitted)
             values[count++]={item.candidate->header.record,InterpretJitter(*item.candidate,*frame,*raster,store),item.evidence};
         return bound(context.jitter,ResolveEvidence<C::Vec2>(std::span(values.data(),count)).value);
@@ -188,7 +190,8 @@ bool FieldBound(std::string_view field,const C::CanonicalFrameContext& context,
     if (field=="fgActive") return bound(context.fgActive,ResolveMember(admitted,&C::AcquisitionCandidate::fgActive).value);
     // Resolve only the descriptor used by this purpose. An unrelated stale source
     // or an unavailable optional descriptor cannot veto another semantic field.
-    C::BoundedList<C::Contradiction,8> conflicts;
+    auto conflictsStorage=std::make_unique<C::BoundedList<C::Contradiction,8>>();
+    auto& conflicts=*conflictsStorage;
     const auto description=[&]<class T>(C::OptionalFact<C::MetadataRef<T>> C::AcquisitionCandidate::* member,
                                         const C::OptionalFact<C::MetadataRef<T>>& expected,auto compare) {
         if (const auto* unknown=expected.UnknownPart()) {failure=*unknown;return false;}
@@ -218,7 +221,8 @@ bool FieldBound(std::string_view field,const C::CanonicalFrameContext& context,
         bool matched=false;
         std::apply([&](const auto&... f){([&]{if (field.substr(5)==f.name) {
             using Fact=std::remove_cvref_t<decltype(expected->*(f.pointer))>;using T=typename Fact::value_type;
-            std::array<FactCandidate<T>,64> facts{};std::size_t count=0;
+            auto factsStorage=std::make_unique<std::array<FactCandidate<T>,64>>();
+            auto& facts=*factsStorage;std::size_t count=0;
             for (const auto& item:admitted) if (const auto* masks=ResolveMetadata(item.candidate->masks,store))
                 facts[count++]={item.candidate->header.record,masks->*(f.pointer),item.evidence};
             matched=bound(expected->*(f.pointer),ResolveEvidence<T>(std::span(facts.data(),count),
@@ -302,7 +306,9 @@ ContextResult BuildContextForPurpose(const C::ObservationSet& observations,
                                     const C::BoundedList<C::Symbol,16>* claimProjection=nullptr,
                                     std::span<const SourceQualification> qualifications={})
 {
-    ContextResult refused;if (!ValidProfile(profile) || sources.size()>64) return refused;
+    auto refusedStorage=std::make_unique<ContextResult>();
+    auto& refused=*refusedStorage;
+    if (!ValidProfile(profile) || sources.size()>64) return refused;
     const auto* frame=ResolveMetadata(request.frame,store);if (!frame) return refused;
     C::BoundedList<C::RecordKey,64> keys;
     for (const auto& source:sources)

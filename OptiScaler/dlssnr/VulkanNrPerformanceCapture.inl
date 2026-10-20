@@ -55,16 +55,25 @@ void RecordPerformanceCaptureVk(VkCommandBuffer cb,NVSDK_NGX_Parameter* params,c
     auto& root=ActiveVk();root.controlLock=&lock;
     struct EndControl {VkState& state;~EndControl(){state.controlLock=nullptr;}} end{root};
     auto wait=[](const char* reason){VulkanNrCaptureWaiting(reason);};
-    if(!root.resources||!root.performanceSource||!root.performanceUse||!root.chain.deliverable||
+    if(!root.resources||!root.performanceSource||!root.performanceOriginalSource||!root.performanceSourceCurrent||
+       !root.performanceSourceCurrent()||!root.performanceUse||!root.chain.deliverable||
        root.chain.requested!=root.chain.completed||!VulkanNrRecordings().UseOnRecording(root.performanceUse,cb)||
        root.performanceSerial!=VulkanNrRecordings().CommandSerial(cb)){
         wait("Performance capture awaits a complete unchanged pre-SR chain on this recording");return;}
+    const auto captureKey=root.generations?root.generations->AppliedKey():std::nullopt;
+    const void* captureCarrier=captureKey?(captureKey->privateDlaa?&root.resources->reJitter.ngx:&root.resources->preSr.ngx):nullptr;
+    const bool boundCapture=VkNrPreSrCaptureAuthorized(params,root.performanceEvaluation,captureCarrier);
+    const bool rawDiagnostic=root.performanceCaptureOnly&&root.performanceParams==params&&
+        root.performanceRawSourceCurrent&&root.performanceRawSourceCurrent();
+    if(!boundCapture&&!rawDiagnostic) {
+        wait("Performance capture awaits its exact live carrier binding or current diagnostic source");return;
+    }
     if(!ReadVkNrPerformanceSignature(params,performanceSignature)){
         wait("Performance capture awaits complete current native DLSS creation settings");return;}
     NVSDK_NGX_Resource_VK* target=nullptr;VkFrame::Failure failure;
     if(params->Get(NVSDK_NGX_Parameter_Output,reinterpret_cast<void**>(&target))!=NVSDK_NGX_Result_Success||
        !VkFrame::ValidateImage("Performance.Output",target,true,failure))return;
-    auto& source=*root.performanceSource;const auto& input=source.Resource.ImageViewInfo;
+    auto& source=*root.performanceOriginalSource;const auto& input=source.Resource.ImageViewInfo;
     const auto& output=target->Resource.ImageViewInfo;unsigned x=0,y=0;
     params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_X,&x);params->Get(NVSDK_NGX_Parameter_DLSS_Output_Subrect_Base_Y,&y);
     const auto applied=root.generations?root.generations->AppliedKey():std::nullopt;

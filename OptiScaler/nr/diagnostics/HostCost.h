@@ -13,14 +13,15 @@ enum class Kind : uint32_t {
     InputBegin, InputFeed, InputEnd, InputWindow, InputQueue, InputCursor,
     InputRaw, InputOriginal, TrackBinding, TrackBarrier, TrackLifecycle,
     TrackOther, TrackSnapshot, RecordingWork, PresentHook, PresentOverlay,
-    PresentOriginal, PresentInterval, WindowOriginal, Observation, NgxHook, Upscaler, DiagnosticReport, Count
+    PresentOriginal, PresentInterval, WindowOriginal, Observation, NgxHook, Upscaler, DiagnosticReport, VkQueueCall, VkQueueOriginal, VkAcquireHook, VkAcquireOriginal, VkFenceWaitHook, VkFenceWaitOriginal, VkQueueIdleHook, VkQueueIdleCall, VkDeviceIdleHook, VkDeviceIdleCall, VkSubmitHook, VkSubmitObservation, VkCompletionPoll, VkCheckpoint, VkGuideSelection, VkNrMaintenance, PresentLimiter, PresentReflex, LatencySleep, Count
 };
 inline constexpr std::array Names {
     "input-begin", "input-feed", "input-end", "input-window", "input-queue", "input-cursor",
     "input-raw", "input-original", "tracker-binding", "tracker-barrier", "tracker-lifecycle",
     "tracker-other", "tracker-snapshot", "recording-work", "present-hook", "present-overlay",
     "present-original", "present-interval", "window-original", "observation-scope", "ngx-hook", "upscaler-provider",
-    "diagnostic-report"
+    "diagnostic-report",
+    "vulkan-queue-call", "vulkan-queue-original", "vulkan-acquire-hook", "vulkan-acquire-original", "vulkan-fence-wait-hook", "vulkan-fence-wait-original", "vulkan-queue-idle-hook", "vulkan-queue-idle-call", "vulkan-device-idle-hook", "vulkan-device-idle-call", "vulkan-submit-hook", "vulkan-submit-observation", "vulkan-completion-poll", "vulkan-checkpoint", "vulkan-guide-selection", "vulkan-nr-maintenance", "present-limiter", "present-reflex", "latency-sleep-original"
 };
 static_assert(Names.size() == static_cast<size_t>(Kind::Count));
 static_assert(std::atomic<uint64_t>::is_always_lock_free);
@@ -63,9 +64,9 @@ class Scope {
     Kind kind_; uint64_t start_=0, before_=0; bool active_=false;
     uint64_t (*clock_)() noexcept;
 public:
-    explicit Scope(Kind kind, uint32_t stride=1, uint64_t (*clock)() noexcept=Now) noexcept
+    explicit Scope(Kind kind, uint32_t stride=1, uint64_t (*clock)() noexcept=Now, bool admitted=true) noexcept
         : kind_(kind), clock_(clock) {
-        if (!Enabled()) return;
+        if (!admitted || !Enabled()) return;
         if (stride > 1) {
             // Pseudorandom selection avoids repeatedly choosing one operation
             // from a periodic bind/draw/constructor/destructor sequence.

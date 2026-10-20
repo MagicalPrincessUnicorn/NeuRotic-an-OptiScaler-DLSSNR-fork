@@ -2,6 +2,7 @@
 #pragma once
 #include <dlssnr/ObservationRefreshButton.h>
 #include "SleekUi.h"
+#include "ItemHelp.h"
 #include "SleekBrand.h"
 #include "SleekPilotLight.h"
 #include "Localization.h"
@@ -184,7 +185,7 @@ inline void Navigation(int& selected, float height, bool wide,
         draw->PushClipRect({left,origin.y},{right,origin.y+size.y},true);
         if(abbreviated){const auto at=ImVec2{left,origin.y+(size.y-f)*.5f};ImGui::RenderTextEllipsis(draw,at,{right,at.y+f},right,caption.c_str(),nullptr,nullptr);}
         else{const float x=wide?left:left+(std::max)(0.f,(captionRoom-captionSize.x)*.5f);draw->AddText(ImGui::GetFont(),captionFont,{x,origin.y+(size.y-captionSize.y)*.5f+held*.5f},ink,caption.c_str(),nullptr,wide?0:captionRoom);}
-        draw->PopClipRect();if(abbreviated&&(hover||ImGui::IsItemFocused())){ImGui::BeginTooltip();ImGui::PushTextWrapPos((std::min)(400.f,(std::max)(1.f,ImGui::GetMainViewport()->WorkSize.x-48)));ImGui::TextUnformatted(caption.c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();}
+        draw->PopClipRect();if(abbreviated&&Neurotic::ItemHelpHovered()){ImGui::BeginTooltip();ImGui::PushTextWrapPos((std::min)(400.f,(std::max)(1.f,ImGui::GetMainViewport()->WorkSize.x-48)));ImGui::TextUnformatted(caption.c_str());ImGui::PopTextWrapPos();ImGui::EndTooltip();}
         if(wide&&chosen>.001f){auto mark=ImGui::GetStyleColorVec4(ImGuiCol_CheckMark);mark.w*=chosen;draw->AddRectFilled({origin.x,origin.y+f*.8f},{origin.x+3,origin.y+size.y-f*.8f},ImGui::GetColorU32(mark),2);}
         ImGui::RenderNavCursor(ImRect(origin,origin+size),id);ImGui::PopID();
     }
@@ -350,29 +351,20 @@ inline void SectionNavigation(int page,int& selected,PilotState preflight=PilotS
 inline void NeuralNavigation(int& selected,bool main=false,bool multipass=false,bool overrides=false,bool inspector=false,
                              bool forceSelection=false,PilotState preflight=PilotState::Degraded)
 {
-    static const char* names[] = {Neurotic::UiLiteral("ingame.sleekshell.nr_settings_bec41745", "NR Settings"), Neurotic::UiLiteral("ingame.sleekshell.multi_pass_4874148b", "Multi Pass"), Neurotic::UiLiteral("ingame.option.da188e3b1cef", "Inspector"), Neurotic::UiLiteral("ingame.option.268f14bbfe11", "Diagnostics"), Neurotic::UiLiteral("ingame.option.7f6e1f2662b4", "Overrides"), Neurotic::UiLiteral("ingame.sleekshell.object_rules_f7828407", "Object Rules"), Neurotic::UiLiteral("ingame.sleekshell.nr_pre_flight_59ef61b0", "NR Pre-flight")};
-    static const char* ids[] = {"###NrOverview", "###NrMultipass", "###NrInspector", "###NrDiagnostics", "###NrOverrides", "###NrObjectRules", "###NrInputPreflight"};
-    // Keep page identities and their scroll state stable while changing display order.
-    static constexpr int order[] = {6, 0, 1, 5, 4, 2};
+    const char* names[]={"Model & image","Inputs & signals","Compare & capture"};
+    const int pages[]={0,6,7};
+    // Historical deep links retain their target in the body until a user picks a section.
     const int requested=selected;
-    if (ImGui::BeginTabBar("##NeuralPages",ImGuiTabBarFlags_FittingPolicyScroll)) {
-        for (int i : order) {
-            std::string label=Neurotic::Translate(names[i]);
-            const bool onState=i==0?main:i==1?multipass:i==4?overrides:i==2?inspector:false;
-            const bool lamp=i==0 || i==1 || i==4 || i==2 || i==6;
-            if(lamp)ImGui::SetNextItemWidth(ImGui::CalcTextSize(label.c_str()).x+ImGui::GetStyle().FramePadding.x*2+PilotReserve());
-            label+=ids[i];
-            const bool open=ImGui::BeginTabItem(label.c_str(),nullptr,
-                ImGuiTabItemFlags_NoTooltip | (forceSelection && i==requested ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None));
-            if(lamp)TabPilotLight(i==6?preflight:onState?PilotState::On:PilotState::Off);
-            if(open) {
-                selected=i;
-                ImGui::EndTabItem();
-            }
+    if(ImGui::BeginTabBar("##NeuralWorkspace",ImGuiTabBarFlags_FittingPolicyScroll)){
+        for(int i=0;i<3;++i)if(ImGui::BeginTabItem(names[i],nullptr,
+            forceSelection&&requested==pages[i]?ImGuiTabItemFlags_SetSelected:ImGuiTabItemFlags_None)){
+            if(!forceSelection||requested==pages[i])selected=pages[i];ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
     }
+
 }
+
 inline float FooterScaleWidth()
 {
     const auto* window=ImGui::GetCurrentWindow();

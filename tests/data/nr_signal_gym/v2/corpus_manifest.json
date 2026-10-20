@@ -1,0 +1,571 @@
+{
+  "schema_version": "2.0.0",
+  "kind": "CorpusManifest",
+  "corpus_id": "GYM-CLOSURE-SEEDS-v2",
+  "corpus_revision": 1,
+  "status": "complete",
+  "canonical_profile": "gym-jcs-restricted-v2",
+  "cases": [
+    {
+      "case_id": "GYM-SEED-001",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-001"
+      ],
+      "frames": [
+        {
+          "path": "frames/minimal-frame.json",
+          "bytes": "8977",
+          "sha256": "30024d08213c9e550a4a7f03fbd8f91f0351d84e6e4193768b42493d5f39f5dd",
+          "canonical_sha256": "3aed5e92701bb35ac43f208e16f8317f3e42b081c547cc63eacb0dd555613bb5"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-001.json",
+        "bytes": "2114",
+        "sha256": "fc5f2fbc257e5d0ddf0d0f95e465a8d05252eebfe61de10ede5573e1aadb64e0",
+        "canonical_sha256": "6b423049aeda13c3af17fd5f80eae184fc22fdc525711a1e8a98eb8c67d072b1"
+      },
+      "case_input_sha256": "3489fbaaae27f9bbb38738754df48bf76c5d3c7ae06f602e3ea52cb7986b6000",
+      "coverage_tags": [
+        "positive",
+        "metadata",
+        "geometry"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-002",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-009"
+      ],
+      "frames": [
+        {
+          "path": "frames/stale-signal-frame.json",
+          "bytes": "8977",
+          "sha256": "42b86bdc86e5b0b6b075809ce9036245776183e94d59b61c3d5e402a703927f8",
+          "canonical_sha256": "bbabac070345be07b2b58cfaabbc6b06fc7975cb6a7a87b299eb22f283d324bb"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-002.json",
+        "bytes": "2967",
+        "sha256": "389c50c577b2537b9f07577ce54e7989d869e59c0bc5f0a35457dbeb1b0fe204",
+        "canonical_sha256": "3eb996e20ff15d0c76e2b7067666411749f166c26d8c170b00351e96451aa6a4"
+      },
+      "case_input_sha256": "5713d038b63765a477dff381db7fe0a7820d41e507575e5367d31b1b1e7af6a0",
+      "coverage_tags": [
+        "stale",
+        "metadata",
+        "preservation"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-003",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-013"
+      ],
+      "frames": [
+        {
+          "path": "frames/contradictory-generation-frame.json",
+          "bytes": "8994",
+          "sha256": "de55bff4a59f4a529e34dc517581b7d4e515daeb65ec9a9b78e8f40245e5dd37",
+          "canonical_sha256": "34c46830ecc724e7f0b966c30d3033110bcab4ab68bfead60aaf0008c203ed38"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-003.json",
+        "bytes": "3875",
+        "sha256": "7ee1b63c0fa13bdeec24095911223f8b990fc71328d72719648bf38ec7f865cf",
+        "canonical_sha256": "0375cbad51eda13e911c1eb3ccf3a1d99c1759be90d750d3534a649f4b3ae6c2"
+      },
+      "case_input_sha256": "d3f742a4f6fe019ec5fa659a4fc3d8c2ce4734c2729f7d0f028e6a66a91a7921",
+      "coverage_tags": [
+        "cross_generation",
+        "metadata",
+        "preservation"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-004",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-017"
+      ],
+      "frames": [
+        {
+          "path": "frames/zero-width-frame.json",
+          "bytes": "8980",
+          "sha256": "d8744e56425e01fd1b183e6a69083e4d4ee7ee0fb5501b68048a07bc3a75a95a",
+          "canonical_sha256": "c218c7f34af534d7c0e512ea2fcb090165de3aedf57bee274cee957d553e194a"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-004.json",
+        "bytes": "1365",
+        "sha256": "e9fb95638872a0d012c41fe59d34740f291706fb5b95b7d1799b260d67b17d46",
+        "canonical_sha256": "1168a8cd617ea169285d1dd8ebbda0105fb4ff1dc1dbcc67dd7614c88ba0a233"
+      },
+      "case_input_sha256": "2817bc3d3a9a0b9eb08d202805bfaacf2fde1a18694f1d2bc7bc5187ef9d0e90",
+      "coverage_tags": [
+        "negative",
+        "geometry"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-005",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-017"
+      ],
+      "frames": [
+        {
+          "path": "frames/overflow-rect-frame.json",
+          "bytes": "8994",
+          "sha256": "0b28dcfcdf0c60cf98b361403f2e5aae1767a956db5a85afceb74b51a528d0bf",
+          "canonical_sha256": "83f2dc478b249b6858b18b94b496c0b999e455995a5ede8712848faf90a4f18f"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-005.json",
+        "bytes": "1368",
+        "sha256": "d5880e24d0e372973aa5ccf5b346c1eb323b1cec8264a92a20298d5cf235cba9",
+        "canonical_sha256": "2eb47b25c810a0766fc19ff403204ca8ff0fa6aa29e8898e0f06618d4edc1480"
+      },
+      "case_input_sha256": "1592392b1e582b95e3ab13a7d0345cdf4242eae4ddde2f5f3462f7f357bb2bd3",
+      "coverage_tags": [
+        "boundary",
+        "geometry"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-006",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-004"
+      ],
+      "frames": [
+        {
+          "path": "frames/padded-frame.json",
+          "bytes": "8977",
+          "sha256": "02a82ae563b483910323f008f0405be411041fbbc98276ca51404c7182b309f3",
+          "canonical_sha256": "c3d30214d155b3eb831957022b8b6c0d12aa022dcc843880fbed070c96eb5f5c"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-006.json",
+        "bytes": "1360",
+        "sha256": "beb9297973b6322b313b2ff1195e1965cd0f0fd5f041cee6964c8dbfee0e0b80",
+        "canonical_sha256": "e671218c527e7e44a55ce33591e7072845f616fbb5b37a55d1a4d007284e842d"
+      },
+      "case_input_sha256": "f52c21558d1c7fb7bb507e5fa4d97f8f0aaf341e63e8f7d21d6e7d09f9997cb6",
+      "coverage_tags": [
+        "positive",
+        "geometry",
+        "padded"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-007",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-003"
+      ],
+      "frames": [
+        {
+          "path": "frames/known-zero-flags-frame.json",
+          "bytes": "9056",
+          "sha256": "1531882d756ac85bef1e491412befcd6d50c6eabb05a071064243e5b2a56d662",
+          "canonical_sha256": "e25fb27619a02528ba6828c09da6fd159de3fb8587846a15dff67c4865a65fdd"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-007.json",
+        "bytes": "1375",
+        "sha256": "748b4ef35987b742d2cfabdb2572e2ac2dce51b0769484e742f1f7b2eca5d2aa",
+        "canonical_sha256": "993c2d4842381fad1e767573d6db86c109454ac75f9c85e8acb8b5e6d9028052"
+      },
+      "case_input_sha256": "91755bca37e98beceeba8178c3c0690254c08cacbcbf7694cf0b1385ad4d74ee",
+      "coverage_tags": [
+        "presence",
+        "known_zero"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-008",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-003"
+      ],
+      "frames": [
+        {
+          "path": "frames/explicit-absence-flags-frame.json",
+          "bytes": "9088",
+          "sha256": "0860c7aaddb6fdf5403a92f28578ee789ca0fb8f7cdd73b3c4bd0b24bdbbd408",
+          "canonical_sha256": "a68fb024155b24bcad4a082f89320612721d911831ef1ecb08959f5d76e64d5d"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-008.json",
+        "bytes": "1383",
+        "sha256": "2ff8f878974b0020bd41a4a96fa2c021d4ccdb74d083359afd0a0e6548475dab",
+        "canonical_sha256": "4fa9f1e2ed2c62536b71eda16f012414780c94a9f4a995306562f7c2b48943aa"
+      },
+      "case_input_sha256": "c040b63fd509e76da093a93ff42b20f59093363283e7d785f7360da61a35e4ad",
+      "coverage_tags": [
+        "presence",
+        "absence"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-009",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-003"
+      ],
+      "frames": [
+        {
+          "path": "frames/unknown-flags-flags-frame.json",
+          "bytes": "9087",
+          "sha256": "a7aed883c0e3c0b9249cad7761a45d67a3c580bcff8917cdeec600447aeaf285",
+          "canonical_sha256": "ece4edece884f9fb763f65a2096c525c04e7d63485f13b1849a6003c4a83c3a4"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-009.json",
+        "bytes": "1913",
+        "sha256": "0491b60895c5677ab0be23858a5dd56aaa01afe44ed3c24365a9ab39c199b581",
+        "canonical_sha256": "ae29216337d6d2205c0223cc7a174dc4c6f3f2a6d949673fba4762c03921f86a"
+      },
+      "case_input_sha256": "beff006024632d115e2dc70504dd5b0e5bf66da3c6d91cbc0517843744b480af",
+      "coverage_tags": [
+        "presence",
+        "unknown"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-010",
+      "revision": 1,
+      "legacy_fixture_ids": [],
+      "frames": [
+        {
+          "path": "frames/present-accepted-frame.json",
+          "bytes": "10054",
+          "sha256": "8926e35ff4ac39f33b53eedb16b97d0509920ced4d8a6bb389b93b20ea9bd8bc",
+          "canonical_sha256": "979d80d68129a5caf3a92295ccf7688928720d53eb2b161734c774d5940dbd7c"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-010.json",
+        "bytes": "1478",
+        "sha256": "91a15ecbab206007c7e1e0b702b4380fafa3d190cbfbed6539ec3291c6ccbee5",
+        "canonical_sha256": "237932347005f9776b8dd77540025145576e41dc48af7cf2a90bd778e9ad415b"
+      },
+      "case_input_sha256": "042fc5b12990c6c5f1a42475f01068417b9d312ea741d36886fbef02e037f230",
+      "coverage_tags": [
+        "admission",
+        "source_policy"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-011",
+      "revision": 1,
+      "legacy_fixture_ids": [],
+      "frames": [
+        {
+          "path": "frames/present-device-mismatch-frame.json",
+          "bytes": "10062",
+          "sha256": "e05fdc01b0c5ae8600e71fb5568be33987882a0f6ddaef00294542faf0c7b743",
+          "canonical_sha256": "b9875a1636101475a5dee0ed9f8d95d2070a42406c6d876d77442fe2f31fd8cb"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-011.json",
+        "bytes": "1519",
+        "sha256": "fcaeb72f993e22062a4b9516f6288f3d47e6fa732d1955c43b386c48d46da884",
+        "canonical_sha256": "4cbfc7b6ca228d53f7d04203110c6b2257260606dbdd752495f39987b4d2f649"
+      },
+      "case_input_sha256": "f68798416a70362238320103ce8159239cc6c0d50923d6cfe05044fcb142a7d9",
+      "coverage_tags": [
+        "admission",
+        "source_policy"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-012",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-020"
+      ],
+      "frames": [
+        {
+          "path": "frames/readiness-generation-frame.json",
+          "bytes": "9779",
+          "sha256": "8c010abd473464450a5dfef1358728a0d603d7154b79616ef6a6f21b86f9e1ad",
+          "canonical_sha256": "e0f3c934f4978f5d2257c100e5d8f54fabf73811964f80a07453ff8817cba43f"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-012.json",
+        "bytes": "1518",
+        "sha256": "c7183f16c29a9ada839507d8c6d8b29c42f1f028759aa21b276106b2c0fbd40a",
+        "canonical_sha256": "17b234efa08d129cc9d97c0800263c4a89af7b64b5850c6dfedc84b8fd5e9684"
+      },
+      "case_input_sha256": "993cf2160ecb09533d96be19070c4b52981db27a9dc9fb2b7762c204ea313b57",
+      "coverage_tags": [
+        "generation",
+        "readiness"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-013",
+      "revision": 1,
+      "legacy_fixture_ids": [],
+      "frames": [
+        {
+          "path": "frames/history-sequence-frame.json",
+          "bytes": "10004",
+          "sha256": "0af8ee024ce5ad9dfb6a3e63474e6a2e43e06ba52f4a6d51e296356723f5e640",
+          "canonical_sha256": "6abacaa6fe0371017dbb4b7e3904ad7ff41a753488e8baa70a051eeb4830b48e"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-013.json",
+        "bytes": "5220",
+        "sha256": "0b825a07c6116181033451996d50ada0bd551d5762247fd4129a41e1bb109ce0",
+        "canonical_sha256": "d7b07848d4ae72175abdca560deda344094a7224bcd3a65a3d174bba1f84bda3"
+      },
+      "case_input_sha256": "00c24035967af54547c7c6c01a996db21727d8701045c0c51e17e8f8b30e6c0b",
+      "coverage_tags": [
+        "temporal",
+        "history"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-014",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-012"
+      ],
+      "frames": [
+        {
+          "path": "frames/absent-motion-frame.json",
+          "bytes": "7998",
+          "sha256": "b4a350deaf697496dc508197d9bc9a21d5d87a2d6bcfa1379de6c7e9179af6da",
+          "canonical_sha256": "e3672df3dfa6aa44ee6f9bc5f522a3561fe7d6099876a5a4a3c9fd5465e492e2"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-014.json",
+        "bytes": "1894",
+        "sha256": "21e5fd3b06cb4b733d092f6bdb7020c52ea592ff59611cb66be1dab79105c77a",
+        "canonical_sha256": "70574838c1f29749fdad8eb47164a7bc235ec16ff274ca700381d87b0eb4c463"
+      },
+      "case_input_sha256": "5b07807bcc7eea36c087da533fad74867ad5171cc6dccb7ea684d21cce353be8",
+      "coverage_tags": [
+        "absence",
+        "preservation"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-015",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-010"
+      ],
+      "frames": [
+        {
+          "path": "frames/ambiguous-motion-frame.json",
+          "bytes": "8812",
+          "sha256": "19948abf2b1bebc62b350c2e156bcbbfd1e7bbf3a0825cd605a79de1fd15e460",
+          "canonical_sha256": "886e531dabd38ab0bb5a44059989e0fbd04b4f835e545eba18f372e3f3515ca5"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-015.json",
+        "bytes": "2998",
+        "sha256": "286cad5545853a80e31d0d9112ee79ecd26430e99c9f2b45b5309db7b90901e2",
+        "canonical_sha256": "9118034fb2270a4921f614bc3be59e8cae290cc7a529bfe5dadc38019d4a51f5"
+      },
+      "case_input_sha256": "e83ab5d8946b110ea90a3f75eec0d50203b5a23e4b02563b7fbc4ffc343dc5a7",
+      "coverage_tags": [
+        "ambiguous",
+        "provenance"
+      ],
+      "required": true
+    },
+    {
+      "case_id": "GYM-SEED-016",
+      "revision": 1,
+      "legacy_fixture_ids": [
+        "GYM-FX-017"
+      ],
+      "frames": [
+        {
+          "path": "frames/nonfinite-scalar-frame.json",
+          "bytes": "8231",
+          "sha256": "4d8186d4a9873a4bf4a4411e0d360b851a6cddc9f884f33b1dbc7a8c72ca6c77",
+          "canonical_sha256": "41583e9f745822ac45230e6e2b7b36584b6005769b72a2497976f557e368e3dd"
+        }
+      ],
+      "environment": {
+        "path": "environment_cpu.json",
+        "bytes": "2023",
+        "sha256": "d2ec674218d321b046ef49777c13ef78b382e3e8f915a4a6603fe6af51b5ba09",
+        "canonical_sha256": "b8be4d6bb76e8efde46246577b25b4987dcdf86d5a2bc17b230cf69fadb46e42"
+      },
+      "expectations": {
+        "path": "expected/GYM-SEED-016.json",
+        "bytes": "1170",
+        "sha256": "0c893f30f903e514eb0677eee455ca38d36b7af88445db68afc6d251796fc8cd",
+        "canonical_sha256": "356c491e202d8196469a7b09980e6b4023c098a42d9e55a713af5cbed8590378"
+      },
+      "case_input_sha256": "11033b0cd62da3233a29c85e5802773289979e2fe8aead7cb038e6b26cb65825",
+      "coverage_tags": [
+        "invalid",
+        "scalar",
+        "preservation"
+      ],
+      "required": true
+    }
+  ],
+  "blobs": [],
+  "provenance": {
+    "origin": "synthetic_specification",
+    "game_label": {
+      "state": "not_applicable",
+      "reason_id": "GYM.NO_GAME_CAPTURE"
+    },
+    "game_version": {
+      "state": "not_applicable",
+      "reason_id": "GYM.NO_GAME_CAPTURE"
+    },
+    "source_build": {
+      "state": "not_observed",
+      "reason_id": "GYM.NOT_OBSERVED"
+    },
+    "source_hashes": [],
+    "contains_game_assets": false,
+    "contains_model_binary": false,
+    "contains_personal_data": false,
+    "distribution": "synthetic_specification",
+    "license_labels": [
+      "NeuRotic-project-design-artifact"
+    ],
+    "attribution": [
+      "EspiOwnage"
+    ],
+    "redactions": [],
+    "evidence_refs": [
+      "User:Chat-E-Implementation-Closure",
+      "Prior:GYM-PROMO-001",
+      "Prior:GYM-PROMO-002"
+    ]
+  },
+  "migration": null
+}

@@ -3,10 +3,12 @@
 #include "NrGpuSafety.h"
 #include "NrScreenshotPng.h"
 #include "NrScreenshotContract.h"
+#include <nr/context/ColorOperation.h>
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <utility>
 #include <sstream>
@@ -14,6 +16,18 @@
 
 namespace DlssNr::StageCapture
 {
+// The proxy owns a different feature. Do not turn the renderer's retained
+// forwarder context into a claimed proxy session or provider generation.
+inline std::string DescribeProviderContext(bool proxy, const void* forwarderSession, UINT64 rendererFeatureBuilds)
+{
+    std::ostringstream out;
+    out << "provider_selection=" << (proxy ? "proxy" : "forwarder") << "; submitted_session=";
+    if (proxy) out << "unknown"; else out << forwarderSession;
+    out << "; submitted_generation=unknown; forwarder_context_session=" << forwarderSession
+        << "; renderer_feature_builds=" << rendererFeatureBuilds;
+    return out.str();
+}
+
 struct StageInput
 {
     const char* name;
@@ -22,6 +36,27 @@ struct StageInput
     float whitePoint = 0.0f;
     Screenshots::Encoding encoding = Screenshots::Encoding::DisplayEncoded;
 };
+
+// The caller supplies the actual encode/resolve base, not a reconstructed proxy.
+// Only a fully completed requested single pass has this four-stage capture layout.
+// Multi-pass captures retain their existing six-stage budget and stage selection.
+inline bool AddSinglePassPresentOriginal(std::vector<StageInput>& stages,
+    unsigned int requestedPasses, unsigned int completedPasses, ID3D12Resource* original,
+    const Neurotic::Context::ModelColorOperation& color)
+{
+    if (requestedPasses != 1 || completedPasses != 1) return false;
+    const float white = color.passthrough ? 0.0f : color.whitePoint;
+    const auto encoding = color.signedOriginal ? Screenshots::Encoding::ScRgb :
+                                               Screenshots::Encoding::DisplayEncoded;
+    stages.insert(stages.begin(), {"scene_original", original,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, white, encoding});
+    // Raw model stages keep their own encoded representation. Only the retained
+    // full scene and composed output share this explicit preview conversion.
+    for (auto& stage : stages)
+        if (std::string_view(stage.name) == "final_composed")
+        { stage.whitePoint = white; stage.encoding = encoding; }
+    return true;
+}
 
 // Diagnostic only: no source texture or model history is changed. All stages of a
 // frame are copied on the same recording, and retained until it cannot be replayed.
@@ -70,7 +105,8 @@ class PresentStages
 
     bool record(ID3D12GraphicsCommandList* cmd, ID3D12Device* device,
                 const std::vector<StageInput>& inputs, UINT64 frameId, bool reset,
-                const std::string& settings, const Screenshots::Identity& identity = {})
+                const std::string& settings, const Screenshots::Identity& identity = {},
+                const std::string& observation = {})
     {
         if (!wantsFrame(GetTickCount64()) || cmd == nullptr || device == nullptr) return false;
         if (inputs.empty() || inputs.size() > 6) { cancel(); return false; }
@@ -94,7 +130,8 @@ class PresentStages
         settings_ = settings;
         for (size_t i = 0; i < inputs.size(); ++i)
             copy(cmd, inputs[i], stages_[i], captured_);
-        frames_.push_back({ticket, frameId, reset, identity});
+        // Per-frame observations vary during a continuous capture; they are not configuration.
+        frames_.push_back({ticket, frameId, reset, identity, observation});
         ++captured_;
         ready_ = captured_ == wanted_;
         status_ = ready_ ? "Capture recorded. Keep playing while the copies finish."
@@ -242,10 +279,11 @@ class PresentStages
                          << ",\"resource_generation\":" << frame.identity.resourceGeneration
                          << ",\"backbuffer\":" << frame.identity.backbuffer
                          << ",\"requested_passes\":" << frame.identity.requestedPasses
-                         << ",\"completed_passes\":" << frame.identity.completedPasses << '}';
+                         << ",\"completed_passes\":" << frame.identity.completedPasses
+                         << ",\"observation\":" << Screenshots::JsonString(frame.observation) << '}';
             }
             manifest << "],\n  \"limitations\": " << Screenshots::JsonString(
-                "Native pairs are scene-stage SDR previews before later game effects. Performance request-only pairs use fresh history, not accumulated live history. HDR display images are converted to SDR previews with one fixed reference for both sides; monitor tone mapping is not reproduced. No per-image exposure adjustment.")
+                "Native before/after pairs are scene-stage SDR previews before later game effects. Optional layer1 input/raw images are model proxies, not scene images; their dimensions and encoding can differ from the pair. Performance request-only pairs use fresh history, not accumulated live history. HDR display images are converted to SDR previews with one fixed reference for both sides; monitor tone mapping is not reproduced. No per-image exposure adjustment.")
                 << ",\n  \"images\": [";
             bool first = true;
             for (const auto& stage : stages_)
@@ -326,8 +364,12 @@ class PresentStages
                         stage.name.c_str(), stage.desc.Width, stage.desc.Height, (int) stage.desc.Format,
                         stage.layout.Footprint.RowPitch, stage.bytes) >= 0) && manifestOk;
                 for (unsigned int i = 0; i < captured_; ++i)
+                {
                     manifestOk = (std::fprintf(file, "frame %u evaluation %llu reset %u\n", i,
                         frames_[i].id, frames_[i].reset ? 1u : 0u) >= 0) && manifestOk;
+                    manifestOk = (std::fprintf(file, "frame_observation %s\n",
+                        Screenshots::JsonString(frames_[i].observation).c_str()) >= 0) && manifestOk;
+                }
                 ok = (std::fclose(file) == 0) && manifestOk;
                 if (!ok) std::filesystem::remove(path, ec);
             }
@@ -364,7 +406,7 @@ class PresentStages
         UINT64 bytes = 0;
         std::vector<ID3D12Resource*> shots;
     };
-    struct Frame { GpuSafety::Ticket use; UINT64 id; bool reset; Screenshots::Identity identity; };
+    struct Frame { GpuSafety::Ticket use; UINT64 id; bool reset; Screenshots::Identity identity; std::string observation; };
     std::vector<Stage> stages_;
     std::vector<Frame> frames_;
     unsigned int captured_ = 0, wanted_ = 0;
@@ -380,7 +422,9 @@ class PresentStages
 
     std::string screenshotName(const std::string& prefix, const std::string& stage, unsigned int frame) const
     {
-        const char* tag = stage == "NR-Off" ? "NROFF" : stage == "Present-NR-On" ? "NRONPRESENT" : "NRON";
+        const char* tag = stage == "scene_original" ? "SCENE" :
+                          stage == "NR-Off" ? "NROFF" : stage == "Present-NR-On" ? "NRONPRESENT" :
+                          stage == "layer1_input" ? "L1INPUT" : stage == "layer1_raw" ? "L1RAW" : "NRON";
         return prefix + (captured_ > 1 ? "_F" + std::to_string(frame) : "") + "_" + tag + ".png";
     }
 

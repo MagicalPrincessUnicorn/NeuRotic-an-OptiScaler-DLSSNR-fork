@@ -88,6 +88,8 @@ template<class S> void Derive(S& c, bool basicSupported = true)
         c.DlssNrSecondLayer = Count(p) > 1;
         c.DlssNrWorkingScale = p.resolution;
         c.DlssNrUiManualResolution = true;
+        // Basic owns the effective raster; preserve the user's saved automatic choice.
+        if constexpr(requires {c.DlssNrNativeResolution=0u;})c.DlssNrNativeResolution=0u;
         using ScalerType = decltype(c.DlssNrScalingDownscaler.value_or_default());
         c.DlssNrScalingDownscaler = ScalerType(p.downscaler);
         // First copy all inherited tuning, then distribute the two independent totals.

@@ -14,7 +14,7 @@ private:
  bool pending=false;uint64_t deadline=0,revision=0;unsigned attempts=0;State state=State::Idle;
  static bool SameSource(const FrameStamp& a,const FrameStamp& b){
   return a.session==b.session&&a.sequence==b.sequence&&a.timestampQpc==b.timestampQpc&&
-   a.width==b.width&&a.height==b.height&&a.streamEpoch==b.streamEpoch&&a.geometryEpoch==b.geometryEpoch;
+   a.width==b.width&&a.height==b.height&&a.streamEpoch==b.streamEpoch&&a.geometryEpoch==b.geometryEpoch&&a.colorEpoch==b.colorEpoch&&a.outputColorEpoch==b.outputColorEpoch;
  }
 public:
  void Clear(){pair.reset();pending=false;attempts=0;deadline=revision=0;state=State::Idle;}
@@ -27,7 +27,7 @@ public:
  }
  bool Store(const CapturedFrame& source,const NrResult& enhanced,uint64_t target,uint64_t output,uint64_t processing){
   if(!source.texture||!source.ownership||!enhanced.texture||!enhanced.ownership||!enhanced.completed||
-     !SameSource(source.stamp,enhanced.stamp)||source.stamp.configEpoch!=processing||enhanced.stamp.configEpoch!=processing){pair.reset();return false;}
+     !color::SameDomain(source.color,enhanced.color)||!SameSource(source.stamp,enhanced.stamp)||source.stamp.configEpoch!=processing||enhanced.stamp.configEpoch!=processing){pair.reset();return false;}
   pair=Pair{source,enhanced,target,output,processing};return true;
  }
  std::optional<CapturedFrame> TakeSource(){if(!pair)return std::nullopt;auto source=pair->source;pair.reset();return source;}

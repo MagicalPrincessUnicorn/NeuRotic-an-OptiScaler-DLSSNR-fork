@@ -10,10 +10,11 @@ namespace nh {
 inline void ValidateInstallDefaults(const Json& value){
  if(!value.is_object()||!value.contains("schemaVersion")||!value["schemaVersion"].is_number_integer()||value["schemaVersion"]!=1)
   throw std::runtime_error("Unsupported install defaults version");
- for(const auto& item:value.items())if(item.key()!="schemaVersion"&&item.key()!="nrMode"&&item.key()!="modelPreset"&&item.key()!="style"&&item.key()!="mfgUnlock"&&item.key()!="mfgConsent")
+ for(const auto& item:value.items())if(item.key()!="schemaVersion"&&item.key()!="nrMode"&&item.key()!="modelPreset"&&item.key()!="style"&&item.key()!="mfgUnlock"&&item.key()!="mfgConsent"&&item.key()!="logToFile"&&item.key()!="logLevel")
   throw std::runtime_error("Unknown install default");
  auto integer=[&](const char* key,std::initializer_list<int> choices){if(!value.contains(key))return;const auto& v=value[key];if(!v.is_number_integer()||std::none_of(choices.begin(),choices.end(),[&](int n){return v==n;}))throw std::runtime_error("Invalid install default value");};
- integer("nrMode",{0,2,3});integer("style",{0,1,2});
+ integer("nrMode",{0,2,3});integer("style",{0,1,2});integer("logLevel",{0,1,2,3,4,5,6});
+ if(value.contains("logToFile")&&!value["logToFile"].is_boolean())throw std::runtime_error("Invalid diagnostic default");
  if(value.contains("modelPreset")) {
   const auto& v=value["modelPreset"];if(!v.is_string()||(v!="auto"&&v!="0"&&v!="1"&&v!="2"&&v!="3"))throw std::runtime_error("Invalid model preset default");
  }
@@ -67,8 +68,17 @@ inline void SaveInstallDefaults(const std::filesystem::path& path,const Json& pr
 }
 inline Json WriteInstallDefault(const std::filesystem::path& path,const char* key,const Json& value){
  auto current=ReadInstallDefaults(path);if(current.readOnly)throw std::runtime_error("Install defaults cannot be read");
- auto next=current.preferences;next[key]=value;
- if(std::string_view(key)=="mfgUnlock")next["mfgConsent"]=value!="off";
+ auto next=current.preferences;
+ if(value.is_null()){
+  const std::string_view setting=key;
+  if(setting!="nrMode"&&setting!="modelPreset"&&setting!="style"&&setting!="mfgUnlock"&&setting!="logToFile"&&setting!="logLevel")throw std::runtime_error("Unknown install default reset");
+  // Omission inherits the package default. Reset only this saved override;
+  // MFG consent belongs to its unlock override and cannot survive its removal.
+  next.erase(key);if(setting=="mfgUnlock")next.erase("mfgConsent");
+ }else{
+  next[key]=value;
+  if(std::string_view(key)=="mfgUnlock")next["mfgConsent"]=value!="off";
+ }
  SaveInstallDefaults(path,next,&current.preferences);return next;
 }
 }

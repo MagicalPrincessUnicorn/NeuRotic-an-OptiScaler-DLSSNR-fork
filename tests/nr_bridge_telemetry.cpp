@@ -50,5 +50,20 @@ int main()
     tracker.CopyBack(false);
     Check(tracker.Snapshot().stage == DlssNr::BridgeStage::CopyBackFailed,
           "copy-back failure remains explicit");
-    std::cout << "PASS: BG3 bridge route, resource, lifecycle, outcome, and copy-back reporting\n";
+    namespace B=DlssNr::Bridge;
+    B::Identity identity {1,2,3,0,4,5,6,7,8};
+    B::Outcome outcome(identity);
+    tracker.Begin(true,true,true,true,true);
+    // Even a diagnostic claiming composition cannot authorize a live outcome.
+    tracker.RecordNr(0,100,0,100,0,100);
+    Check(!outcome.CanCopyBack(identity),"cumulative telemetry cannot authorize output publication");
+    outcome.Prepared(); outcome.ProviderResult(true); outcome.Submitted(true);
+    Check(outcome.QueueCopyBack(identity),"current upscaler-only attempt enqueues output");
+    outcome.Delivered(); tracker.Begin(true,true,true,true,true); tracker.ObserveOutcome(outcome.Snapshot());
+    Check(tracker.Snapshot().stage==DlssNr::BridgeStage::AwaitingModel &&
+        tracker.Snapshot().receipt.delivered && !tracker.Snapshot().receipt.nrComposed,
+        "receipt distinguishes upscaler-only delivery from NR composition");
+    auto diagnostic=tracker.Snapshot(); diagnostic.receipt.nrComposed=true;
+    Check(!outcome.Snapshot().nrComposed,"diagnostic copy cannot mutate current outcome");
+    std::cout << "PASS: 13 bridge route, lifecycle, outcome, and telemetry non-authority checks\n";
 }

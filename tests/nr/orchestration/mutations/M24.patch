@@ -1,0 +1,11 @@
+diff --git a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+--- a/before/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
++++ b/after/OptiScaler/nr/orchestration/StreamCoordinatorKernel.cpp
+@@ -295,7 +295,6 @@
+         const bool continuation=point==Protocol::NativeCheckPoint::BeforeComposition||point==Protocol::NativeCheckPoint::BeforeCopy||
+             point==Protocol::NativeCheckPoint::BeforeSubmission;
+         if(!op||!op->handle||!p.root.execution_.Authorized(op->attempt)||checkpoint>=limits.size()||
+-            op->actions[checkpoint]>=limits[checkpoint]||
+             (p.state.phase!=RoutePhase::Active&&!(p.root.execution_.ModelCalled(op->attempt)&&continuation)))return {};
+         ++op->actions[checkpoint];
+     }

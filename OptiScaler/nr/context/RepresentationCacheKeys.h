@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "RepresentationLineage.h"
 #include "NativeSampleQualification.h"
 
@@ -95,17 +96,20 @@ inline bool CompleteResourceStructure(const C::ResourceView& v)
 }
 inline bool CompleteContent(const C::ResourceView& v)
 {return CompleteResourceStructure(v)&&Established(v.identity.contentRevision);}
-template<class Reader> std::optional<SemanticRepresentationKey> BuildSemanticKey(const C::RecordReference& meaning,
+template<class Reader> std::unique_ptr<SemanticRepresentationKey> BuildSemanticKeyOwned(const C::RecordReference& meaning,
     C::SemanticKind kind,const C::BoundaryDescription& boundary,const C::FrameIdentity& frame,const C::ResourceView& source,const TransformLineage& applied,const Reader& reader)
 {
     if(!ValidValues(meaning)||meaning.record.Check()!=C::Error::None||meaning.revision==0||!ValidValues(kind)||!ValidValues(boundary)||
        !ValidValues(frame)||!SameObservationScope(frame,frame,reader,false)||!ValidRaster(source.raster)||!CompleteDescriptor(source.descriptor)||!ValidValues(source.identity)||
        !Established(source.identity.representationGeneration)||!ValidLineage(applied,true,reader))return {};
     C::FrameIdentity scope;scope.sessionId=frame.sessionId;scope.renderStreamId=frame.renderStreamId;scope.viewId=frame.viewId;scope.episodeId=frame.episodeId;
-    return SemanticRepresentationKey{1,meaning,kind,boundary,scope,source.raster,source.descriptor,applied,
-        source.identity.representationGeneration.KnownPart()->value};
+    auto result=std::make_unique<SemanticRepresentationKey>();
+    result->meaning=meaning;result->kind=kind;result->boundary=boundary;result->scope=scope;
+    result->raster=source.raster;result->descriptor=source.descriptor;result->applied=applied;
+    result->representation=source.identity.representationGeneration.KnownPart()->value;
+    return result;
 }
-template<class Reader> std::optional<RepresentationPlanKey> BuildRepresentationPlanKey(const SemanticRepresentationKey& semantic,
+template<class Reader> std::unique_ptr<RepresentationPlanKey> BuildRepresentationPlanKeyOwned(const SemanticRepresentationKey& semantic,
     const C::ResourceView& source,const C::ProfileKey& profile,const C::Symbol& purpose,const C::RasterMapping& mapping,
     const C::ResourceDescriptor& output,const C::Symbol& precision,const C::BoundedList<C::ResourceCapability,4>& caps,
     const TransformLineage& requested,const Reader& reader,const C::GenerationVector& qualifiedGenerations={},
@@ -127,8 +131,31 @@ template<class Reader> std::optional<RepresentationPlanKey> BuildRepresentationP
            kind==C::IdentityKind::ResourceViewIncarnation||kind==C::IdentityKind::ProviderIncarnation)continue;
         if(structural.Insert(token)!=C::Error::None)return {};
     }
-    return RepresentationPlanKey{semantic,profile,purpose,mapping,output,precision,caps,requested,
-        source.identity.resourceGeneration.KnownPart()->value,structural,qualificationPolicy};
+    auto result=std::make_unique<RepresentationPlanKey>();
+    result->semantic=semantic;result->profile=profile;result->purpose=purpose;result->mapping=mapping;
+    result->output=output;result->precision=precision;result->capabilities=caps;result->requested=requested;
+    result->resource=source.identity.resourceGeneration.KnownPart()->value;
+    result->qualifiedGenerations=structural;result->qualificationPolicy=qualificationPolicy;
+    return result;
+}
+// Compatibility value APIs. Native preparation uses the owning APIs above so
+// the large keys are never returned through its caller stack.
+template<class Reader> std::optional<SemanticRepresentationKey> BuildSemanticKey(const C::RecordReference& meaning,
+    C::SemanticKind kind,const C::BoundaryDescription& boundary,const C::FrameIdentity& frame,const C::ResourceView& source,const TransformLineage& applied,const Reader& reader)
+{
+    const auto result=BuildSemanticKeyOwned(meaning,kind,boundary,frame,source,applied,reader);
+    if(!result)return {};return *result;
+}
+
+template<class Reader> std::optional<RepresentationPlanKey> BuildRepresentationPlanKey(const SemanticRepresentationKey& semantic,
+    const C::ResourceView& source,const C::ProfileKey& profile,const C::Symbol& purpose,const C::RasterMapping& mapping,
+    const C::ResourceDescriptor& output,const C::Symbol& precision,const C::BoundedList<C::ResourceCapability,4>& caps,
+    const TransformLineage& requested,const Reader& reader,const C::GenerationVector& qualifiedGenerations={},
+    const std::optional<C::RecordKey>& qualificationPolicy={})
+{
+    const auto result=BuildRepresentationPlanKeyOwned(semantic,source,profile,purpose,mapping,output,precision,caps,
+        requested,reader,qualifiedGenerations,qualificationPolicy);
+    if(!result)return {};return *result;
 }
 inline std::optional<AllocationRequirementKey> BuildAllocationRequirementKey(const C::FrameIdentity& frame,
     const C::OptionalFact<C::ObjectIncarnation>& device,const C::ResourceDescriptor& output,

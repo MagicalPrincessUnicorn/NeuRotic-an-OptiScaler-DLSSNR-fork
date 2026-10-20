@@ -5,6 +5,7 @@
 #include "DlssNr_Dx11.h"
 #include "DlssNr_Dx11Transport.h"
 #include "NrNativeDx11OutputContract.h"
+#include "NativeTemporalInputFacts.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_PresentGuides.h"
 #include "DlssNr_PresentInputPolicy.h"
@@ -72,6 +73,10 @@ struct Runtime
     std::array<Slot, Dx11Transport::SlotCount> slots;
     UINT64 nextReady = 0, nextCompleted = 0;
     bool failed = false, nrChecked = false, nrAvailable = false;
+    bool nrSessionUnavailable = false;
+    UINT64 nrResumeGeneration = 0, nrLifecycleGeneration = 0;
+    ID3D12Device* nrAvailabilityDevice = nullptr; // Borrowed from this Runtime's owning device12.
+    std::string nrUnavailableReason;
 
     bool Initialize(ID3D11DeviceContext* context, std::string& reason)
     {
@@ -142,10 +147,13 @@ ComPtr<ID3D11Texture2D> Texture(NVSDK_NGX_Parameter* p, const char* name)
 }
 struct Feature::State
 {
+    std::atomic<UINT64> nextAttempt {0}, activeAttempt {0};
     UINT64 id = ++nextFeature, evaluation = 0, submissions = 0;
     unsigned int flags = 0, width = 0, height = 0, outWidth = 0, outHeight = 0;
     int quality = 0;
-    bool created = false, copyGuides = false, nativePostSr = false, nativePreSr = false;
+    CreationValues callerCreation, effectiveCreation;
+    std::atomic<bool> created {false};
+    bool copyGuides = false, nativePostSr = false, nativePreSr = false;
     bool guideContractReported = false;
     bool privateColorActive = false, privateColorUsed = false, preSrDelivered = false;
     bool colorXChanged = false, colorYChanged = false;
@@ -161,7 +169,7 @@ struct Feature::State
     std::string lastReason;
     void Reject(const std::string& reason)
     {
-        PresentGuides::Instance().RejectNative("DX11: " + reason);
+        PresentGuides::Instance().RejectNative("DX11: " + reason, 0, 0, id, generation);
         if (lastReason != reason) LOG_INFO("NR native DX11: {}", reason);
         lastReason = reason;
     }
@@ -201,31 +209,72 @@ bool QualifiedPresentInputs(IDXGISwapChain* swapchain)
 Feature::Feature() : state(std::make_unique<State>()) {}
 Feature::~Feature()
 {
-    if (state->created) PresentGuides::Instance().Invalidate();
+    Revoke();
     if (state->pending >= 0)
     {
         auto& runtime = Transport(); std::lock_guard lock(runtime.mutex);
         runtime.slots[state->pending].reserved = false;
     }
 }
-void Feature::Created(NVSDK_NGX_Parameter* p)
+CreationValues CreationValues::Read(NVSDK_NGX_Parameter* p)
 {
-    state->guideContractReported = false;
-    state->created = p &&
-        p->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &state->flags) == NVSDK_NGX_Result_Success &&
-        p->Get(NVSDK_NGX_Parameter_Width, &state->width) == NVSDK_NGX_Result_Success &&
-        p->Get(NVSDK_NGX_Parameter_Height, &state->height) == NVSDK_NGX_Result_Success &&
-        p->Get(NVSDK_NGX_Parameter_OutWidth, &state->outWidth) == NVSDK_NGX_Result_Success &&
-        p->Get(NVSDK_NGX_Parameter_OutHeight, &state->outHeight) == NVSDK_NGX_Result_Success &&
-        p->Get(NVSDK_NGX_Parameter_PerfQualityValue, &state->quality) == NVSDK_NGX_Result_Success;
-    PresentGuides::Instance().Invalidate();
-    LOG_INFO("NR native DX11 feature: id={} createValid={} flags={} render={}x{} output={}x{} quality={}",
-        state->id, state->created, state->flags, state->width, state->height,
-        state->outWidth, state->outHeight, state->quality);
+    CreationValues values;
+    if (!p) return values;
+    values.flagsObserved = p->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &values.flags) == NVSDK_NGX_Result_Success;
+    values.widthObserved = p->Get(NVSDK_NGX_Parameter_Width, &values.width) == NVSDK_NGX_Result_Success;
+    values.heightObserved = p->Get(NVSDK_NGX_Parameter_Height, &values.height) == NVSDK_NGX_Result_Success;
+    values.outWidthObserved = p->Get(NVSDK_NGX_Parameter_OutWidth, &values.outWidth) == NVSDK_NGX_Result_Success;
+    values.outHeightObserved = p->Get(NVSDK_NGX_Parameter_OutHeight, &values.outHeight) == NVSDK_NGX_Result_Success;
+    values.qualityObserved = p->Get(NVSDK_NGX_Parameter_PerfQualityValue, &values.quality) == NVSDK_NGX_Result_Success;
+    values.valid = values.flagsObserved && values.widthObserved && values.heightObserved &&
+        values.outWidthObserved && values.outHeightObserved && values.qualityObserved;
+    return values;
 }
-void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
+void Feature::Created(const CreationValues& caller, const CreationValues& effective)
+{
+    Revoke();
+    state->guideContractReported = false;
+    state->callerCreation = caller;
+    state->effectiveCreation = effective;
+    state->flags = effective.flags;
+    state->width = effective.width; state->height = effective.height;
+    state->outWidth = effective.outWidth; state->outHeight = effective.outHeight;
+    state->quality = effective.quality;
+    state->created = effective.valid;
+    if (state->created) state->generation = PresentGuides::Instance().ActivateDx11Feature(state->id);
+    LOG_INFO("NR native DX11 feature: id={} generation={} createValid={} flags={} render={}x{} output={}x{} quality={} "
+             "callerFlags={} callerRender={}x{} callerOutput={}x{} callerQuality={} callerObserved={},{},{},{},{},{} effectiveFlagsQuery={} hdrOverrideApplied={}",
+        state->id, state->generation, state->created.load(), state->flags, state->width, state->height,
+        state->outWidth, state->outHeight, state->quality, caller.flags, caller.width, caller.height,
+        caller.outWidth, caller.outHeight, caller.quality, caller.flagsObserved, caller.widthObserved,
+        caller.heightObserved, caller.outWidthObserved, caller.outHeightObserved, caller.qualityObserved,
+        effective.flagsObserved, effective.hdrOverridden);
+}
+void Feature::Revoke()
+{
+    state->created = false;
+    PresentGuides::Instance().InvalidateDx11Feature(state->id);
+}
+UINT64 Feature::AcquireAttempt()
+{
+    auto attempt = state->nextAttempt.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (!attempt) attempt = state->nextAttempt.fetch_add(1, std::memory_order_relaxed) + 1;
+    UINT64 expected = 0;
+    if (!state->activeAttempt.compare_exchange_strong(expected, attempt, std::memory_order_acq_rel)) return 0;
+    // A previous cleanup exception must not let a new CPU attempt overwrite a
+    // still-owned reservation or an unrestored caller parameter. GPU fences and
+    // retained transport remain responsible for their original retirement.
+    if (state->pending >= 0 || state->privateColorActive)
+    {
+        state->activeAttempt.store(0, std::memory_order_release);
+        return 0;
+    }
+    return attempt;
+}
+void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p, UINT64 attempt)
 {
     auto& s = *state;
+    if (!attempt || s.activeAttempt.load(std::memory_order_acquire) != attempt) return;
     ++s.evaluation;
     s.copyGuides = false;
     s.nativePostSr = false;
@@ -236,6 +285,7 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     s.colorXChanged = false;
     s.colorYChanged = false;
     s.settings.reset();
+    if (!s.created) return;
     const auto* config = Config::Instance();
     const auto settings = TryNrConfigSnapshot(*config);
     if (!settings) return;
@@ -253,6 +303,7 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (!nativePostSr && !nativePreSr && !presentObserve) return;
     if (!s.created || !context || !p || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
     { s.Reject("native feature contract or immediate context unavailable"); return; }
+    s.generation = PresentGuides::Instance().ActivateDx11Feature(s.id);
     s.copyGuides = nativePostSr || nativePreSr ||
         (presentObserve && presentPolicy != PresentInput::Policy::ImageOnly);
     s.nativePostSr = nativePostSr;
@@ -261,23 +312,45 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     if (s.pending >= 0) { s.Reject("overlapping native feature evaluations"); return; }
     if (s.copyGuides && (s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered))
     { s.Reject("jittered motion-vector convention is not validated"); return; }
+    auto lifecycleLock = LockBridgeLifecycle();
     Dx11Transport::ContextLock contextLock(context);
     auto& runtime = Transport();
     std::lock_guard lock(runtime.mutex);
     std::string reason;
     if (!runtime.Initialize(context, reason)) { s.Reject(reason); return; }
-    if ((s.nativePostSr || s.nativePreSr) && !runtime.nrChecked)
+    if (s.nativePostSr || s.nativePreSr)
     {
-        runtime.nrChecked = true;
-        runtime.nrAvailable = DirectD3D12Available(runtime.device12.Get());
+        {
+            // Serialize the observed epoch and capability result with their owner.
+            // Device/queue changes and lost completion still fail Initialize above.
+            const auto lifecycleGeneration = BridgeLifecycleGeneration();
+            const bool sessionUnavailable = BridgeSessionUnavailable();
+            auto* device = runtime.device12.Get();
+            if (!runtime.nrChecked || runtime.nrAvailabilityDevice != device ||
+                runtime.nrResumeGeneration != runtimeSettings.resumeGeneration ||
+                runtime.nrLifecycleGeneration != lifecycleGeneration ||
+                runtime.nrSessionUnavailable != sessionUnavailable)
+            {
+                const char* unavailable = nullptr;
+                const bool available = DirectD3D12Available(device, &unavailable);
+                // Commit the whole cache entry only after the probe and reason copy
+                // succeed. An exception must leave this epoch eligible for retry.
+                runtime.nrUnavailableReason = available ? "" :
+                    (unavailable ? unavailable : "native DX11 NR capability unavailable");
+                runtime.nrAvailable = available;
+                runtime.nrAvailabilityDevice = device;
+                runtime.nrResumeGeneration = runtimeSettings.resumeGeneration;
+                runtime.nrLifecycleGeneration = lifecycleGeneration;
+                runtime.nrSessionUnavailable = sessionUnavailable;
+                runtime.nrChecked = true;
+            }
+        }
+        if (!runtime.nrAvailable) { s.Reject(runtime.nrUnavailableReason); return; }
     }
-    if ((s.nativePostSr || s.nativePreSr) && !runtime.nrAvailable)
-    { s.Reject("native DX11 model is unavailable on the private D3D12 device"); return; }
     auto chain = UniqueChain(runtime.device11.Get());
     if (!chain) { s.Reject("no unique registered native DX11 swapchain"); return; }
     s.identity = PresentGuides::Identity(chain.Get());
     s.backbuffer = chain->GetCurrentBackBufferIndex();
-    s.generation = PresentGuides::Instance().Inspect().generation;
     s.color = Texture(p, NVSDK_NGX_Parameter_Color);
     s.output = Texture(p, NVSDK_NGX_Parameter_Output);
     s.exposure = Texture(p, NVSDK_NGX_Parameter_ExposureTexture);
@@ -320,21 +393,42 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
         std::to_string(chainDesc.Width) + "x" + std::to_string(chainDesc.Height)); return; }
     s.frame = {};
     s.frame.RenderSubrectWidth = s.width; s.frame.RenderSubrectHeight = s.height;
-    p->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &s.frame.RenderSubrectWidth);
-    p->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, &s.frame.RenderSubrectHeight);
+    const bool haveRenderWidth=p->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width,
+        &s.frame.RenderSubrectWidth)==NVSDK_NGX_Result_Success;
+    const bool haveRenderHeight=p->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height,
+        &s.frame.RenderSubrectHeight)==NVSDK_NGX_Result_Success;
+    s.frame.NativeRenderDimensionsObserved=haveRenderWidth&&haveRenderHeight;
+    if (const auto reason=NativeResolution::SelectionRefusal(*settings))
+    { s.Reject(reason); return; }
+    if (NativeResolution::PostSelected(*settings)&&!s.frame.NativeRenderDimensionsObserved)
+    { s.Reject("Match Native Post awaits current pre-SR render dimensions"); return; }
     p->Get(NVSDK_NGX_Parameter_Reset, &reset);
     s.frame.Reset = reset != 0 || s.evaluation == 1;
     s.frame.DepthInverted = (s.flags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
     s.frame.ColourIsLinearHdr = (s.flags & NVSDK_NGX_DLSS_Feature_Flags_IsHDR) != 0;
-    p->Get(NVSDK_NGX_Parameter_DLSS_Pre_Exposure, &s.frame.PreExposure);
-    p->Get(NVSDK_NGX_Parameter_MV_Scale_X, &s.frame.MvScaleX);
-    p->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &s.frame.MvScaleY);
-    const bool jitter = p->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &s.frame.JitterX) == NVSDK_NGX_Result_Success &&
-        p->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &s.frame.JitterY) == NVSDK_NGX_Result_Success;
+    s.frame.ColorDomainKnown = s.effectiveCreation.flagsObserved;
+    const auto preExposure = NativeTemporalInputFacts::Read(
+        p, NVSDK_NGX_Parameter_DLSS_Pre_Exposure, NVSDK_NGX_Result_Success);
+    s.frame.PreExposure = preExposure.value_or(1.0f);
+    s.frame.PreExposureSupplied = preExposure && std::isfinite(*preExposure) && *preExposure > 1e-6f;
+    const auto scalarFacts = NativeTemporalInputFacts::Resolve(
+        NativeTemporalInputFacts::Read(p, NVSDK_NGX_Parameter_MV_Scale_X, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(p, NVSDK_NGX_Parameter_MV_Scale_Y, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(p, NVSDK_NGX_Parameter_Jitter_Offset_X, NVSDK_NGX_Result_Success),
+        NativeTemporalInputFacts::Read(p, NVSDK_NGX_Parameter_Jitter_Offset_Y, NVSDK_NGX_Result_Success));
+    s.frame.NativeScalarFacts = scalarFacts;
+    s.frame.MvScaleX = scalarFacts.MvX();
+    s.frame.MvScaleY = scalarFacts.MvY();
+    s.frame.JitterX = scalarFacts.JitterX();
+    s.frame.JitterY = scalarFacts.JitterY();
+    const bool jitter = scalarFacts.JitterComplete();
     p->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, &s.frame.DepthSubrectX);
     p->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, &s.frame.DepthSubrectY);
     p->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, &s.frame.MotionSubrectX);
     p->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, &s.frame.MotionSubrectY);
+    s.frame.NativeFeatureGeneration = s.id;
+    s.frame.JitterSupplied = jitter && std::isfinite(s.frame.JitterX) && std::isfinite(s.frame.JitterY);
+    s.frame.MotionVectorsJittered = (s.flags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered) != 0;
     const auto rw = s.frame.RenderSubrectWidth, rh = s.frame.RenderSubrectHeight;
     s.frame.DepthSubrectWidth = rw;
     s.frame.DepthSubrectHeight = rh;
@@ -347,13 +441,13 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
     Neurotic::Feed::ObservePresentGuide(feedEffective, s.frame, depth.Get(), motion.Get());
     feedEffective.Value("host.firstEvaluationReset", s.evaluation == 1);
     // NR-FEED-001 END
-    if (!rw || !rh || rw > s.outWidth || rh > s.outHeight || colorX > colorDesc.Width || colorY > colorDesc.Height ||
+    if (!rw || !rh || (!NativeResolution::PostSelected(*settings)&&(rw > s.outWidth || rh > s.outHeight)) ||
+        colorX > colorDesc.Width || colorY > colorDesc.Height ||
         rw > colorDesc.Width - colorX || rh > colorDesc.Height - colorY)
     { s.Reject("render subrect exceeds native color/output dimensions"); return; }
     if (s.nativePreSr && !Dx11Transport::SupportedShape(colorDesc))
     { s.Reject("native Pre-SR color shape unsupported; original color preserved"); return; }
-    if (s.copyGuides && (!jitter || !std::isfinite(s.frame.MvScaleX) || !std::isfinite(s.frame.MvScaleY) ||
-        !std::isfinite(s.frame.JitterX) || !std::isfinite(s.frame.JitterY)))
+    if (s.copyGuides && (!jitter || !scalarFacts.Finite()))
     { s.Reject("jitter/motion-scale metadata missing or non-finite"); return; }
     if (s.copyGuides && (!depth || !motion)) { s.Reject("native depth or motion texture missing"); return; }
     if (depth) depth->GetDesc(&dd);
@@ -516,27 +610,33 @@ void Feature::Prepare(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* p)
         {
             if (FAILED(runtime.context11->Wait(runtime.completed11.Get(), slot.completed)))
             { runtime.failed = true; s.Reject("DX11 Pre-SR consumer wait failed; original color preserved"); return; }
+            // Publish CPU ownership before any setter can expose the private
+            // input or throw. Restore/Complete must reach the real reservation
+            // and its retirement/quarantine path even after partial publication.
+            slot.reserved = true;
+            s.pending = selected;
+            s.privateColorActive = true;
+            s.privateColorUsed = true;
             p->Set(NVSDK_NGX_Parameter_Color, static_cast<ID3D11Resource*>(slot.output.shared.Get()));
             if (haveColorX && colorX)
             {
-                p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, 0u);
                 s.colorXChanged = true;
+                p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, 0u);
             }
             if (haveColorY && colorY)
             {
-                p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, 0u);
                 s.colorYChanged = true;
+                p->Set(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, 0u);
             }
-            s.privateColorActive = true;
-            s.privateColorUsed = true;
         }
     }
-    slot.reserved = true; s.pending = selected;
+    if (s.pending < 0) { slot.reserved = true; s.pending = selected; }
 }
 
-void Feature::Restore(NVSDK_NGX_Parameter* p)
+void Feature::Restore(NVSDK_NGX_Parameter* p, UINT64 attempt)
 {
     auto& s = *state;
+    if (!attempt || s.activeAttempt.load(std::memory_order_acquire) != attempt) return;
     if (!s.privateColorActive || p == nullptr)
         return;
     p->Set(NVSDK_NGX_Parameter_Color, static_cast<ID3D11Resource*>(s.color.Get()));
@@ -547,14 +647,25 @@ void Feature::Restore(NVSDK_NGX_Parameter* p)
     s.privateColorActive = false;
 }
 
-void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
+void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded, UINT64 attempt)
 {
     auto& s = *state;
+    if (!attempt || s.activeAttempt.load(std::memory_order_acquire) != attempt) return;
+    struct ReleaseAttempt
+    {
+        State& state;
+        ~ReleaseAttempt()
+        {
+            state.activeAttempt.store(0, std::memory_order_release);
+        }
+    } releaseAttempt {s};
     if (s.pending < 0)
     {
-        s.color.Reset(); s.output.Reset(); s.exposure.Reset(); s.settings.reset();
+        if (!s.privateColorActive)
+        { s.color.Reset(); s.output.Reset(); s.exposure.Reset(); s.settings.reset(); }
         return;
     }
+    auto lifecycleLock = LockBridgeLifecycle();
     Dx11Transport::ContextLock contextLock(context);
     auto& runtime = Transport();
     std::lock_guard lock(runtime.mutex);
@@ -567,7 +678,8 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
         ~Finish()
         {
             slot.reserved = false;
-            state.color.Reset(); state.output.Reset(); state.exposure.Reset(); state.settings.reset();
+            if (!state.privateColorActive)
+            { state.color.Reset(); state.output.Reset(); state.exposure.Reset(); state.settings.reset(); }
         }
     } finish {s, slot};
 
@@ -577,7 +689,7 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
         if (++s.submissions == 1 || !s.lastReason.empty() || s.evaluation % 300 == 0)
             LOG_INFO("NR native DX11 {}: feature={} evaluation={} guides={} depth={}x{} motion={}x{} render={}x{} "
                      "output={}x{} transport={}MiB directDepth={} directMotion={} producer={} completed={} retired={} "
-                     "delivered={} captures={} matched={} evaluated={} nativeDLSS=success status={}",
+                     "seamDelivered={} captures={} matched={} evaluated={} nativeUpscaler=success status={}",
                 s.nativePreSr ? "Pre-SR" : (s.nativePostSr ? "Post-SR" : "capture"),
                 s.id, s.evaluation, s.copyGuides,
                 slot.depth.sourceDesc.Width, slot.depth.sourceDesc.Height,
@@ -590,8 +702,8 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
                 runtime.completed12->GetCompletedValue(), slot.retired, delivered, guides.captures,
                 guides.matched, guides.evaluated,
                 (s.nativePostSr || s.nativePreSr)
-                    ? (delivered ? "native NR delivered with transported depth/motion"
-                                 : "native NR not delivered; native DLSS image retained")
+                    ? (delivered ? "native NR delivered at upscaler seam; shared post-processing pending"
+                                 : "native NR not delivered; native upscaler image retained")
                     : guides.status.c_str());
         s.lastReason.clear();
     };
@@ -612,8 +724,10 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
     }
 
     if (!nativeSucceeded)
-    { s.Reject("native DLSS evaluation failed; native image preserved"); return; }
-    if (!s.nativePostSr && !s.nativePreSr && s.generation != PresentGuides::Instance().Inspect().generation)
+    { s.Reject("native upscaler evaluation failed or skipped; native image preserved"); return; }
+    // Retire any already-consumed Pre-SR input above even if admission closed.
+    // Revocation cannot erase its genuine fence obligation or authorize Post-SR.
+    if (!s.created || s.generation != PresentGuides::Instance().Inspect().generation)
     { s.Reject("native source generation changed during evaluation"); return; }
     if (s.nativePostSr && (!context || !s.output || !s.settings ||
         !Dx11Transport::SameObject(context, runtime.context11.Get())))
@@ -680,7 +794,7 @@ void Feature::Complete(ID3D11DeviceContext* context, bool nativeSucceeded)
         PresentGuides::Instance().Capture(slot.list.Get(), s.copyGuides ? slot.depth.resource12.Get() : nullptr,
             s.copyGuides ? slot.motion.resource12.Get() : nullptr, s.frame, s.identity.Get(), s.backbuffer,
             s.outWidth, s.outHeight, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COMMON,
-            s.copyGuides, nullptr, 0, proof);
+            s.copyGuides, nullptr, 0, proof, 0, s.generation);
     }
     if (FAILED(slot.list->Close()))
     { runtime.failed = true; s.Reject("private capture close failed"); return; }

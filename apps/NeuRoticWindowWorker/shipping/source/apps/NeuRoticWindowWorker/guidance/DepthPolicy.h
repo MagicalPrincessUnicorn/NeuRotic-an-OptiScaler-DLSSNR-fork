@@ -21,10 +21,11 @@ inline bool PublicationFresh(uint64_t capture,uint64_t now,uint64_t frequency)no
     return capture&&frequency&&now>=capture&&now-capture<=frequency/4;
 }
 struct FrameKey {
-    std::uint64_t sourceId{},streamEpoch{},captureSequence{},geometryEpoch{},configEpoch{};
-    bool operator==(const FrameKey& other)const noexcept{return sourceId==other.sourceId&&streamEpoch==other.streamEpoch&&captureSequence==other.captureSequence&&geometryEpoch==other.geometryEpoch&&configEpoch==other.configEpoch;}
+    std::uint64_t sourceId{},streamEpoch{},captureSequence{},geometryEpoch{},configEpoch{},colorEpoch=1;
+    std::uint32_t analysisRecipe=0;
+    bool operator==(const FrameKey& other)const noexcept{return sourceId==other.sourceId&&streamEpoch==other.streamEpoch&&captureSequence==other.captureSequence&&geometryEpoch==other.geometryEpoch&&configEpoch==other.configEpoch&&colorEpoch==other.colorEpoch&&analysisRecipe==other.analysisRecipe;}
     bool operator!=(const FrameKey& other)const noexcept{return !(*this==other);}
-    bool Valid()const noexcept{return sourceId&&streamEpoch&&captureSequence&&geometryEpoch&&configEpoch;}
+    bool Valid()const noexcept{return sourceId&&streamEpoch&&captureSequence&&geometryEpoch&&configEpoch&&colorEpoch&&analysisRecipe<=1;}
 };
 enum class Encoding {Unknown,EstimatedRelativeRaw,EstimatedRelativeNearHigh01};
 struct Receipt {FrameKey key;Encoding encoding=Encoding::Unknown;bool completed=false,numericValid=false;};
@@ -62,7 +63,7 @@ class FreshCounter {
 public:
     bool Record(const FrameKey& key)noexcept {
         if(!key.Valid())return false;
-        if(last_.Valid()&&(key.sourceId!=last_.sourceId||key.streamEpoch<last_.streamEpoch||
+        if(last_.Valid()&&(key.sourceId!=last_.sourceId||key.colorEpoch<last_.colorEpoch||key.streamEpoch<last_.streamEpoch||
            (key.streamEpoch==last_.streamEpoch&&key.captureSequence<=last_.captureSequence)))return false;
         last_=key;++count_;return true;
     }

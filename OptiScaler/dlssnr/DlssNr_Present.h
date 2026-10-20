@@ -4,6 +4,7 @@
 #include "PreFg.h"
 #include "NrAdvisorSampling.h"
 #include "DlssNr_PresentInputDecision.h"
+#include "connections/ConnectionPolicy.h"
 
 #include <dxgi1_6.h>
 #include <vulkan/vulkan.h>
@@ -21,6 +22,8 @@ enum class PresentApi : unsigned int
 
 struct PresentTelemetrySnapshot
 {
+    Connections::SignalStatusSnapshot inputSignals{};
+    bool nativeGuidesAvailable = false;
     AdvisorSampling::Cadence cadence;
     bool requested = false;
     bool active = false;

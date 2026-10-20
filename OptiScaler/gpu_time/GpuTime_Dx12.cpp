@@ -58,6 +58,9 @@ void GpuTime_Dx12::Start(ID3D12GraphicsCommandList* cmdList)
         if (_completionTracked)
         {
             if (!DlssNr::GpuSafety::Reusable(_use[next])) return;
+            // Let the existing post-dispatch read consume a completed unread sample
+            // before reusing its query slot. Rendering continues without new timing.
+            if (_trigger[next] && DlssNr::GpuSafety::Readable(_use[next])) return;
             auto use = DlssNr::GpuSafety::Record(cmdList);
             if (!use) return;
             _use[next] = use;

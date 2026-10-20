@@ -595,6 +595,8 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
             if (work.outputRestoreFailed) { outcome.Fail();break; }
         }
 
+        const auto nrRenderObservation=nrSettings&&DlssNr::NativeResolution::PostSelected(*nrSettings)
+            ? DlssNr::ObserveRenderBeforeUpscale(InParameters) : DlssNr::NativeResolution::RenderObservation{};
         LOG_DEBUG("Dispatch!!");
         dx12EvalResult = dx12Feature->Evaluate(cmdList, InParameters);
         outcome.ProviderResult(dx12EvalResult);
@@ -618,7 +620,7 @@ bool IFeature_Dx11wDx12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NG
 
         if (dx12EvalResult && nrSettings && nrEnabled && nativeRoute && nrBefore.lifecycleOpen &&
             bridgeInputsAvailable)
-            outcome.NrResult(DlssNr::EvaluateBridgeAfterUpscale(cmdList, InParameters, Dx12CommandQueue, &*nrSettings));
+            outcome.NrResult(DlssNr::EvaluateBridgeAfterUpscale(cmdList, InParameters, Dx12CommandQueue, &*nrSettings, &nrRenderObservation));
 
         const auto nrAfter = DlssNr::Telemetry();
         if (outcome.Snapshot().nrComposed && nrAfter.lifecycleGeneration!=nrBefore.lifecycleGeneration)

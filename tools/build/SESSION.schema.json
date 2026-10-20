@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NR0041 local producer capture offering; never a whole-target success receipt",
+  "type": "object",
+  "required": ["schema_version", "scope", "repository", "source_manifest", "output_root", "capture_root", "actions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scope": {"const": "LOCAL_PRODUCER_CAPTURE_ONLY"},
+    "repository": {"type": "string"},
+    "source_manifest": {"$ref": "#/$defs/pin"},
+    "output_root": {"type": "string"},
+    "capture_root": {"type": "string"},
+    "forwarder_tracking_root": {"type": "string"},
+    "actions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/action"}}
+  },
+  "$defs": {
+    "pin": {
+      "type": "object", "required": ["path", "bytes", "sha256"],
+      "properties": {"path": {"type": "string"}, "bytes": {"type": "integer", "minimum": 0}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "paths": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+    "action": {
+      "type": "object", "required": ["id", "kind", "configuration", "cwd", "command", "inputs", "tools", "outputs", "environment"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+        "kind": {"enum": ["dxc-direct", "ffx-depfile", "forwarder-identity", "msvc-showincludes", "native-librarian"]},
+        "configuration": {"const": "Release|x64"},
+        "cwd": {"type": "string"},
+        "command": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "inputs": {"$ref": "#/$defs/paths"},
+        "tools": {"$ref": "#/$defs/paths"},
+        "outputs": {"$ref": "#/$defs/paths"},
+        "parent_records": {"type": "array", "items": {"type": "string"}},
+        "shader_name": {"type": "string"},
+        "environment": {"type": "object", "required": ["PATH", "INCLUDE", "LIB", "LIBPATH", "CL", "_CL_", "LINK", "_LINK_", "VCToolsVersion", "WindowsSDKVersion", "VSLANG", "TEMP", "TMP"], "additionalProperties": {"type": ["string", "null"]}}
+      }
+    }
+  }
+}
